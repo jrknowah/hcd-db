@@ -12,7 +12,7 @@ import { Link } from 'react-router';
 import CustomCheckbox from "src/components/forms/theme-elements/CustomCheckbox";
 import CustomTextField from "src/components/forms/theme-elements/CustomTextField";
 import CustomFormLabel from "src/components/forms/theme-elements/CustomFormLabel";
-import AuthSocialButtons from "./AuthSocialButtons";
+// import AuthSocialButtons from "./AuthSocialButtons";
 
 const AuthLogin = ({ title, subtitle, subtext }) => (
   <>
@@ -24,7 +24,7 @@ const AuthLogin = ({ title, subtitle, subtext }) => (
 
     {subtext}
 
-    <AuthSocialButtons />
+    {/* <AuthSocialButtons />
     <Box mt={3}>
       <Divider>
         <Typography
@@ -37,7 +37,7 @@ const AuthLogin = ({ title, subtitle, subtext }) => (
           or sign in with
         </Typography>
       </Divider>
-    </Box>
+    </Box> */}
 
     <Stack>
       <Box>
@@ -65,7 +65,7 @@ const AuthLogin = ({ title, subtitle, subtext }) => (
             label="Remeber this Device"
           />
         </FormGroup>
-        <Typography
+        {/* <Typography
           component={Link}
           to="/auth/auth1/forgot-password"
           fontWeight="500"
@@ -75,7 +75,7 @@ const AuthLogin = ({ title, subtitle, subtext }) => (
           }}
         >
           Forgot Password ?
-        </Typography>
+        </Typography> */}
       </Stack>
     </Stack>
     <Box>
