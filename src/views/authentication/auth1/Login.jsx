@@ -1,12 +1,29 @@
+import React, { useState } from 'react';
 import { Link } from 'react-router';
-import { Grid, Box, Stack, Typography, Avatar, Button, Divider, Card, CardContent } from "@mui/material";
-import { Microsoft as MicrosoftIcon } from '@mui/icons-material';
+import { 
+  Grid, 
+  Box, 
+  Stack, 
+  Typography, 
+  Button, 
+  Card, 
+  CardContent, 
+  Alert,
+  CircularProgress,
+  Chip
+} from "@mui/material";
+import { 
+  Microsoft as MicrosoftIcon,
+  CheckCircle as CheckCircleIcon,
+  Error as ErrorIcon
+} from '@mui/icons-material';
+import { useMsal } from '@azure/msal-react';
 import PageContainer from 'src/components/container/PageContainer';
-import AuthLogin from "../authForms/AuthLogin";
 import { CustomizerContext } from 'src/context/CustomizerContext';
 import { useContext } from 'react';
+import { useAuth } from '../../../hooks/useAuth';
 
-// HOPE Logo Component (inline for this example)
+// HOPE Logo Component (same as before)
 const HopeLogo = ({ width = "180", height = "60" }) => (
   <svg width={width} height={height} viewBox="0 0 220 60" xmlns="http://www.w3.org/2000/svg">
     <defs>
@@ -49,49 +66,180 @@ const HopeLogo = ({ width = "180", height = "60" }) => (
   </svg>
 );
 
-// Azure Login Component
-const AzureLogin = ({ onLogin }) => {
+// Working Azure Login Component
+const AzureLogin = () => {
+  const { login, loading, error } = useAuth();
+  const [localLoading, setLocalLoading] = useState(false);
+  const [localError, setLocalError] = useState(null);
+  const [loginSuccess, setLoginSuccess] = useState(false);
+
   const handleAzureLogin = async () => {
+    setLocalLoading(true);
+    setLocalError(null);
+    setLoginSuccess(false);
+
     try {
-      // This would integrate with MSAL (Microsoft Authentication Library)
-      // Example: await msalInstance.loginPopup(loginRequest);
-      console.log('Azure login initiated');
-      onLogin && onLogin();
+      await login();
+      setLoginSuccess(true);
+      // Navigation is handled by AuthGuard component
     } catch (error) {
       console.error('Azure login failed:', error);
+      setLocalError(error.message || 'Login failed. Please try again.');
+    } finally {
+      setLocalLoading(false);
     }
   };
 
+  const isLoading = loading || localLoading;
+  const displayError = error || localError;
+
   return (
-    <Button
-      fullWidth
-      variant="outlined"
-      size="large"
-      onClick={handleAzureLogin}
-      startIcon={<MicrosoftIcon />}
-      sx={{
-        py: 1.5,
-        borderColor: '#0078d4',
-        color: '#0078d4',
-        '&:hover': {
-          backgroundColor: '#0078d4',
-          color: 'white',
-        },
-        mb: 2,
-      }}
-    >
-      Sign in with Microsoft
-    </Button>
+    <Box>
+      {/* Error Alert */}
+      {displayError && !isLoading && (
+        <Alert 
+          severity="error" 
+          sx={{ mb: 2 }}
+          icon={<ErrorIcon />}
+        >
+          <Typography variant="body2">
+            {typeof displayError === 'string' ? displayError : 'Login failed. Please try again.'}
+          </Typography>
+        </Alert>
+      )}
+
+      {/* Success Alert */}
+      {loginSuccess && (
+        <Alert 
+          severity="success" 
+          sx={{ mb: 2 }}
+          icon={<CheckCircleIcon />}
+        >
+          <Typography variant="body2">
+            Login successful! Loading your dashboard...
+          </Typography>
+        </Alert>
+      )}
+
+      {/* Azure Login Button */}
+      <Button
+        fullWidth
+        variant="outlined"
+        size="large"
+        onClick={handleAzureLogin}
+        disabled={isLoading}
+        startIcon={
+          isLoading ? (
+            <CircularProgress size={20} color="inherit" />
+          ) : (
+            <MicrosoftIcon />
+          )
+        }
+        sx={{
+          py: 1.5,
+          borderColor: '#0078d4',
+          color: '#0078d4',
+          '&:hover': {
+            backgroundColor: '#0078d4',
+            color: 'white',
+          },
+          '&:disabled': {
+            borderColor: '#e0e0e0',
+            color: '#9e9e9e',
+          },
+          mb: 2,
+        }}
+      >
+        {isLoading ? 'Signing in...' : 'Sign in with Microsoft'}
+      </Button>
+
+      {/* Login Info */}
+      <Box mt={2}>
+        <Typography variant="caption" color="text.secondary" display="block" mb={1}>
+          Sign in with your organization account to access:
+        </Typography>
+        <Stack direction="row" spacing={1} flexWrap="wrap">
+          <Chip 
+            label="HOPE Database" 
+            size="small" 
+            variant="outlined" 
+            sx={{ fontSize: '0.7rem' }}
+          />
+          <Chip 
+            label="Medical Records" 
+            size="small" 
+            variant="outlined" 
+            sx={{ fontSize: '0.7rem' }}
+          />
+          <Chip 
+            label="Case Management" 
+            size="small" 
+            variant="outlined" 
+            sx={{ fontSize: '0.7rem' }}
+          />
+        </Stack>
+      </Box>
+    </Box>
+  );
+};
+
+// User Role Display Component (shows during loading)
+const UserRoleDisplay = ({ userRoles, loading }) => {
+  if (loading || !userRoles?.length) return null;
+
+  const roleDisplayNames = {
+    'IT_ADMIN': 'IT Administrator',
+    'LEVEL1': 'Level 1 Staff',
+    'CASE_MANAGER': 'Case Manager',
+    'NURSE': 'Nurse',
+    'AUDITOR': 'Auditor',
+    'READONLY': 'Read Only'
+  };
+
+  return (
+    <Box mt={2} p={2} bgcolor="success.50" borderRadius={1} border="1px solid" borderColor="success.200">
+      <Typography variant="caption" color="success.700" gutterBottom>
+        Welcome! Your access level:
+      </Typography>
+      <Stack direction="row" spacing={1} mt={1}>
+        {userRoles.map(role => (
+          <Chip
+            key={role}
+            label={roleDisplayNames[role] || role}
+            size="small"
+            color="success"
+            variant="filled"
+          />
+        ))}
+      </Stack>
+    </Box>
   );
 };
 
 export default function Login() {
   const { activeMode } = useContext(CustomizerContext);
+  const { isAuthenticated, userRoles, isLoadingGroups } = useAuth();
 
-  const handleAzureLogin = () => {
-    // Handle Azure login logic here
-    // This would typically redirect to Azure AD or handle the authentication flow
-  };
+  // If user is already authenticated, show loading state
+  if (isAuthenticated) {
+    return (
+      <PageContainer title="HOPE Login" description="HOPE Client Database Login">
+        <Box
+          display="flex"
+          flexDirection="column"
+          alignItems="center"
+          justifyContent="center"
+          minHeight="100vh"
+        >
+          <CircularProgress size={40} />
+          <Typography variant="h6" sx={{ mt: 2 }}>
+            Loading HOPE Dashboard...
+          </Typography>
+          <UserRoleDisplay userRoles={userRoles} loading={isLoadingGroups} />
+        </Box>
+      </PageContainer>
+    );
+  }
 
   return (
     <PageContainer title="HOPE Login" description="HOPE Client Database Login">
@@ -141,48 +289,38 @@ export default function Login() {
                   Access your HOPE Client Database
                 </Typography>
 
-                {/* Azure Login Button */}
-                <AzureLogin onLogin={handleAzureLogin} />
+                {/* Azure Login Component */}
+                <AzureLogin />
 
-                {/* <Divider sx={{ my: 3 }}>
-                  <Typography variant="body2" color="text.secondary">
-                    Or continue with
+                {/* Support Information */}
+                <Box mt={4} p={2} bgcolor="grey.50" borderRadius={1}>
+                  <Typography variant="caption" color="text.secondary" gutterBottom display="block">
+                    <strong>Need Help?</strong>
                   </Typography>
-                </Divider> */}
+                  <Typography variant="body2" color="text.secondary" mb={1}>
+                    Contact your IT administrator for account access.
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    Make sure you're added to the appropriate HOPE security groups in Azure AD.
+                  </Typography>
+                </Box>
 
-                {/* Standard Login Form 
-                <AuthLogin
-                  title=""
-                  subtext=""
-                  subtitle={
-                    <Stack
-                      direction="row"
-                      justifyContent="center"
-                      spacing={1}
-                      mt={3}
-                    >
-                      <Typography
-                        color="textSecondary"
-                        variant="body2"
-                        fontWeight="400"
-                      >
-                        Need help accessing your account?
-                      </Typography>
-                      <Typography
-                        component={Link}
-                        to="/auth/forgot-password"
-                        fontWeight="500"
-                        variant="body2"
-                        sx={{
-                          textDecoration: "none",
-                          color: "primary.main",
-                        }}
-                      >
-                        Contact Support
-                      </Typography>
+                {/* Development Info (remove in production) */}
+                {process.env.NODE_ENV === 'development' && (
+                  <Box mt={2} p={2} bgcolor="info.50" borderRadius={1} border="1px solid" borderColor="info.200">
+                    <Typography variant="caption" color="info.700" gutterBottom display="block">
+                      <strong>Development Mode - Required Groups:</strong>
+                    </Typography>
+                    <Stack spacing={0.5}>
+                      <Typography variant="caption" color="info.600">• HOPE_case (Case Managers)</Typography>
+                      <Typography variant="caption" color="info.600">• HOPE_nursing (Nursing Staff)</Typography>
+                      <Typography variant="caption" color="info.600">• HOPE_it (IT Administrators)</Typography>
+                      <Typography variant="caption" color="info.600">• HOPE_level1 (Level 1 Staff)</Typography>
+                      <Typography variant="caption" color="info.600">• HOPE_audit (Auditors)</Typography>
+                      <Typography variant="caption" color="info.600">• HOPE_readonly (Read Only)</Typography>
                     </Stack>
-                  }
-                />*/}
+                  </Box>
+                )}
               </CardContent>
             </Card>
           </Box>
@@ -243,13 +381,27 @@ export default function Login() {
                 </Box>
                 <Box display="flex" alignItems="center" gap={2}>
                   <Box width={8} height={8} bgcolor="white" borderRadius="50%" />
-                  <Typography variant="body2">Real-time Data Access</Typography>
+                  <Typography variant="body2">Azure AD Integration</Typography>
                 </Box>
                 <Box display="flex" alignItems="center" gap={2}>
                   <Box width={8} height={8} bgcolor="white" borderRadius="50%" />
-                  <Typography variant="body2">Integrated Workflows</Typography>
+                  <Typography variant="body2">Role-Based Access Control</Typography>
+                </Box>
+                <Box display="flex" alignItems="center" gap={2}>
+                  <Box width={8} height={8} bgcolor="white" borderRadius="50%" />
+                  <Typography variant="body2">Real-time Data Access</Typography>
                 </Box>
               </Stack>
+
+              {/* Security Badge */}
+              <Box mt={4} p={2} bgcolor="rgba(255,255,255,0.1)" borderRadius={2} border="1px solid rgba(255,255,255,0.2)">
+                <Typography variant="caption" display="block" mb={1}>
+                  🔒 Enterprise Security
+                </Typography>
+                <Typography variant="body2" opacity={0.9}>
+                  Single Sign-On with Multi-Factor Authentication
+                </Typography>
+              </Box>
             </Box>
 
             {/* Decorative Elements */}
