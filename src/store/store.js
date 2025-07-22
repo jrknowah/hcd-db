@@ -4,7 +4,7 @@ import rootReducer from './reducers'; // or combineReducers
 import auth from './slices/authSlice';
 import clientReducer from './slices/clientSlice';
 import authSigReducer from './slices/authSigSlice';
-import mentalHealth from './slices/mentalHealthSlice';
+import mentalHealth from './slices/MentalHealthSlice.js';
 import arrestReducer from './slices/arrestActions';
 import noteArchive from './slices/noteArchiveSlice';
 import MedFaceSheet from "./slices/medFaceSheetSlice";
