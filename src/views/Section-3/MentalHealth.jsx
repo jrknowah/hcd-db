@@ -16,7 +16,7 @@ import {
   removeHospitalizationLocal,
   addMedicationLocal,
   removeMedicationLocal
-} from '../../store/slices/mentalHealthSlice';
+} from '../../store/slices/MentalHealthSlice';
 import { fetchArrestData, saveArrestData } from '../../store/slices//arrestActions';
 import logUserAction from "../../config/logAction";
 import {
