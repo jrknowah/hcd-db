@@ -1,7 +1,3 @@
-
-
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-ignore
 import React, { lazy } from 'react';
 import { Navigate, createBrowserRouter } from 'react-router';
 import Loadable from '../layouts/full/shared/loadable/Loadable';
@@ -15,19 +11,12 @@ const SamplePage = Loadable(lazy(() => import('../views/sample-page/SamplePage')
 const Dashboard = Loadable(lazy(() => import('../views/Dashboard/DashboardClient')));
 const Identification = Loadable(lazy(() => import('../views/Section-1/Identification.jsx')));
 const Section2 = Loadable(lazy(() => import('../views/Section-2/AuthSig.jsx')));
-// ✅ Correct syntax:
 const Section3 = Loadable(lazy(() => import('../views/Section-3/AssessCarePlans.jsx')));
 const Section4 = Loadable(lazy(() => import('../views/Section-4/ClientProgress.js')));
 const Section5 = Loadable(lazy(() => import('../views/Section-5/Medical.jsx')));
 const Section6 = Loadable(lazy(() => import('../views/Section-6/Section6.jsx')));
-// const BioSocial = Loadable(lazy(() => import('../components/apps/charts/Section-3/BioSocial')));
-// const ClientProgress = Loadable(lazy(() => import('../components/apps/charts/Section-4/ClientProgress')));
-// const Medical = Loadable(lazy(() => import('../components/apps/charts/Section-5/Medical')));
-// const Section6 = Loadable(lazy(() => import('../components/apps/charts/Section-6/Section6')));
 
 const Error = Loadable(lazy(() => import('../views/authentication/Error')));
-
-
 const Login = Loadable(lazy(() => import('../views/authentication/auth1/Login')));
 const Login2 = Loadable(lazy(() => import('../views/authentication/auth2/Login2')));
 const Register = Loadable(lazy(() => import('../views/authentication/auth1/Register')));
@@ -36,11 +25,10 @@ const ForgotPassword = Loadable(lazy(() => import('../views/authentication/auth1
 const ForgotPassword2 = Loadable(
   lazy(() => import('../views/authentication/auth2/ForgotPassword2')),
 );
-
-
 const Maintenance = Loadable(lazy(() => import('../views/authentication/Maintenance')));
 
-const Router = [
+// Define the routes configuration
+const routesConfig = [
   {
     path: '/',
     element: <FullLayout />,
@@ -54,10 +42,6 @@ const Router = [
       { path: '/Section4', name: 'Section 4', exact: true, element: <Section4 /> },
       { path: '/Section5', name: 'Section 5', exact: true, element: <Section5 /> },
       { path: '/Section6', name: 'Section 6', exact: true, element: <Section6 /> },
-      // { path: '/apps/BioSocial', name: 'BioSocial', exact: true, element: <BioSocial /> },
-      // { path: '/apps/ClientProgress', name: 'ClientProgress', exact: true, element: <ClientProgress /> },
-      // { path: '/apps/Medical', name: 'Medical', exact: true, element: <Medical /> },
-      // { path: '/apps/Section6', name: 'Section6', exact: true, element: <Section6 /> },
       { path: '*', element: <Navigate to="/auth/404" /> },
     ],
   },
@@ -78,5 +62,8 @@ const Router = [
   },
 ];
 
-const router = createBrowserRouter(Router);
+// Create the router
+const router = createBrowserRouter(routesConfig);
+
+// Export the router as default
 export default router;
