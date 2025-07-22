@@ -10,6 +10,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@azure/msal-browser": "^4.15.0",
+    "@azure/msal-react": "^3.0.15",
     "@azure/storage-blob": "^12.27.0",
     "@casl/react": "5.0.0",
     "@emotion/cache": "11.14.0",
@@ -51,7 +53,7 @@
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.4.1",
-    "eslint": "9.26.0",
+    "eslint": "^9.31.0",
     "eslint-plugin-react": "7.37.5",
     "eslint-plugin-react-hooks": "5.2.0",
     "eslint-plugin-react-refresh": "0.4.20",
