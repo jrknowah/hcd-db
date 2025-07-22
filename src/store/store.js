@@ -3,9 +3,8 @@ import { configureStore } from '@reduxjs/toolkit';
 import rootReducer from './reducers'; // or combineReducers
 import auth from './slices/authSlice';
 import clientReducer from './slices/clientSlice';
-import medFaceSheetReducer from './slices/medFaceSheetSlice';
 import authSigReducer from './slices/authSigSlice';
-import mentalHealthReducer from './slices/mentalHealthSlice';
+import mentalHealth from './slices/mentalHealthSlice';
 import arrestReducer from './slices/arrestActions';
 import noteArchive from './slices/noteArchiveSlice';
 import MedFaceSheet from "./slices/medFaceSheetSlice";
@@ -28,12 +27,11 @@ const store = configureStore({
   reducer: {
     auth: authSigReducer,
     client: clientReducer,
-    medFaceSheet: medFaceSheetReducer,
     authSig: authSigReducer,
-    mentalHealth: mentalHealthReducer,
+    mentalHealth: mentalHealth,
     arrests: arrestReducer,
     noteArchive: noteArchive,
-    MedFaceSheet: MedFaceSheet,
+    medFaceSheet: MedFaceSheet,
     medScreening: medScreening,
     progressNote: progressNote,
     nursingAdmission: nursingAdmission,
