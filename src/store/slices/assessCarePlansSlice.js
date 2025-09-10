@@ -1,7 +1,7 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import axios from 'axios';
 
-const HCD_API = `${import.meta.env.VITE_API_URL}/auth`; // Adjust to your actual auth endpoint
+const HCD_API = `${import.meta.env.VITE_API_URL}`; // Adjust to your actual auth endpoint
 
 // Mock data for development
 const mockAssessmentData = {

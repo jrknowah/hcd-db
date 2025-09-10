@@ -1,6 +1,15 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 
-// ✅ API Base URL - Update this to match your backend
+// ✅ Helper function to check if we should use mock data
+const shouldUseMockData = (clientID) => {
+  const isDevelopment = import.meta.env.MODE === 'development';
+  const isMockClient = clientID === 'mock-123' || clientID?.toString().startsWith('mock-');
+  const forceRealData = import.meta.env.VITE_USE_REAL_DATA === 'true';
+  
+  return isDevelopment && isMockClient && !forceRealData;
+};
+
+// ✅ API Base URL - CONSISTENT naming
 const API_URL = import.meta.env.VITE_API_URL;
 
 // ✅ Async Thunks for API Calls
@@ -8,11 +17,21 @@ const API_URL = import.meta.env.VITE_API_URL;
 // Fetch IDT Provider Note data
 export const fetchIDTNoteProvider = createAsyncThunk(
     'idtProvider/fetchIDTNoteProvider',
-    async (clientID, { rejectWithValue, getState }) => {
-        const { idtProvider } = getState();
+    async (clientID, { rejectWithValue }) => {
         
-        // Return mock data if enabled
-        if (idtProvider.useMockData) {
+        // ✅ Debug logging
+        console.log('📡 fetchIDTNoteProvider called with clientID:', clientID);
+        console.log('🔧 API_URL:', API_URL);
+        
+        // ✅ Check for undefined clientID
+        if (!clientID || clientID === 'undefined') {
+            console.error('❌ clientID is undefined or invalid:', clientID);
+            return rejectWithValue('Client ID is required');
+        }
+        
+        // ✅ Use consistent mock data checking
+        if (shouldUseMockData(clientID)) {
+            console.log("🔧 Mock mode: Returning mock IDT provider data for", clientID);
             return {
                 idtHospital: "City General Hospital",
                 idtAdmitDate: "2025-07-10",
@@ -43,7 +62,8 @@ export const fetchIDTNoteProvider = createAsyncThunk(
         }
 
         try {
-            const response = await fetch(`${API_BASE_URL}/api/idt-provider/${clientID}`, {
+            // ✅ FIXED: Use consistent API_URL variable
+            const response = await fetch(`${API_URL}/idt-provider/${clientID}`, {
                 method: 'GET',
                 headers: {
                     'Content-Type': 'application/json',
@@ -70,11 +90,11 @@ export const fetchIDTNoteProvider = createAsyncThunk(
 // Save IDT Provider Note data
 export const saveIDTNoteProvider = createAsyncThunk(
     'idtProvider/saveIDTNoteProvider',
-    async (idtData, { rejectWithValue, getState }) => {
-        const { idtProvider } = getState();
+    async (idtData, { rejectWithValue }) => {
         
-        // Return mock success if enabled
-        if (idtProvider.useMockData) {
+        // ✅ Use consistent mock data checking
+        if (shouldUseMockData(idtData.clientID)) {
+            console.log("🔧 Mock mode: Simulating IDT provider save for", idtData.clientID);
             return {
                 ...idtData,
                 idtID: 'MOCK-IDT-' + Date.now(),
@@ -85,7 +105,8 @@ export const saveIDTNoteProvider = createAsyncThunk(
         try {
             const { clientID, ...saveData } = idtData;
             
-            const response = await fetch(`${API_BASE_URL}/api/idt-provider/${clientID}`, {
+            // ✅ FIXED: Use consistent API_URL variable
+            const response = await fetch(`${API_URL}/idt-provider/${clientID}`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -110,10 +131,10 @@ export const saveIDTNoteProvider = createAsyncThunk(
 // Fetch IDT summary data
 export const fetchIDTSummary = createAsyncThunk(
     'idtProvider/fetchIDTSummary',
-    async (clientID, { rejectWithValue, getState }) => {
-        const { idtProvider } = getState();
+    async (clientID, { rejectWithValue }) => {
         
-        if (idtProvider.useMockData) {
+        if (shouldUseMockData(clientID)) {
+            console.log("🔧 Mock mode: Returning mock IDT summary for", clientID);
             return {
                 totalNotes: 3,
                 averageComplexity: 6.5,
@@ -124,7 +145,8 @@ export const fetchIDTSummary = createAsyncThunk(
         }
 
         try {
-            const response = await fetch(`${API_BASE_URL}/api/idt-provider/${clientID}/summary`);
+            // ✅ FIXED: Use consistent API_URL variable
+            const response = await fetch(`${API_URL}/idt-provider/${clientID}/summary`);
             
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
@@ -141,10 +163,10 @@ export const fetchIDTSummary = createAsyncThunk(
 // Fetch consultation data
 export const fetchConsultationData = createAsyncThunk(
     'idtProvider/fetchConsultationData',
-    async (clientID, { rejectWithValue, getState }) => {
-        const { idtProvider } = getState();
+    async (clientID, { rejectWithValue }) => {
         
-        if (idtProvider.useMockData) {
+        if (shouldUseMockData(clientID)) {
+            console.log("🔧 Mock mode: Returning mock consultation data for", clientID);
             return {
                 activeConsultations: [
                     { specialty: "Cardiology", status: "Scheduled", date: "2025-07-17" },
@@ -158,7 +180,8 @@ export const fetchConsultationData = createAsyncThunk(
         }
 
         try {
-            const response = await fetch(`${API_BASE_URL}/api/idt-provider/${clientID}/consultations`);
+            // ✅ FIXED: Use consistent API_URL variable
+            const response = await fetch(`${API_URL}/idt-provider/${clientID}/consultations`);
             
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
@@ -175,10 +198,10 @@ export const fetchConsultationData = createAsyncThunk(
 // Fetch discharge planning data
 export const fetchDischargePlanning = createAsyncThunk(
     'idtProvider/fetchDischargePlanning',
-    async (clientID, { rejectWithValue, getState }) => {
-        const { idtProvider } = getState();
+    async (clientID, { rejectWithValue }) => {
         
-        if (idtProvider.useMockData) {
+        if (shouldUseMockData(clientID)) {
+            console.log("🔧 Mock mode: Returning mock discharge planning for", clientID);
             return {
                 dischargeReadiness: "Needs Planning",
                 targetDate: "2025-07-20",
@@ -190,7 +213,8 @@ export const fetchDischargePlanning = createAsyncThunk(
         }
 
         try {
-            const response = await fetch(`${API_BASE_URL}/api/idt-provider/${clientID}/discharge-planning`);
+            // ✅ FIXED: Use consistent API_URL variable
+            const response = await fetch(`${API_URL}/idt-provider/${clientID}/discharge-planning`);
             
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
@@ -207,10 +231,10 @@ export const fetchDischargePlanning = createAsyncThunk(
 // Fetch IDT note history
 export const fetchIDTHistory = createAsyncThunk(
     'idtProvider/fetchIDTHistory',
-    async (clientID, { rejectWithValue, getState }) => {
-        const { idtProvider } = getState();
+    async (clientID, { rejectWithValue }) => {
         
-        if (idtProvider.useMockData) {
+        if (shouldUseMockData(clientID)) {
+            console.log("🔧 Mock mode: Returning mock IDT history for", clientID);
             return [
                 {
                     idtID: "IDT-001",
@@ -230,7 +254,8 @@ export const fetchIDTHistory = createAsyncThunk(
         }
 
         try {
-            const response = await fetch(`${API_BASE_URL}/api/idt-provider/${clientID}/history`);
+            // ✅ FIXED: Use consistent API_URL variable
+            const response = await fetch(`${API_URL}/idt-provider/${clientID}/history`);
             
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
@@ -279,8 +304,8 @@ const initialState = {
     // Validation
     validationErrors: {},
     
-    // Mock data flag - set to true for development without backend
-    useMockData: process.env.NODE_ENV === 'development' ? true : false,
+    // ✅ FIXED: Single useMockData declaration
+    useMockData: import.meta.env.MODE === 'development',
     
     // User activity tracking
     lastActivity: null,

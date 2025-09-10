@@ -12,7 +12,72 @@ const API_URL = `${import.meta.env.VITE_API_URL}/auth`;
 // ============================================================================
 // Azure AD Integration Helper Functions
 // ============================================================================
+// Add this helper function at the top of your authSlice.js file
+const storeAuthInLocalStorage = (user, token, azureGroups, userRoles, permissions) => {
+  try {
+    localStorage.setItem('authToken', token);
+    localStorage.setItem('userSession', JSON.stringify(user));
+    localStorage.setItem('azureGroups', JSON.stringify(azureGroups));
+    localStorage.setItem('userRoles', JSON.stringify(userRoles));
+    localStorage.setItem('permissions', JSON.stringify(permissions));
+    localStorage.setItem('lastLoginTime', Date.now().toString());
+    console.log('✅ Auth data stored in localStorage');
+  } catch (error) {
+    console.error('❌ Failed to store auth data in localStorage:', error);
+  }
+};
 
+const clearAuthFromLocalStorage = () => {
+  try {
+    localStorage.removeItem('authToken');
+    localStorage.removeItem('userSession');
+    localStorage.removeItem('azureGroups');
+    localStorage.removeItem('userRoles');
+    localStorage.removeItem('permissions');
+    localStorage.removeItem('lastLoginTime');
+    console.log('✅ Auth data cleared from localStorage');
+  } catch (error) {
+    console.error('❌ Failed to clear auth data from localStorage:', error);
+  }
+};
+
+// ✅ Add new action to restore auth from localStorage
+export const restoreAuthFromLocalStorage = createAsyncThunk(
+  'auth/restoreAuthFromLocalStorage',
+  async (_, { rejectWithValue }) => {
+    try {
+      const authToken = localStorage.getItem('authToken');
+      const userSession = localStorage.getItem('userSession');
+      const azureGroups = localStorage.getItem('azureGroups');
+      const userRoles = localStorage.getItem('userRoles');
+      const permissions = localStorage.getItem('permissions');
+      const lastLoginTime = localStorage.getItem('lastLoginTime');
+
+      if (!authToken || !userSession) {
+        return rejectWithValue('No auth data found in localStorage');
+      }
+
+      // Check if token is too old (optional - 24 hours)
+      const tokenAge = Date.now() - parseInt(lastLoginTime || '0');
+      const maxAge = 24 * 60 * 60 * 1000; // 24 hours
+      if (tokenAge > maxAge) {
+        clearAuthFromLocalStorage();
+        return rejectWithValue('Auth token expired');
+      }
+
+      return {
+        user: JSON.parse(userSession),
+        token: authToken,
+        azureGroups: azureGroups ? JSON.parse(azureGroups) : [],
+        userRoles: userRoles ? JSON.parse(userRoles) : [],
+        permissions: permissions ? JSON.parse(permissions) : [],
+      };
+    } catch (error) {
+      clearAuthFromLocalStorage();
+      return rejectWithValue('Failed to restore auth data');
+    }
+  }
+);
 // Helper to extract groups from Azure account
 const extractAzureGroups = (account) => {
   if (account?.idTokenClaims?.groups) {
@@ -261,8 +326,10 @@ const authSlice = createSlice({
       state.error = null;
       state.groupsError = null;
       state.tokenExpiresOn = null;
+
+      // ✅ ADD: Clear localStorage
+      clearAuthFromLocalStorage();
     },
-    
     // ✅ Set loading states
     setLoading: (state, action) => {
       state.loading = action.payload;
@@ -299,7 +366,11 @@ const authSlice = createSlice({
         state.userRoles = userRoles;
         state.permissions = permissions;
         state.msalInstance = msalInstance;
+
+        // ✅ ADD: Store in localStorage
+        storeAuthInLocalStorage(user, token, azureGroups, userRoles, permissions);
       })
+
       .addCase(loginWithAzure.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
@@ -315,6 +386,15 @@ const authSlice = createSlice({
         state.user = action.payload.user;
         state.token = action.payload.token;
         state.isAuthenticated = true;
+
+        // ✅ ADD: Store in localStorage (traditional login)
+        storeAuthInLocalStorage(
+          action.payload.user, 
+          action.payload.token, 
+          [], // No Azure groups for traditional login
+          [], // No roles for traditional login
+          []  // No permissions for traditional login
+        );
       })
       .addCase(loginUser.rejected, (state, action) => {
         state.loading = false;
@@ -343,6 +423,37 @@ const authSlice = createSlice({
         state.error = action.payload;
       })
       
+      // ✅ ADD: Restore from localStorage case
+      .addCase(restoreAuthFromLocalStorage.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(restoreAuthFromLocalStorage.fulfilled, (state, action) => {
+        state.loading = false;
+        const { user, token, azureGroups, userRoles, permissions } = action.payload;
+        state.user = user;
+        state.token = token;
+        state.isAuthenticated = true;
+        state.azureGroups = azureGroups;
+        state.userRoles = userRoles;
+        state.permissions = permissions;
+        console.log('✅ Auth state restored from localStorage');
+      })
+      .addCase(restoreAuthFromLocalStorage.rejected, (state, action) => {
+        state.loading = false;
+        // ✅ DON'T set error for missing localStorage data - this is normal!
+        if (action.payload === 'No auth data found in localStorage' || 
+            action.payload === 'Failed to restore auth data') {
+          console.log('📝 No auth data in localStorage (normal when not logged in)');
+          // Don't set error - just log it
+        } else {
+          // Only set error for actual problems
+          state.error = action.payload;
+        }
+      })
+
+
+      // 7. UPDATE the logoutUser.fulfilled case (around line 320)
       // Logout
       .addCase(logoutUser.fulfilled, (state) => {
         state.user = null;
@@ -353,9 +464,12 @@ const authSlice = createSlice({
         state.permissions = [];
         state.msalInstance = null;
         state.tokenExpiresOn = null;
+
+        // ✅ Clear localStorage
+        clearAuthFromLocalStorage();
       });
-  },
-});
+  }, // ✅ FIXED: Added missing closing brace
+}); // ✅ FIXED: Added missing closing brace and parenthesis
 
 // ============================================================================
 // Actions Export (Updated)
@@ -372,6 +486,7 @@ export const {
   setError,
   setGroupsError,
 } = authSlice.actions;
+
 
 // ============================================================================
 // Selectors (Complete Set)

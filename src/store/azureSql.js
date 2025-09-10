@@ -1,51 +1,59 @@
-// backend/db/azureSql.js
-const sql = require("mssql");
-const { DefaultAzureCredential } = require("@azure/identity");
+// store/azureSql.js
+require('dotenv').config({ path: '../../.env' });
+const sql = require('mssql');
+const { DefaultAzureCredential } = require('@azure/identity');
 
-const credential = new DefaultAzureCredential();
-let poolPromise = null;
+let pool;
+let credential;
 
-function delay(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-async function connectToAzureSQL(retries = 3) {
-  try {
-    console.log("🔄 Attempting to connect to Azure SQL...");
-
-    const tokenResponse = await credential.getToken("https://database.windows.net");
-
-    const config = {
-      server: "cch-server.database.windows.net",
-      database: "clientDemo",
-      authentication: {
-        type: "azure-active-directory-access-token",
-        options: { token: tokenResponse.token },
-      },
-      options: {
-        encrypt: true,
-        trustServerCertificate: false,
-      },
-    };
-
-    poolPromise = new sql.ConnectionPool(config).connect();
-    await poolPromise;
-
-    console.log("✅ Successfully connected to Azure SQL!");
-  } catch (err) {
-    console.error("❌ Database connection failed:", err);
-    if (retries > 0) {
-      console.log(`🔄 Retrying (${retries} attempts left)...`);
-      await delay(5000);
-      return connectToAzureSQL(retries - 1);
-    } else {
-      console.error("❌ All retries failed.");
-      process.exit(1);
-    }
+const config = {
+  server: process.env.AZURE_SQL_SERVER,  // or process.env.SQL_SERVER
+  database: process.env.AZURE_SQL_DATABASE,  // or process.env.SQL_DATABASE
+  user: process.env.AZURE_SQL_USER,  // or process.env.SQL_USER
+  password: process.env.AZURE_SQL_PASSWORD,  // or process.env.SQL_PASSWORD
+  
+  options: {
+    encrypt: true,
+    trustServerCertificate: false
+  },
+  authentication: {
+    type: 'azure-active-directory-default'
   }
-}
-
-module.exports = {
-  connectToAzureSQL,
-  getPool: () => poolPromise,
 };
+
+const getPool = async () => {
+  console.log('Environment check:');
+console.log('Server:', process.env.AZURE_SQL_SERVER ? 'FOUND' : 'NOT FOUND');
+console.log('Database:', process.env.AZURE_SQL_DATABASE ? 'FOUND' : 'NOT FOUND');
+console.log('User:', process.env.AZURE_SQL_USER ? 'FOUND' : 'NOT FOUND');
+console.log('Password:', process.env.AZURE_SQL_PASSWORD ? 'FOUND' : 'NOT FOUND');
+  try {
+    if (!pool) {
+      credential = new DefaultAzureCredential();
+      pool = await sql.connect(config);
+      console.log('✅ Connected to Azure SQL Database');
+    }
+
+    // Check if pool is connected, reconnect if needed
+    if (!pool.connected) {
+      console.log('🔄 Reconnecting to Azure SQL Database...');
+      await pool.close();
+      pool = await sql.connect(config);
+    }
+
+    return pool;
+  } catch (error) {
+    console.error('❌ Azure SQL connection error:', error);
+    
+    // If token expired, reset pool and try again
+    if (error.code === 'ELOGIN') {
+      console.log('🔄 Token expired, creating new connection...');
+      pool = null;
+      return await getPool();
+    }
+    
+    throw error;
+  }
+};
+
+module.exports = { getPool };

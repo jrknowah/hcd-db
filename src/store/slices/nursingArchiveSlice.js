@@ -1,9 +1,17 @@
+// src/store/slices/nursingArchiveSlice.js - FIXED VERSION
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 
-// ✅ API Base URL - Update this to match your backend
-const API_BASE_URL = process.env.NODE_ENV === 'development' 
-    ? 'http://localhost:3001' 
-    : '';
+// ✅ FIXED: Consistent API base URL using import.meta.env
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+
+// ✅ FIXED: Consistent mock data helper function
+const shouldUseMockData = (clientID) => {
+  const isDevelopment = import.meta.env.MODE === 'development';
+  const isMockClient = clientID === 'mock-123' || clientID?.toString().startsWith('mock-');
+  const forceRealData = import.meta.env.VITE_USE_REAL_DATA === 'true';
+  
+  return isDevelopment && isMockClient && !forceRealData;
+};
 
 // ✅ Async Thunks for API Calls
 
@@ -13,8 +21,9 @@ export const fetchDocuments = createAsyncThunk(
     async (clientID, { rejectWithValue, getState }) => {
         const { nursingArchive } = getState();
         
-        // Return mock data if enabled
-        if (nursingArchive.useMockData) {
+        // ✅ FIXED: Use consistent mock data checking
+        if (shouldUseMockData(clientID)) {
+            console.log("🔧 Mock mode: Returning mock documents for", clientID);
             return [
                 {
                     archiveID: 1,
@@ -88,11 +97,11 @@ export const fetchDocuments = createAsyncThunk(
 // Upload document
 export const uploadDocument = createAsyncThunk(
     'nursingArchive/uploadDocument',
-    async ({ clientID, formData }, { rejectWithValue, getState }) => {
-        const { nursingArchive } = getState();
+    async ({ clientID, formData }, { rejectWithValue }) => {
         
-        // Return mock success if enabled
-        if (nursingArchive.useMockData) {
+        // ✅ FIXED: Use consistent mock data checking
+        if (shouldUseMockData(clientID)) {
+            console.log("🔧 Mock mode: Simulating document upload for", clientID);
             return {
                 archiveID: Date.now(),
                 documentName: "Mock Document",
@@ -132,11 +141,11 @@ export const uploadDocument = createAsyncThunk(
 // Download document
 export const downloadDocument = createAsyncThunk(
     'nursingArchive/downloadDocument',
-    async ({ documentID, fileName }, { rejectWithValue, getState }) => {
-        const { nursingArchive } = getState();
+    async ({ documentID, fileName }, { rejectWithValue }) => {
         
-        // Mock download for development
-        if (nursingArchive.useMockData) {
+        // ✅ FIXED: Mock download for development
+        if (shouldUseMockData('mock-123')) {
+            console.log("🔧 Mock mode: Simulating document download for", documentID);
             // Create a mock file download
             const link = document.createElement('a');
             link.href = 'data:text/plain;charset=utf-8,' + encodeURIComponent('Mock document content');
@@ -174,11 +183,11 @@ export const downloadDocument = createAsyncThunk(
 // Delete document
 export const deleteDocument = createAsyncThunk(
     'nursingArchive/deleteDocument',
-    async (documentID, { rejectWithValue, getState }) => {
-        const { nursingArchive } = getState();
+    async (documentID, { rejectWithValue }) => {
         
-        // Mock delete for development
-        if (nursingArchive.useMockData) {
+        // ✅ FIXED: Mock delete for development
+        if (shouldUseMockData('mock-123')) {
+            console.log("🔧 Mock mode: Simulating document delete for", documentID);
             return { documentID, deleted: true };
         }
 
@@ -206,8 +215,9 @@ export const searchDocuments = createAsyncThunk(
     async ({ clientID, query, filters }, { rejectWithValue, getState }) => {
         const { nursingArchive } = getState();
         
-        // Mock search for development
-        if (nursingArchive.useMockData) {
+        // ✅ FIXED: Mock search for development
+        if (shouldUseMockData(clientID)) {
+            console.log("🔧 Mock mode: Simulating document search for", clientID);
             // Simple mock search logic
             const mockDocuments = nursingArchive.documents || [];
             return mockDocuments.filter(doc => 
@@ -245,11 +255,11 @@ export const searchDocuments = createAsyncThunk(
 // Fetch categories
 export const fetchCategories = createAsyncThunk(
     'nursingArchive/fetchCategories',
-    async (_, { rejectWithValue, getState }) => {
-        const { nursingArchive } = getState();
+    async (_, { rejectWithValue }) => {
         
-        // Mock categories for development
-        if (nursingArchive.useMockData) {
+        // ✅ FIXED: Mock categories for development
+        if (import.meta.env.MODE === 'development') {
+            console.log("🔧 Mock mode: Returning mock categories");
             return [
                 { id: 1, name: 'Nursing Notes', description: 'General nursing documentation' },
                 { id: 2, name: 'Lab Reports', description: 'Laboratory test results' },
@@ -286,11 +296,11 @@ export const fetchCategories = createAsyncThunk(
 // Share document
 export const shareDocument = createAsyncThunk(
     'nursingArchive/shareDocument',
-    async ({ documentID, shareData }, { rejectWithValue, getState }) => {
-        const { nursingArchive } = getState();
+    async ({ documentID, shareData }, { rejectWithValue }) => {
         
-        // Mock share for development
-        if (nursingArchive.useMockData) {
+        // ✅ FIXED: Mock share for development
+        if (shouldUseMockData('mock-123')) {
+            console.log("🔧 Mock mode: Simulating document share for", documentID);
             return {
                 shareID: 'SHARE-' + Date.now(),
                 shareLink: `https://mock-hospital.com/share/${documentID}`,
@@ -370,8 +380,8 @@ const initialState = {
     maxFileSize: 50 * 1024 * 1024, // 50MB
     allowedFileTypes: ['.pdf', '.doc', '.docx', '.jpg', '.jpeg', '.png', '.txt'],
     
-    // Mock data flag - set to true for development without backend
-    useMockData: process.env.NODE_ENV === 'development' ? true : false,
+    // ✅ FIXED: Consistent mock data flag
+    useMockData: import.meta.env.MODE === 'development',
     
     // Activity tracking
     lastActivity: null,
