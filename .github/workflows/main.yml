@@ -1,0 +1,61 @@
+name: Deploy Backend to Azure App Service
+
+on:
+  push:
+    branches: [ main ]
+    paths: 
+      - 'server.cjs'
+      - 'routes/**'
+      - 'config/**'
+      - 'azureSql.js'
+      - '.github/workflows/deploy-backend.yml'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+    
+    - name: Create backend deployment package
+      run: |
+        mkdir backend-deploy
+        cp server.cjs backend-deploy/
+        cp -r routes backend-deploy/ 2>/dev/null || echo "No routes folder"
+        cp -r config backend-deploy/ 2>/dev/null || echo "No config folder"
+        cp azureSql.js backend-deploy/ 2>/dev/null || echo "No azureSql.js"
+        
+        # Create backend package.json
+        cat > backend-deploy/package.json << 'EOF'
+        {
+          "name": "hcd-backend",
+          "version": "1.0.0",
+          "scripts": {
+            "start": "node server.cjs"
+          },
+          "engines": {
+            "node": "18.x"
+          },
+          "dependencies": {
+            "express": "^5.1.0",
+            "cors": "^2.8.5",
+            "dotenv": "^17.2.0",
+            "mssql": "^11.0.1",
+            "express-validator": "^7.2.1",
+            "multer": "^2.0.2",
+            "jwks-rsa": "^3.2.0"
+          }
+        }
+        EOF
+    
+    - name: Deploy to Azure App Service
+      uses: azure/webapps-deploy@v2
+      with:
+        app-name: 'hcd-db-backend-fdfmekfgehbhf0db'
+        publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE_BACKEND }}
+        package: './backend-deploy'
