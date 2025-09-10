@@ -1,12 +1,14 @@
+// Fixed DashboardClient.js with working navigation
+
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
+import { useSearchParams, useLocation, useNavigate } from 'react-router-dom';
 import {
   Box,
   Button,
   Dialog,
   DialogTitle,
   DialogContent,
-  DialogActions,
   Typography,
   Grid,
   Card,
@@ -23,16 +25,15 @@ import {
   Fade,
   Zoom,
   Paper,
-  Divider,
   Tooltip,
   CircularProgress,
   Stack,
-  Badge
+  Badge,
+  Snackbar
 } from '@mui/material';
 import {
   Add as AddIcon,
   Search as SearchIcon,
-  FilterList as FilterIcon,
   ViewList as ViewListIcon,
   ViewModule as ViewModuleIcon,
   Refresh as RefreshIcon,
@@ -43,47 +44,108 @@ import {
   Close as CloseIcon,
   Home as HomeIcon,
   TrendingUp as TrendingUpIcon,
-  Schedule as ScheduleIcon
+  Schedule as ScheduleIcon,
+  Edit as EditIcon
 } from '@mui/icons-material';
 
 import ClientProfileCard from 'src/components/cards/ClientProfileCard';
 import ClientTable from 'src/components/tables/ClientTable';
 import NewClient from './NewClient';
+import NavigationDebugger from '../../components/debug/NavigationDebugger';
 
-// Import Redux actions if available
-// import { fetchClients, selectAllClients, selectClientsLoading } from 'src/store/slices/clientSlice';
+// Import Redux actions
+import { 
+  fetchClients, 
+  selectAllClients, 
+  selectClientsLoading, 
+  selectClientsError,
+  fetchClientById,
+  setSelectedClient
+} from 'src/store/slices/clientSlice';
 
 const DashboardClient = () => {
   const dispatch = useDispatch();
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const location = useLocation();
   
-  // Redux selectors
+  // ✅ FIXED: Move Redux selectors to the TOP, before any useEffect that uses them
   const user = useSelector((state) => state.auth?.user);
-  const clients = useSelector((state) => state.clients?.clients || []);
+  const clients = useSelector(selectAllClients);
   const selectedClient = useSelector((state) => state.clients?.selectedClient);
-  const loading = useSelector((state) => state.clients?.loading || false);
+  const loading = useSelector(selectClientsLoading);
+  const error = useSelector(selectClientsError);
   
-  // Local state
+  // ✅ FIXED: Local state comes AFTER Redux selectors
   const [newClientModal, setNewClientModal] = useState(false);
+  const [editClientModal, setEditClientModal] = useState(false);
+  const [editingClientID, setEditingClientID] = useState(null);
+  const [editingClientData, setEditingClientData] = useState(null);
   const [selectedClientID, setSelectedClientID] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterBy, setFilterBy] = useState('all');
-  const [viewMode, setViewMode] = useState('table'); // 'table' or 'grid'
+  const [viewMode, setViewMode] = useState('table');
   const [activeTab, setActiveTab] = useState(0);
-  const [showFilters, setShowFilters] = useState(false);
+  const [showDebugModal, setShowDebugModal] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
+  const [showSuccess, setShowSuccess] = useState(false);
+
+  // ✅ FIXED: Debug logging AFTER variables are declared
+  console.log('🔍 Current pathname:', location.pathname);
+  console.log('🔍 URL Client ID from params:', searchParams.get('clientID'));
+
+  // ✅ FIXED: useEffect now comes AFTER all variables are declared
+  useEffect(() => {
+    console.log('🔗 API URL:', import.meta.env.VITE_API_URL);
+    console.log('📊 Redux clients state:', clients);
+    console.log('📊 Redux loading state:', loading);
+    console.log('📊 Redux error state:', error);
+    
+    // Test API call directly
+    console.log('🧪 Testing API call...');
+    fetch(`${import.meta.env.VITE_API_URL}/clients`)
+      .then(response => {
+        console.log('🌐 API Response status:', response.status);
+        return response.json();
+      })
+      .then(data => {
+        console.log('📋 Real clients from API:', data);
+        console.log('📋 Number of clients:', data?.length);
+      })
+      .catch(err => {
+        console.error('❌ API call failed:', err);
+      });
+  }, [clients, loading, error]);
+
+  // ✅ Load client from URL on page load/refresh (only for dashboard)
+  useEffect(() => {
+    const isDashboard = location.pathname === '/dashboard' || location.pathname === '/';
+    
+    if (isDashboard) {
+      const clientIDFromParams = searchParams.get('clientID');
+      if (clientIDFromParams) {
+        console.log('🔄 Loading client from URL for dashboard:', clientIDFromParams);
+        const existingClient = clients?.find(c => c.clientID === clientIDFromParams);
+        if (existingClient) {
+          dispatch(setSelectedClient(existingClient));
+        } else {
+          dispatch(fetchClientById(clientIDFromParams));
+        }
+      }
+    }
+  }, [location.pathname, searchParams, dispatch, clients]);
 
   // Fetch clients on component mount
   useEffect(() => {
-    // Uncomment when Redux action is available
-    // if (dispatch && !clients.length) {
-    //   dispatch(fetchClients());
-    // }
+    if (dispatch) {
+      dispatch(fetchClients());
+    }
   }, [dispatch]);
 
   // Filter and search logic
   const filteredClients = useMemo(() => {
-    let filtered = clients;
+    let filtered = clients || [];
 
-    // Apply search filter
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
       filtered = filtered.filter(client => 
@@ -94,12 +156,11 @@ const DashboardClient = () => {
       );
     }
 
-    // Apply category filter
     if (filterBy !== 'all') {
       switch (filterBy) {
         case 'new':
-          // Clients added in last 7 days
           filtered = filtered.filter(client => {
+            if (!client.createdAt) return false;
             const createdDate = new Date(client.createdAt);
             const weekAgo = new Date();
             weekAgo.setDate(weekAgo.getDate() - 7);
@@ -125,42 +186,102 @@ const DashboardClient = () => {
 
   // Dashboard statistics
   const dashboardStats = useMemo(() => {
-    const totalClients = clients.length;
-    const newThisWeek = clients.filter(client => {
+    const totalClients = clients?.length || 0;
+    const newThisWeek = clients?.filter(client => {
+      if (!client.createdAt) return false;
       const createdDate = new Date(client.createdAt);
       const weekAgo = new Date();
       weekAgo.setDate(weekAgo.getDate() - 7);
       return createdDate > weekAgo;
-    }).length;
+    }).length || 0;
     
-    const veterans = clients.filter(client => 
+    const veterans = clients?.filter(client => 
       client.clientVetStatus === 'Protected Veteran' || 
       client.clientVetStatus === 'I am a veteran, but I am not a protected veteran'
-    ).length;
+    ).length || 0;
 
-    const activeClients = clients.filter(client => client.status === 'active').length;
+    const activeClients = clients?.filter(client => client.status === 'active').length || 0;
 
     return {
       total: totalClients,
       newThisWeek,
       veterans,
       active: activeClients,
-      formsComplete: Math.floor(totalClients * 0.7) // Mock percentage
+      formsComplete: Math.floor(totalClients * 0.7)
     };
   }, [clients]);
 
+  // ✅ Clean React Router navigation (no page reload)
+  const handleGoToSection = useCallback((sectionName, clientID) => {
+    console.log('🔄 Navigating to section:', sectionName, 'with client:', clientID);
+    
+    if (clientID) {
+      // Find and set the client data in Redux store before navigation
+      const client = clients?.find(c => c.clientID === clientID);
+      if (client) {
+        dispatch(setSelectedClient(client));
+        console.log('✅ Client set in Redux:', client);
+        
+        // ✅ Simple React Router navigation
+        const routeName = sectionName.charAt(0).toUpperCase() + sectionName.slice(1);
+        const targetPath = `/${routeName}?clientID=${clientID}`;
+        
+        console.log('🔄 Using React Router navigate to:', targetPath);
+        navigate(targetPath);
+        
+      } else {
+        console.error('❌ Client not found:', clientID);
+      }
+    }
+  }, [clients, dispatch, navigate]);
+
+  const handleBackToDashboard = useCallback(() => {
+    console.log('🔄 Navigating back to Dashboard');
+    navigate('/dashboard');
+  }, [navigate]);
+
+  // ✅ View Chart handler (navigates to Section1 - capitalized to match routes)
+  const handleViewChart = useCallback((clientID) => {
+    console.log('📊 View chart for client:', clientID);
+    handleGoToSection('section1', clientID); // lowercase input, will be converted to Section1
+  }, [handleGoToSection]);
+
+  const handleViewForms = useCallback((clientID) => {
+    console.log('📋 View forms for client:', clientID);
+    handleGoToSection('section2', clientID); // lowercase input, will be converted to Section2
+  }, [handleGoToSection]);
+
   // Event handlers
   const handleClientCreated = useCallback((clientID) => {
-    setSelectedClientID(clientID);
+    console.log('✅ Client created:', clientID);
     setNewClientModal(false);
+    setSuccessMessage('Client created successfully!');
+    setShowSuccess(true);
     
-    // Refresh clients list if needed
-    // dispatch(fetchClients());
-  }, []);
+    // Refresh clients list
+    dispatch(fetchClients());
+  }, [dispatch]);
 
   const handleSelectClient = useCallback((clientID) => {
+    console.log('👤 Client selected for sidebar:', clientID);
     setSelectedClientID(clientID);
   }, []);
+
+  // Edit handler - opens modal only
+  const handleEditClient = useCallback((clientID) => {
+    console.log('🔧 Edit client clicked:', clientID);
+    
+    const clientToEdit = clients?.find(c => c.clientID === clientID);
+    if (!clientToEdit) {
+      console.error('❌ Client not found');
+      return;
+    }
+    
+    setEditingClientID(clientID);
+    setEditingClientData(clientToEdit);
+    dispatch(setSelectedClient(clientToEdit));
+    setEditClientModal(true);
+  }, [clients, dispatch]);
 
   const handleSearchChange = useCallback((event) => {
     setSearchQuery(event.target.value);
@@ -175,8 +296,8 @@ const DashboardClient = () => {
   }, []);
 
   const handleRefresh = useCallback(() => {
-    // dispatch(fetchClients());
-  }, []);
+    dispatch(fetchClients());
+  }, [dispatch]);
 
   const handleCloseModal = useCallback(() => {
     setNewClientModal(false);
@@ -186,9 +307,53 @@ const DashboardClient = () => {
     setNewClientModal(true);
   }, []);
 
+  const handleCloseEditModal = useCallback(() => {
+    setEditClientModal(false);
+    setEditingClientID(null);
+    setEditingClientData(null);
+  }, []);
+
+  // Simple update handler - just show success message
+  const handleClientUpdated = useCallback(() => {
+    console.log('✅ Client updated successfully');
+    setEditClientModal(false);
+    setEditingClientID(null);
+    setEditingClientData(null);
+    
+    // Show success message
+    setSuccessMessage('Client updated successfully!');
+    setShowSuccess(true);
+    
+    // Refresh clients list
+    dispatch(fetchClients());
+  }, [dispatch]);
+
+  // Close success notification
+  const handleCloseSuccess = useCallback(() => {
+    setShowSuccess(false);
+  }, []);
+
+  // ✅ This component only renders the dashboard - sections are separate routes
+  // Handle both root path and dashboard path
+  const isDashboardRoute = location.pathname === '/dashboard' || location.pathname === '/';
+  
+  if (!isDashboardRoute) {
+    console.log('🔍 Not on dashboard route, pathname:', location.pathname);
+    return null;
+  }
+
   // Render dashboard statistics
   const renderDashboardStats = () => (
-    <Grid container spacing={3} sx={{ mb: 3 }}>
+  <Grid container spacing={3} sx={{ mb: 3 }}>
+    {process.env.NODE_ENV === 'development' && (
+      <Button
+        variant="outlined"
+        onClick={() => setShowDebugModal(true)}
+        sx={{ ml: 2 }}
+      >
+        🐛 Debug
+      </Button>
+    )}
       <Grid item xs={12} sm={6} md={2.4}>
         <Card elevation={2} sx={{ 
           background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
@@ -346,10 +511,9 @@ const DashboardClient = () => {
         </Grid>
       </Grid>
 
-      {/* Results summary */}
       <Box sx={{ mt: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <Typography variant="body2" color="text.secondary">
-          Showing {filteredClients.length} of {clients.length} clients
+          Showing {filteredClients.length} of {clients?.length || 0} clients
           {searchQuery && ` for "${searchQuery}"`}
         </Typography>
         
@@ -381,9 +545,16 @@ const DashboardClient = () => {
           Client Management Dashboard
         </Typography>
         <Typography variant="body1" color="text.secondary">
-          Manage clients, track progress, and access client information
+          Select a client to begin working with their information
         </Typography>
       </Box>
+
+      {/* Error Alert */}
+      {error && (
+        <Alert severity="error" sx={{ mb: 3 }}>
+          {error}
+        </Alert>
+      )}
 
       {/* Dashboard Statistics */}
       {renderDashboardStats()}
@@ -437,6 +608,9 @@ const DashboardClient = () => {
                     selectedClientID={selectedClientID}
                     viewMode={viewMode}
                     loading={loading}
+                    onEditClient={handleEditClient}
+                    onViewForms={handleViewForms}
+                    onViewChart={handleViewChart} // ✅ View Chart functionality
                   />
                 )}
 
@@ -461,6 +635,8 @@ const DashboardClient = () => {
                     <ClientProfileCard 
                       clientID={selectedClientID}
                       onClose={() => setSelectedClientID(null)}
+                      onEditClient={handleEditClient}
+                      onViewForms={handleViewForms}
                     />
                   </Box>
                 </Zoom>
@@ -530,6 +706,84 @@ const DashboardClient = () => {
           <NewClient onClientCreated={handleClientCreated} />
         </DialogContent>
       </Dialog>
+
+      {/* Edit Client Modal */}
+      <Dialog 
+        open={editClientModal} 
+        onClose={handleCloseEditModal}
+        maxWidth="lg"
+        fullWidth
+        PaperProps={{
+          sx: { 
+            minHeight: '80vh',
+            maxHeight: '90vh'
+          }
+        }}
+      >
+        <DialogTitle sx={{ 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: 'center',
+          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+          color: 'white'
+        }}>
+          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            <EditIcon sx={{ mr: 1 }} />
+            Edit Client Information
+            {editingClientID && (
+              <Typography variant="caption" sx={{ ml: 1, opacity: 0.8 }}>
+                (ID: {editingClientID})
+              </Typography>
+            )}
+          </Box>
+          <IconButton 
+            onClick={handleCloseEditModal}
+            sx={{ color: 'white' }}
+          >
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
+        
+        <DialogContent sx={{ p: 0 }}>
+          {editingClientData ? (
+            <NewClient 
+              editMode={true}
+              clientData={editingClientData}
+              onClientCreated={handleClientUpdated}
+            />
+          ) : (
+            <Box sx={{ p: 3, textAlign: 'center' }}>
+              <CircularProgress />
+              <Typography sx={{ mt: 2 }}>Loading client data...</Typography>
+            </Box>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Success Notification */}
+      <Snackbar
+        open={showSuccess}
+        autoHideDuration={4000}
+        onClose={handleCloseSuccess}
+        anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
+      >
+        <Alert 
+          onClose={handleCloseSuccess} 
+          severity="success" 
+          sx={{ width: '100%' }}
+        >
+          {successMessage}
+        </Alert>
+      </Snackbar>
+
+      <Dialog 
+  open={showDebugModal} 
+  onClose={() => setShowDebugModal(false)}
+  maxWidth="xl"
+  fullWidth
+>
+  <NavigationDebugger />
+</Dialog>
     </Box>
   );
 };

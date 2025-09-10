@@ -40,7 +40,8 @@ import {
     Warning as WarningIcon,
     Person as PersonIcon,
     Schedule as ScheduleIcon,
-    BugReport as BugIcon
+    BugReport as BugIcon,
+    Label
 } from '@mui/icons-material';
 import { useSelector, useDispatch } from "react-redux";
 import logUserAction from "../../config/logAction";
@@ -367,9 +368,10 @@ const ReAssessment = () => {
                         <AccordionDetails>
                             <Grid container spacing={3}>
                                 <Grid item xs={12} md={6}>
+                                    <Typography>Date of Baseline Assessment</Typography>
                                     <TextField
                                         fullWidth
-                                        label="Date of Baseline Assessment"
+                                        label=""
                                         type="date"
                                         name="dateFullAssess"
                                         value={formData.dateFullAssess || ''}
@@ -378,9 +380,9 @@ const ReAssessment = () => {
                                     />
                                 </Grid>
                                 <Grid item xs={12} md={6}>
+                                    <Typography>Date of Last Re-Assessment</Typography>
                                     <TextField
                                         fullWidth
-                                        label="Date of Last Re-Assessment"
                                         type="date"
                                         name="dateLastReAssess"
                                         value={formData.dateLastReAssess || ''}
@@ -388,39 +390,46 @@ const ReAssessment = () => {
                                         InputLabelProps={{ shrink: true }}
                                     />
                                 </Grid>
+                            </Grid>
+                            <Grid container spacing={3} sx={{ mt: 2 }}>
                                 <Grid item xs={12}>
+                                    <Typography>Sources for Re-Assessment</Typography>
                                     <TextField
                                         fullWidth
-                                        label="Other Sources for Re-Assessment Information"
                                         name="reassessmentSources"
                                         value={formData.reassessmentSources || ''}
                                         onChange={handleInputChange}
                                         multiline
-                                        rows={2}
+                                        rows={4}
+                                        columns={6}
                                     />
                                 </Grid>
                                 <Grid item xs={12} md={4}>
+                                    <Typography>Cultural Considerations"</Typography>
                                     <TextField
                                         fullWidth
-                                        label="Cultural Considerations"
                                         name="culturalCons"
                                         value={formData.culturalCons || ''}
                                         onChange={handleInputChange}
                                     />
                                 </Grid>
+                            </Grid>
+                            <Grid container spacing={3} sx={{ mt: 2 }}>
                                 <Grid item xs={12} md={4}>
+                                    <Typography>Physical Challenges</Typography> 
                                     <TextField
                                         fullWidth
-                                        label="Physical Challenges"
+                                        label=""
                                         name="physicalChall"
                                         value={formData.physicalChall || ''}
                                         onChange={handleInputChange}
                                     />
                                 </Grid>
                                 <Grid item xs={12} md={4}>
+                                    <Typography>Access Issues</Typography>
                                     <TextField
                                         fullWidth
-                                        label="Access Issues"
+                                        label=""
                                         name="accessIssues"
                                         value={formData.accessIssues || ''}
                                         onChange={handleInputChange}
@@ -446,8 +455,8 @@ const ReAssessment = () => {
                         <AccordionDetails>
                             <Grid container spacing={3}>
                                 <Grid item xs={12} md={6}>
+                                    <Typography>Precipitating Event/Reason for Referral</Typography>
                                     <FormControl fullWidth>
-                                        <InputLabel>Precipitating Event/Reason for Referral</InputLabel>
                                         <Select
                                             name="reasonForRef"
                                             value={formData.reasonForRef || ''}
@@ -461,9 +470,10 @@ const ReAssessment = () => {
                                     </FormControl>
                                 </Grid>
                                 <Grid item xs={12}>
+                                    <Typography>Current Symptoms/Behaviors and Impairments</Typography>
                                     <TextField
                                         fullWidth
-                                        label="Current symptoms/behaviors and impairments"
+                                        label=""
                                         name="currentSymp"
                                         value={formData.currentSymp || ''}
                                         onChange={handleInputChange}
@@ -472,9 +482,11 @@ const ReAssessment = () => {
                                         helperText="Include intensity, duration, frequency, and perspective of client and others"
                                     />
                                 </Grid>
+                            </Grid> 
+                            <Grid container spacing={3} sx={{ mt: 2 }}>
                                 <Grid item xs={12} md={6}>
+                                    <Typography>Suicidal/Homicidal Thoughts/Attempts</Typography>
                                     <FormControl fullWidth>
-                                        <InputLabel>Suicidal/Homicidal Thoughts/Attempts</InputLabel>
                                         <Select
                                             name="suicHomiThou"
                                             value={formData.suicHomiThou || ''}
@@ -488,13 +500,14 @@ const ReAssessment = () => {
                                     </FormControl>
                                 </Grid>
                                 <Grid item xs={12} md={6}>
+                                    <Typography>Columbia Suicide Risk Scale Completed?</Typography>
                                     <FormControl fullWidth>
-                                        <InputLabel>Columbia Suicide Risk Scale Completed?</InputLabel>
+                                        <InputLabel></InputLabel>
                                         <Select
                                             name="columbiaSRComp"
                                             value={formData.columbiaSRComp || ''}
                                             onChange={(e) => handleSelectChange('columbiaSRComp', e.target.value)}
-                                            label="Columbia Suicide Risk Scale Completed?"
+                                            label=""
                                         >
                                             <MenuItem value="">Select...</MenuItem>
                                             <MenuItem value="Yes">Yes</MenuItem>
@@ -502,10 +515,13 @@ const ReAssessment = () => {
                                         </Select>
                                     </FormControl>
                                 </Grid>
-                                <Grid item xs={12}>
+                            </Grid>
+                            <Grid container spacing={3} sx={{ mt: 2 }}>
+                                <Grid item xs={12}> 
+                                    <Typography>If Columbia Scale NOT completed, describe details</Typography>
                                     <TextField
                                         fullWidth
-                                        label="If Columbia Scale NOT completed, describe details"
+                                        label=""
                                         name="columbiaSR"
                                         value={formData.columbiaSR || ''}
                                         onChange={handleInputChange}
@@ -546,6 +562,7 @@ const ReAssessment = () => {
 
                                     return (
                                         <Grid item xs={12} md={4} key={field}>
+                                            <Typography>{labels[field]}</Typography>
                                             <Autocomplete
                                                 multiple
                                                 options={options}
@@ -553,7 +570,7 @@ const ReAssessment = () => {
                                                 value={formData[field] || []}
                                                 onChange={(event, newValue) => handleMultiSelectChange(field, newValue)}
                                                 renderInput={(params) => (
-                                                    <TextField {...params} label={labels[field]} />
+                                                    <TextField {...params} />
                                                 )}
                                                 renderTags={(value, getTagProps) =>
                                                     value.map((option, index) => (
@@ -575,9 +592,9 @@ const ReAssessment = () => {
                                     );
                                 })}
                                 <Grid item xs={12}>
+                                    <Typography>Other Observations</Typography>
                                     <TextField
                                         fullWidth
-                                        label="Summary and Any Other Observations"
                                         name="cmObvSum"
                                         value={formData.cmObvSum || ''}
                                         onChange={handleInputChange}
@@ -605,9 +622,10 @@ const ReAssessment = () => {
                         <AccordionDetails>
                             <Grid container spacing={3}>
                                 <Grid item xs={12}>
+                                    <Typography>Client Strengths</Typography>
                                     <TextField
                                         fullWidth
-                                        label="Client Strengths (to assist in achieving treatment goals)"
+                                        label=""
                                         name="clientStrengthReAssessSummary"
                                         value={formData.clientStrengthReAssessSummary || ''}
                                         onChange={handleInputChange}
@@ -616,9 +634,10 @@ const ReAssessment = () => {
                                     />
                                 </Grid>
                                 <Grid item xs={12}>
+                                    <Typography>Clinical Formulation and Diagnostic Justification</Typography>
                                     <TextField
                                         fullWidth
-                                        label="Clinical Formulation and Diagnostic Justification"
+                                        label=""
                                         name="clientFormReAssessSummary"
                                         value={formData.clientFormReAssessSummary || ''}
                                         onChange={handleInputChange}
@@ -628,9 +647,10 @@ const ReAssessment = () => {
                                     />
                                 </Grid>
                                 <Grid item xs={12} md={4}>
+                                    <Typography>Diagnostic Descriptor</Typography>
                                     <TextField
                                         fullWidth
-                                        label="Diagnostic Descriptor"
+                                        label=""
                                         name="diagDescript"
                                         value={formData.diagDescript || ''}
                                         onChange={handleInputChange}
@@ -639,8 +659,8 @@ const ReAssessment = () => {
                                     />
                                 </Grid>
                                 <Grid item xs={12} md={4}>
+                                    <Typography>ICD Diagnosis Code Type</Typography>
                                     <FormControl fullWidth>
-                                        <InputLabel>ICD Diagnosis Code Type</InputLabel>
                                         <Select
                                             name="diagDescriptCodeChoice"
                                             value={formData.diagDescriptCodeChoice || ''}
@@ -654,9 +674,10 @@ const ReAssessment = () => {
                                     </FormControl>
                                 </Grid>
                                 <Grid item xs={12} md={4}>
+                                    <Typography>ICD Code</Typography>
                                     <TextField
                                         fullWidth
-                                        label="ICD Code"
+                                        label=""
                                         name="diagDescriptCode"
                                         value={formData.diagDescriptCode || ''}
                                         onChange={handleInputChange}

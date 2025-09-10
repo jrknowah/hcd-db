@@ -1,8 +1,7 @@
 {
-  "name": "main-vite-js",
+  "name": "hope-cdb",
   "private": true,
-  "version": "5.0.0",
-  "type": "module",
+  "version": "1.0.0",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
@@ -10,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@azure/identity": "^4.10.2",
     "@azure/msal-browser": "^4.15.0",
     "@azure/msal-react": "^3.0.15",
     "@azure/storage-blob": "^12.27.0",
@@ -30,11 +30,17 @@
     "@tabler/icons-react": "^3.31.0",
     "apexcharts": "4.7.0",
     "axios": "^1.10.0",
+    "cors": "^2.8.5",
     "dotenv": "^17.2.0",
+    "express": "^5.1.0",
+    "express-validator": "^7.2.1",
     "html2pdf": "^0.0.11",
     "html2pdf.js": "^0.10.3",
     "i18next": "25.1.1",
+    "jwks-rsa": "^3.2.0",
     "lodash": "4.17.21",
+    "mssql": "^11.0.1",
+    "multer": "^2.0.2",
     "react": "^19.1.0",
     "react-apexcharts": "^1.7.0",
     "react-dom": "19.1.0",

@@ -4,6 +4,9 @@
 // Microsoft Azure AD Configuration for HOPE
 // ============================================================================
 
+import { PublicClientApplication } from '@azure/msal-browser';
+
+// ✅ STEP 1: Define the configuration FIRST
 export const msalConfig = {
   auth: {
     clientId: import.meta.env.VITE_AZURE_CLIENT_ID || process.env.REACT_APP_AZURE_CLIENT_ID,
@@ -41,7 +44,7 @@ export const msalConfig = {
   },
 };
 
-// Updated login request to include groups claim
+// ✅ STEP 2: Updated login request to include groups claim
 export const loginRequest = {
   scopes: [
     "User.Read", 
@@ -59,12 +62,12 @@ export const loginRequest = {
   }
 };
 
-// Microsoft Graph API scopes for getting detailed group info
+// ✅ STEP 3: Microsoft Graph API scopes for getting detailed group info
 export const graphRequest = {
   scopes: ["User.Read", "GroupMember.Read.All", "Directory.Read.All"],
 };
 
-// Configuration validation
+// ✅ STEP 4: Configuration validation
 export const validateConfig = () => {
   const clientId = import.meta.env.VITE_AZURE_CLIENT_ID || process.env.REACT_APP_AZURE_CLIENT_ID;
   const tenantId = import.meta.env.VITE_AZURE_TENANT_ID || process.env.REACT_APP_AZURE_TENANT_ID;
@@ -84,4 +87,49 @@ export const validateConfig = () => {
   console.log('🔑 Client ID:', clientId.substring(0, 8) + '...');
   
   return true;
+};
+
+// ✅ STEP 5: Create MSAL instance AFTER config is defined
+export const msalInstance = new PublicClientApplication(msalConfig);
+
+// ✅ STEP 6: Initialization function with proper error handling
+let initializationPromise = null;
+
+export const initializeMsal = async () => {
+  if (initializationPromise) {
+    return initializationPromise;
+  }
+
+  initializationPromise = (async () => {
+    try {
+      // Validate config first
+      if (!validateConfig()) {
+        throw new Error('Invalid Azure AD configuration');
+      }
+
+      console.log('🔄 Starting MSAL initialization...');
+      await msalInstance.initialize();
+      console.log('✅ MSAL initialized successfully');
+      
+      // Handle redirect promise AFTER initialization
+      try {
+        console.log('🔄 Handling redirect promise...');
+        const response = await msalInstance.handleRedirectPromise();
+        if (response) {
+          console.log('✅ Redirect handled successfully:', response.account?.username);
+        } else {
+          console.log('ℹ️ No redirect to handle');
+        }
+      } catch (redirectError) {
+        console.error('❌ Redirect handling error:', redirectError);
+      }
+      
+      return true;
+    } catch (error) {
+      console.error('❌ MSAL initialization failed:', error);
+      throw error;
+    }
+  })();
+
+  return initializationPromise;
 };

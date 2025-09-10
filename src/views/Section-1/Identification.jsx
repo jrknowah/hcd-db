@@ -1,14 +1,26 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  Box, Tabs, Tab, Typography, Button, Grid, Card, InputLabel, OutlinedInput
+  Box, Tabs, Tab, Typography, Button, Grid, Card, InputLabel, OutlinedInput, 
+  Modal, IconButton, Chip, LinearProgress, Alert, CardContent, CardActions,
+  Dialog, DialogTitle, DialogContent, DialogActions, List, ListItem, ListItemText,
+  ListItemSecondaryAction, Tooltip
 } from '@mui/material';
+import {
+  CloudUpload as UploadIcon,
+  Delete as DeleteIcon,
+  Download as DownloadIcon,
+  PictureAsPdf as PdfIcon,
+  Visibility as ViewIcon,
+  Close as CloseIcon
+} from '@mui/icons-material';
 import { useSelector } from 'react-redux';
 import axios from 'axios';
+import html2pdf from 'html2pdf.js';
+import { azureBlobService } from '../../services/azureBlobService'; // Import our service
 import logUserAction from '../../config/logAction';
 import ClientFace from './ClientFace';
 import Referrals from './Referrals';
 import Discharge from './Discharge';
-import html2pdf from 'html2pdf.js';
 
 // ✅ Move all static data outside component
 const MOCK_CLIENT = {
@@ -28,23 +40,46 @@ const DOC_TYPES = [
 ];
 
 const MOCK_FILES = [
-  { fileName: 'mock_id_card.pdf', filePath: '/mock/path/id_card.pdf' },
-  { fileName: 'mock_drivers_license.jpg', filePath: '/mock/path/drivers_license.jpg' },
+  { 
+    fileName: 'mock_id_card.pdf', 
+    blobUrl: '/mock/path/id_card.pdf',
+    docType: 'Identification Card',
+    uploadDate: '2024-03-15T10:30:00Z',
+    fileSize: 1024000
+  },
+  { 
+    fileName: 'mock_drivers_license.jpg', 
+    blobUrl: '/mock/path/drivers_license.jpg',
+    docType: "Driver's License",
+    uploadDate: '2024-03-14T15:45:00Z',
+    fileSize: 2048000
+  },
 ];
 
 const Identification = () => {
   const API_URL = import.meta.env.VITE_APP_API_URL;
   
-  // ✅ Simple state - no complex dependencies
+  // ✅ Simple state
   const [forceMockData, setForceMockData] = useState(false);
   const [tabIndex, setTabIndex] = useState(0);
   const [files, setFiles] = useState([]);
   const [filesToUpload, setFilesToUpload] = useState({});
-  const [uploadingDocType, setUploadingDocType] = useState(null);
+  const [uploadProgress, setUploadProgress] = useState({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [successMessage, setSuccessMessage] = useState('');
+  
+  // PDF Export states
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportProgress, setExportProgress] = useState(0);
+  
+  // File management states
+  const [fileToDelete, setFileToDelete] = useState(null);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [filePreview, setFilePreview] = useState(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
 
-  // ✅ Simple selectors - just get the data, don't transform it
+  // ✅ Simple selectors
   const reduxSelectedClient = useSelector((state) => state?.clients?.selectedClient);
   const reduxUser = useSelector((state) => state?.auth?.user);
 
@@ -52,13 +87,12 @@ const Identification = () => {
   const isDevelopment = import.meta.env.MODE === 'development';
   const shouldUseMockData = forceMockData || (isDevelopment && !import.meta.env.VITE_USE_REAL_DATA);
   
-  // ✅ Determine what client/user to use
   const currentClient = shouldUseMockData && !reduxSelectedClient ? MOCK_CLIENT : reduxSelectedClient;
   const currentUser = shouldUseMockData && !reduxUser ? MOCK_USER : reduxUser;
 
   const exportRef = useRef();
 
-  // ✅ Simple useEffect with minimal dependencies
+  // ✅ Load files when client changes
   useEffect(() => {
     if (!currentClient?.clientID) return;
 
@@ -73,129 +107,281 @@ const Identification = () => {
       }, 1000);
       return () => clearTimeout(timer);
     } else {
-      // Real API call
-      axios.get(`${API_URL}/files/${currentClient.clientID}`)
-        .then((res) => {
-          setFiles(res.data || []);
+      // Load files from Azure Blob Storage
+      azureBlobService.listClientFiles(currentClient.clientID)
+        .then((filesData) => {
+          console.log('📁 Azure files loaded:', filesData);
+          setFiles(Array.isArray(filesData) ? filesData : []);
           setLoading(false);
         })
         .catch((err) => {
-          console.error("❌ Error fetching files:", err);
-          setError("Failed to load client files");
+          console.error("❌ Error fetching files from Azure:", err);
+          setError("Failed to load client files from Azure storage");
+          setFiles([]);
           setLoading(false);
         });
     }
-  }, [currentClient?.clientID, shouldUseMockData, API_URL]);
+  }, [currentClient?.clientID, shouldUseMockData]);
+
+  // Clear success message after 5 seconds
+  useEffect(() => {
+    if (successMessage) {
+      const timer = setTimeout(() => setSuccessMessage(''), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [successMessage]);
 
   const handleTabChange = (event, newValue) => setTabIndex(newValue);
 
   const handleFileSelect = (docType, file) => {
+    if (!file) return;
+    
+    // Validate file size (max 10MB)
+    const maxSize = 10 * 1024 * 1024; // 10MB
+    if (file.size > maxSize) {
+      setError(`File "${file.name}" is too large. Maximum size is 10MB.`);
+      return;
+    }
+    
+    // Validate file type
+    const allowedTypes = [
+      'application/pdf',
+      'image/jpeg',
+      'image/jpg', 
+      'image/png',
+      'image/gif',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    ];
+    
+    if (!allowedTypes.includes(file.type)) {
+      setError(`File type "${file.type}" is not supported. Please upload PDF, Word, or image files.`);
+      return;
+    }
+
+    setError(null);
     setFilesToUpload((prev) => ({ ...prev, [docType]: file }));
   };
 
   const handleFileUpload = async (docType) => {
     const fileToUpload = filesToUpload[docType];
     if (!fileToUpload || !currentClient) {
-      alert("Please select a file and ensure a client is selected.");
+      setError("Please select a file and ensure a client is selected.");
       return;
     }
 
-    setUploadingDocType(docType);
+    setUploadProgress((prev) => ({ ...prev, [docType]: 0 }));
+    setError(null);
 
     try {
       if (shouldUseMockData) {
-        // Mock upload
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        setFiles((prev) => [
-          ...prev,
-          { fileName: fileToUpload.name, filePath: `/mock/uploads/${fileToUpload.name}` },
-        ]);
-        alert(`✅ ${fileToUpload.name} uploaded as ${docType} (Mock)`);
+        // Mock upload with progress simulation
+        for (let i = 0; i <= 100; i += 10) {
+          setUploadProgress((prev) => ({ ...prev, [docType]: i }));
+          await new Promise(resolve => setTimeout(resolve, 200));
+        }
+        
+        const mockFile = {
+          fileName: fileToUpload.name,
+          blobUrl: `/mock/uploads/${fileToUpload.name}`,
+          docType: docType,
+          uploadDate: new Date().toISOString(),
+          fileSize: fileToUpload.size
+        };
+        
+        setFiles((prev) => [mockFile, ...prev]);
+        setSuccessMessage(`✅ ${fileToUpload.name} uploaded successfully (Mock)`);
       } else {
-        // Real upload
-        const formData = new FormData();
-        formData.append("file", fileToUpload);
-        formData.append("clientID", currentClient.clientID);
-        formData.append("docType", docType);
+        // Real Azure upload
+        setUploadProgress((prev) => ({ ...prev, [docType]: 20 }));
+        
+        const uploadResult = await azureBlobService.uploadFile(
+          fileToUpload, 
+          currentClient.clientID, 
+          docType
+        );
+        
+        setUploadProgress((prev) => ({ ...prev, [docType]: 100 }));
+        
+        // Add to files list
+        const newFile = {
+          fileName: uploadResult.fileName,
+          blobUrl: uploadResult.blobUrl,
+          blobName: uploadResult.blobName,
+          docType: docType,
+          uploadDate: uploadResult.uploadDate,
+          fileSize: uploadResult.fileSize
+        };
+        
+        setFiles((prev) => [newFile, ...prev]);
+        setSuccessMessage(`✅ ${uploadResult.fileName} uploaded successfully to Azure`);
 
-        const res = await axios.post(`${API_URL}/api/upload`, formData, {
-          headers: { "Content-Type": "multipart/form-data" },
-        });
-
-        setFiles((prev) => [
-          ...prev,
-          { fileName: fileToUpload.name, filePath: res.data.filePath },
-        ]);
-
-        if (currentUser) {
+        // Log user action
+        if (currentUser && currentUser.id !== 'mock-user-123') {
           await logUserAction(currentUser, "UPLOAD_DOCUMENT", {
             clientID: currentClient.clientID,
             docType,
-            fileName: fileToUpload.name,
+            fileName: uploadResult.fileName,
+            blobName: uploadResult.blobName
           });
         }
-
-        alert(`✅ ${fileToUpload.name} uploaded as ${docType}`);
       }
+      
+      // Clear the file input
+      setFilesToUpload((prev) => ({ ...prev, [docType]: null }));
+      
     } catch (err) {
-      console.error("❌ Upload Error:", err);
-      alert(`Failed to upload ${fileToUpload.name}`);
+      console.error(`❌ Upload Error for ${docType}:`, err);
+      setError(`Failed to upload ${fileToUpload.name}: ${err.message}`);
     } finally {
-      setUploadingDocType(null);
+      setUploadProgress((prev) => ({ ...prev, [docType]: null }));
     }
   };
 
-  const handleExport = () => {
-    if (!currentClient) {
-      alert("Please select a client first.");
-      return;
-    }
+  const handleDeleteFile = async () => {
+    if (!fileToDelete) return;
 
-    // ✅ Better export implementation
-    const exportContent = exportRef.current;
-    if (!exportContent) {
-      alert("Export content not found.");
-      return;
-    }
+    try {
+      if (shouldUseMockData) {
+        // Mock delete
+        setFiles((prev) => prev.filter(f => f.fileName !== fileToDelete.fileName));
+        setSuccessMessage(`🗑️ ${fileToDelete.fileName} deleted successfully (Mock)`);
+      } else {
+        // Real Azure delete
+        await azureBlobService.deleteFile(fileToDelete.blobName);
+        setFiles((prev) => prev.filter(f => f.blobName !== fileToDelete.blobName));
+        setSuccessMessage(`🗑️ ${fileToDelete.fileName} deleted successfully`);
 
-    // Show the export content temporarily
-    exportContent.style.display = "block";
-    exportContent.style.position = "absolute";
-    exportContent.style.left = "-9999px";
-    exportContent.style.top = "0";
-
-    const opt = {
-      margin: [0.5, 0.5, 0.5, 0.5],
-      filename: `${currentClient.clientLastName}_${currentClient.clientFirstName}_ClientChart_${new Date().toISOString().split('T')[0]}.pdf`,
-      image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: { 
-        scale: 2,
-        useCORS: true,
-        allowTaint: true,
-        backgroundColor: '#ffffff'
-      },
-      jsPDF: { 
-        unit: 'in', 
-        format: 'letter', 
-        orientation: 'portrait',
-        compress: true
+        // Log user action
+        if (currentUser && currentUser.id !== 'mock-user-123') {
+          await logUserAction(currentUser, "DELETE_DOCUMENT", {
+            clientID: currentClient.clientID,
+            fileName: fileToDelete.fileName,
+            blobName: fileToDelete.blobName
+          });
+        }
       }
-    };
+    } catch (err) {
+      console.error("❌ Delete Error:", err);
+      setError(`Failed to delete ${fileToDelete.fileName}: ${err.message}`);
+    } finally {
+      setDeleteConfirmOpen(false);
+      setFileToDelete(null);
+    }
+  };
 
-    html2pdf()
-      .set(opt)
-      .from(exportContent)
-      .save()
-      .then(() => {
-        // Hide the export content again
-        exportContent.style.display = "none";
-        alert("✅ PDF exported successfully!");
-      })
-      .catch((error) => {
-        console.error("Export error:", error);
-        alert("❌ Failed to export PDF. Please try again.");
-        exportContent.style.display = "none";
-      });
+  const handlePreviewFile = (file) => {
+    setFilePreview(file);
+    setPreviewOpen(true);
+  };
+
+  const handleDownloadFile = async (file) => {
+    try {
+      if (shouldUseMockData) {
+        // Mock download
+        window.open(file.blobUrl, '_blank');
+        return;
+      }
+
+      const downloadUrl = await azureBlobService.generateDownloadUrl(file.blobName);
+      
+      // Create download link
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = file.fileName;
+      link.target = '_blank';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+    } catch (err) {
+      console.error("❌ Download Error:", err);
+      setError(`Failed to download ${file.fileName}: ${err.message}`);
+    }
+  };
+
+  const handleExport = async () => {
+    if (!currentClient) {
+      setError("Please select a client first.");
+      return;
+    }
+
+    setIsExporting(true);
+    setExportProgress(0);
+
+    try {
+      // Configure PDF options
+      const opt = {
+        margin: [0.5, 0.5, 0.5, 0.5],
+        filename: `${currentClient.clientLastName}_${currentClient.clientFirstName}_Complete_Chart.pdf`,
+        image: { type: 'jpeg', quality: 0.95 },
+        html2canvas: { 
+          scale: 2,
+          useCORS: true,
+          allowTaint: true,
+          logging: false
+        },
+        jsPDF: { 
+          unit: 'in', 
+          format: 'letter', 
+          orientation: 'portrait',
+          compress: true
+        },
+        pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
+      };
+
+      // Simulate progress
+      const progressInterval = setInterval(() => {
+        setExportProgress(prev => {
+          if (prev >= 90) {
+            clearInterval(progressInterval);
+            return 90;
+          }
+          return prev + 10;
+        });
+      }, 300);
+
+      // Generate PDF
+      await html2pdf().set(opt).from(exportRef.current).save();
+      
+      clearInterval(progressInterval);
+      setExportProgress(100);
+      setSuccessMessage('📄 PDF exported successfully!');
+
+      // Log user action
+      if (currentUser && currentUser.id !== 'mock-user-123') {
+        await logUserAction(currentUser, "EXPORT_CLIENT_CHART", {
+          clientID: currentClient.clientID,
+          exportType: 'PDF',
+          filename: opt.filename
+        });
+      }
+
+    } catch (err) {
+      console.error("❌ PDF Export Error:", err);
+      setError(`Failed to export PDF: ${err.message}`);
+    } finally {
+      setTimeout(() => {
+        setIsExporting(false);
+        setExportProgress(0);
+      }, 2000);
+    }
+  };
+
+  const formatFileSize = (bytes) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
+  const getFileIcon = (file) => {
+    const ext = file.fileName.split('.').pop().toLowerCase();
+    if (['pdf'].includes(ext)) return '📄';
+    if (['jpg', 'jpeg', 'png', 'gif'].includes(ext)) return '🖼️';
+    if (['doc', 'docx'].includes(ext)) return '📝';
+    return '📎';
   };
 
   // ✅ No client selected
@@ -226,17 +412,42 @@ const Identification = () => {
 
   return (
     <Card sx={{ padding: 2 }}>
+      {/* Development indicator */}
       {shouldUseMockData && (
-        <Box sx={{ mb: 2, p: 1, bgcolor: 'info.light', borderRadius: 1 }}>
-          <Typography variant="body2" color="info.contrastText">
-            🔧 Development Mode: Using mock data for {currentClient.clientFirstName} {currentClient.clientLastName}
-          </Typography>
-        </Box>
+        <Alert severity="info" sx={{ mb: 2 }}>
+          🔧 Development Mode: Using mock data for {currentClient.clientFirstName} {currentClient.clientLastName}
+        </Alert>
+      )}
+
+      {/* Error Alert */}
+      {error && (
+        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
+          {error}
+        </Alert>
+      )}
+
+      {/* Success Alert */}
+      {successMessage && (
+        <Alert severity="success" sx={{ mb: 2 }} onClose={() => setSuccessMessage('')}>
+          {successMessage}
+        </Alert>
+      )}
+
+      {/* Export Progress */}
+      {isExporting && (
+        <Alert severity="info" sx={{ mb: 2 }}>
+          <Box sx={{ width: '100%' }}>
+            <Typography variant="body2" sx={{ mb: 1 }}>
+              Exporting PDF... {exportProgress}%
+            </Typography>
+            <LinearProgress variant="determinate" value={exportProgress} />
+          </Box>
+        </Alert>
       )}
 
       <Tabs value={tabIndex} onChange={handleTabChange} variant="scrollable" scrollButtons="auto">
         <Tab label="Client Face Sheet" />
-        <Tab label="Identification" />
+        <Tab label="Identification Documents" />
         <Tab label="Referrals" />
         <Tab label="Discharge" />
         <Tab label="Export Chart" />
@@ -247,57 +458,148 @@ const Identification = () => {
       
       {tabIndex === 1 && (
         <Box p={3}>
-          {error && (
-            <Typography color="error" gutterBottom>
-              {error}
-            </Typography>
-          )}
+          <Typography variant="h6" gutterBottom>
+            Document Upload & Management
+          </Typography>
           
-          <Grid container spacing={2}>
+          {/* Upload Section */}
+          <Grid container spacing={2} sx={{ mb: 4 }}>
             {DOC_TYPES.map((docTitle) => (
               <Grid item xs={12} sm={6} md={4} key={docTitle}>
-                <Card sx={{ padding: 2 }}>
-                  <Typography variant="subtitle1" gutterBottom>{docTitle}</Typography>
-                  <OutlinedInput
-                    type="file"
-                    onChange={(e) => handleFileSelect(docTitle, e.target.files[0])}
-                    fullWidth
-                  />
-                  {filesToUpload[docTitle] && (
-                    <Typography variant="caption" color="text.secondary">
-                      Selected: {filesToUpload[docTitle].name}
+                <Card variant="outlined" sx={{ height: '100%' }}>
+                  <CardContent>
+                    <Typography variant="subtitle1" gutterBottom>
+                      {docTitle}
                     </Typography>
-                  )}
-                  <Button
-                    variant="contained"
-                    fullWidth
-                    onClick={() => handleFileUpload(docTitle)}
-                    disabled={uploadingDocType === docTitle}
-                    sx={{ mt: 1 }}
-                  >
-                    {uploadingDocType === docTitle ? "Uploading..." : "Upload"}
-                  </Button>
+                    
+                    <OutlinedInput
+                      type="file"
+                      onChange={(e) => handleFileSelect(docTitle, e.target.files[0])}
+                      fullWidth
+                      sx={{ mb: 1 }}
+                      inputProps={{
+                        accept: '.pdf,.doc,.docx,.jpg,.jpeg,.png,.gif'
+                      }}
+                    />
+                    
+                    {filesToUpload[docTitle] && (
+                      <Box sx={{ mb: 1 }}>
+                        <Typography variant="caption" color="text.secondary">
+                          Selected: {filesToUpload[docTitle].name}
+                        </Typography>
+                        <Typography variant="caption" display="block" color="text.secondary">
+                          Size: {formatFileSize(filesToUpload[docTitle].size)}
+                        </Typography>
+                      </Box>
+                    )}
+                    
+                    {uploadProgress[docTitle] !== null && uploadProgress[docTitle] !== undefined && (
+                      <Box sx={{ mb: 1 }}>
+                        <LinearProgress variant="determinate" value={uploadProgress[docTitle]} />
+                        <Typography variant="caption" color="text.secondary">
+                          Uploading... {uploadProgress[docTitle]}%
+                        </Typography>
+                      </Box>
+                    )}
+                  </CardContent>
+                  
+                  <CardActions>
+                    <Button
+                      variant="contained"
+                      fullWidth
+                      startIcon={<UploadIcon />}
+                      onClick={() => handleFileUpload(docTitle)}
+                      disabled={!filesToUpload[docTitle] || uploadProgress[docTitle] !== null}
+                    >
+                      {uploadProgress[docTitle] !== null ? "Uploading..." : "Upload"}
+                    </Button>
+                  </CardActions>
                 </Card>
               </Grid>
             ))}
           </Grid>
 
-          <Box mt={4}>
-            <Typography variant="h6">Uploaded Documents</Typography>
+          {/* Files List Section */}
+          <Box>
+            <Typography variant="h6" gutterBottom>
+              Uploaded Documents ({files.length})
+            </Typography>
+            
             {loading ? (
-              <Typography variant="body2">Loading files...</Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                <LinearProgress sx={{ flexGrow: 1 }} />
+                <Typography variant="body2">Loading files...</Typography>
+              </Box>
             ) : files.length === 0 ? (
-              <Typography variant="body2">No files uploaded yet.</Typography>
+              <Alert severity="info">
+                No documents uploaded yet. Use the upload forms above to add client documents.
+              </Alert>
             ) : (
-              <ul>
+              <Grid container spacing={2}>
                 {files.map((file, index) => (
-                  <li key={index}>
-                    <a href={file.filePath} target="_blank" rel="noopener noreferrer">
-                      {file.fileName}
-                    </a>
-                  </li>
+                  <Grid item xs={12} sm={6} md={4} key={index}>
+                    <Card variant="outlined">
+                      <CardContent>
+                        <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
+                          <Typography variant="h6" component="span">
+                            {getFileIcon(file)}
+                          </Typography>
+                          <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+                            <Typography variant="subtitle2" noWrap title={file.fileName}>
+                              {file.fileName}
+                            </Typography>
+                            <Chip 
+                              label={file.docType} 
+                              size="small" 
+                              variant="outlined" 
+                              sx={{ mb: 1 }}
+                            />
+                            <Typography variant="caption" display="block" color="text.secondary">
+                              Size: {formatFileSize(file.fileSize)}
+                            </Typography>
+                            <Typography variant="caption" display="block" color="text.secondary">
+                              Uploaded: {new Date(file.uploadDate).toLocaleDateString()}
+                            </Typography>
+                          </Box>
+                        </Box>
+                      </CardContent>
+                      
+                      <CardActions>
+                        <Tooltip title="Preview">
+                          <IconButton 
+                            size="small" 
+                            onClick={() => handlePreviewFile(file)}
+                          >
+                            <ViewIcon />
+                          </IconButton>
+                        </Tooltip>
+                        
+                        <Tooltip title="Download">
+                          <IconButton 
+                            size="small" 
+                            onClick={() => handleDownloadFile(file)}
+                          >
+                            <DownloadIcon />
+                          </IconButton>
+                        </Tooltip>
+                        
+                        <Tooltip title="Delete">
+                          <IconButton 
+                            size="small" 
+                            color="error"
+                            onClick={() => {
+                              setFileToDelete(file);
+                              setDeleteConfirmOpen(true);
+                            }}
+                          >
+                            <DeleteIcon />
+                          </IconButton>
+                        </Tooltip>
+                      </CardActions>
+                    </Card>
+                  </Grid>
                 ))}
-              </ul>
+              </Grid>
             )}
           </Box>
         </Box>
@@ -308,114 +610,111 @@ const Identification = () => {
       
       {tabIndex === 4 && (
         <Box p={3}>
-          <Typography variant="h5" gutterBottom>Export Client Chart</Typography>
-          <Typography variant="body1" sx={{ mb: 2 }}>
-            Export a comprehensive PDF containing all client information including face sheet, referrals, and discharge summary.
+          <Typography variant="h5" gutterBottom>
+            Export Complete Client Chart
+          </Typography>
+          <Typography variant="body1" sx={{ mb: 3 }}>
+            Export the complete client chart including all sections to a comprehensive PDF file.
           </Typography>
           
-          <Grid container spacing={2} sx={{ mb: 3 }}>
-            <Grid item xs={12} sm={6}>
-              <Typography variant="body2" color="text.secondary">
-                <strong>Client:</strong> {currentClient.clientFirstName} {currentClient.clientLastName}
-              </Typography>
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <Typography variant="body2" color="text.secondary">
-                <strong>Export Date:</strong> {new Date().toLocaleDateString()}
-              </Typography>
-            </Grid>
-          </Grid>
-
           <Button 
             variant="contained" 
             size="large"
-            sx={{ mt: 2 }} 
+            startIcon={<PdfIcon />}
             onClick={handleExport}
+            disabled={isExporting}
+            sx={{ mb: 3 }}
           >
-            📄 Export Complete Chart to PDF
+            {isExporting ? `Exporting... ${exportProgress}%` : "Export Complete Chart to PDF"}
           </Button>
 
-          {/* ✅ Improved export container with better styling */}
-          <div ref={exportRef} style={{ 
-            display: "none",
-            backgroundColor: "#ffffff",
-            fontFamily: "Arial, sans-serif",
-            fontSize: "12px",
-            lineHeight: "1.4",
-            color: "#000000"
-          }}>
-            {/* Export Header */}
-            <div style={{ 
-              textAlign: "center", 
-              marginBottom: "20px", 
-              borderBottom: "2px solid #333", 
-              paddingBottom: "10px" 
-            }}>
-              <h1 style={{ margin: "0", fontSize: "24px", color: "#333" }}>
-                Client Chart
-              </h1>
-              <p style={{ margin: "5px 0", fontSize: "14px" }}>
-                {currentClient.clientFirstName} {currentClient.clientLastName} - Generated on {new Date().toLocaleDateString()}
-              </p>
-            </div>
-
-            {/* Client Face Sheet Section */}
-            <div style={{ marginBottom: "30px" }}>
-              <h2 style={{ 
-                backgroundColor: "#f5f5f5", 
-                padding: "10px", 
-                margin: "0 0 15px 0", 
-                fontSize: "18px",
-                borderLeft: "4px solid #1976d2"
-              }}>
-                Client Face Sheet
-              </h2>
-              <ClientFace exportMode={true} />
-            </div>
-
-            {/* Referrals Section */}
-            <div style={{ marginBottom: "30px" }}>
-              <h2 style={{ 
-                backgroundColor: "#f5f5f5", 
-                padding: "10px", 
-                margin: "0 0 15px 0", 
-                fontSize: "18px",
-                borderLeft: "4px solid #1976d2"
-              }}>
-                Referrals
-              </h2>
-              <Referrals exportMode={true} />
-            </div>
-
-            {/* Discharge Section */}
-            <div style={{ marginBottom: "30px" }}>
-              <h2 style={{ 
-                backgroundColor: "#f5f5f5", 
-                padding: "10px", 
-                margin: "0 0 15px 0", 
-                fontSize: "18px",
-                borderLeft: "4px solid #1976d2"
-              }}>
-                Discharge Summary
-              </h2>
-              <Discharge exportMode={true} />
-            </div>
-
-            {/* Footer */}
-            <div style={{ 
-              textAlign: "center", 
-              marginTop: "30px", 
-              paddingTop: "10px", 
-              borderTop: "1px solid #ccc",
-              fontSize: "10px",
-              color: "#666"
-            }}>
-              <p>This document contains confidential patient information. Handle according to HIPAA guidelines.</p>
-              <p>Generated by Healthcare Management System - {new Date().toLocaleString()}</p>
+          {/* Hidden export content */}
+          <div ref={exportRef} style={{ display: "none" }}>
+            <div style={{ padding: '20px', fontFamily: 'Arial, sans-serif' }}>
+              <div style={{ textAlign: 'center', marginBottom: '30px', borderBottom: '2px solid #333', paddingBottom: '20px' }}>
+                <h1>Client Chart - {currentClient.clientFirstName} {currentClient.clientLastName}</h1>
+                <p>Generated on: {new Date().toLocaleDateString()}</p>
+              </div>
+              
+              <div style={{ pageBreakAfter: 'always' }}>
+                <h2>Client Face Sheet</h2>
+                <ClientFace exportMode />
+              </div>
+              
+              <div style={{ pageBreakAfter: 'always' }}>
+                <h2>Referrals</h2>
+                <Referrals exportMode />
+              </div>
+              
+              <div>
+                <h2>Discharge Summary</h2>
+                <Discharge exportMode />
+              </div>
             </div>
           </div>
         </Box>
       )}
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={deleteConfirmOpen} onClose={() => setDeleteConfirmOpen(false)}>
+        <DialogTitle>Confirm Delete</DialogTitle>
+        <DialogContent>
+          <Typography>
+            Are you sure you want to delete "{fileToDelete?.fileName}"? This action cannot be undone.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteConfirmOpen(false)}>Cancel</Button>
+          <Button onClick={handleDeleteFile} color="error" variant="contained">
+            Delete
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* File Preview Dialog */}
+      <Dialog 
+        open={previewOpen} 
+        onClose={() => setPreviewOpen(false)}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Typography variant="h6">
+              {filePreview?.fileName}
+            </Typography>
+            <IconButton onClick={() => setPreviewOpen(false)}>
+              <CloseIcon />
+            </IconButton>
+          </Box>
+        </DialogTitle>
+        <DialogContent>
+          {filePreview && (
+            <Box sx={{ textAlign: 'center' }}>
+              {filePreview.fileName.toLowerCase().match(/\.(jpg|jpeg|png|gif)$/) ? (
+                <img 
+                  src={filePreview.blobUrl} 
+                  alt={filePreview.fileName}
+                  style={{ maxWidth: '100%', maxHeight: '500px' }}
+                />
+              ) : (
+                <Box sx={{ p: 4 }}>
+                  <Typography variant="h6" gutterBottom>
+                    Preview not available for this file type
+                  </Typography>
+                  <Button 
+                    variant="contained" 
+                    startIcon={<DownloadIcon />}
+                    onClick={() => handleDownloadFile(filePreview)}
+                  >
+                    Download to View
+                  </Button>
+                </Box>
+              )}
+            </Box>
+          )}
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 };

@@ -1,5 +1,5 @@
 import { Box, Typography, Button } from "@mui/material";
-import { Link } from 'react-router';
+import { Link } from 'react-router-dom';
 import CustomTextField from "src/components/forms/theme-elements/CustomTextField";
 import CustomFormLabel from "src/components/forms/theme-elements/CustomFormLabel";
 import { Stack } from "@mui/system";

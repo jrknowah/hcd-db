@@ -48,7 +48,7 @@ import { acpList } from "../../data/arrayList";
 import BioSocial from './BioSocial';
 import MentalHealth from './MentalHealth';
 import ReAssessment from './ReAssessment';
-// import MentalArchive from './MentalArchive';
+import MentalArchive from './MentalArchive';
 
 const AssessCarePlans = ({ clientID = "CLIENT-123" }) => {
     const dispatch = useDispatch();
@@ -201,10 +201,10 @@ const AssessCarePlans = ({ clientID = "CLIENT-123" }) => {
         return (
             <Grid container spacing={3}>
                 {/* Assessment Overview */}
-                <Grid item xs={12}>
+                {/*<Grid item xs={12}>
                     <Card elevation={2}>
                         <CardContent>
-                            <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+                             <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
                                 <Typography variant="h5" color="primary">
                                     Assessment & Care Plans - {data.assessmentNumber}
                                 </Typography>
@@ -213,10 +213,10 @@ const AssessCarePlans = ({ clientID = "CLIENT-123" }) => {
                                         <RefreshIcon />
                                     </IconButton>
                                 </Tooltip>
-                            </Box>
+                            </Box> */}
                             
-                            <Grid container spacing={2}>
-                                <Grid item xs={12} sm={6} md={3}>
+                            {/*<Grid container spacing={2}>
+                                 <Grid item xs={12} sm={6} md={3}>
                                     <Box textAlign="center">
                                         <Typography variant="body2" color="textSecondary">Assessment Status</Typography>
                                         <Chip 
@@ -225,7 +225,7 @@ const AssessCarePlans = ({ clientID = "CLIENT-123" }) => {
                                             size="large"
                                         />
                                     </Box>
-                                </Grid>
+                                </Grid> 
                                 <Grid item xs={12} sm={6} md={3}>
                                     <Box textAlign="center">
                                         <Typography variant="body2" color="textSecondary">Completion</Typography>
@@ -261,9 +261,9 @@ const AssessCarePlans = ({ clientID = "CLIENT-123" }) => {
                             </Grid>
                         </CardContent>
                     </Card>
-                </Grid>
+                </Grid>*/}
 
-                {/* Key Assessment Metrics */}
+                {/* Key Assessment Metrics 
                 <Grid item xs={12} md={6}>
                     <Card elevation={2}>
                         <CardContent>
@@ -318,9 +318,9 @@ const AssessCarePlans = ({ clientID = "CLIENT-123" }) => {
                             </Grid>
                         </CardContent>
                     </Card>
-                </Grid>
+                </Grid>*/}
 
-                {/* Assessment Information */}
+                {/* Assessment Information 
                 <Grid item xs={12} md={6}>
                     <Card elevation={2}>
                         <CardContent>
@@ -366,7 +366,7 @@ const AssessCarePlans = ({ clientID = "CLIENT-123" }) => {
                             </List>
                         </CardContent>
                     </Card>
-                </Grid>
+                </Grid>*/}
 
                 {/* Assessment Progress */}
                 <Grid item xs={12}>
@@ -434,7 +434,7 @@ const AssessCarePlans = ({ clientID = "CLIENT-123" }) => {
                     </Card>
                 </Grid>
 
-                {/* Additional Metrics */}
+                {/* Additional Metrics 
                 <Grid item xs={12} md={6}>
                     <Card elevation={2}>
                         <CardContent>
@@ -471,7 +471,7 @@ const AssessCarePlans = ({ clientID = "CLIENT-123" }) => {
                             </Box>
                         </CardContent>
                     </Card>
-                </Grid>
+                </Grid>*/}
             </Grid>
         );
     };
@@ -500,7 +500,7 @@ const AssessCarePlans = ({ clientID = "CLIENT-123" }) => {
             {
                 label: "Section 3 Archive",
                 icon: <ArchiveIcon />,
-                // component: <MentalArchive clientID={clientID} />,
+                component: <MentalArchive clientID={clientID} />,
                 completed: mockAssessmentMilestones[3]?.completed || false
             }
         ];

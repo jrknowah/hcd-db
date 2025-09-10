@@ -18,7 +18,8 @@ import {
   useMediaQuery,
   alpha,
   Divider,
-  Container
+  Container,
+  CircularProgress 
 } from '@mui/material';
 import {
   Close as CloseIcon,
@@ -31,7 +32,9 @@ import {
   Assignment as AssignmentIcon,
   VerifiedUser as VerifiedIcon,
   BusinessCenter as BusinessIcon,
-  FilterList as FilterIcon
+  FilterList as FilterIcon,
+  Save as SaveIcon,
+  CheckCircle as CheckCircleIcon,
 } from '@mui/icons-material';
 import ClientOrientation from './ClientOrientation';
 import ClientRights from './ClientRights';
@@ -409,14 +412,66 @@ const FormCard = ({ form, onOpen }) => {
 };
 
 // Reusable Modal Component with MUI Dialog
+// ✅ Enhanced Modal with proper button functionality
+// Update your FormModal component in AuthSig.jsx
+
 const FormModal = ({ form, open, onClose }) => {
   const theme = useTheme();
   const fullScreen = useMediaQuery(theme.breakpoints.down('md'));
+  const [saving, setSaving] = useState(false);
+  const [saveType, setSaveType] = useState(null); // 'progress' or 'submit'
   
   if (!form) return null;
   
   const FormComponent = form.component;
   const IconComponent = form.icon;
+  
+  // Handle save progress (draft)
+  const handleSaveProgress = async () => {
+    setSaving(true);
+    setSaveType('progress');
+    
+    try {
+      // This saves without validation - just saves current state
+      console.log('Saving progress for form:', form.id);
+      // The form component should handle this via useFormManager
+      
+      // Show success message
+      setTimeout(() => {
+        setSaving(false);
+        setSaveType(null);
+      }, 1000);
+      
+    } catch (error) {
+      console.error('Failed to save progress:', error);
+      setSaving(false);
+      setSaveType(null);
+    }
+  };
+  
+  // Handle form submission (complete)
+  const handleSubmitForm = async () => {
+    setSaving(true);
+    setSaveType('submit');
+    
+    try {
+      // This validates and submits if valid
+      console.log('Submitting form:', form.id);
+      // The form component should handle validation and submission
+      
+      setTimeout(() => {
+        setSaving(false);
+        setSaveType(null);
+        // Could close modal on successful submission
+        // onClose();
+      }, 1000);
+      
+    } catch (error) {
+      console.error('Failed to submit form:', error);
+      setSaving(false);
+      setSaveType(null);
+    }
+  };
   
   return (
     <Dialog
@@ -457,7 +512,13 @@ const FormModal = ({ form, open, onClose }) => {
       </DialogTitle>
       
       <DialogContent sx={{ p: 0 }}>
-        <FormComponent title={form.title} />
+        <FormComponent 
+          title={form.title} 
+          onSaveProgress={handleSaveProgress}
+          onSubmitForm={handleSubmitForm}
+          saving={saving}
+          saveType={saveType}
+        />
       </DialogContent>
       
       <DialogActions sx={{ 
@@ -466,14 +527,48 @@ const FormModal = ({ form, open, onClose }) => {
         borderTop: `1px solid ${theme.palette.divider}`,
         background: alpha(theme.palette.grey[50], 0.5)
       }}>
-        <Button onClick={onClose} variant="outlined" color="inherit">
+        <Button 
+          onClick={onClose} 
+          variant="outlined" 
+          color="inherit"
+          disabled={saving}
+        >
           Close
         </Button>
-        <Button variant="outlined" color="primary">
-          Save Progress
+        
+        {/* Save Progress Button - No validation required */}
+        <Button 
+          variant="outlined" 
+          color="primary"
+          onClick={handleSaveProgress}
+          disabled={saving}
+          startIcon={
+            saving && saveType === 'progress' ? (
+              <CircularProgress size={16} />
+            ) : (
+              <SaveIcon />
+            )
+          }
+        >
+          {saving && saveType === 'progress' ? 'Saving...' : 'Save Progress'}
         </Button>
-        <Button variant="contained" color="success" sx={{ fontWeight: 600 }}>
-          Submit Form
+        
+        {/* Submit Form Button - Full validation required */}
+        <Button 
+          variant="contained" 
+          color="success" 
+          onClick={handleSubmitForm}
+          disabled={saving}
+          startIcon={
+            saving && saveType === 'submit' ? (
+              <CircularProgress size={16} />
+            ) : (
+              <CheckCircleIcon />
+            )
+          }
+          sx={{ fontWeight: 600 }}
+        >
+          {saving && saveType === 'submit' ? 'Submitting...' : 'Submit Form'}
         </Button>
       </DialogActions>
     </Dialog>

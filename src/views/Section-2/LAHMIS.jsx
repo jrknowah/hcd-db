@@ -447,38 +447,8 @@ const LAHMIS = ({ clientID: propClientID }) => {
         </Typography>
         
         <Grid container spacing={3}>
-          <Grid item xs={12} md={4}>
-            <TextField
-              fullWidth
-              label="Client Printed Name"
-              value={formData.clientName}
-              onChange={(e) => handleFieldChange('clientName', e.target.value)}
-              required
-            />
-          </Grid>
-          <Grid item xs={12} md={4}>
-            <TextField
-              fullWidth
-              label="Date of Birth"
-              type="date"
-              value={formData.clientDOB}
-              onChange={(e) => handleFieldChange('clientDOB', e.target.value)}
-              InputLabelProps={{ shrink: true }}
-              required
-            />
-          </Grid>
-          <Grid item xs={12} md={4}>
-            <TextField
-              fullWidth
-              label="Last 4 digits of SSN"
-              value={formData.clientSSN}
-              onChange={(e) => handleFieldChange('clientSSN', e.target.value)}
-              inputProps={{ maxLength: 4 }}
-              required
-            />
-          </Grid>
           
-          <Grid item xs={12} md={4}>
+          <Grid item xs={12} >
             <TextField
               fullWidth
               label="Client Signature"
@@ -487,18 +457,7 @@ const LAHMIS = ({ clientID: propClientID }) => {
               required
             />
           </Grid>
-          <Grid item xs={12} md={4}>
-            <TextField
-              fullWidth
-              label="Date"
-              type="date"
-              value={formData.signatureDate}
-              onChange={(e) => handleFieldChange('signatureDate', e.target.value)}
-              InputLabelProps={{ shrink: true }}
-              required
-            />
-          </Grid>
-          <Grid item xs={12} md={4}>
+          <Grid item xs={12} >
             <TextField
               fullWidth
               label="Head of Household"
@@ -582,32 +541,6 @@ const LAHMIS = ({ clientID: propClientID }) => {
             {index < children.length - 1 && <Divider sx={{ mt: 2 }} />}
           </Box>
         ))}
-      </Paper>
-
-      {/* Staff Information */}
-      <Paper elevation={1} sx={{ p: 3, mb: 3 }}>
-        <Typography variant="h6" gutterBottom sx={{ fontWeight: 600, mb: 3 }}>
-          Staff Information
-        </Typography>
-        
-        <Grid container spacing={3}>
-          <Grid item xs={12} md={6}>
-            <TextField
-              fullWidth
-              label="Staff Signature"
-              value={formData.staffSignature}
-              onChange={(e) => handleFieldChange('staffSignature', e.target.value)}
-            />
-          </Grid>
-          <Grid item xs={12} md={6}>
-            <TextField
-              fullWidth
-              label="Organization"
-              value={formData.organization}
-              onChange={(e) => handleFieldChange('organization', e.target.value)}
-            />
-          </Grid>
-        </Grid>
       </Paper>
 
       {/* Submit Button */}

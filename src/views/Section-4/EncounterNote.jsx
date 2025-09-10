@@ -32,7 +32,7 @@ import { useDispatch, useSelector } from "react-redux";
 import Select from 'react-select';
 import { addEncounterNote, editEncounterNote, fetchEncounterNotes } from '../../store/slices/encounterNoteSlice';
 import logUserAction from "../../config/logAction";
-import { hhhSiteList, cmNoteType } from "../../data/arrayList";
+import { hhhSiteList2, cmNoteType } from "../../data/arrayList";
 
 // ✅ Static mock data outside component
 const MOCK_CLIENT = {
@@ -171,7 +171,7 @@ const EncounterNote = ({ clientID, exportMode }) => {
     setFormData({
       careNoteDate: note.careNoteDate,
       careNoteType: cmNoteType.find(type => type.value === note.careNoteType) || null,
-      careNoteSite: hhhSiteList.find(site => site.value === note.careNoteSite) || null,
+      careNoteSite: hhhSiteList2.find(site => site.value === note.careNoteSite) || null,
       careNote: note.careNote,
     });
     setEditNoteId(note._id);
@@ -492,7 +492,7 @@ const EncounterNote = ({ clientID, exportMode }) => {
         </Table>
 
         {/* Add Note Modal */}
-        <Dialog open={modalOpen} onClose={closeAddModal} maxWidth="md" fullWidth>
+        <Dialog open={modalOpen} onClose={closeAddModal} maxWidth="lg" fullWidth>
           <DialogTitle>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
               <AddIcon />
@@ -513,6 +513,8 @@ const EncounterNote = ({ clientID, exportMode }) => {
                   required
                 />
               </Grid>
+            </Grid>
+            <Grid container spacing={2} sx={{ mt: 2 }}>
               <Grid item xs={12} sm={6}>
                 <Typography variant="body1" sx={{ mb: 1 }}>Note Type *</Typography>
                 <Select
@@ -526,7 +528,7 @@ const EncounterNote = ({ clientID, exportMode }) => {
               <Grid item xs={12} sm={6}>
                 <Typography variant="body1" sx={{ mb: 1 }}>Site</Typography>
                 <Select
-                  options={hhhSiteList}
+                  options={hhhSiteList2}
                   value={formData.careNoteSite}
                   onChange={(option) => handleSelectChange('careNoteSite', option)}
                   placeholder="Select site..."
@@ -534,6 +536,8 @@ const EncounterNote = ({ clientID, exportMode }) => {
                   isClearable
                 />
               </Grid>
+            </Grid>
+            <Grid container spacing={2} sx={{ mt: 2 }}>
               <Grid item xs={12}>
                 <TextField
                   fullWidth
@@ -594,7 +598,7 @@ const EncounterNote = ({ clientID, exportMode }) => {
               <Grid item xs={12} sm={6}>
                 <Typography variant="body1" sx={{ mb: 1 }}>Site</Typography>
                 <Select
-                  options={hhhSiteList}
+                  options={hhhSiteList2}
                   value={formData.careNoteSite}
                   onChange={(option) => handleSelectChange('careNoteSite', option)}
                   placeholder="Select site..."

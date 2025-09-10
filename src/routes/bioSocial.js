@@ -1,8 +1,18 @@
 const express = require('express');
 const router = express.Router();
 const sql = require('mssql');
-const { getDbConnection } = require('../config/database');
-const { logUserAction } = require('../middleware/logging');
+const { logUserAction } = require('../config/logAction');
+
+// Try to load azureSql module (following your existing pattern)
+let getDbConnection;
+try {
+  const azureSql = require('../store/azureSql');
+  getDbConnection = azureSql.getPool;
+  console.log('✅ azureSql loaded for CarePlans routes');
+} catch (err) {
+  console.error('❌ Could not load azureSql module:', err.message);
+  throw new Error('azureSql module not found');
+}
 
 // ===== UTILITY FUNCTIONS =====
 

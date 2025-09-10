@@ -336,6 +336,28 @@ export const hhhSiteList = [
     {id: "Hope Haven", value: "Hope Haven"}
 ];
 
+export const section4List2 = [
+    { section4Title: 'Initial Assessment', section4Date: '' },
+    { section4Title: 'Bio-Social Assessment', section4Date: '' },
+    { section4Title: 'Mental Health Assessment', section4Date: '' },
+    { section4Title: 'Re-Assessment', section4Date: '' },
+    { section4Title: 'Employment Screening', section4Date: '' },
+    { section4Title: 'Housing Application', section4Date: '' },
+    { section4Title: 'Benefits Application', section4Date: '' },
+    { section4Title: 'Section 3 Archive', section4Date: '' }
+];
+
+export const hhhSiteList2 = [
+    { value: '41st', label: '41st Street' },
+    { value: '97th', label: '97th Street' },
+    { value: 'Pacific', label: 'Pacific Avenue' },
+    { value: 'Heritage House', label: 'Heritage House' },
+    { value: 'Northridge', label: 'Northridge Center' },
+    { value: 'Downtown', label: 'Downtown Office' },
+    { value: 'Mobile', label: 'Mobile Unit' },
+    { value: 'Community', label: 'Community Location' }
+];
+
 export const cmNoteType = [
     { value: 'Summary', label: 'Summary' },
     { value: 'Individual', label: 'Individual' },
@@ -1517,6 +1539,12 @@ export const hearingVision = [
     {value: "Adequate", label: "Adequate"},
     {value: "Poor", label: "Poor"},
     {value: "Deaf", label: "Deaf"}
+];
+
+export const hearingVision2 = [
+    {value: "Adequate", label: "Adequate"},
+    {value: "Poor", label: "Poor"},
+    {value: "Blind", label: "Blind"}
 ];
 
 export const skinRisk = [

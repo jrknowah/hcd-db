@@ -29,7 +29,6 @@ import {
   Button,
   Stack,
   Badge,
-  LinearProgress
 } from '@mui/material';
 import {
   MoreVert as MoreVertIcon,
@@ -38,68 +37,10 @@ import {
   Assignment as AssignmentIcon,
   Print as PrintIcon,
   Email as EmailIcon,
-  Phone as PhoneIcon,
-  Home as HomeIcon,
   Person as PersonIcon,
-  CheckCircle as CheckCircleIcon,
-  Warning as WarningIcon,
-  Schedule as ScheduleIcon,
-  Star as StarIcon,
-  StarBorder as StarBorderIcon
+  ContactPage as ContactPageIcon, // ✅ Add this import for View Chart
 } from '@mui/icons-material';
 import { visuallyHidden } from '@mui/utils';
-
-// Mock data for demonstration
-const mockClients = [
-  {
-    clientID: 'CLI001',
-    clientFirstName: 'John',
-    clientLastName: 'Doe',
-    clientDOB: '1980-05-15',
-    clientSite: '104th',
-    clientGender: 'Male',
-    clientVetStatus: 'Protected Veteran',
-    clientAdmitDate: '2025-01-15',
-    status: 'active',
-    formsCompleted: 8,
-    totalForms: 12,
-    lastActivity: '2025-01-20T10:30:00Z',
-    caseworker: 'Sarah Johnson',
-    priority: 'high'
-  },
-  {
-    clientID: 'CLI002',
-    clientFirstName: 'Jane',
-    clientLastName: 'Smith',
-    clientDOB: '1975-08-22',
-    clientSite: 'Heritage House',
-    clientGender: 'Female',
-    clientVetStatus: 'I am not a veteran',
-    clientAdmitDate: '2025-01-10',
-    status: 'active',
-    formsCompleted: 12,
-    totalForms: 12,
-    lastActivity: '2025-01-19T14:15:00Z',
-    caseworker: 'Michael Chen',
-    priority: 'medium'
-  },
-  {
-    clientID: 'CLI003',
-    clientFirstName: 'Robert',
-    clientLastName: 'Johnson',
-    clientDOB: '1965-12-03',
-    clientSite: 'Northridge',
-    clientGender: 'Male',
-    clientVetStatus: 'Protected Veteran',
-    clientAdmitDate: '2024-12-20',
-    status: 'inactive',
-    formsCompleted: 5,
-    totalForms: 12,
-    lastActivity: '2025-01-18T09:00:00Z',
-    caseworker: 'Sarah Johnson',
-    priority: 'low'
-  }
-];
 
 // Table column definitions
 const headCells = [
@@ -107,10 +48,9 @@ const headCells = [
   { id: 'clientName', numeric: false, disablePadding: false, label: 'Client Name' },
   { id: 'clientID', numeric: false, disablePadding: false, label: 'ID' },
   { id: 'clientSite', numeric: false, disablePadding: false, label: 'Site' },
-  { id: 'status', numeric: false, disablePadding: false, label: 'Status' },
-  { id: 'formsProgress', numeric: false, disablePadding: false, label: 'Forms Progress' },
-  { id: 'lastActivity', numeric: false, disablePadding: false, label: 'Last Activity' },
-  { id: 'caseworker', numeric: false, disablePadding: false, label: 'Caseworker' },
+  { id: 'clientGender', numeric: false, disablePadding: false, label: 'Gender' },
+  { id: 'clientDOB', numeric: false, disablePadding: false, label: 'Date of Birth' },
+  { id: 'createdAt', numeric: false, disablePadding: false, label: 'Created' },
   { id: 'actions', numeric: false, disablePadding: false, label: 'Actions' }
 ];
 
@@ -169,8 +109,8 @@ function EnhancedTableHead({
   );
 }
 
-// Client row action menu component
-function ClientActionMenu({ client, onEdit, onView, onViewForms }) {
+// ✅ FIXED: Client row action menu component with View Chart
+function ClientActionMenu({ client, onEdit, onView, onViewForms, onViewChart }) {
   const [anchorEl, setAnchorEl] = useState(null);
   const open = Boolean(anchorEl);
 
@@ -184,7 +124,9 @@ function ClientActionMenu({ client, onEdit, onView, onViewForms }) {
   };
 
   const handleEdit = () => {
-    onEdit(client.clientID);
+    if (onEdit) {
+      onEdit(client.clientID);
+    }
     handleClose();
   };
 
@@ -195,6 +137,18 @@ function ClientActionMenu({ client, onEdit, onView, onViewForms }) {
 
   const handleViewForms = () => {
     onViewForms(client.clientID);
+    handleClose();
+  };
+
+  // ✅ NEW: View Chart handler
+  const handleViewChart = () => {
+    console.log('🔄 ClientActionMenu handleViewChart called for client:', client.clientID);
+    if (onViewChart) {
+      console.log('🔄 Calling onViewChart with:', client.clientID);
+      onViewChart(client.clientID);
+    } else {
+      console.warn('❌ onViewChart not provided to ClientActionMenu');
+    }
     handleClose();
   };
 
@@ -209,30 +163,42 @@ function ClientActionMenu({ client, onEdit, onView, onViewForms }) {
         onClose={handleClose}
         onClick={(e) => e.stopPropagation()}
       >
+        {/* ✅ NEW: View Chart option - first item for visibility */}
+        <MenuItem onClick={handleViewChart}>
+          <ListItemIcon>
+            <ContactPageIcon fontSize="small" />
+          </ListItemIcon>
+          <ListItemText>View Chart</ListItemText>
+        </MenuItem>
+        
         <MenuItem onClick={handleView}>
           <ListItemIcon>
             <VisibilityIcon fontSize="small" />
           </ListItemIcon>
           <ListItemText>View Profile</ListItemText>
         </MenuItem>
+        
         <MenuItem onClick={handleEdit}>
           <ListItemIcon>
             <EditIcon fontSize="small" />
           </ListItemIcon>
           <ListItemText>Edit Client</ListItemText>
         </MenuItem>
+        
         <MenuItem onClick={handleViewForms}>
           <ListItemIcon>
             <AssignmentIcon fontSize="small" />
           </ListItemIcon>
           <ListItemText>View Forms</ListItemText>
         </MenuItem>
+        
         <MenuItem onClick={handleClose}>
           <ListItemIcon>
             <PrintIcon fontSize="small" />
           </ListItemIcon>
           <ListItemText>Print Profile</ListItemText>
         </MenuItem>
+        
         <MenuItem onClick={handleClose}>
           <ListItemIcon>
             <EmailIcon fontSize="small" />
@@ -244,10 +210,9 @@ function ClientActionMenu({ client, onEdit, onView, onViewForms }) {
   );
 }
 
-// Client card component for mobile/grid view
-function ClientCard({ client, isSelected, onSelect, onView, onEdit, onViewForms }) {
-  const completionPercentage = Math.round((client.formsCompleted / client.totalForms) * 100);
-  const avatarInitials = `${client.clientFirstName.charAt(0)}${client.clientLastName.charAt(0)}`;
+// ✅ FIXED: Client card component with View Chart button
+function ClientCard({ client, isSelected, onSelect, onView, onEdit, onViewForms, onViewChart }) {
+  const avatarInitials = `${client.clientFirstName?.charAt(0) || ''}${client.clientLastName?.charAt(0) || ''}`;
 
   return (
     <Card 
@@ -274,25 +239,9 @@ function ClientCard({ client, isSelected, onSelect, onView, onEdit, onViewForms 
             onClick={(e) => e.stopPropagation()}
           />
           
-          <Badge
-            overlap="circular"
-            anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-            badgeContent={
-              <Box
-                sx={{
-                  width: 12,
-                  height: 12,
-                  borderRadius: '50%',
-                  bgcolor: client.status === 'active' ? 'success.main' : 'grey.500',
-                  border: '2px solid white'
-                }}
-              />
-            }
-          >
-            <Avatar sx={{ bgcolor: 'primary.main', mr: 2 }}>
-              {avatarInitials}
-            </Avatar>
-          </Badge>
+          <Avatar sx={{ bgcolor: 'primary.main', mr: 2 }}>
+            {avatarInitials}
+          </Avatar>
           
           <Box sx={{ flex: 1 }}>
             <Typography variant="h6" sx={{ fontWeight: 600 }}>
@@ -308,34 +257,17 @@ function ClientCard({ client, isSelected, onSelect, onView, onEdit, onViewForms 
             onEdit={onEdit}
             onView={onView}
             onViewForms={onViewForms}
-          />
-        </Box>
-
-        <Box sx={{ mb: 2 }}>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-            <Typography variant="body2" color="text.secondary">
-              Forms Progress
-            </Typography>
-            <Typography variant="body2" sx={{ fontWeight: 600 }}>
-              {client.formsCompleted}/{client.totalForms}
-            </Typography>
-          </Box>
-          <LinearProgress 
-            variant="determinate" 
-            value={completionPercentage} 
-            sx={{ height: 6, borderRadius: 3 }}
-            color={completionPercentage === 100 ? 'success' : 'primary'}
+            onViewChart={onViewChart} // ✅ Pass View Chart handler
           />
         </Box>
 
         <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
           <Chip 
-            label={client.status}
+            label={client.clientGender || 'Not specified'}
             size="small"
-            color={client.status === 'active' ? 'success' : 'default'}
             variant="outlined"
           />
-          {client.clientVetStatus.includes('veteran') && (
+          {client.clientVetStatus?.includes('veteran') && (
             <Chip 
               label="Veteran"
               size="small"
@@ -343,19 +275,10 @@ function ClientCard({ client, isSelected, onSelect, onView, onEdit, onViewForms 
               variant="outlined"
             />
           )}
-          <Chip 
-            label={client.priority}
-            size="small"
-            color={
-              client.priority === 'high' ? 'error' : 
-              client.priority === 'medium' ? 'warning' : 'default'
-            }
-            variant="outlined"
-          />
         </Box>
 
         <Typography variant="caption" color="text.secondary">
-          Last activity: {new Date(client.lastActivity).toLocaleDateString()}
+          Created: {client.createdAt ? new Date(client.createdAt).toLocaleDateString() : 'N/A'}
         </Typography>
       </CardContent>
 
@@ -370,6 +293,21 @@ function ClientCard({ client, isSelected, onSelect, onView, onEdit, onViewForms 
         >
           View
         </Button>
+        
+        {/* ✅ NEW: View Chart button */}
+        <Button 
+          size="small" 
+          startIcon={<ContactPageIcon />}
+          onClick={(e) => {
+            e.stopPropagation();
+            if (onViewChart) onViewChart(client.clientID);
+          }}
+          variant="contained"
+          color="primary"
+        >
+          Chart
+        </Button>
+        
         <Button 
           size="small" 
           startIcon={<AssignmentIcon />}
@@ -385,12 +323,16 @@ function ClientCard({ client, isSelected, onSelect, onView, onEdit, onViewForms 
   );
 }
 
+// ✅ FIXED: Main component with onViewChart prop
 const ClientTable = ({ 
-  clients = mockClients, 
+  clients = [], 
   onSelectClient, 
   selectedClientID, 
   viewMode = 'table',
-  loading = false 
+  loading = false,
+  onEditClient,  // Edit functionality
+  onViewForms,   // View forms functionality
+  onViewChart    // ✅ NEW: View Chart functionality
 }) => {
   // State management
   const [order, setOrder] = useState('asc');
@@ -398,7 +340,6 @@ const ClientTable = ({
   const [selected, setSelected] = useState([]);
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
-  const [favorites, setFavorites] = useState(new Set());
 
   // Sorting comparator
   const descendingComparator = (a, b, orderBy) => {
@@ -406,20 +347,20 @@ const ClientTable = ({
     
     switch (orderBy) {
       case 'clientName':
-        aVal = `${a.clientFirstName} ${a.clientLastName}`;
-        bVal = `${b.clientFirstName} ${b.clientLastName}`;
+        aVal = `${a.clientFirstName || ''} ${a.clientLastName || ''}`;
+        bVal = `${b.clientFirstName || ''} ${b.clientLastName || ''}`;
         break;
-      case 'formsProgress':
-        aVal = a.formsCompleted / a.totalForms;
-        bVal = b.formsCompleted / b.totalForms;
+      case 'createdAt':
+        aVal = new Date(a.createdAt || 0);
+        bVal = new Date(b.createdAt || 0);
         break;
-      case 'lastActivity':
-        aVal = new Date(a.lastActivity);
-        bVal = new Date(b.lastActivity);
+      case 'clientDOB':
+        aVal = new Date(a.clientDOB || 0);
+        bVal = new Date(b.clientDOB || 0);
         break;
       default:
-        aVal = a[orderBy];
-        bVal = b[orderBy];
+        aVal = a[orderBy] || '';
+        bVal = b[orderBy] || '';
     }
 
     if (bVal < aVal) return -1;
@@ -495,20 +436,28 @@ const ClientTable = ({
 
   const handleEdit = (clientID) => {
     console.log('Edit client:', clientID);
+    if (onEditClient) {
+      onEditClient(clientID);
+    }
   };
 
   const handleViewForms = (clientID) => {
     console.log('View forms for client:', clientID);
+    if (onViewForms) {
+      onViewForms(clientID);
+    }
   };
 
-  const toggleFavorite = (clientID) => {
-    const newFavorites = new Set(favorites);
-    if (newFavorites.has(clientID)) {
-      newFavorites.delete(clientID);
+  // ✅ NEW: View Chart handler
+  const handleViewChart = (clientID) => {
+    console.log('🔄 ClientTable handleViewChart called with:', clientID);
+    console.log('🔄 onViewChart function exists:', typeof onViewChart);
+    if (onViewChart) {
+      console.log('🔄 Calling onViewChart with:', clientID);
+      onViewChart(clientID);
     } else {
-      newFavorites.add(clientID);
+      console.warn('❌ onViewChart prop not provided to ClientTable');
     }
-    setFavorites(newFavorites);
   };
 
   const isSelected = (clientID) => selected.indexOf(clientID) !== -1;
@@ -559,6 +508,7 @@ const ClientTable = ({
               onView={handleRowClick}
               onEdit={handleEdit}
               onViewForms={handleViewForms}
+              onViewChart={handleViewChart} // ✅ Pass View Chart handler
             />
           </Grid>
         ))}
@@ -585,8 +535,7 @@ const ClientTable = ({
                 const isItemSelected = isSelected(client.clientID);
                 const isRowSelected = isClientSelected(client.clientID);
                 const labelId = `enhanced-table-checkbox-${index}`;
-                const completionPercentage = Math.round((client.formsCompleted / client.totalForms) * 100);
-                const avatarInitials = `${client.clientFirstName.charAt(0)}${client.clientLastName.charAt(0)}`;
+                const avatarInitials = `${client.clientFirstName?.charAt(0) || ''}${client.clientLastName?.charAt(0) || ''}`;
 
                 return (
                   <TableRow
@@ -615,52 +564,21 @@ const ClientTable = ({
                     </TableCell>
                     
                     <TableCell padding="none">
-                      <Badge
-                        overlap="circular"
-                        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-                        badgeContent={
-                          <Box
-                            sx={{
-                              width: 10,
-                              height: 10,
-                              borderRadius: '50%',
-                              bgcolor: client.status === 'active' ? 'success.main' : 'grey.500',
-                              border: '2px solid white'
-                            }}
-                          />
-                        }
-                      >
-                        <Avatar sx={{ bgcolor: 'primary.main', width: 32, height: 32 }}>
-                          <Typography variant="caption" sx={{ fontWeight: 'bold' }}>
-                            {avatarInitials}
-                          </Typography>
-                        </Avatar>
-                      </Badge>
+                      <Avatar sx={{ bgcolor: 'primary.main', width: 32, height: 32 }}>
+                        <Typography variant="caption" sx={{ fontWeight: 'bold' }}>
+                          {avatarInitials}
+                        </Typography>
+                      </Avatar>
                     </TableCell>
 
                     <TableCell component="th" id={labelId} scope="row">
-                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                        <Box>
-                          <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                            {client.clientFirstName} {client.clientLastName}
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            {client.clientGender} • Born {new Date(client.clientDOB).getFullYear()}
-                          </Typography>
-                        </Box>
-                        <IconButton
-                          size="small"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            toggleFavorite(client.clientID);
-                          }}
-                          sx={{ ml: 1 }}
-                        >
-                          {favorites.has(client.clientID) ? 
-                            <StarIcon sx={{ color: 'warning.main' }} fontSize="small" /> :
-                            <StarBorderIcon fontSize="small" />
-                          }
-                        </IconButton>
+                      <Box>
+                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                          {client.clientFirstName} {client.clientLastName}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {client.clientGender} • Born {client.clientDOB ? new Date(client.clientDOB).getFullYear() : 'N/A'}
+                        </Typography>
                       </Box>
                     </TableCell>
 
@@ -672,7 +590,7 @@ const ClientTable = ({
 
                     <TableCell>
                       <Chip 
-                        label={client.clientSite}
+                        label={client.clientSite || 'Not assigned'}
                         size="small"
                         variant="outlined"
                         color="primary"
@@ -680,57 +598,20 @@ const ClientTable = ({
                     </TableCell>
 
                     <TableCell>
-                      <Stack direction="row" spacing={1}>
-                        <Chip 
-                          label={client.status}
-                          size="small"
-                          color={client.status === 'active' ? 'success' : 'default'}
-                        />
-                        {client.clientVetStatus.includes('veteran') && (
-                          <Chip 
-                            label="VET"
-                            size="small"
-                            color="info"
-                            sx={{ fontSize: '0.75rem' }}
-                          />
-                        )}
-                      </Stack>
-                    </TableCell>
-
-                    <TableCell>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Box sx={{ width: 60 }}>
-                          <LinearProgress 
-                            variant="determinate" 
-                            value={completionPercentage} 
-                            color={completionPercentage === 100 ? 'success' : 'primary'}
-                            sx={{ height: 4, borderRadius: 2 }}
-                          />
-                        </Box>
-                        <Typography variant="caption" sx={{ minWidth: 45 }}>
-                          {client.formsCompleted}/{client.totalForms}
-                        </Typography>
-                        {completionPercentage === 100 && (
-                          <CheckCircleIcon sx={{ color: 'success.main', fontSize: 16 }} />
-                        )}
-                      </Box>
-                    </TableCell>
-
-                    <TableCell>
                       <Typography variant="body2">
-                        {new Date(client.lastActivity).toLocaleDateString()}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        {new Date(client.lastActivity).toLocaleTimeString([], { 
-                          hour: '2-digit', 
-                          minute: '2-digit' 
-                        })}
+                        {client.clientGender || 'Not specified'}
                       </Typography>
                     </TableCell>
 
                     <TableCell>
                       <Typography variant="body2">
-                        {client.caseworker}
+                        {client.clientDOB ? new Date(client.clientDOB).toLocaleDateString() : 'N/A'}
+                      </Typography>
+                    </TableCell>
+
+                    <TableCell>
+                      <Typography variant="body2">
+                        {client.createdAt ? new Date(client.createdAt).toLocaleDateString() : 'N/A'}
                       </Typography>
                     </TableCell>
 
@@ -740,6 +621,7 @@ const ClientTable = ({
                         onEdit={handleEdit}
                         onView={handleRowClick}
                         onViewForms={handleViewForms}
+                        onViewChart={handleViewChart} // ✅ Pass View Chart handler
                       />
                     </TableCell>
                   </TableRow>
@@ -761,42 +643,6 @@ const ClientTable = ({
           />
         )}
       </Paper>
-
-      {/* Selection toolbar */}
-      {selected.length > 0 && (
-        <Paper 
-          elevation={4}
-          sx={{ 
-            position: 'fixed',
-            bottom: 20,
-            left: '50%',
-            transform: 'translateX(-50%)',
-            p: 2,
-            zIndex: 1000,
-            display: 'flex',
-            alignItems: 'center',
-            gap: 2
-          }}
-        >
-          <Typography variant="body2">
-            {selected.length} client{selected.length > 1 ? 's' : ''} selected
-          </Typography>
-          <Button size="small" variant="outlined">
-            Export
-          </Button>
-          <Button size="small" variant="outlined">
-            Bulk Edit
-          </Button>
-          <Button 
-            size="small" 
-            variant="outlined" 
-            color="error"
-            onClick={() => setSelected([])}
-          >
-            Clear
-          </Button>
-        </Paper>
-      )}
     </Box>
   );
 };

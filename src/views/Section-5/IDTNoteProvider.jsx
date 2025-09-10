@@ -153,33 +153,36 @@ const IDTNoteProvider = () => {
                     <AccordionDetails>
                         <Grid container spacing={3}>
                             <Grid item xs={12}>
+                                <Typography>Diagnosis and H&P Pertinent</Typography>
                                 <TextField
                                     fullWidth
                                     multiline
                                     rows={3}
-                                    label="Diagnosis and H&P Pertinent"
+                                    label=""
                                     name="idtDiag"
                                     value={formData.idtDiag}
                                     onChange={handleChange}
                                 />
                             </Grid>
                             <Grid item xs={12} md={6}>
+                                <Typography>Problems Member is Having with Life</Typography>
                                 <TextField
                                     fullWidth
                                     multiline
                                     rows={3}
-                                    label="Problems Member is Having with Life"
+                                    label=""
                                     name="idtProblems"
                                     value={formData.idtProblems}
                                     onChange={handleChange}
                                 />
                             </Grid>
                             <Grid item xs={12} md={6}>
+                                <Typography>Priority Problems for Member</Typography>
                                 <TextField
                                     fullWidth
                                     multiline
                                     rows={3}
-                                    label="Priority Problems for Member"
+                                    label=""
                                     name="idtPriority"
                                     value={formData.idtPriority}
                                     onChange={handleChange}
@@ -198,22 +201,24 @@ const IDTNoteProvider = () => {
                     <AccordionDetails>
                         <Grid container spacing={3}>
                             <Grid item xs={12} md={6}>
+                                <Typography>Consultations Being Placed for Problems</Typography>
                                 <TextField
                                     fullWidth
                                     multiline
                                     rows={4}
-                                    label="Consultations Being Placed for Problems"
+                                    label=""
                                     name="idtConsults"
                                     value={formData.idtConsults}
                                     onChange={handleChange}
                                 />
                             </Grid>
                             <Grid item xs={12} md={6}>
+                                <Typography>If No Consults, Alternative Options</Typography>
                                 <TextField
                                     fullWidth
                                     multiline
                                     rows={4}
-                                    label="If No Consults, Alternative Options"
+                                    label=""
                                     name="idtNoConsults"
                                     value={formData.idtNoConsults}
                                     onChange={handleChange}
@@ -232,22 +237,24 @@ const IDTNoteProvider = () => {
                     <AccordionDetails>
                         <Grid container spacing={3}>
                             <Grid item xs={12} md={6}>
+                                <Typography>Discharge Plans for Member</Typography>
                                 <TextField
                                     fullWidth
                                     multiline
                                     rows={4}
-                                    label="Discharge Plans for Member"
+                                    label=""
                                     name="idtPlans"
                                     value={formData.idtPlans}
                                     onChange={handleChange}
                                 />
                             </Grid>
                             <Grid item xs={12} md={6}>
+                                <Typography>Barriers to Discharge</Typography>
                                 <TextField
                                     fullWidth
                                     multiline
                                     rows={4}
-                                    label="Barriers to Discharge"
+                                    label=""
                                     name="idtDischarge"
                                     value={formData.idtDischarge}
                                     onChange={handleChange}
@@ -266,8 +273,8 @@ const IDTNoteProvider = () => {
                     <AccordionDetails>
                         <Grid container spacing={3}>
                             <Grid item xs={12} md={6}>
-                                <FormControl fullWidth>
-                                    <InputLabel>Is Patient Medically Cleared?</InputLabel>
+                                <Typography>Is Patient Medically Cleared?</Typography>
+                                <FormControl fullWidth> 
                                     <Select
                                         name="idtPatientClear"
                                         value={formData.idtPatientClear}
@@ -282,9 +289,10 @@ const IDTNoteProvider = () => {
                                 </FormControl>
                             </Grid>
                             <Grid item xs={12} md={6}>
+                                <Typography>Date Patient was Cleared</Typography>
                                 <TextField
                                     fullWidth
-                                    label="Date Patient was Cleared"
+                                    label=""
                                     name="idtPatientClearDate"
                                     type="date"
                                     value={formData.idtPatientClearDate}

@@ -438,15 +438,6 @@ const HousingAgree = ({ clientID: propClientID }) => {
 
                 {/* Action Buttons */}
                 <Box sx={{ display: 'flex', justifyContent: 'center', gap: 2, mt: 4 }}>
-                    <Button
-                        variant="outlined"
-                        size="large"
-                        onClick={handleSaveDraft}
-                        disabled={saving}
-                        sx={{ px: 4 }}
-                    >
-                        Save Draft
-                    </Button>
                     
                     <Button
                         type="submit"

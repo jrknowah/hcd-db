@@ -1,4 +1,4 @@
-// ===== IMPORTS MUST BE AT THE TOP OF THE FILE =====
+// ✅ SIMPLIFIED IDTNoteCM.jsx - No external error handling needed
 import React, { useState, useEffect } from "react";
 import {
   Accordion,
@@ -15,10 +15,9 @@ import {
   MenuItem,
   Chip,
   Box,
-  Card,
-  CardContent,
   LinearProgress,
-  Paper
+  Paper,
+  CircularProgress
 } from "@mui/material";
 import {
   ExpandMore as ExpandMoreIcon,
@@ -30,26 +29,57 @@ import {
 } from "@mui/icons-material";
 import { useDispatch, useSelector } from "react-redux";
 import PropTypes from "prop-types";
-import { identityList, highestEdu } from "../../data/arrayList";
 
-// TODO: Update these imports to match your existing slice exports
-// Check your slice file for the correct export names and path:
-// Example possibilities:
-// import { saveIDTNote, fetchIDTNote } from "../../../../store/apps/notes/IDTNoteCMSlice";
-// import { saveIDTNote, fetchIDTNote } from "../../../store/slices/idtNoteCmSlice";
-// Or check what exports are actually available in your slice file
+// ✅ SIMPLE: Direct imports - slice handles all error cases
+import { 
+  fetchIDTCaseManager,
+  saveIDTCaseManager,
+  clearError,
+  clearSaveSuccess,
+  selectIDTData,
+  selectIDTLoading,
+  selectIDTError,
+  selectIDTSaving,
+  selectIDTSaveSuccess,
+  selectAPIConnected
+} from "../../store/slices/idtNoteCmSlice";
 
-// ===== COMPONENT STARTS HERE =====
+// ✅ SIMPLE: Inline data - no external dependencies
+const identityList = [
+  { value: 'state_id', label: 'State ID' },
+  { value: 'drivers_license', label: 'Driver\'s License' },
+  { value: 'passport', label: 'Passport' },
+  { value: 'ssn_card', label: 'Social Security Card' },
+  { value: 'birth_certificate', label: 'Birth Certificate' },
+  { value: 'medical_card', label: 'Medical Insurance Card' }
+];
+
+const highestEdu = [
+  'No Formal Education',
+  'Elementary School',
+  'Middle School',
+  'High School Diploma',
+  'GED',
+  'Some College',
+  'Trade/Vocational School',
+  'Associate Degree',
+  'Bachelor Degree',
+  'Master Degree',
+  'Doctoral Degree'
+];
+
 const IDTNoteCM = ({ clientID }) => {
   const dispatch = useDispatch();
-  const user = useSelector((state) => state.auth.user);
   
-  // TODO: Update this to match your actual state structure
-  // const { data, loading, error } = useSelector((state) => state.idtNoteCM || {});
+  // ✅ SIMPLE: Safe selectors from slice - no destructuring errors
+  const data = useSelector(selectIDTData);
+  const loading = useSelector(selectIDTLoading);
+  const error = useSelector(selectIDTError);
+  const saving = useSelector(selectIDTSaving);
+  const saveSuccess = useSelector(selectIDTSaveSuccess);
+  const apiConnected = useSelector(selectAPIConnected);
   
-  // For now, using local state until Redux is connected
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
+  const user = useSelector((state) => state.auth?.user || null);
   
   const [formData, setFormData] = useState({
     idtMemberSituation: "",
@@ -67,13 +97,45 @@ const IDTNoteCM = ({ clientID }) => {
 
   const [expandedAccordion, setExpandedAccordion] = useState(0);
 
+  // ✅ SIMPLE: Direct dispatch - slice handles all scenarios
   useEffect(() => {
-    // TODO: Replace with your actual fetch action
-    // if (clientID) dispatch(fetchIDTNote(clientID));
-    
-    // Mock data for testing the UI
-    console.log('Loading data for client:', clientID);
+    if (clientID) {
+      dispatch(fetchIDTCaseManager(clientID));
+    }
   }, [clientID, dispatch]);
+
+  // ✅ SIMPLE: Safe data loading
+  useEffect(() => {
+    if (data && Object.keys(data).length > 0) {
+      setFormData({
+        idtMemberSituation: data.idtMemberSituation || "",
+        idtMemberSupport: data.idtMemberSupport || "",
+        idtIncomeSource: data.idtIncomeSource || "",
+        clientGovIssued: Array.isArray(data.clientGovIssued) 
+          ? data.clientGovIssued.map(item => 
+              typeof item === 'string' ? { label: item, value: item } : item
+            )
+          : [],
+        idtResources: data.idtResources || "",
+        idtHfhCM: data.idtHfhCM || "",
+        idtRecommend: data.idtRecommend || "",
+        clientHighEnd: data.clientHighEnd || "",
+        idtGoals: data.idtGoals || "",
+        clientPayeeBarriers: data.clientPayeeBarriers || "",
+        clientPayeeAssistance: data.clientPayeeAssistance || ""
+      });
+    }
+  }, [data]);
+
+  // ✅ SIMPLE: Auto-clear success messages
+  useEffect(() => {
+    if (saveSuccess) {
+      const timer = setTimeout(() => {
+        dispatch(clearSaveSuccess());
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [saveSuccess, dispatch]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -84,7 +146,9 @@ const IDTNoteCM = ({ clientID }) => {
     const value = event.target.value;
     setFormData((prev) => ({
       ...prev,
-      clientGovIssued: typeof value === 'string' ? value.split(',').map(v => ({ label: v, value: v })) : value.map(v => ({ label: v, value: v }))
+      clientGovIssued: typeof value === 'string' 
+        ? value.split(',').map(v => ({ label: v, value: v })) 
+        : value.map(v => ({ label: v, value: v }))
     }));
   };
 
@@ -92,31 +156,18 @@ const IDTNoteCM = ({ clientID }) => {
     setExpandedAccordion(isExpanded ? panel : false);
   };
 
+  // ✅ SIMPLE: Direct save - slice handles all scenarios
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setLoading(true);
     
-    try {
-      // TODO: Replace with your actual save action
-      // const payload = {
-      //   ...formData,
-      //   clientGovIssued: formData.clientGovIssued.map((option) => option.value),
-      //   clientID,
-      //   updatedBy: user?.email || "unknown"
-      // };
-      // dispatch(saveIDTNote(payload));
-      
-      // Mock save for testing
-      console.log('Saving data:', formData);
-      setTimeout(() => {
-        setLoading(false);
-        alert('Data saved successfully! (Mock save)');
-      }, 1000);
-      
-    } catch (err) {
-      setError('Error saving data');
-      setLoading(false);
-    }
+    const payload = {
+      ...formData,
+      clientGovIssued: formData.clientGovIssued.map((option) => option.value),
+      clientID,
+      updatedBy: user?.email || "system"
+    };
+    
+    dispatch(saveIDTCaseManager(payload));
   };
 
   const getCompletionPercentage = () => {
@@ -143,6 +194,13 @@ const IDTNoteCM = ({ clientID }) => {
           Comprehensive case management evaluation and goal setting
         </Typography>
         
+        {/* ✅ SIMPLE: Connection status indicator */}
+        {!apiConnected && (
+          <Alert severity="info" sx={{ mt: 2, mb: 2 }}>
+            🔧 Development Mode: Using demo data (API not connected)
+          </Alert>
+        )}
+        
         {/* Progress Indicator */}
         <Box sx={{ mt: 2 }}>
           <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
@@ -157,11 +215,32 @@ const IDTNoteCM = ({ clientID }) => {
         </Box>
       </Paper>
 
-      {/* Error Alert */}
+      {/* ✅ SIMPLE: Error handling */}
       {error && (
-        <Alert severity="error" sx={{ mb: 3 }}>
+        <Alert 
+          severity="error" 
+          sx={{ mb: 3 }} 
+          onClose={() => dispatch(clearError())}
+        >
           {error}
         </Alert>
+      )}
+
+      {saveSuccess && (
+        <Alert 
+          severity="success" 
+          sx={{ mb: 3 }} 
+          onClose={() => dispatch(clearSaveSuccess())}
+        >
+          ✅ Assessment saved successfully!
+        </Alert>
+      )}
+
+      {/* Loading Indicator */}
+      {loading && (
+        <Box display="flex" justifyContent="center" mb={3}>
+          <CircularProgress />
+        </Box>
       )}
 
       {/* Main Form */}
@@ -219,18 +298,18 @@ const IDTNoteCM = ({ clientID }) => {
           <AccordionDetails>
             <Grid container spacing={3}>
               <Grid item xs={12} md={4}>
+                <Typography>Income Source</Typography>
                 <TextField
                   fullWidth
-                  label="Income Source"
+                  label=""
                   name="idtIncomeSource"
                   value={formData.idtIncomeSource}
                   onChange={handleChange}
-                  helperText="Member source of income?"
                 />
               </Grid>
               <Grid item xs={12} md={4}>
+                <Typography>Government Issued ID</Typography>
                 <FormControl fullWidth>
-                  <InputLabel>Government Issued ID</InputLabel>
                   <Select
                     multiple
                     value={formData.clientGovIssued.map(item => item.value)}
@@ -252,15 +331,15 @@ const IDTNoteCM = ({ clientID }) => {
                 </FormControl>
               </Grid>
               <Grid item xs={12} md={4}>
+                <Typography>Available Resources</Typography>
                 <TextField
                   fullWidth
                   multiline
                   rows={3}
-                  label="Available Resources"
+                  label=""
                   name="idtResources"
                   value={formData.idtResources}
                   onChange={handleChange}
-                  helperText="What resources/assistance can we provide?"
                 />
               </Grid>
             </Grid>
@@ -280,25 +359,25 @@ const IDTNoteCM = ({ clientID }) => {
           <AccordionDetails>
             <Grid container spacing={3}>
               <Grid item xs={12} md={6}>
+                <Typography>HFH Case Manager</Typography>
                 <TextField
                   fullWidth
-                  label="HFH Case Manager"
+                  label=""
                   name="idtHfhCM"
                   value={formData.idtHfhCM}
                   onChange={handleChange}
-                  helperText="HFH case manager that will follow this client?"
                 />
               </Grid>
               <Grid item xs={12} md={6}>
+                <Typography>Recommendations</Typography>
                 <TextField
                   fullWidth
                   multiline
                   rows={3}
-                  label="Recommendations"
+                  label=""
                   name="idtRecommend"
                   value={formData.idtRecommend}
-                  onChange={handleChange}
-                  helperText="Recommendations to address problems?"
+                  onChange={handleChange} 
                 />
               </Grid>
             </Grid>
@@ -318,8 +397,8 @@ const IDTNoteCM = ({ clientID }) => {
           <AccordionDetails>
             <Grid container spacing={3}>
               <Grid item xs={12} md={4}>
-                <FormControl fullWidth>
-                  <InputLabel>Educational Level</InputLabel>
+                <Typography>Highest Educational Level</Typography>
+                <FormControl fullWidth> 
                   <Select
                     name="clientHighEnd"
                     value={formData.clientHighEnd}
@@ -336,39 +415,39 @@ const IDTNoteCM = ({ clientID }) => {
                 </FormControl>
               </Grid>
               <Grid item xs={12} md={4}>
+                <Typography>Work Goals</Typography>
                 <TextField
                   fullWidth
                   multiline
                   rows={3}
-                  label="Work Goals"
+                  label=""
                   name="idtGoals"
                   value={formData.idtGoals}
-                  onChange={handleChange}
-                  helperText="Is a work goal feasible and how long will it take to achieve?"
+                  onChange={handleChange} 
                 />
               </Grid>
               <Grid item xs={12} md={4}>
+                <Typography>Employment Barriers</Typography>
                 <TextField
                   fullWidth
                   multiline
                   rows={3}
-                  label="Employment Barriers"
+                  label=""
                   name="clientPayeeBarriers"
                   value={formData.clientPayeeBarriers}
-                  onChange={handleChange}
-                  helperText="Any mental/physical barriers to attaining employment?"
+                  onChange={handleChange} 
                 />
               </Grid>
               <Grid item xs={12}>
+                <Typography>Assistance Plan</Typography>
                 <TextField
                   fullWidth
                   multiline
                   rows={3}
-                  label="Assistance Plan"
+                  label=""
                   name="clientPayeeAssistance"
                   value={formData.clientPayeeAssistance}
-                  onChange={handleChange}
-                  helperText="How will we assist the member in attaining these goals?"
+                  onChange={handleChange} 
                 />
               </Grid>
             </Grid>
@@ -381,11 +460,11 @@ const IDTNoteCM = ({ clientID }) => {
             type="submit"
             variant="contained"
             size="large"
-            disabled={loading}
+            disabled={saving || loading}
             startIcon={<SaveIcon />}
             sx={{ minWidth: 150 }}
           >
-            {loading ? 'Saving...' : 'Save Assessment'}
+            {saving ? 'Saving...' : 'Save Assessment'}
           </Button>
         </Box>
       </form>

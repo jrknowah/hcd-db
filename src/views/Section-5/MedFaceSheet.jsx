@@ -49,7 +49,7 @@ import {
   fetchClientAllergies,
 } from "../../store/slices/medFaceSheetSlice";
 import logUserAction from "../../config/logAction";
-import { medCond } from "../../data/arrayList";
+import { medCond, allergyList } from "../../data/arrayList";
 
 // Custom styles for react-select to match Material-UI theme
 const customSelectStyles = {
@@ -332,13 +332,21 @@ const MedFaceSheet = ({ clientID }) => {
                 <Typography variant="body1">Allergy/Intolerance History</Typography>
               </Box>
               <Select
-                isMulti
-                options={clientAllergies}
-                value={formData.clientAllergies}
-                onChange={(value) => handleSelectChange("clientAllergies", value)}
-                placeholder="Select allergies..."
-                styles={customSelectStyles}
-              />
+                  isMulti
+                  options={allergyList?.map((item) => ({ 
+                    label: item.value, 
+                    value: item.value 
+                  })) || []}
+                  value={formData.clientAllergies}
+                  onChange={(value) => handleSelectChange("clientAllergies", value)}
+                  placeholder="Select allergies..."
+                  styles={{
+                    control: (base) => ({
+                      ...base,
+                      minHeight: '56px'
+                    })
+                  }}
+                /> 
             </Grid>
 
             {/* Save Button */}

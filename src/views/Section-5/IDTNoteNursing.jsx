@@ -309,22 +309,24 @@ export const store = configureStore({
             <AccordionDetails>
               <Grid container spacing={3}>
                 <Grid item xs={12}>
+                  <Typography>Has the Member been able to attend appointments?</Typography>
                   <TextField
                     fullWidth
                     multiline
                     rows={4}
-                    label="Has the Member been able to attend appointments?"
+                    label=""
                     value={formData.idtNursingAppointYN}
                     onChange={(e) => handleInputChange('idtNursingAppointYN', e.target.value)}
                     placeholder="Describe appointment attendance patterns, barriers, and overall engagement..."
                   />
                 </Grid>
                 <Grid item xs={12}>
+                  <Typography>Specific appointment(s) Member would like to focus on attending?</Typography>
                   <TextField
                     fullWidth
                     multiline
                     rows={4}
-                    label="Specific appointment(s) Member would like to focus on attending?"
+                    label=""
                     value={formData.idtNursingAppoint}
                     onChange={(e) => handleInputChange('idtNursingAppoint', e.target.value)}
                     placeholder="List priority appointments, member preferences, and focus areas..."
@@ -343,17 +345,21 @@ export const store = configureStore({
             <AccordionDetails>
               <Grid container spacing={3}>
                 <Grid item xs={12}>
+                  <Typography>Specific problems the member is experiencing that are barriers to independent functioning?</Typography>
                   <TextField
                     fullWidth
                     multiline
                     rows={4}
-                    label="Specific problems the member is experiencing that are barriers to independent functioning?"
+                    label=""
                     value={formData.idtNursingProb}
                     onChange={(e) => handleInputChange('idtNursingProb', e.target.value)}
                     placeholder="Document barriers, challenges, and obstacles to independence..."
                   />
                 </Grid>
+              </Grid>
+              <Grid container spacing={3} sx={{ mt: 2 }}>
                 <Grid item xs={12}>
+                  <Typography>What is the Member's goal? Has it changed since initial eval/previous appointments? *</Typography>
                   <TextField
                     fullWidth
                     multiline
@@ -364,19 +370,21 @@ export const store = configureStore({
                     placeholder="Document member's goals, changes, and progress since last assessment..."
                     required
                     error={!formData.idtNursingGoal.trim()}
-                    helperText={!formData.idtNursingGoal.trim() ? "Goal documentation is required" : ""}
+                   
                   />
                 </Grid>
-                
+              </Grid>
+              <Grid container spacing={3} sx={{ mt: 2 }}>
                 {/* Enhanced Goal Management */}
                 <Grid item xs={12} md={4}>
+                  <Typography>Goal Status</Typography>
                   <FormControl fullWidth>
-                    <InputLabel>Goal Status</InputLabel>
                     <Select
                       value={formData.goalStatus}
-                      label="Goal Status"
+                      label=""
                       onChange={(e) => handleInputChange('goalStatus', e.target.value)}
-                    >
+                    > 
+                      <MenuItem value=""></MenuItem>
                       <MenuItem value="Active">Active</MenuItem>
                       <MenuItem value="Achieved">Achieved</MenuItem>
                       <MenuItem value="Modified">Modified</MenuItem>
@@ -385,13 +393,14 @@ export const store = configureStore({
                   </FormControl>
                 </Grid>
                 <Grid item xs={12} md={4}>
+                  <Typography>Goal Priority</Typography>
                   <FormControl fullWidth>
-                    <InputLabel>Goal Priority</InputLabel>
                     <Select
                       value={formData.goalPriority}
-                      label="Goal Priority"
+                      label=""
                       onChange={(e) => handleInputChange('goalPriority', e.target.value)}
                     >
+                      <MenuItem value=""></MenuItem>
                       <MenuItem value="High">High Priority</MenuItem>
                       <MenuItem value="Medium">Medium Priority</MenuItem>
                       <MenuItem value="Low">Low Priority</MenuItem>
@@ -399,10 +408,11 @@ export const store = configureStore({
                   </FormControl>
                 </Grid>
                 <Grid item xs={12} md={4}>
+                  <Typography>Goal Target Date</Typography>
                   <TextField
                     fullWidth
                     type="date"
-                    label="Goal Target Date"
+                    label=""
                     value={formData.goalTargetDate}
                     onChange={(e) => handleInputChange('goalTargetDate', e.target.value)}
                     InputLabelProps={{ shrink: true }}
@@ -442,11 +452,12 @@ export const store = configureStore({
             <AccordionDetails>
               <Grid container spacing={3}>
                 <Grid item xs={12}>
+                  <Typography>Is Member compliant with meds/therapy?</Typography>
                   <TextField
                     fullWidth
                     multiline
                     rows={4}
-                    label="Is Member compliant with meds/therapy?"
+                    label=""
                     value={formData.idtNursingCompliant}
                     onChange={(e) => handleInputChange('idtNursingCompliant', e.target.value)}
                     placeholder="Document medication compliance, therapy adherence, and any barriers..."
@@ -486,12 +497,13 @@ export const store = configureStore({
                     {formData.complianceScore < 5 && "Needs improvement"}
                   </Typography>
                 </Grid>
-                
+              </Grid>
+              <Grid  spacing={3} sx={{ mt: 2 }}>
                 <Grid item xs={12}>
                   <TextField
                     fullWidth
                     multiline
-                    rows={4}
+                    rows={6}
                     label="Additional Information"
                     value={formData.idtNursingInfo}
                     onChange={(e) => handleInputChange('idtNursingInfo', e.target.value)}

@@ -1,458 +1,766 @@
-// backend/routes/mentalHealthRoutes.js
+// routes/mentalHealth.js
 const express = require('express');
 const router = express.Router();
-const db = require('../config/database'); // Your database connection
+const sql = require('mssql');
 
-// =========================================
-// MENTAL HEALTH ROUTES
-// =========================================
+// Try to load azureSql module (following your existing pattern)
+let getPool;
+try {
+  const azureSql = require('../store/azureSql');
+  getPool = azureSql.getPool;
+  console.log('✅ azureSql loaded for Mental Health routes');
+} catch (err) {
+  console.error('⚠️ Could not load azureSql module:', err.message);
+  throw new Error('azureSql module not found');
+}
 
-// GET /api/mental-health/:clientId - Fetch complete mental health assessment
-router.get('/:clientId', async (req, res) => {
+// Generate unique mental health assessment ID
+const generateMentalHealthID = (clientID) => {
+  const timestamp = Date.now().toString().slice(-8);
+  const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+  return `MH-${clientID}-${timestamp}-${random}`;
+};
+
+// Validation helper
+const validateMentalHealthData = (data, isUpdate = false) => {
+  const errors = {};
+  
+  if (!isUpdate && !data.clientID) {
+    errors.clientID = 'Client ID is required';
+  }
+  
+  if (data.columbiaSRComp && !['Yes', 'No'].includes(data.columbiaSRComp)) {
+    errors.columbiaSRComp = 'Columbia SR Comp must be Yes or No';
+  }
+  
+  if (data.riskLevel && !['Minimal', 'Low', 'Medium', 'High'].includes(data.riskLevel)) {
+    errors.riskLevel = 'Invalid risk level value';
+  }
+  
+  return Object.keys(errors).length > 0 ? errors : null;
+};
+
+// Helper function to parse JSON fields safely
+const parseJsonField = (field) => {
   try {
-    const { clientId } = req.params;
+    return field ? JSON.parse(field) : [];
+  } catch (e) {
+    return Array.isArray(field) ? field : [];
+  }
+};
 
+// Helper function to stringify array fields
+const stringifyArrayField = (field) => {
+  return Array.isArray(field) ? JSON.stringify(field) : field;
+};
+
+// GET /api/mental-health/:clientID - Fetch complete mental health assessment
+router.get('/:clientID', async (req, res) => {
+  try {
+    const pool = await getPool();
+    const { clientID } = req.params;
+    
+    console.log(`🧠 Fetching mental health data for client: ${clientID}`);
+    
     // Get main mental health assessment
-    const [assessmentRows] = await db.execute(
-      `SELECT * FROM mental_health_assessments WHERE client_id = ? ORDER BY created_at DESC LIMIT 1`,
-      [clientId]
-    );
+    const assessmentResult = await pool.request()
+      .input('clientID', sql.VarChar, clientID)
+      .query(`
+        SELECT TOP 1 * 
+        FROM MentalHealthAssessments 
+        WHERE clientID = @clientID 
+        ORDER BY createdAt DESC
+      `);
 
-    if (assessmentRows.length === 0) {
+    if (assessmentResult.recordset.length === 0) {
+      console.log(`📝 No mental health assessment found for client ${clientID}`);
       return res.json({});
     }
 
-    const assessment = assessmentRows[0];
+    const assessment = assessmentResult.recordset[0];
 
     // Get related data
-    const [providers] = await db.execute(
-      `SELECT * FROM mental_health_providers WHERE client_id = ? AND active = 1`,
-      [clientId]
-    );
+    const [providersResult, hospitalizationsResult, medicationsResult, substanceResult, arrestsResult] = await Promise.all([
+      // Get current providers
+      pool.request()
+        .input('clientID', sql.VarChar, clientID)
+        .query(`
+          SELECT * FROM MentalHealthProviders 
+          WHERE clientID = @clientID AND active = 1
+          ORDER BY createdAt DESC
+        `),
+      
+      // Get hospitalizations
+      pool.request()
+        .input('clientID', sql.VarChar, clientID)
+        .query(`
+          SELECT * FROM MentalHealthHospitalizations 
+          WHERE clientID = @clientID
+          ORDER BY hospitalizationDate DESC
+        `),
+      
+      // Get medications
+      pool.request()
+        .input('clientID', sql.VarChar, clientID)
+        .query(`
+          SELECT * FROM MentalHealthMedications 
+          WHERE clientID = @clientID AND active = 1
+          ORDER BY createdAt DESC
+        `),
+      
+      // Get substance abuse data
+      pool.request()
+        .input('clientID', sql.VarChar, clientID)
+        .query(`
+          SELECT * FROM SubstanceAbuseData 
+          WHERE clientID = @clientID
+          ORDER BY createdAt DESC
+        `),
+      
+      // Get arrest records
+      pool.request()
+        .input('clientID', sql.VarChar, clientID)
+        .query(`
+          SELECT * FROM ArrestRecords 
+          WHERE clientID = @clientID
+          ORDER BY arrestDate DESC
+        `)
+    ]);
 
-    const [hospitalizations] = await db.execute(
-      `SELECT * FROM mental_health_hospitalizations WHERE client_id = ?`,
-      [clientId]
-    );
-
-    const [medications] = await db.execute(
-      `SELECT * FROM mental_health_medications WHERE client_id = ? AND active = 1`,
-      [clientId]
-    );
-
-    const [substanceData] = await db.execute(
-      `SELECT * FROM substance_abuse_data WHERE client_id = ?`,
-      [clientId]
-    );
-
-    // Parse JSON fields
-    const parseJsonField = (field) => {
-      try {
-        return field ? JSON.parse(field) : [];
-      } catch (e) {
-        return [];
-      }
-    };
-
-    // Combine all data
+    // Parse JSON arrays in assessment data
     const completeData = {
       ...assessment,
-      // Parse JSON arrays
-      mentalHealthDiagnosis: parseJsonField(assessment.mental_health_diagnosis),
-      mhAbuse: parseJsonField(assessment.mh_abuse),
-      clientRisk: parseJsonField(assessment.client_risk),
-      clientLegalIssues: parseJsonField(assessment.client_legal_issues),
-      clientPatFamNeeds: parseJsonField(assessment.client_pat_fam_needs),
-      cmOb1: parseJsonField(assessment.cm_ob1),
-      cmOb2: parseJsonField(assessment.cm_ob2),
-      cmOb3: parseJsonField(assessment.cm_ob3),
-      cmOb4: parseJsonField(assessment.cm_ob4),
-      cmOb5: parseJsonField(assessment.cm_ob5),
-      cmOb6: parseJsonField(assessment.cm_ob6),
-      cmOb7: parseJsonField(assessment.cm_ob7),
-      cmOb8: parseJsonField(assessment.cm_ob8),
-      cmOb9: parseJsonField(assessment.cm_ob9),
-      cmOb10: parseJsonField(assessment.cm_ob10),
-      cmOb11: parseJsonField(assessment.cm_ob11),
-      cmObNone: parseJsonField(assessment.cm_ob_none),
+      // Parse JSON fields
+      mentalHealthDiagnosis: parseJsonField(assessment.mentalHealthDiagnosis),
+      mhAbuse: parseJsonField(assessment.mhAbuse),
+      clientRisk: parseJsonField(assessment.clientRisk),
+      clientLegalIssues: parseJsonField(assessment.clientLegalIssues),
+      clientPatFamNeeds: parseJsonField(assessment.clientPatFamNeeds),
+      cmOb1: parseJsonField(assessment.cmOb1),
+      cmOb2: parseJsonField(assessment.cmOb2),
+      cmOb3: parseJsonField(assessment.cmOb3),
+      cmOb4: parseJsonField(assessment.cmOb4),
+      cmOb5: parseJsonField(assessment.cmOb5),
+      cmOb6: parseJsonField(assessment.cmOb6),
+      cmOb7: parseJsonField(assessment.cmOb7),
+      cmOb8: parseJsonField(assessment.cmOb8),
+      cmOb9: parseJsonField(assessment.cmOb9),
+      cmOb10: parseJsonField(assessment.cmOb10),
+      cmOb11: parseJsonField(assessment.cmOb11),
+      cmObNone: parseJsonField(assessment.cmObNone),
+      
       // Related data
-      currentProvider: providers,
-      hospitalizations: hospitalizations,
-      medications: medications,
-      substanceData: substanceData.reduce((acc, item) => {
-        acc[item.substance_name] = {
-          use: item.substance_use,
+      currentProvider: providersResult.recordset,
+      hospitalizations: hospitalizationsResult.recordset,
+      medications: medicationsResult.recordset,
+      
+      // Transform substance data to object format
+      substanceData: substanceResult.recordset.reduce((acc, item) => {
+        acc[item.substanceName] = {
+          use: item.substanceUse,
           frequency: item.frequency,
           method: item.method,
-          yearStarted: item.year_started,
-          yearQuit: item.year_quit
+          yearStarted: item.yearStarted,
+          yearQuit: item.yearQuit
         };
         return acc;
-      }, {})
+      }, {}),
+      
+      // Include arrest records
+      arrestRecords: arrestsResult.recordset
     };
 
+    console.log(`✅ Mental health data retrieved for client ${clientID}`);
     res.json(completeData);
+    
   } catch (error) {
-    console.error('Error fetching mental health data:', error);
-    res.status(500).json({ error: 'Failed to fetch mental health data' });
+    console.error('⚠️ Error fetching mental health data:', error);
+    res.status(500).json({ 
+      error: 'Failed to fetch mental health data',
+      message: error.message 
+    });
   }
 });
 
-// POST /api/mental-health/:clientId - Save mental health assessment
-router.post('/:clientId', async (req, res) => {
-  const connection = await db.getConnection();
+// POST /api/mental-health/:clientID - Save mental health assessment
+router.post('/:clientID', async (req, res) => {
+  const pool = await getPool();
+  let transaction;
   
   try {
-    await connection.beginTransaction();
-    
-    const { clientId } = req.params;
+    const { clientID } = req.params;
     const formData = req.body;
+    
+    // Validation
+    const validationErrors = validateMentalHealthData(formData);
+    if (validationErrors) {
+      return res.status(400).json({
+        error: 'Validation failed',
+        errors: validationErrors
+      });
+    }
+    
+    transaction = new sql.Transaction(pool);
+    await transaction.begin();
+    
+    console.log(`🧠 Saving mental health assessment for client: ${clientID}`);
+    
+    // Check if assessment already exists
+    const existingResult = await new sql.Request(transaction)
+      .input('clientID', sql.VarChar, clientID)
+      .query('SELECT mentalHealthID FROM MentalHealthAssessments WHERE clientID = @clientID');
 
-    // Prepare data for database
-    const assessmentData = {
-      client_id: clientId,
-      // Basic mental health history
-      mental_health_history: formData.mentalHealthHistory,
-      mental_health_diagnosis: JSON.stringify(formData.mentalHealthDiagnosis || []),
-      mental_health_treatment: formData.mentalHealthTreatment,
-      mental_health_current_treatment: formData.mentalHealthCurrentTreatment,
-      
-      // Symptom assessment
-      mh_sad: formData.mhSad,
-      mh_anxious: formData.mhAnxious,
-      mh_sleep_pattern: formData.mhSleepPattern,
-      mh_energy_level: formData.mhEnergyLevel,
-      mh_concentrate: formData.mhConcentrate,
-      mh_thoughts: formData.mhThoughts,
-      mh_voices: formData.mhVoices,
-      mh_voices_say: formData.mhVoicesSay,
-      mh_following: formData.mhFollowing,
-      mh_someone: formData.mhSomeone,
-      mh_fam_history: formData.mhFamHistory,
-      mh_summary: formData.mhSummary,
-      
-      // Risk assessment
-      mh_abuse: JSON.stringify(formData.mhAbuse || []),
-      client_risk: JSON.stringify(formData.clientRisk || []),
-      mh_self_harm: formData.mhSelfHarm,
-      mh_self_harm_occurrence: formData.mhSelfHarmOccurrence,
-      mh_suicide: formData.mhSuicide,
-      mh_suicide_last: formData.mhSuicideLast,
-      mh_risk_summary: formData.mhRiskSummary,
-      
-      // Substance abuse
-      mh_sub_abuse_help: formData.mhSubAbuseHelp,
-      mh_sub_ab_sum: formData.mhSubAbSum,
-      
-      // Legal
-      client_legal_issues: JSON.stringify(formData.clientLegalIssues || []),
-      client_legal_probation: formData.clientLegalProbation,
-      client_legal_parole: formData.clientLegalParole,
-      arrest_meth: formData.arrestMeth,
-      arrest_drug_alcohol: formData.arrestDrugAlcohol,
-      arrest_violent: formData.arrestViolent,
-      arrest_arson: formData.arrestArson,
-      arrest_sex_crime: formData.arrestSexCrime,
-      reg_sex_offender: formData.regSexOffender,
-      arrest_crime: formData.arrestCrime,
-      mh_legal_sum: formData.mhLegalSum,
-      
-      // Needs assessment
-      client_pat_fam_needs: JSON.stringify(formData.clientPatFamNeeds || []),
-      mh_needs_sum: formData.mhNeedsSum,
-      
-      // Case manager observations
-      cm_ob1: JSON.stringify(formData.cmOb1 || []),
-      cm_ob2: JSON.stringify(formData.cmOb2 || []),
-      cm_ob3: JSON.stringify(formData.cmOb3 || []),
-      cm_ob4: JSON.stringify(formData.cmOb4 || []),
-      cm_ob5: JSON.stringify(formData.cmOb5 || []),
-      cm_ob6: JSON.stringify(formData.cmOb6 || []),
-      cm_ob7: JSON.stringify(formData.cmOb7 || []),
-      cm_ob8: JSON.stringify(formData.cmOb8 || []),
-      cm_ob9: JSON.stringify(formData.cmOb9 || []),
-      cm_ob10: JSON.stringify(formData.cmOb10 || []),
-      cm_ob11: JSON.stringify(formData.cmOb11 || []),
-      cm_ob_none: JSON.stringify(formData.cmObNone || []),
-      cm_obv_sum: formData.cmObvSum,
-      
-      // Metadata
-      updated_by: formData.updatedBy,
-      updated_at: new Date()
-    };
+    let mentalHealthID;
+    let operation;
 
-    // Insert or update main assessment
-    const [existingAssessment] = await connection.execute(
-      `SELECT id FROM mental_health_assessments WHERE client_id = ?`,
-      [clientId]
-    );
-
-    let assessmentId;
-    if (existingAssessment.length > 0) {
-      // Update existing
-      assessmentId = existingAssessment[0].id;
-      const updateFields = Object.keys(assessmentData).map(key => `${key} = ?`).join(', ');
-      const updateValues = Object.values(assessmentData);
+    if (existingResult.recordset.length > 0) {
+      // Update existing assessment
+      mentalHealthID = existingResult.recordset[0].mentalHealthID;
+      operation = 'UPDATE';
       
-      await connection.execute(
-        `UPDATE mental_health_assessments SET ${updateFields} WHERE id = ?`,
-        [...updateValues, assessmentId]
-      );
+      await new sql.Request(transaction)
+        .input('clientID', sql.VarChar, clientID)
+        .input('mentalHealthHistory', sql.NVarChar, formData.mentalHealthHistory || '')
+        .input('mentalHealthDiagnosis', sql.NVarChar, stringifyArrayField(formData.mentalHealthDiagnosis))
+        .input('mentalHealthTreatment', sql.NVarChar, formData.mentalHealthTreatment || '')
+        .input('mentalHealthCurrentTreatment', sql.NVarChar, formData.mentalHealthCurrentTreatment || '')
+        .input('mhSad', sql.VarChar, formData.mhSad || '')
+        .input('mhAnxious', sql.VarChar, formData.mhAnxious || '')
+        .input('mhSleepPattern', sql.VarChar, formData.mhSleepPattern || '')
+        .input('mhEnergyLevel', sql.VarChar, formData.mhEnergyLevel || '')
+        .input('mhConcentrate', sql.VarChar, formData.mhConcentrate || '')
+        .input('mhThoughts', sql.VarChar, formData.mhThoughts || '')
+        .input('mhVoices', sql.VarChar, formData.mhVoices || '')
+        .input('mhVoicesSay', sql.NVarChar, formData.mhVoicesSay || '')
+        .input('mhFollowing', sql.VarChar, formData.mhFollowing || '')
+        .input('mhSomeone', sql.VarChar, formData.mhSomeone || '')
+        .input('mhFamHistory', sql.NVarChar, formData.mhFamHistory || '')
+        .input('mhSummary', sql.NVarChar, formData.mhSummary || '')
+        .input('mhAbuse', sql.NVarChar, stringifyArrayField(formData.mhAbuse))
+        .input('clientRisk', sql.NVarChar, stringifyArrayField(formData.clientRisk))
+        .input('mhSelfHarm', sql.VarChar, formData.mhSelfHarm || '')
+        .input('mhSelfHarmOccurrence', sql.NVarChar, formData.mhSelfHarmOccurrence || '')
+        .input('mhSuicide', sql.VarChar, formData.mhSuicide || '')
+        .input('mhSuicideLast', sql.NVarChar, formData.mhSuicideLast || '')
+        .input('mhRiskSummary', sql.NVarChar, formData.mhRiskSummary || '')
+        .input('mhSubAbuseHelp', sql.VarChar, formData.mhSubAbuseHelp || '')
+        .input('mhSubAbSum', sql.NVarChar, formData.mhSubAbSum || '')
+        .input('clientLegalIssues', sql.NVarChar, stringifyArrayField(formData.clientLegalIssues))
+        .input('clientLegalProbation', sql.VarChar, formData.clientLegalProbation || '')
+        .input('clientLegalParole', sql.VarChar, formData.clientLegalParole || '')
+        .input('arrestMeth', sql.VarChar, formData.arrestMeth || '')
+        .input('arrestDrugAlcohol', sql.VarChar, formData.arrestDrugAlcohol || '')
+        .input('arrestViolent', sql.VarChar, formData.arrestViolent || '')
+        .input('arrestArson', sql.VarChar, formData.arrestArson || '')
+        .input('arrestSexCrime', sql.VarChar, formData.arrestSexCrime || '')
+        .input('regSexOffender', sql.VarChar, formData.regSexOffender || '')
+        .input('arrestCrime', sql.NVarChar, formData.arrestCrime || '')
+        .input('mhLegalSum', sql.NVarChar, formData.mhLegalSum || '')
+        .input('clientPatFamNeeds', sql.NVarChar, stringifyArrayField(formData.clientPatFamNeeds))
+        .input('mhNeedsSum', sql.NVarChar, formData.mhNeedsSum || '')
+        .input('cmOb1', sql.NVarChar, stringifyArrayField(formData.cmOb1))
+        .input('cmOb2', sql.NVarChar, stringifyArrayField(formData.cmOb2))
+        .input('cmOb3', sql.NVarChar, stringifyArrayField(formData.cmOb3))
+        .input('cmOb4', sql.NVarChar, stringifyArrayField(formData.cmOb4))
+        .input('cmOb5', sql.NVarChar, stringifyArrayField(formData.cmOb5))
+        .input('cmOb6', sql.NVarChar, stringifyArrayField(formData.cmOb6))
+        .input('cmOb7', sql.NVarChar, stringifyArrayField(formData.cmOb7))
+        .input('cmOb8', sql.NVarChar, stringifyArrayField(formData.cmOb8))
+        .input('cmOb9', sql.NVarChar, stringifyArrayField(formData.cmOb9))
+        .input('cmOb10', sql.NVarChar, stringifyArrayField(formData.cmOb10))
+        .input('cmOb11', sql.NVarChar, stringifyArrayField(formData.cmOb11))
+        .input('cmObNone', sql.NVarChar, stringifyArrayField(formData.cmObNone))
+        .input('cmObvSum', sql.NVarChar, formData.cmObvSum || '')
+        .input('columbiaSRComp', sql.VarChar, formData.columbiaSRComp || 'No')
+        .input('riskLevel', sql.VarChar, formData.riskLevel || 'Minimal')
+        .input('completionStatus', sql.VarChar, formData.completionStatus || 'In Progress')
+        .input('completionPercentage', sql.Decimal, formData.completionPercentage || 0)
+        .input('updatedBy', sql.VarChar, formData.updatedBy || 'unknown')
+        .query(`
+          UPDATE MentalHealthAssessments SET
+            mentalHealthHistory = @mentalHealthHistory,
+            mentalHealthDiagnosis = @mentalHealthDiagnosis,
+            mentalHealthTreatment = @mentalHealthTreatment,
+            mentalHealthCurrentTreatment = @mentalHealthCurrentTreatment,
+            mhSad = @mhSad,
+            mhAnxious = @mhAnxious,
+            mhSleepPattern = @mhSleepPattern,
+            mhEnergyLevel = @mhEnergyLevel,
+            mhConcentrate = @mhConcentrate,
+            mhThoughts = @mhThoughts,
+            mhVoices = @mhVoices,
+            mhVoicesSay = @mhVoicesSay,
+            mhFollowing = @mhFollowing,
+            mhSomeone = @mhSomeone,
+            mhFamHistory = @mhFamHistory,
+            mhSummary = @mhSummary,
+            mhAbuse = @mhAbuse,
+            clientRisk = @clientRisk,
+            mhSelfHarm = @mhSelfHarm,
+            mhSelfHarmOccurrence = @mhSelfHarmOccurrence,
+            mhSuicide = @mhSuicide,
+            mhSuicideLast = @mhSuicideLast,
+            mhRiskSummary = @mhRiskSummary,
+            mhSubAbuseHelp = @mhSubAbuseHelp,
+            mhSubAbSum = @mhSubAbSum,
+            clientLegalIssues = @clientLegalIssues,
+            clientLegalProbation = @clientLegalProbation,
+            clientLegalParole = @clientLegalParole,
+            arrestMeth = @arrestMeth,
+            arrestDrugAlcohol = @arrestDrugAlcohol,
+            arrestViolent = @arrestViolent,
+            arrestArson = @arrestArson,
+            arrestSexCrime = @arrestSexCrime,
+            regSexOffender = @regSexOffender,
+            arrestCrime = @arrestCrime,
+            mhLegalSum = @mhLegalSum,
+            clientPatFamNeeds = @clientPatFamNeeds,
+            mhNeedsSum = @mhNeedsSum,
+            cmOb1 = @cmOb1,
+            cmOb2 = @cmOb2,
+            cmOb3 = @cmOb3,
+            cmOb4 = @cmOb4,
+            cmOb5 = @cmOb5,
+            cmOb6 = @cmOb6,
+            cmOb7 = @cmOb7,
+            cmOb8 = @cmOb8,
+            cmOb9 = @cmOb9,
+            cmOb10 = @cmOb10,
+            cmOb11 = @cmOb11,
+            cmObNone = @cmObNone,
+            cmObvSum = @cmObvSum,
+            columbiaSRComp = @columbiaSRComp,
+            riskLevel = @riskLevel,
+            completionStatus = @completionStatus,
+            completionPercentage = @completionPercentage,
+            updatedBy = @updatedBy,
+            updatedAt = GETDATE()
+          WHERE clientID = @clientID
+        `);
+        
     } else {
-      // Insert new
-      assessmentData.created_at = new Date();
-      assessmentData.created_by = formData.updatedBy;
+      // Insert new assessment
+      mentalHealthID = generateMentalHealthID(clientID);
+      operation = 'INSERT';
       
-      const insertFields = Object.keys(assessmentData).join(', ');
-      const insertPlaceholders = Object.keys(assessmentData).map(() => '?').join(', ');
-      const insertValues = Object.values(assessmentData);
-      
-      const [result] = await connection.execute(
-        `INSERT INTO mental_health_assessments (${insertFields}) VALUES (${insertPlaceholders})`,
-        insertValues
-      );
-      assessmentId = result.insertId;
+      await new sql.Request(transaction)
+        .input('mentalHealthID', sql.VarChar, mentalHealthID)
+        .input('clientID', sql.VarChar, clientID)
+        .input('mentalHealthHistory', sql.NVarChar, formData.mentalHealthHistory || '')
+        .input('mentalHealthDiagnosis', sql.NVarChar, stringifyArrayField(formData.mentalHealthDiagnosis))
+        .input('mentalHealthTreatment', sql.NVarChar, formData.mentalHealthTreatment || '')
+        .input('mentalHealthCurrentTreatment', sql.NVarChar, formData.mentalHealthCurrentTreatment || '')
+        .input('mhSad', sql.VarChar, formData.mhSad || '')
+        .input('mhAnxious', sql.VarChar, formData.mhAnxious || '')
+        .input('mhSleepPattern', sql.VarChar, formData.mhSleepPattern || '')
+        .input('mhEnergyLevel', sql.VarChar, formData.mhEnergyLevel || '')
+        .input('mhConcentrate', sql.VarChar, formData.mhConcentrate || '')
+        .input('mhThoughts', sql.VarChar, formData.mhThoughts || '')
+        .input('mhVoices', sql.VarChar, formData.mhVoices || '')
+        .input('mhVoicesSay', sql.NVarChar, formData.mhVoicesSay || '')
+        .input('mhFollowing', sql.VarChar, formData.mhFollowing || '')
+        .input('mhSomeone', sql.VarChar, formData.mhSomeone || '')
+        .input('mhFamHistory', sql.NVarChar, formData.mhFamHistory || '')
+        .input('mhSummary', sql.NVarChar, formData.mhSummary || '')
+        .input('mhAbuse', sql.NVarChar, stringifyArrayField(formData.mhAbuse))
+        .input('clientRisk', sql.NVarChar, stringifyArrayField(formData.clientRisk))
+        .input('mhSelfHarm', sql.VarChar, formData.mhSelfHarm || '')
+        .input('mhSelfHarmOccurrence', sql.NVarChar, formData.mhSelfHarmOccurrence || '')
+        .input('mhSuicide', sql.VarChar, formData.mhSuicide || '')
+        .input('mhSuicideLast', sql.NVarChar, formData.mhSuicideLast || '')
+        .input('mhRiskSummary', sql.NVarChar, formData.mhRiskSummary || '')
+        .input('mhSubAbuseHelp', sql.VarChar, formData.mhSubAbuseHelp || '')
+        .input('mhSubAbSum', sql.NVarChar, formData.mhSubAbSum || '')
+        .input('clientLegalIssues', sql.NVarChar, stringifyArrayField(formData.clientLegalIssues))
+        .input('clientLegalProbation', sql.VarChar, formData.clientLegalProbation || '')
+        .input('clientLegalParole', sql.VarChar, formData.clientLegalParole || '')
+        .input('arrestMeth', sql.VarChar, formData.arrestMeth || '')
+        .input('arrestDrugAlcohol', sql.VarChar, formData.arrestDrugAlcohol || '')
+        .input('arrestViolent', sql.VarChar, formData.arrestViolent || '')
+        .input('arrestArson', sql.VarChar, formData.arrestArson || '')
+        .input('arrestSexCrime', sql.VarChar, formData.arrestSexCrime || '')
+        .input('regSexOffender', sql.VarChar, formData.regSexOffender || '')
+        .input('arrestCrime', sql.NVarChar, formData.arrestCrime || '')
+        .input('mhLegalSum', sql.NVarChar, formData.mhLegalSum || '')
+        .input('clientPatFamNeeds', sql.NVarChar, stringifyArrayField(formData.clientPatFamNeeds))
+        .input('mhNeedsSum', sql.NVarChar, formData.mhNeedsSum || '')
+        .input('cmOb1', sql.NVarChar, stringifyArrayField(formData.cmOb1))
+        .input('cmOb2', sql.NVarChar, stringifyArrayField(formData.cmOb2))
+        .input('cmOb3', sql.NVarChar, stringifyArrayField(formData.cmOb3))
+        .input('cmOb4', sql.NVarChar, stringifyArrayField(formData.cmOb4))
+        .input('cmOb5', sql.NVarChar, stringifyArrayField(formData.cmOb5))
+        .input('cmOb6', sql.NVarChar, stringifyArrayField(formData.cmOb6))
+        .input('cmOb7', sql.NVarChar, stringifyArrayField(formData.cmOb7))
+        .input('cmOb8', sql.NVarChar, stringifyArrayField(formData.cmOb8))
+        .input('cmOb9', sql.NVarChar, stringifyArrayField(formData.cmOb9))
+        .input('cmOb10', sql.NVarChar, stringifyArrayField(formData.cmOb10))
+        .input('cmOb11', sql.NVarChar, stringifyArrayField(formData.cmOb11))
+        .input('cmObNone', sql.NVarChar, stringifyArrayField(formData.cmObNone))
+        .input('cmObvSum', sql.NVarChar, formData.cmObvSum || '')
+        .input('columbiaSRComp', sql.VarChar, formData.columbiaSRComp || 'No')
+        .input('riskLevel', sql.VarChar, formData.riskLevel || 'Minimal')
+        .input('completionStatus', sql.VarChar, 'In Progress')
+        .input('completionPercentage', sql.Decimal, formData.completionPercentage || 0)
+        .input('createdBy', sql.VarChar, formData.updatedBy || 'unknown')
+        .input('updatedBy', sql.VarChar, formData.updatedBy || 'unknown')
+        .query(`
+          INSERT INTO MentalHealthAssessments (
+            mentalHealthID, clientID, mentalHealthHistory, mentalHealthDiagnosis,
+            mentalHealthTreatment, mentalHealthCurrentTreatment, mhSad, mhAnxious,
+            mhSleepPattern, mhEnergyLevel, mhConcentrate, mhThoughts, mhVoices,
+            mhVoicesSay, mhFollowing, mhSomeone, mhFamHistory, mhSummary, mhAbuse,
+            clientRisk, mhSelfHarm, mhSelfHarmOccurrence, mhSuicide, mhSuicideLast,
+            mhRiskSummary, mhSubAbuseHelp, mhSubAbSum, clientLegalIssues,
+            clientLegalProbation, clientLegalParole, arrestMeth, arrestDrugAlcohol,
+            arrestViolent, arrestArson, arrestSexCrime, regSexOffender, arrestCrime,
+            mhLegalSum, clientPatFamNeeds, mhNeedsSum, cmOb1, cmOb2, cmOb3, cmOb4,
+            cmOb5, cmOb6, cmOb7, cmOb8, cmOb9, cmOb10, cmOb11, cmObNone, cmObvSum,
+            columbiaSRComp, riskLevel, completionStatus, completionPercentage,
+            createdBy, createdAt, updatedBy, updatedAt
+          ) VALUES (
+            @mentalHealthID, @clientID, @mentalHealthHistory, @mentalHealthDiagnosis,
+            @mentalHealthTreatment, @mentalHealthCurrentTreatment, @mhSad, @mhAnxious,
+            @mhSleepPattern, @mhEnergyLevel, @mhConcentrate, @mhThoughts, @mhVoices,
+            @mhVoicesSay, @mhFollowing, @mhSomeone, @mhFamHistory, @mhSummary, @mhAbuse,
+            @clientRisk, @mhSelfHarm, @mhSelfHarmOccurrence, @mhSuicide, @mhSuicideLast,
+            @mhRiskSummary, @mhSubAbuseHelp, @mhSubAbSum, @clientLegalIssues,
+            @clientLegalProbation, @clientLegalParole, @arrestMeth, @arrestDrugAlcohol,
+            @arrestViolent, @arrestArson, @arrestSexCrime, @regSexOffender, @arrestCrime,
+            @mhLegalSum, @clientPatFamNeeds, @mhNeedsSum, @cmOb1, @cmOb2, @cmOb3, @cmOb4,
+            @cmOb5, @cmOb6, @cmOb7, @cmOb8, @cmOb9, @cmOb10, @cmOb11, @cmObNone, @cmObvSum,
+            @columbiaSRComp, @riskLevel, @completionStatus, @completionPercentage,
+            @createdBy, GETDATE(), @updatedBy, GETDATE()
+          )
+        `);
     }
 
     // Save substance abuse data
     if (formData.substanceData) {
       // Clear existing substance data
-      await connection.execute(
-        `DELETE FROM substance_abuse_data WHERE client_id = ?`,
-        [clientId]
-      );
+      await new sql.Request(transaction)
+        .input('clientID', sql.VarChar, clientID)
+        .query('DELETE FROM SubstanceAbuseData WHERE clientID = @clientID');
 
       // Insert new substance data
       for (const [substanceName, data] of Object.entries(formData.substanceData)) {
         if (data.use || data.frequency || data.method || data.yearStarted || data.yearQuit) {
-          await connection.execute(
-            `INSERT INTO substance_abuse_data (client_id, substance_name, substance_use, frequency, method, year_started, year_quit, created_at, created_by) 
-             VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), ?)`,
-            [clientId, substanceName, data.use || '', data.frequency || '', data.method || '', data.yearStarted || '', data.yearQuit || '', formData.updatedBy]
-          );
+          await new sql.Request(transaction)
+            .input('clientID', sql.VarChar, clientID)
+            .input('substanceName', sql.VarChar, substanceName)
+            .input('substanceUse', sql.VarChar, data.use || '')
+            .input('frequency', sql.VarChar, data.frequency || '')
+            .input('method', sql.VarChar, data.method || '')
+            .input('yearStarted', sql.VarChar, data.yearStarted || '')
+            .input('yearQuit', sql.VarChar, data.yearQuit || '')
+            .input('createdBy', sql.VarChar, formData.updatedBy || 'unknown')
+            .query(`
+              INSERT INTO SubstanceAbuseData (
+                clientID, substanceName, substanceUse, frequency, method, 
+                yearStarted, yearQuit, createdBy, createdAt
+              ) VALUES (
+                @clientID, @substanceName, @substanceUse, @frequency, @method,
+                @yearStarted, @yearQuit, @createdBy, GETDATE()
+              )
+            `);
         }
       }
     }
 
-    await connection.commit();
+    await transaction.commit();
     
+    console.log(`✅ Mental health assessment ${operation} completed: ${mentalHealthID}`);
     res.json({ 
       success: true, 
-      assessmentId,
-      message: 'Mental health assessment saved successfully' 
+      mentalHealthID,
+      operation,
+      message: `Mental health assessment ${operation === 'INSERT' ? 'created' : 'updated'} successfully` 
     });
 
   } catch (error) {
-    await connection.rollback();
-    console.error('Error saving mental health data:', error);
-    res.status(500).json({ error: 'Failed to save mental health data' });
-  } finally {
-    connection.release();
+    if (transaction) {
+      await transaction.rollback();
+    }
+    console.error('⚠️ Error saving mental health data:', error);
+    res.status(500).json({ 
+      error: 'Failed to save mental health data',
+      message: error.message 
+    });
   }
 });
 
-// POST /api/mental-health/:clientId/providers - Add mental health provider
-router.post('/:clientId/providers', async (req, res) => {
+// POST /api/mental-health/:clientID/providers - Add mental health provider
+router.post('/:clientID/providers', async (req, res) => {
   try {
-    const { clientId } = req.params;
+    const pool = await getPool();
+    const { clientID } = req.params;
     const providerData = req.body;
 
-    const [result] = await db.execute(
-      `INSERT INTO mental_health_providers (client_id, agency, worker, phone, last_appointment, next_appointment, active, created_at) 
-       VALUES (?, ?, ?, ?, ?, ?, 1, NOW())`,
-      [clientId, providerData.agency, providerData.worker, providerData.phone, providerData.lastAppointment, providerData.nextAppointment]
-    );
+    console.log(`🏥 Adding provider for client: ${clientID}`);
 
-    const newProvider = {
-      id: result.insertId,
-      ...providerData
-    };
+    const result = await pool.request()
+      .input('clientID', sql.VarChar, clientID)
+      .input('agency', sql.NVarChar, providerData.agency)
+      .input('worker', sql.NVarChar, providerData.worker)
+      .input('phone', sql.VarChar, providerData.phone)
+      .input('lastAppointment', sql.Date, providerData.lastAppointment || null)
+      .input('nextAppointment', sql.Date, providerData.nextAppointment || null)
+      .input('createdBy', sql.VarChar, providerData.createdBy || 'unknown')
+      .query(`
+        INSERT INTO MentalHealthProviders (
+          clientID, agency, worker, phone, lastAppointment, nextAppointment, 
+          active, createdBy, createdAt
+        ) 
+        OUTPUT INSERTED.*
+        VALUES (
+          @clientID, @agency, @worker, @phone, @lastAppointment, @nextAppointment, 
+          1, @createdBy, GETDATE()
+        )
+      `);
 
-    res.json(newProvider);
+    console.log(`✅ Provider added for client ${clientID}`);
+    res.json(result.recordset[0]);
+    
   } catch (error) {
-    console.error('Error adding provider:', error);
-    res.status(500).json({ error: 'Failed to add provider' });
+    console.error('⚠️ Error adding provider:', error);
+    res.status(500).json({ 
+      error: 'Failed to add provider',
+      message: error.message 
+    });
   }
 });
 
-// DELETE /api/mental-health/:clientId/providers/:providerId
-router.delete('/:clientId/providers/:providerId', async (req, res) => {
+// DELETE /api/mental-health/:clientID/providers/:providerID
+router.delete('/:clientID/providers/:providerID', async (req, res) => {
   try {
-    const { providerId } = req.params;
+    const pool = await getPool();
+    const { providerID } = req.params;
     
-    await db.execute(
-      `UPDATE mental_health_providers SET active = 0 WHERE id = ?`,
-      [providerId]
-    );
+    console.log(`🗑️ Removing provider: ${providerID}`);
     
+    await pool.request()
+      .input('providerID', sql.VarChar, providerID)
+      .query('UPDATE MentalHealthProviders SET active = 0 WHERE providerID = @providerID');
+    
+    console.log(`✅ Provider ${providerID} deactivated`);
     res.json({ success: true });
+    
   } catch (error) {
-    console.error('Error removing provider:', error);
-    res.status(500).json({ error: 'Failed to remove provider' });
+    console.error('⚠️ Error removing provider:', error);
+    res.status(500).json({ 
+      error: 'Failed to remove provider',
+      message: error.message 
+    });
   }
 });
 
-// POST /api/mental-health/:clientId/hospitalizations - Add hospitalization
-router.post('/:clientId/hospitalizations', async (req, res) => {
+// POST /api/mental-health/:clientID/hospitalizations - Add hospitalization
+router.post('/:clientID/hospitalizations', async (req, res) => {
   try {
-    const { clientId } = req.params;
+    const pool = await getPool();
+    const { clientID } = req.params;
     const hospitalizationData = req.body;
 
-    const [result] = await db.execute(
-      `INSERT INTO mental_health_hospitalizations (client_id, location, reasons, date, created_at) 
-       VALUES (?, ?, ?, ?, NOW())`,
-      [clientId, hospitalizationData.location, hospitalizationData.reasons, hospitalizationData.date]
-    );
+    console.log(`🏥 Adding hospitalization for client: ${clientID}`);
 
-    const newHospitalization = {
-      id: result.insertId,
-      ...hospitalizationData
-    };
+    const result = await pool.request()
+      .input('clientID', sql.VarChar, clientID)
+      .input('location', sql.NVarChar, hospitalizationData.location)
+      .input('reasons', sql.NVarChar, hospitalizationData.reasons)
+      .input('hospitalizationDate', sql.Date, hospitalizationData.date)
+      .input('createdBy', sql.VarChar, hospitalizationData.createdBy || 'unknown')
+      .query(`
+        INSERT INTO MentalHealthHospitalizations (
+          clientID, location, reasons, hospitalizationDate, createdBy, createdAt
+        ) 
+        OUTPUT INSERTED.*
+        VALUES (
+          @clientID, @location, @reasons, @hospitalizationDate, @createdBy, GETDATE()
+        )
+      `);
 
-    res.json(newHospitalization);
+    console.log(`✅ Hospitalization added for client ${clientID}`);
+    res.json(result.recordset[0]);
+    
   } catch (error) {
-    console.error('Error adding hospitalization:', error);
-    res.status(500).json({ error: 'Failed to add hospitalization' });
+    console.error('⚠️ Error adding hospitalization:', error);
+    res.status(500).json({ 
+      error: 'Failed to add hospitalization',
+      message: error.message 
+    });
   }
 });
 
-// POST /api/mental-health/:clientId/medications - Add medication
-router.post('/:clientId/medications', async (req, res) => {
+// POST /api/mental-health/:clientID/medications - Add medication
+router.post('/:clientID/medications', async (req, res) => {
   try {
-    const { clientId } = req.params;
+    const pool = await getPool();
+    const { clientID } = req.params;
     const medicationData = req.body;
 
-    const [result] = await db.execute(
-      `INSERT INTO mental_health_medications (client_id, name, dose, side_effects, active, created_at) 
-       VALUES (?, ?, ?, ?, 1, NOW())`,
-      [clientId, medicationData.name, medicationData.dose, medicationData.sideEffects]
-    );
+    console.log(`💊 Adding medication for client: ${clientID}`);
 
-    const newMedication = {
-      id: result.insertId,
-      ...medicationData
-    };
+    const result = await pool.request()
+      .input('clientID', sql.VarChar, clientID)
+      .input('name', sql.NVarChar, medicationData.name)
+      .input('dose', sql.NVarChar, medicationData.dose)
+      .input('sideEffects', sql.NVarChar, medicationData.sideEffects)
+      .input('createdBy', sql.VarChar, medicationData.createdBy || 'unknown')
+      .query(`
+        INSERT INTO MentalHealthMedications (
+          clientID, name, dose, sideEffects, active, createdBy, createdAt
+        ) 
+        OUTPUT INSERTED.*
+        VALUES (
+          @clientID, @name, @dose, @sideEffects, 1, @createdBy, GETDATE()
+        )
+      `);
 
-    res.json(newMedication);
+    console.log(`✅ Medication added for client ${clientID}`);
+    res.json(result.recordset[0]);
+    
   } catch (error) {
-    console.error('Error adding medication:', error);
-    res.status(500).json({ error: 'Failed to add medication' });
+    console.error('⚠️ Error adding medication:', error);
+    res.status(500).json({ 
+      error: 'Failed to add medication',
+      message: error.message 
+    });
   }
 });
 
-// =========================================
-// ARREST ROUTES
-// =========================================
-
-// GET /api/arrests/:clientId - Fetch arrest records
-router.get('/arrests/:clientId', async (req, res) => {
+// GET /api/mental-health/:clientID/arrests - Fetch arrest records
+router.get('/:clientID/arrests', async (req, res) => {
   try {
-    const { clientId } = req.params;
+    const pool = await getPool();
+    const { clientID } = req.params;
     
-    const [arrests] = await db.execute(
-      `SELECT * FROM arrest_records WHERE client_id = ? ORDER BY date DESC`,
-      [clientId]
-    );
+    console.log(`👮 Fetching arrest records for client: ${clientID}`);
     
-    res.json(arrests);
+    const result = await pool.request()
+      .input('clientID', sql.VarChar, clientID)
+      .query(`
+        SELECT * FROM ArrestRecords 
+        WHERE clientID = @clientID 
+        ORDER BY arrestDate DESC
+      `);
+    
+    console.log(`✅ Found ${result.recordset.length} arrest records for client ${clientID}`);
+    res.json(result.recordset);
+    
   } catch (error) {
-    console.error('Error fetching arrest data:', error);
-    res.status(500).json({ error: 'Failed to fetch arrest data' });
+    console.error('⚠️ Error fetching arrest data:', error);
+    res.status(500).json({ 
+      error: 'Failed to fetch arrest data',
+      message: error.message 
+    });
   }
 });
 
-// POST /api/arrests/:clientId - Add arrest record
-router.post('/arrests/:clientId', async (req, res) => {
+// POST /api/mental-health/:clientID/arrests - Add arrest record
+router.post('/:clientID/arrests', async (req, res) => {
   try {
-    const { clientId } = req.params;
+    const pool = await getPool();
+    const { clientID } = req.params;
     const arrestData = req.body;
 
-    const [result] = await db.execute(
-      `INSERT INTO arrest_records (client_id, date, charge, misdemeanor_or_felony, location, time_served, result, created_by, created_at) 
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
-      [
-        clientId,
-        arrestData.mhaDate,
-        arrestData.mhaCharge,
-        arrestData.mhaMF,
-        arrestData.mhaLoc,
-        arrestData.mhaTime,
-        arrestData.mhaResult,
-        arrestData.createdBy
-      ]
-    );
+    console.log(`👮 Adding arrest record for client: ${clientID}`);
 
-    const newArrest = {
-      id: result.insertId,
-      clientID: clientId,
-      date: arrestData.mhaDate,
-      charge: arrestData.mhaCharge,
-      misdemeanorOrFelony: arrestData.mhaMF,
-      location: arrestData.mhaLoc,
-      timeServed: arrestData.mhaTime,
-      result: arrestData.mhaResult
-    };
+    const result = await pool.request()
+      .input('clientID', sql.VarChar, clientID)
+      .input('arrestDate', sql.Date, arrestData.mhaDate)
+      .input('charge', sql.NVarChar, arrestData.mhaCharge)
+      .input('misdemeanorOrFelony', sql.VarChar, arrestData.mhaMF)
+      .input('location', sql.NVarChar, arrestData.mhaLoc)
+      .input('timeServed', sql.NVarChar, arrestData.mhaTime)
+      .input('result', sql.NVarChar, arrestData.mhaResult)
+      .input('createdBy', sql.VarChar, arrestData.createdBy || 'unknown')
+      .query(`
+        INSERT INTO ArrestRecords (
+          clientID, arrestDate, charge, misdemeanorOrFelony, location, 
+          timeServed, result, createdBy, createdAt
+        ) 
+        OUTPUT INSERTED.*
+        VALUES (
+          @clientID, @arrestDate, @charge, @misdemeanorOrFelony, @location,
+          @timeServed, @result, @createdBy, GETDATE()
+        )
+      `);
 
-    res.json(newArrest);
+    console.log(`✅ Arrest record added for client ${clientID}`);
+    res.json(result.recordset[0]);
+    
   } catch (error) {
-    console.error('Error saving arrest data:', error);
-    res.status(500).json({ error: 'Failed to save arrest data' });
+    console.error('⚠️ Error saving arrest data:', error);
+    res.status(500).json({ 
+      error: 'Failed to save arrest data',
+      message: error.message 
+    });
   }
 });
 
-// DELETE /api/arrests/:clientId/records/:arrestId
-router.delete('/arrests/:clientId/records/:arrestId', async (req, res) => {
+// DELETE /api/mental-health/:clientID/arrests/:arrestID
+router.delete('/:clientID/arrests/:arrestID', async (req, res) => {
   try {
-    const { arrestId } = req.params;
+    const pool = await getPool();
+    const { arrestID } = req.params;
     
-    await db.execute(
-      `DELETE FROM arrest_records WHERE id = ?`,
-      [arrestId]
-    );
+    console.log(`🗑️ Deleting arrest record: ${arrestID}`);
     
-    res.json({ success: true, deletedId: parseInt(arrestId) });
+    await pool.request()
+      .input('arrestID', sql.VarChar, arrestID)
+      .query('DELETE FROM ArrestRecords WHERE arrestID = @arrestID');
+    
+    console.log(`✅ Arrest record ${arrestID} deleted`);
+    res.json({ success: true, deletedId: arrestID });
+    
   } catch (error) {
-    console.error('Error deleting arrest record:', error);
-    res.status(500).json({ error: 'Failed to delete arrest record' });
+    console.error('⚠️ Error deleting arrest record:', error);
+    res.status(500).json({ 
+      error: 'Failed to delete arrest record',
+      message: error.message 
+    });
+  }
+});
+
+// GET /api/mental-health/:clientID/summary - Get mental health summary
+router.get('/:clientID/summary', async (req, res) => {
+  try {
+    const pool = await getPool();
+    const { clientID } = req.params;
+    
+    console.log(`📊 Fetching mental health summary for client: ${clientID}`);
+    
+    const result = await pool.request()
+      .input('clientID', sql.VarChar, clientID)
+      .query(`
+        SELECT 
+          COUNT(DISTINCT mh.mentalHealthID) as totalAssessments,
+          mh.riskLevel,
+          mh.completionStatus,
+          mh.completionPercentage,
+          COUNT(DISTINCT p.providerID) as activeProviders,
+          COUNT(DISTINCT h.hospitalizationID) as totalHospitalizations,
+          COUNT(DISTINCT m.medicationID) as activeMedications,
+          COUNT(DISTINCT ar.arrestID) as totalArrests,
+          MAX(mh.updatedAt) as lastActivity
+        FROM MentalHealthAssessments mh
+        LEFT JOIN MentalHealthProviders p ON p.clientID = mh.clientID AND p.active = 1
+        LEFT JOIN MentalHealthHospitalizations h ON h.clientID = mh.clientID
+        LEFT JOIN MentalHealthMedications m ON m.clientID = mh.clientID AND m.active = 1
+        LEFT JOIN ArrestRecords ar ON ar.clientID = mh.clientID
+        WHERE mh.clientID = @clientID
+        GROUP BY mh.riskLevel, mh.completionStatus, mh.completionPercentage
+      `);
+    
+    console.log(`✅ Mental health summary retrieved for client ${clientID}`);
+    res.json(result.recordset[0] || {});
+    
+  } catch (error) {
+    console.error('⚠️ Error fetching mental health summary:', error);
+    res.status(500).json({ 
+      error: 'Failed to fetch mental health summary',
+      message: error.message 
+    });
   }
 });
 
 module.exports = router;
-
-// =========================================
-// SERVER SETUP EXAMPLE
-// =========================================
-
-/*
-// backend/server.js (example integration)
-const express = require('express');
-const cors = require('cors');
-const mentalHealthRoutes = require('./routes/mentalHealthRoutes');
-
-const app = express();
-const PORT = process.env.PORT || 3001;
-
-// Middleware
-app.use(cors());
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-
-// Routes
-app.use('/api/mental-health', mentalHealthRoutes);
-app.use('/api', mentalHealthRoutes); // For arrest routes
-
-// Health check
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'OK', timestamp: new Date().toISOString() });
-});
-
-// Error handling middleware
-app.use((error, req, res, next) => {
-  console.error('Server error:', error);
-  res.status(500).json({ error: 'Internal server error' });
-});
-
-app.listen(PORT, () => {
-  console.log(`Mental Health API server running on port ${PORT}`);
-});
-*/

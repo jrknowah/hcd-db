@@ -1,6 +1,6 @@
 import { Box, Typography, Grid, Stack } from "@mui/material";
 import * as dropdownData from "./data";
-import { Link } from 'react-router';
+import { Link } from 'react-router-dom';
 
 import { Icon } from "@iconify/react";
 

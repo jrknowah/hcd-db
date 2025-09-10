@@ -1,6 +1,6 @@
-// components/ClientFace.jsx
 import React, { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
+import { useSearchParams, useLocation } from "react-router-dom";
 import Select from "react-select";
 import {
   Box,
@@ -41,8 +41,27 @@ import {
 } from "../../store/slices/clientFaceSlice";
 import { allergyList } from "../../data/arrayList";
 
+// ✅ Safe hook wrapper
+const useSafeRouter = () => {
+  try {
+    const searchParams = useSearchParams();
+    const location = useLocation();
+    return { searchParams: searchParams[0], location, hasRouter: true };
+  } catch (error) {
+    console.warn('⚠️ ClientFace: Router context not available, using fallback');
+    return { 
+      searchParams: new URLSearchParams(), 
+      location: { pathname: '', search: '' }, 
+      hasRouter: false 
+    };
+  }
+};
+
 const ClientFace = ({ exportMode = false }) => {
   const dispatch = useDispatch();
+  
+  // ✅ Safe router hooks
+  const { searchParams, location, hasRouter } = useSafeRouter();
   
   // ✅ Redux selectors - get data directly from store
   const formData = useSelector(selectFormData);
@@ -68,6 +87,21 @@ const ClientFace = ({ exportMode = false }) => {
       dispatch(fetchClientFaceData(currentClient.clientID));
     }
   }, [dispatch, currentClient?.clientID]);
+
+  // ✅ Handle URL parameters only if router is available
+  useEffect(() => {
+    if (!hasRouter) {
+      console.log('🔍 ClientFace: No router context, skipping URL parameter handling');
+      return;
+    }
+
+    const clientIDFromURL = searchParams.get('clientID');
+    if (clientIDFromURL && (!currentClient || currentClient.clientID !== clientIDFromURL)) {
+      console.log('🔍 ClientFace: Client ID from URL:', clientIDFromURL);
+      // In this case, the parent component should handle loading the client
+      // We'll just log it for debugging
+    }
+  }, [hasRouter, searchParams, currentClient]);
 
   // ✅ Sync allergies from Redux to local UI state
   useEffect(() => {
@@ -223,6 +257,11 @@ const ClientFace = ({ exportMode = false }) => {
       <Box sx={{ maxWidth: 1200, mx: "auto", p: 3 }}>
         <Alert severity="info">
           Please select a client to view client face information.
+          {!hasRouter && (
+            <Typography variant="caption" display="block" sx={{ mt: 1, opacity: 0.7 }}>
+              (Router context not available)
+            </Typography>
+          )}
         </Alert>
       </Box>
     );
@@ -263,6 +302,9 @@ const ClientFace = ({ exportMode = false }) => {
           )}
           {validationErrors.length > 0 && (
             <Chip label={`${validationErrors.length} Error(s)`} color="error" size="small" />
+          )}
+          {!hasRouter && (
+            <Chip label="Standalone Mode" color="warning" size="small" />
           )}
         </Box>
       </Paper>
@@ -311,35 +353,36 @@ const ClientFace = ({ exportMode = false }) => {
             
             <Grid container spacing={2}>
               <Grid item xs={12} md={4}>
+                <Typography>Primary Phone</Typography>
                 <TextField
                   fullWidth
-                  label="Primary Phone *"
+                  label=""
                   name="clientContactNum"
                   value={formData.clientContactNum || ""}
                   onChange={handleFieldChange('clientContactNum')}
                   disabled={saving}
                   error={!formData.clientContactNum && validationErrors.some(err => err.includes('phone'))}
-                  helperText="Format: (xxx) xxx-xxxx"
-                  placeholder="(555) 123-4567"
                 />
               </Grid>
               
               <Grid item xs={12} md={4}>
+                <Typography>Alternate Phone</Typography>
                 <TextField
                   fullWidth
-                  label="Alternate Phone"
+                  label=""
                   name="clientContactAltNum"
                   value={formData.clientContactAltNum || ""}
                   onChange={handleFieldChange('clientContactAltNum')}
                   disabled={saving}
-                  placeholder="(555) 123-4567"
+                  placeholder="(XXX) XXX-XXXX"
                 />
               </Grid>
               
               <Grid item xs={12} md={4}>
+                <Typography>Email Address</Typography>
                 <TextField
                   fullWidth
-                  label="Email Address *"
+                  label=""
                   name="clientEmail"
                   type="email"
                   value={formData.clientEmail || ""}
@@ -364,9 +407,10 @@ const ClientFace = ({ exportMode = false }) => {
             
             <Grid container spacing={2}>
               <Grid item xs={12} md={4}>
+                <Typography>Contact Name</Typography>
                 <TextField
                   fullWidth
-                  label="Contact Name"
+                  label=""
                   name="clientEmgContactName"
                   value={formData.clientEmgContactName || ""}
                   onChange={handleFieldChange('clientEmgContactName')}
@@ -374,10 +418,11 @@ const ClientFace = ({ exportMode = false }) => {
                 />
               </Grid>
               
-              <Grid item xs={12} md={4}>
+              <Grid item xs={12} md={4}>  
+                <Typography>Contact Phone</Typography>
                 <TextField
                   fullWidth
-                  label="Contact Phone"
+                  label=""
                   name="clientEmgContactNum"
                   value={formData.clientEmgContactNum || ""}
                   onChange={handleFieldChange('clientEmgContactNum')}
@@ -387,9 +432,10 @@ const ClientFace = ({ exportMode = false }) => {
               </Grid>
               
               <Grid item xs={12} md={4}>
+                <Typography>Relationship</Typography>
                 <TextField
                   fullWidth
-                  label="Relationship"
+                  label=""
                   name="clientEmgContactRel"
                   value={formData.clientEmgContactRel || ""}
                   onChange={handleFieldChange('clientEmgContactRel')}
@@ -398,9 +444,10 @@ const ClientFace = ({ exportMode = false }) => {
               </Grid>
               
               <Grid item xs={12}>
+                <Typography>Emergency Contact Address</Typography>
                 <TextField
                   fullWidth
-                  label="Emergency Contact Address"
+                  label=""
                   name="clientEmgContactAddress"
                   value={formData.clientEmgContactAddress || ""}
                   onChange={handleFieldChange('clientEmgContactAddress')}
@@ -423,9 +470,10 @@ const ClientFace = ({ exportMode = false }) => {
             
             <Grid container spacing={2}>
               <Grid item xs={12} md={4}>
+                <Typography>Insurance Type *</Typography>
                 <TextField
                   fullWidth
-                  label="Insurance Type *"
+                  label=""
                   name="clientMedInsType"
                   value={formData.clientMedInsType || ""}
                   onChange={handleFieldChange('clientMedInsType')}
@@ -435,9 +483,10 @@ const ClientFace = ({ exportMode = false }) => {
               </Grid>
               
               <Grid item xs={12} md={4}>
+                <Typography>Insurance Carrier</Typography>
                 <TextField
                   fullWidth
-                  label="Insurance Carrier"
+                  label=""
                   name="clientMedCarrier"
                   value={formData.clientMedCarrier || ""}
                   onChange={handleFieldChange('clientMedCarrier')}
@@ -446,9 +495,10 @@ const ClientFace = ({ exportMode = false }) => {
               </Grid>
               
               <Grid item xs={12} md={4}>
+                <Typography>Insurance Number</Typography>
                 <TextField
                   fullWidth
-                  label="Insurance Number"
+                  label=""
                   name="clientMedInsNum"
                   value={formData.clientMedInsNum || ""}
                   onChange={handleFieldChange('clientMedInsNum')}
@@ -491,11 +541,12 @@ const ClientFace = ({ exportMode = false }) => {
               </Grid>
               
               <Grid item xs={12} md={6}>
+                <Typography> Allergy Comments & Details </Typography>
                 <TextField
                   fullWidth
                   multiline
                   rows={4}
-                  label="Allergy Comments & Details"
+                  label=""
                   name="clientAllergyComments"
                   value={formData.clientAllergyComments || ""}
                   onChange={handleFieldChange('clientAllergyComments')}
@@ -508,10 +559,11 @@ const ClientFace = ({ exportMode = false }) => {
         </Card>
 
         {/* ✅ Submit Button - Only show in non-export mode */}
+        {/* ✅ Submit Button - Only show in non-export mode */}
         {!exportMode && (
-          <Box sx={{ display: 'flex', justifyContent: 'center' }}>
+          <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
             <Button
-              type="submit"
+              onClick={handleSubmit}
               variant="contained"
               size="large"
               disabled={saving || !isFormValid}

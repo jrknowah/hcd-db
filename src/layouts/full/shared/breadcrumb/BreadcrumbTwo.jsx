@@ -4,7 +4,7 @@ import Breadcrumbs from '@mui/material/Breadcrumbs';
 import { Grid } from '@mui/material';
 import Typography from '@mui/material/Typography';
 
-import { Link } from 'react-router';
+import { Link } from 'react-router-dom';
 
 import { IconChevronRight } from '@tabler/icons-react';
 import { Box, Container } from '@mui/material';

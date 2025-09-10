@@ -1,5 +1,5 @@
 import { Grid, Box, Card, Typography, Stack } from "@mui/material";
-import { Link } from 'react-router';
+import { Link } from 'react-router-dom';
 import AuthLogo from "src/layouts/full/shared/logo/AuthLogo";
 import PageContainer from 'src/components/container/PageContainer';
 import AuthRegister from "../authForms/AuthRegister";

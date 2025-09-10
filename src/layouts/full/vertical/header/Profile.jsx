@@ -1,5 +1,5 @@
 import { useState, useContext } from 'react';
-import { Link } from 'react-router';
+import { Link } from 'react-router-dom';
 import { Box, Menu, Avatar, Typography, Divider, IconButton } from '@mui/material';
 import * as dropdownData from './data';
 import { Stack } from '@mui/system';
@@ -66,9 +66,12 @@ const Profile = () => {
           <Avatar src={ProfileImg} alt={'ProfileImg'} sx={{ width: 50, height: 50 }} />
           <Box>
             <Typography variant="h6" color="textPrimary" fontWeight={600}>
-              Markarn Doe
+              Markarn Doe-
             </Typography>
-            <Typography
+            <Typography variant="h6" color="textPrimary" fontWeight={600}>
+              Case Manager
+            </Typography>
+            {/* <Typography
               variant="subtitle2"
               color="textSecondary"
               display="flex"
@@ -76,11 +79,11 @@ const Profile = () => {
               gap={1}
             >
               info@materialpro.com
-            </Typography>
+            </Typography> */}
           </Box>
         </Stack>
         <Divider />
-        <Box p={2}>
+        {/* <Box p={2}>
           {dropdownData.profile.map((profile) => (
             <Box key={profile.title}>
               <Box
@@ -114,9 +117,9 @@ const Profile = () => {
               </Box>
             </Box>
           ))}
-        </Box>
+        </Box> */}
         <Divider />
-        <Box p={2}>
+        {/* <Box p={2}>
           <Box
             sx={{
               px: 2,
@@ -219,7 +222,7 @@ const Profile = () => {
               </Stack>
             </Link>
           </Box>
-        </Box>
+        </Box> */}
       </Menu>
     </Box>
   );

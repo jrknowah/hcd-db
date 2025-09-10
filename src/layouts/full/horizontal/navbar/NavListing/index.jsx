@@ -1,6 +1,6 @@
 import { useContext } from 'react';
 import Menudata from '../Menudata';
-import { useLocation } from 'react-router';
+import { useLocation } from 'react-router-dom';
 import { Box, List, useMediaQuery } from '@mui/material';
 import NavItem from '../NavItem';
 import NavCollapse from '../NavCollapse';

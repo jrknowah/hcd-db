@@ -1,5 +1,5 @@
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-ignore
+// Updated NewClient.js with edit mode support
+
 import React, { useEffect, useState } from 'react';
 import {
   Box,
@@ -32,88 +32,48 @@ import {
   hhhSiteList,
 } from 'src/data/arrayList';
 
-import { fetchClients, addClient, setSelectedClient } from 'src/store/slices/clientSlice';
-import logUserAction from 'src/config/logAction';
+import { 
+  fetchClients, 
+  addClient, 
+  updateClient, 
+  setSelectedClient 
+} from 'src/store/slices/clientSlice';
 
-// ✅ Static mock data outside component
-const MOCK_USER = {
-  email: 'test@example.com',
-  name: 'Test User',
-};
-
-const generateMockClientID = () => {
-  return 'MOCK-' + Date.now().toString().slice(-6);
-};
-
-const NewClient = ({ onClientCreated }) => {
+const NewClient = ({ onClientCreated, editMode = false, clientData = null }) => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   
-  // ✅ Safe selector with mock data fallback
+  // Redux selectors
+  const loading = useSelector((state) => state.clients?.loading || false);
+  const error = useSelector((state) => state.clients?.error);
   const reduxUser = useSelector((state) => state?.auth?.user);
 
-  // ✅ Simple computed values
-  const isDevelopment = import.meta.env.MODE === 'development';
-  const shouldUseMockData = isDevelopment && !import.meta.env.VITE_USE_REAL_DATA;
-  
-  const currentUser = shouldUseMockData && !reduxUser ? MOCK_USER : reduxUser;
-
-  const [formData, setFormData] = useState({
-    clientID: '',
-    clientAdmitDate: '',
-    clientDOB: '',
-    clientSite: '',
-    clientFirstName: '',
-    clientMiddleName: '',
-    clientLastName: '',
-    clientAliases: '',
-    clientCitizenship: '',
-    clientVetStatus: '',
-    clientSSN: '',
-    clientGender: '',
-    clientPronouns: '',
-    clientEthnicity: '',
-    clientRace: '',
-    clientPrimaryLang: '',
-    clientMaritalStatus: '',
-    clientReligiousPref: '',
-    clientHighEd: '',
-  });
-
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const [success, setSuccess] = useState(false);
-
-  // ✅ Safe dispatch with mock data protection
-  useEffect(() => {
-    if (dispatch && !shouldUseMockData) {
-      dispatch(fetchClients());
+  // ✅ Initialize form data based on edit mode
+  const getInitialFormData = () => {
+    if (editMode && clientData) {
+      return {
+        clientID: clientData.clientID || '',
+        clientAdmitDate: clientData.clientAdmitDate ? clientData.clientAdmitDate.split('T')[0] : '',
+        clientDOB: clientData.clientDOB ? clientData.clientDOB.split('T')[0] : '',
+        clientSite: clientData.clientSite || '',
+        clientFirstName: clientData.clientFirstName || '',
+        clientMiddleName: clientData.clientMiddleName || '',
+        clientLastName: clientData.clientLastName || '',
+        clientAliases: clientData.clientAliases || '',
+        clientCitizenship: clientData.clientCitizenship || '',
+        clientVetStatus: clientData.clientVetStatus || '',
+        clientSSN: clientData.clientSSN || '',
+        clientGender: clientData.clientGender || '',
+        clientPronouns: clientData.clientPronouns || '',
+        clientEthnicity: clientData.clientEthnicity || '',
+        clientRace: clientData.clientRace || '',
+        clientPrimaryLang: clientData.clientPrimaryLang || '',
+        clientMaritalStatus: clientData.clientMaritalStatus || '',
+        clientReligiousPref: clientData.clientReligiousPref || '',
+        clientHighEd: clientData.clientHighEd || '',
+      };
     }
-  }, [dispatch, shouldUseMockData]);
-
-  const handleChange = (field) => (e) => {
-    setFormData({ ...formData, [field]: e.target.value });
-  };
-
-  const validateForm = () => {
-    const { clientFirstName, clientLastName, clientDOB, clientSite } = formData;
-    if (!clientFirstName || !clientLastName || !clientDOB || !clientSite) {
-      setError('Please fill in all required fields: First Name, Last Name, Date of Birth, and Site.');
-      return false;
-    }
-    
-    // Additional validation
-    if (formData.clientSSN && formData.clientSSN.length !== 9) {
-      setError('SSN must be exactly 9 digits.');
-      return false;
-    }
-
-    setError(null);
-    return true;
-  };
-
-  const resetForm = () => {
-    setFormData({
+    return {
       clientID: '',
       clientAdmitDate: '',
       clientDOB: '',
@@ -133,76 +93,115 @@ const NewClient = ({ onClientCreated }) => {
       clientMaritalStatus: '',
       clientReligiousPref: '',
       clientHighEd: '',
-    });
-    setError(null);
+    };
+  };
+
+  // Form state
+  const [formData, setFormData] = useState(getInitialFormData);
+  const [localError, setLocalError] = useState(null);
+  const [success, setSuccess] = useState(false);
+
+  // ✅ Update form data when clientData changes (for edit mode)
+  useEffect(() => {
+    if (editMode && clientData) {
+      setFormData(getInitialFormData());
+    }
+  }, [editMode, clientData]);
+
+  const handleChange = (field) => (e) => {
+    setFormData({ ...formData, [field]: e.target.value });
+    // Clear errors when user starts typing
+    if (localError) setLocalError(null);
+  };
+
+  const validateForm = () => {
+    const { clientID, clientFirstName, clientLastName, clientDOB, clientSite } = formData;
+    
+    // ✅ Client ID is always required (both new and edit)
+    if (!clientID) {
+      setLocalError('Please provide a Client ID.');
+      return false;
+    }
+    
+    if (!clientFirstName || !clientLastName || !clientDOB || !clientSite) {
+      setLocalError('Please fill in all required fields: Client ID, First Name, Last Name, Date of Birth, and Site.');
+      return false;
+    }
+    
+    // Additional validation
+    if (formData.clientSSN && formData.clientSSN.length !== 9) {
+      setLocalError('SSN must be exactly 9 digits.');
+      return false;
+    }
+
+    setLocalError(null);
+    return true;
+  };
+
+  const resetForm = () => {
+    setFormData(getInitialFormData());
+    setLocalError(null);
     setSuccess(false);
   };
 
-  const handleAddClient = async () => {
+  // ✅ Updated handler to support both create and update with better error handling
+  const handleSubmit = async () => {
     if (!validateForm()) return;
 
-    setLoading(true);
-    setError(null);
-
     try {
-      if (shouldUseMockData) {
-        // ✅ Mock client creation
-        const mockClient = {
-          ...formData,
-          clientID: generateMockClientID(),
-          createdAt: new Date().toISOString(),
-        };
-
-        // Simulate API delay
-        await new Promise(resolve => setTimeout(resolve, 1500));
-
-        // Mock success
+      let response;
+      
+      if (editMode) {
+        console.log('🔄 Updating client with data:', {
+          clientID: formData.clientID,
+          updates: formData
+        });
+        
+        // Update existing client
+        response = await dispatch(updateClient({
+          clientID: formData.clientID,
+          updates: formData
+        })).unwrap();
+        
+        console.log('✅ Update successful:', response);
         setSuccess(true);
         
+        // ✅ Pass the clientID for navigation after update
         if (onClientCreated) {
-          onClientCreated(mockClient.clientID);
+          onClientCreated(formData.clientID);
         }
+      } else {
+        console.log('🔄 Creating new client with data:', formData);
+        
+        // Create new client
+        response = await dispatch(addClient(formData)).unwrap();
+        
+        console.log('✅ Create successful:', response);
+        setSuccess(true);
+        
+        // ✅ Pass the clientID for navigation after create
+        if (onClientCreated) {
+          onClientCreated(response.clientID || formData.clientID);
+        }
+      }
 
-        // Mock navigation after delay
+      // Reset form after successful creation (but not for edit mode)
+      if (!editMode) {
         setTimeout(() => {
-          setSuccess(false);
           resetForm();
-          // Don't actually navigate in mock mode, just show success
-          alert(`✅ Mock client created successfully!\nClient ID: ${mockClient.clientID}\n\nIn production, you would be redirected to the Identification page.`);
         }, 2000);
-
-        return;
       }
-
-      // ✅ Real client creation
-      const response = await dispatch(addClient(formData)).unwrap();
-      
-      if (currentUser) {
-        await logUserAction(currentUser.email || '', 'CREATE_CLIENT', { 
-          clientID: response.clientID 
-        });
-      }
-      
-      if (dispatch) {
-        dispatch(setSelectedClient(response));
-      }
-
-      setSuccess(true);
-
-      if (onClientCreated) {
-        onClientCreated(response.clientID);
-      }
-
-      setTimeout(() => {
-        navigate('/apps/Identification');
-        resetForm();
-      }, 3000);
 
     } catch (err) {
-      console.error('❌ Error adding client:', err);
-      setError('Failed to add client. Please check all fields and try again.');
-    } finally {
-      setLoading(false);
+      console.error(`❌ Error ${editMode ? 'updating' : 'adding'} client:`, err);
+      console.error('❌ Full error object:', {
+        message: err.message,
+        stack: err.stack,
+        response: err.response,
+        status: err.status
+      });
+      
+      setLocalError(err.message || `Failed to ${editMode ? 'update' : 'add'} client. Please check all fields and try again.`);
     }
   };
 
@@ -215,6 +214,7 @@ const NewClient = ({ onClientCreated }) => {
         labelId={`${fieldId}-label`}
         id={fieldId}
         value={value}
+        label={label + (required ? ' *' : '')}
         onChange={onChange}
         disabled={loading}
       >
@@ -227,70 +227,70 @@ const NewClient = ({ onClientCreated }) => {
     </FormControl>
   );
 
+  const displayError = localError || error;
+
   return (
     <Card sx={{ 
       p: 3, 
       mx: 'auto',
       maxWidth: {
-        xs: '95vw',  // 95% on mobile
-        sm: '90vw',  // 90% on small screens
-        md: 1400,    // 1400px on medium screens
-        lg: 1600,    // 1600px on large screens
-        xl: 1800,    // 1800px on extra large screens
+        xs: '95vw',
+        sm: '90vw',
+        md: 1400,
+        lg: 1600,
+        xl: 1800,
       }
     }}>
-      {/* ✅ Development indicator */}
-      {shouldUseMockData && (
-        <Alert severity="info" sx={{ mb: 2 }}>
-          🔧 Development Mode: Client creation will be simulated (no real database changes)
-        </Alert>
-      )}
-
-      {/* ✅ Error display */}
-      {error && (
+      {/* Error display */}
+      {displayError && (
         <Alert severity="error" sx={{ mb: 2 }}>
-          {error}
+          {displayError}
         </Alert>
       )}
 
-      {/* ✅ Success message */}
+      {/* Success message */}
       {success && (
         <Alert severity="success" sx={{ mb: 2 }}>
-          ✅ Client created successfully! {shouldUseMockData ? 'Redirecting...' : 'Redirecting to client chart...'}
+          ✅ Client {editMode ? 'updated' : 'created'} successfully!
         </Alert>
       )}
 
       <Typography variant="h5" gutterBottom>
-        New Client Intake
+        {editMode ? 'Edit Client Information' : 'New Client Intake'}
       </Typography>
       
       <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-        Fields marked with * are required
+        Fields marked with * are required. Client ID must be unique.
       </Typography>
 
       <Box component="form" sx={{ mt: 2 }}>
         <Grid container spacing={3}>
-          {/* First Row - Basic Info */}
+          {/* Basic Information */}
           <Grid item xs={12}>
             <Typography variant="h6" sx={{ mb: 2, color: 'primary.main' }}>
               Basic Information
             </Typography>
           </Grid>
-          
+        </Grid>
+        <Grid container spacing={3}>
           <Grid item xs={12} sm={3}>
+            <Typography>Client ID</Typography>
             <TextField
               fullWidth
-              label="ID Number"
+              label=""
               value={formData.clientID}
               onChange={handleChange('clientID')}
-              disabled={loading}
-              helperText="Leave blank for auto-generation"
+              disabled={loading} // ✅ Removed editMode from disabled condition
+              error={!formData.clientID}
+              helperText="Enter a unique client ID"
+              required
             />
           </Grid>
           <Grid item xs={12} sm={3}>
+            <Typography>Client Admit Date</Typography>
             <TextField
               fullWidth
-              label="Client Admit Date"
+              label=""
               type="date"
               InputLabelProps={{ shrink: true }}
               value={formData.clientAdmitDate}
@@ -299,9 +299,10 @@ const NewClient = ({ onClientCreated }) => {
             />
           </Grid>
           <Grid item xs={12} sm={3}>
+            <Typography>Date of Birth</Typography>
             <TextField
               fullWidth
-              label="Date of Birth *"
+              label=""
               type="date"
               InputLabelProps={{ shrink: true }}
               value={formData.clientDOB}
@@ -312,8 +313,9 @@ const NewClient = ({ onClientCreated }) => {
             />
           </Grid>
           <Grid item xs={12} sm={3}>
+            <Typography>Site</Typography>
             {renderSelect(
-              'Site', 
+              '', 
               formData.clientSite, 
               handleChange('clientSite'), 
               hhhSiteList.map(s => s.value), 
@@ -321,19 +323,21 @@ const NewClient = ({ onClientCreated }) => {
               true
             )}
           </Grid>
-
+        </Grid>
+        <Grid container spacing={3} sx={{ mt: 2 }}>
           {/* Name Information */}
           <Grid item xs={12}>
             <Typography variant="h6" sx={{ mb: 2, mt: 2, color: 'primary.main' }}>
               Name Information
             </Typography>
           </Grid>
-
+        </Grid>
+        <Grid container spacing={3}>
           <Grid item xs={12} sm={4}>
-            First Name
+            <Typography>First Name</Typography>
             <TextField
               fullWidth
-              label="First Name *"
+              label=""
               value={formData.clientFirstName}
               onChange={handleChange('clientFirstName')}
               disabled={loading}
@@ -342,18 +346,20 @@ const NewClient = ({ onClientCreated }) => {
             />
           </Grid>
           <Grid item xs={12} sm={4}>
+            <Typography>Middle Name</Typography>
             <TextField
               fullWidth
-              label="Middle Name"
+              label=""
               value={formData.clientMiddleName}
               onChange={handleChange('clientMiddleName')}
               disabled={loading}
             />
           </Grid>
           <Grid item xs={12} sm={4}>
+            <Typography>Last Name</Typography>
             <TextField
               fullWidth
-              label="Last Name *"
+              label=""
               value={formData.clientLastName}
               onChange={handleChange('clientLastName')}
               disabled={loading}
@@ -361,18 +367,22 @@ const NewClient = ({ onClientCreated }) => {
               required
             />
           </Grid>
-
+        </Grid>
+        <Grid container spacing={3} sx={{ mt: 2 }}>
+          {/* ... rest of the form fields remain the same ... */}
           {/* Identity Information */}
           <Grid item xs={12}>
             <Typography variant="h6" sx={{ mb: 2, mt: 2, color: 'primary.main' }}>
               Identity & Demographics
             </Typography>
           </Grid>
-
+        </Grid>
+        <Grid container spacing={3}>
           <Grid item xs={12} sm={4}>
+            <Typography>Aliases</Typography>
             <TextField
               fullWidth
-              label="Aliases"
+              label=""
               value={formData.clientAliases}
               onChange={handleChange('clientAliases')}
               disabled={loading}
@@ -380,13 +390,16 @@ const NewClient = ({ onClientCreated }) => {
             />
           </Grid>
           <Grid item xs={12} sm={4}>
-            {renderSelect('Citizenship Status', formData.clientCitizenship, handleChange('clientCitizenship'), clientCitizenStatus, 'clientCitizenship')}
+            <Typography>Citizenship Status</Typography>
+            {renderSelect('', formData.clientCitizenship, handleChange('clientCitizenship'), clientCitizenStatus, 'clientCitizenship')}
           </Grid>
           <Grid item xs={12} sm={4}>
-            {renderSelect('Veteran Status', formData.clientVetStatus, handleChange('clientVetStatus'), clientVeteranStatus, 'clientVetStatus')}
+            <Typography>Veteran Status</Typography>
+            {renderSelect('', formData.clientVetStatus, handleChange('clientVetStatus'), clientVeteranStatus, 'clientVetStatus')}
           </Grid>
 
           <Grid item xs={12} sm={4}>
+            <Typography>SSN</Typography>
             <TextField
               fullWidth
               label="SSN"
@@ -398,53 +411,69 @@ const NewClient = ({ onClientCreated }) => {
             />
           </Grid>
           <Grid item xs={12} sm={4}>
-            {renderSelect('Gender', formData.clientGender, handleChange('clientGender'), clientGenders, 'clientGender')}
+            <Typography>Gender</Typography>
+            {renderSelect('', formData.clientGender, handleChange('clientGender'), clientGenders, 'clientGender')}
           </Grid>
+        </Grid>
+        <Grid container spacing={3} sx={{ mt: 2 }}>
           <Grid item xs={12} sm={4}>
-            {renderSelect('Pronouns', formData.clientPronouns, handleChange('clientPronouns'), clientPronounsList, 'clientPronouns')}
+            <Typography>Pronouns</Typography>
+            {renderSelect('', formData.clientPronouns, handleChange('clientPronouns'), clientPronounsList, 'clientPronouns')}
           </Grid>
 
           <Grid item xs={12} sm={4}>
-            {renderSelect('Ethnicity', formData.clientEthnicity, handleChange('clientEthnicity'), clientEthnicityList, 'clientEthnicity')}
+            <Typography>Ethnicity</Typography>
+            {renderSelect('', formData.clientEthnicity, handleChange('clientEthnicity'), clientEthnicityList, 'clientEthnicity')}
           </Grid>
           <Grid item xs={12} sm={4}>
-            {renderSelect('Race', formData.clientRace, handleChange('clientRace'), clientRaceList, 'clientRace')}
+            <Typography>Race</Typography>
+            {renderSelect('', formData.clientRace, handleChange('clientRace'), clientRaceList, 'clientRace')}
           </Grid>
           <Grid item xs={12} sm={4}>
-            {renderSelect('Primary Language', formData.clientPrimaryLang, handleChange('clientPrimaryLang'), clientLangList, 'clientPrimaryLang')}
+            <Typography>Primary Language</Typography>
+            {renderSelect('', formData.clientPrimaryLang, handleChange('clientPrimaryLang'), clientLangList, 'clientPrimaryLang')}
           </Grid>
-
+        </Grid>
+        <Grid container spacing={3} sx={{ mt: 2 }}>
           {/* Additional Information */}
           <Grid item xs={12}>
             <Typography variant="h6" sx={{ mb: 2, mt: 2, color: 'primary.main' }}>
               Additional Information
             </Typography>
           </Grid>
-
+        </Grid>
+        <Grid container spacing={3}>
           <Grid item xs={12} sm={4}>
-            {renderSelect('Marital Status', formData.clientMaritalStatus, handleChange('clientMaritalStatus'), maritalStatusList, 'clientMaritalStatus')}
+            <Typography>Marital Status</Typography>
+            {renderSelect('', formData.clientMaritalStatus, handleChange('clientMaritalStatus'), maritalStatusList, 'clientMaritalStatus')}
           </Grid>
           <Grid item xs={12} sm={4}>
-            {renderSelect('Religious Preference', formData.clientReligiousPref, handleChange('clientReligiousPref'), religiousPrefList, 'clientReligiousPref')}
+            <Typography>Religious Preference</Typography>
+            {renderSelect('', formData.clientReligiousPref, handleChange('clientReligiousPref'), religiousPrefList, 'clientReligiousPref')}
           </Grid>
           <Grid item xs={12} sm={4}>
-            {renderSelect('Highest Education', formData.clientHighEd, handleChange('clientHighEd'), highestEdu, 'clientHighEd')}
+            <Typography>Highest Education</Typography>
+            {renderSelect('', formData.clientHighEd, handleChange('clientHighEd'), highestEdu, 'clientHighEd')}
           </Grid>
-
+        </Grid>
+        <Grid container spacing={3} sx={{ mt: 2 }}>
           {/* Submit Section */}
           <Grid item xs={12} sx={{ mt: 3, textAlign: 'center' }}>
             <Button 
               variant="contained" 
               color="primary" 
               size="large"
-              onClick={handleAddClient}
+              onClick={handleSubmit}
               disabled={loading}
               sx={{ minWidth: 200 }}
             >
-              {loading ? 'Creating Client...' : 'Create Client'}
+              {loading 
+                ? `${editMode ? 'Updating' : 'Creating'} Client...` 
+                : `${editMode ? 'Update' : 'Create'} Client`
+              }
             </Button>
             
-            {!loading && (
+            {!loading && !editMode && (
               <Button 
                 variant="outlined" 
                 color="secondary" 
@@ -464,6 +493,8 @@ const NewClient = ({ onClientCreated }) => {
 
 NewClient.propTypes = {
   onClientCreated: PropTypes.func,
+  editMode: PropTypes.bool,
+  clientData: PropTypes.object,
 };
 
 export default NewClient;

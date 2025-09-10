@@ -1,5 +1,7 @@
-import React, { useCallback, useState } from "react";
-import { useSelector } from "react-redux";
+// ✅ Updated ConsentPhoto.jsx - Key fixes for data flow
+
+import React, { useCallback, useState, useEffect } from "react";
+import { useSelector, useDispatch } from "react-redux";
 import {
     Box,
     Typography,
@@ -35,12 +37,12 @@ import {
     Warning as WarningIcon
 } from '@mui/icons-material';
 
-// Import custom hooks and utilities
+// Import hooks and utilities
 import { 
     useFormManager,
+    useFormStepper,
     createFormValidator,
-    calculateFormCompletion,
-    useFormStepper
+    calculateFormCompletion
 } from '../../hooks/useFormManager';
 
 // Import data
@@ -50,24 +52,45 @@ import {
     clientReleasePHTList
 } from "../../data/arrayList";
 
-// Form validation rules
+// ✅ Enhanced form validation rules
 const validationRules = createFormValidator({
     required: ['clientReleaseItems', 'clientReleasePurposes', 'consentPhotoSign1'],
     custom: {
         clientReleaseItems: (value) => {
-            if (!value || value.length === 0) return "Please select at least one type of content to authorize";
+            if (!value || !Array.isArray(value) || value.length === 0) {
+                return "Please select at least one type of content to authorize";
+            }
             return true;
         },
         clientReleasePurposes: (value) => {
-            if (!value || value.length === 0) return "Please select at least one purpose for the release";
+            if (!value || !Array.isArray(value) || value.length === 0) {
+                return "Please select at least one purpose for the release";
+            }
             return true;
         },
         consentPhotoSign1: (value) => {
-            if (!value || value.trim().length < 2) return "Electronic signature must be at least 2 characters";
+            if (!value || value.trim().length < 2) {
+                return "Electronic signature must be at least 2 characters";
+            }
             return true;
         },
         consentPhotoEffectiveDate: (value) => {
             if (!value) return "Effective date is required";
+            const date = new Date(value);
+            if (isNaN(date.getTime())) return "Invalid effective date";
+            return true;
+        },
+        consentPhotoExpireDate: (value, formData) => {
+            if (!value) return "Expiration date is required";
+            const expDate = new Date(value);
+            if (isNaN(expDate.getTime())) return "Invalid expiration date";
+            
+            if (formData.consentPhotoEffectiveDate) {
+                const effDate = new Date(formData.consentPhotoEffectiveDate);
+                if (expDate <= effDate) {
+                    return "Expiration date must be after effective date";
+                }
+            }
             return true;
         }
     }
@@ -101,7 +124,7 @@ const ConsentPhoto = ({ clientID: propClientID }) => {
     const selectedClient = useSelector((state) => state.clients?.selectedClient);
     const clientID = propClientID || selectedClient?.clientID;
 
-    // Use the custom form manager hook
+    // ✅ Use the enhanced form manager hook
     const {
         formData,
         formLoading,
@@ -111,6 +134,7 @@ const ConsentPhoto = ({ clientID: propClientID }) => {
         isValid,
         showSuccessSnackbar,
         updateField,
+        updateFields,
         submitForm,
         saveDraft,
         clearFormErrors,
@@ -122,7 +146,7 @@ const ConsentPhoto = ({ clientID: propClientID }) => {
         validationRules
     );
 
-    // Use stepper hook for better UX
+    // ✅ Enhanced stepper with proper validation
     const {
         activeStep,
         nextStep,
@@ -139,7 +163,7 @@ const ConsentPhoto = ({ clientID: propClientID }) => {
             case 2:
                 return true; // Optional step
             case 3:
-                return formData.consentPhotoSign1 && formData.consentPhotoEffectiveDate;
+                return formData.consentPhotoSign1 && formData.consentPhotoEffectiveDate && formData.consentPhotoExpireDate;
             default:
                 return true;
         }
@@ -147,61 +171,88 @@ const ConsentPhoto = ({ clientID: propClientID }) => {
 
     // Local state
     const [showRevocationSection, setShowRevocationSection] = useState(false);
-    const [showRightsSection, setShowRightsSection] = useState(false);
 
-    // Calculate completion percentage
+    // ✅ Calculate completion percentage with all required fields
     const requiredFields = [
         'clientReleaseItems', 'clientReleasePurposes', 'consentPhotoSign1',
         'consentPhotoEffectiveDate', 'consentPhotoExpireDate'
     ];
     
-    const completionPercentage = calculateFormCompletion(formData, requiredFields, [
+    const allFields = [
         ...requiredFields,
         'clientReleasePHTItems',
-        'consentPhotoSignRights'
-    ]);
+        'consentPhotoSign1Revoke'
+    ];
+    
+    const completionPercentage = calculateFormCompletion(formData, requiredFields, allFields);
 
-    // Field change handlers
+    // ✅ Enhanced field change handlers with proper data structure
+    const handleMultiSelectChange = useCallback((fieldName, selectedValues) => {
+        // Ensure we're storing the full object structure, not just values
+        const formattedValues = selectedValues ? selectedValues.map(item => {
+            if (typeof item === 'string') {
+                // Convert string back to object format
+                const foundItem = [...clientReleaseList, ...clientReleasePurposeList, ...clientReleasePHTList]
+                    .find(listItem => listItem.value === item);
+                return foundItem || { value: item };
+            }
+            return item;
+        }) : [];
+        
+        updateField(fieldName, formattedValues);
+    }, [updateField]);
+
     const handleFieldChange = useCallback((fieldName) => (event) => {
         const { value } = event.target;
         updateField(fieldName, value);
     }, [updateField]);
 
-    const handleMultiSelectChange = useCallback((fieldName, selectedValues) => {
-        updateField(fieldName, selectedValues || []);
-    }, [updateField]);
+    // ✅ Auto-fill dates with proper validation
+    const handleAutoFillEffectiveDate = useCallback(() => {
+        const today = new Date().toISOString().split('T')[0];
+        const oneYearLater = new Date();
+        oneYearLater.setFullYear(oneYearLater.getFullYear() + 1);
+        const expDate = oneYearLater.toISOString().split('T')[0];
+        
+        updateFields({
+            consentPhotoEffectiveDate: today,
+            consentPhotoExpireDate: expDate
+        });
+    }, [updateFields]);
 
-    // Form submission
+    // ✅ Enhanced form submission with proper data structure
     const handleSubmit = useCallback(async (event) => {
         event.preventDefault();
-        const result = await submitForm({
+        
+        // Ensure all data is properly formatted before submission
+        const submissionData = {
+            ...formData,
             formVersion: '2.0',
             submissionType: 'final',
             stepperProgress,
-            completedSteps: activeStep + 1
-        });
+            completedSteps: activeStep + 1,
+            completionPercentage
+        };
+        
+        const result = await submitForm(submissionData);
         
         if (!result.success) {
             console.error('Form submission failed:', result.errors);
         }
-    }, [submitForm, stepperProgress, activeStep]);
+    }, [submitForm, formData, stepperProgress, activeStep, completionPercentage]);
 
     // Save as draft
     const handleSaveDraft = useCallback(async () => {
-        await saveDraft();
-    }, [saveDraft]);
+        const draftData = {
+            ...formData,
+            status: 'draft',
+            stepperProgress,
+            completionPercentage
+        };
+        await saveDraft(draftData);
+    }, [saveDraft, formData, stepperProgress, completionPercentage]);
 
-    // Auto-fill dates
-    const handleAutoFillEffectiveDate = useCallback(() => {
-        const today = new Date().toISOString().split('T')[0];
-        updateField('consentPhotoEffectiveDate', today);
-        
-        // Auto-calculate expiration date (1 year from effective date)
-        const expDate = new Date();
-        expDate.setFullYear(expDate.getFullYear() + 1);
-        updateField('consentPhotoExpireDate', expDate.toISOString().split('T')[0]);
-    }, [updateField]);
-
+    // ✅ Loading state
     if (formLoading) {
         return (
             <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', p: 4 }}>
@@ -314,6 +365,7 @@ const ConsentPhoto = ({ clientID: propClientID }) => {
                                                 size="small"
                                                 color="primary"
                                                 {...getTagProps({ index })}
+                                                key={option.value || index}
                                             />
                                         ))
                                     }
@@ -381,6 +433,7 @@ const ConsentPhoto = ({ clientID: propClientID }) => {
                                                 size="small"
                                                 color="secondary"
                                                 {...getTagProps({ index })}
+                                                key={option.value || index}
                                             />
                                         ))
                                     }
@@ -447,6 +500,7 @@ const ConsentPhoto = ({ clientID: propClientID }) => {
                                                 size="small"
                                                 color="warning"
                                                 {...getTagProps({ index })}
+                                                key={option.value || index}
                                             />
                                         ))
                                     }
@@ -493,14 +547,14 @@ const ConsentPhoto = ({ clientID: propClientID }) => {
                                             required
                                             InputLabelProps={{ shrink: true }}
                                             helperText="When this authorization becomes effective"
-                                            InputProps={{
-                                                endAdornment: (
-                                                    <Button size="small" onClick={handleAutoFillEffectiveDate}>
-                                                        Today
-                                                    </Button>
-                                                )
-                                            }}
                                         />
+                                        <Button 
+                                            size="small" 
+                                            onClick={handleAutoFillEffectiveDate}
+                                            sx={{ mt: 1 }}
+                                        >
+                                            Use Today's Date
+                                        </Button>
                                     </Grid>
                                     <Grid item xs={12} sm={6}>
                                         <TextField
@@ -561,85 +615,6 @@ const ConsentPhoto = ({ clientID: propClientID }) => {
                         </Step>
                     </Stepper>
                 </Paper>
-
-                {/* Legal Information Sections */}
-                <Paper elevation={1} sx={{ p: 3, mb: 3 }}>
-                    <Typography variant="h6" gutterBottom sx={{ fontWeight: 600, color: 'warning.main' }}>
-                        Important Legal Information
-                    </Typography>
-
-                    {/* Restrictions */}
-                    <Accordion>
-                        <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                            <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                                <SecurityIcon sx={{ mr: 1, color: 'warning.main' }} />
-                                <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-                                    RESTRICTIONS
-                                </Typography>
-                            </Box>
-                        </AccordionSummary>
-                        <AccordionDetails>
-                            <Typography variant="body2" color="text.secondary">
-                                California law prohibits Holliday's Helping Hands from making further disclosures 
-                                of this information without additional authorization from you unless required by law.
-                            </Typography>
-                        </AccordionDetails>
-                    </Accordion>
-
-                    {/* Your Rights */}
-                    <Accordion>
-                        <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                            <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                                <InfoIcon sx={{ mr: 1, color: 'info.main' }} />
-                                <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-                                    YOUR RIGHTS
-                                </Typography>
-                            </Box>
-                        </AccordionSummary>
-                        <AccordionDetails>
-                            <Typography variant="body2" color="text.secondary" component="div">
-                                <Box component="ul" sx={{ pl: 2, m: 0 }}>
-                                    <li>I may refuse to sign this Authorization.</li>
-                                    <li>I may revoke this Authorization at any time by written notice to Holliday's Helping Hands.</li>
-                                    <li>I have a right to receive a copy of this Authorization.</li>
-                                    <li>I may inspect or obtain a copy of any information that is disclosed under this Authorization.</li>
-                                    <li>Neither treatment, payment, enrollment, nor eligibility for benefits is contingent upon signing this Authorization.</li>
-                                </Box>
-                            </Typography>
-                        </AccordionDetails>
-                    </Accordion>
-                </Paper>
-
-                {/* Revocation Section */}
-                <Accordion sx={{ mb: 3 }}>
-                    <AccordionSummary 
-                        expandIcon={<ExpandMoreIcon />}
-                        onClick={() => setShowRevocationSection(!showRevocationSection)}
-                    >
-                        <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                            <WarningIcon sx={{ mr: 1, color: 'warning.main' }} />
-                            <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                                Authorization Revocation (Optional)
-                            </Typography>
-                        </Box>
-                    </AccordionSummary>
-                    <AccordionDetails>
-                        <Typography variant="body2" sx={{ mb: 2 }}>
-                            If you wish to revoke this authorization in the future, you can sign below:
-                        </Typography>
-                        
-                        <TextField
-                            fullWidth
-                            label="Revocation Signature (Optional)"
-                            name="consentPhotoSign1Revoke"
-                            value={formData.consentPhotoSign1Revoke || ''}
-                            onChange={handleFieldChange('consentPhotoSign1Revoke')}
-                            variant="outlined"
-                            placeholder="Sign here to revoke authorization"
-                            helperText="This field can be completed later if you wish to revoke this authorization"
-                        />
-                    </AccordionDetails>
-                </Accordion>
 
                 {/* Action Buttons */}
                 <Box sx={{ display: 'flex', justifyContent: 'center', gap: 2, mt: 4 }}>

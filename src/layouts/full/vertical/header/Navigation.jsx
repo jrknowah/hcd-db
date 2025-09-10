@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Box, Menu, Typography, Button, Divider, Grid, IconButton } from "@mui/material";
-import { Link } from 'react-router';
+import { Link } from 'react-router-dom';
 import { IconHelp } from "@tabler/icons-react";
 import AppLinks from "./AppLinks";
 import QuickLinks from "./QuickLinks";

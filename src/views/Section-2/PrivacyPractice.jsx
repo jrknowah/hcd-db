@@ -517,7 +517,7 @@ const PrivacyPractice = ({ clientID: propClientID }) => {
         </Typography>
         
         <Grid container spacing={3}>
-          <Grid item xs={12} md={6}>
+          <Grid item xs={12} md={12}>
             <TextField
               fullWidth
               label="Client Signature"
@@ -527,44 +527,6 @@ const PrivacyPractice = ({ clientID: propClientID }) => {
               required
               sx={{ mb: 2 }}
             />
-            <TextField
-              fullWidth
-              label="Client Printed Name"
-              variant="outlined"
-              value={formData.clientPrintedName}
-              onChange={handleTextChange('clientPrintedName')}
-              required
-            />
-          </Grid>
-          
-          <Grid item xs={12} md={6}>
-            <TextField
-              fullWidth
-              label="Staff Signature"
-              variant="outlined"
-              value={formData.staffSignature}
-              onChange={handleTextChange('staffSignature')}
-              required
-              sx={{ mb: 2 }}
-            />
-            <Box sx={{ display: 'flex', gap: 1 }}>
-              <TextField
-                label="Copy Date"
-                variant="outlined"
-                value={formData.copyDate}
-                onChange={handleTextChange('copyDate')}
-                placeholder="Date"
-                size="small"
-              />
-              <TextField
-                label="Initials"
-                variant="outlined"
-                value={formData.copyInitials}
-                onChange={handleTextChange('copyInitials')}
-                placeholder="Initials"
-                size="small"
-              />
-            </Box>
           </Grid>
         </Grid>
 

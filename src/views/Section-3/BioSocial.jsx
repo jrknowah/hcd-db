@@ -55,7 +55,7 @@ import {
     ambulatoryStatus
 } from "../../data/arrayList";
 
-const HCD_API = `${import.meta.env.VITE_API_URL}'`;
+const HCD_API = `${import.meta.env.VITE_API_URL}`;
 
 const BioSocial = () => {
     // ✅ Redux selectors - try multiple possible locations

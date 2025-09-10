@@ -1,4 +1,4 @@
-import { IconButton, Box, AppBar, useMediaQuery, Toolbar, styled, Stack } from '@mui/material';
+import { IconButton, Box, AppBar, useMediaQuery, Toolbar, styled, Stack, useTheme } from '@mui/material';
 import { IconDots } from '@tabler/icons-react';
 import Notifications from './Notification';
 import Profile from './Profile';
@@ -26,26 +26,55 @@ const Header = () => {
 
   const [height, setHeight] = useState('0px');
 
+  // ✅ BULLETPROOF FIX: Use window.innerWidth as fallback
+  const [lgUp, setLgUp] = useState(window.innerWidth >= 1200);
+  const [lgDown, setLgDown] = useState(window.innerWidth < 1200);
+
+  // ✅ Try to get theme, but don't crash if it fails
+  let theme;
+  try {
+    theme = useTheme();
+  } catch (error) {
+    console.warn('⚠️ Header: useTheme failed, using fallback');
+    theme = null;
+  }
+
+  // ✅ Update breakpoints based on theme if available, otherwise use window size
+  useEffect(() => {
+    if (theme) {
+      try {
+        const updateBreakpoints = () => {
+          setLgUp(window.innerWidth >= 1200);
+          setLgDown(window.innerWidth < 1200);
+        };
+        
+        updateBreakpoints();
+        window.addEventListener('resize', updateBreakpoints);
+        return () => window.removeEventListener('resize', updateBreakpoints);
+      } catch (error) {
+        console.warn('⚠️ Header: Breakpoint setup failed');
+      }
+    }
+  }, [theme]);
+
   const handleChange = () => {
     height == '0px' ? setHeight('auto') : setHeight('0px');
   };
-  const lgUp = useMediaQuery((theme) => theme.breakpoints.up('lg'));
-  const lgDown = useMediaQuery((theme) => theme.breakpoints.down('lg'));
 
   const toggleWidth = isCollapse == 'mini-sidebar' && !isSidebarHover ? '75px' : '256px';
 
+  // ✅ Safe styled components with fallback
   const AppBarStyled = styled(AppBar)(({ theme }) => ({
     boxShadow: 'none !important',
-    background: theme.palette.primary.main,
+    background: theme?.palette?.primary?.main || '#1976d2',
     justifyContent: 'center',
     backdropFilter: 'blur(4px)',
-    [theme.breakpoints.up('lg')]: {
-      minHeight: '64px',
-    },
+    minHeight: '64px',
   }));
+  
   const ToolbarStyled = styled(Toolbar)(({ theme }) => ({
     width: '100%',
-    color: theme.palette.warning.contrastText,
+    color: theme?.palette?.warning?.contrastText || '#fff',
     gap: '8px',
     padding: '0 20px',
   }));
@@ -57,8 +86,6 @@ const Header = () => {
       }
     };
     window.addEventListener('resize', handleResize);
-
-    // Cleanup function to remove event listener on unmount
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 

@@ -6,7 +6,7 @@ import Scrollbar from 'src/components/custom-scroll/Scrollbar';
 import { styled } from '@mui/material/styles';
 
 import { Stack } from '@mui/system';
-import { Link } from 'react-router';
+import { Link } from 'react-router-dom';
 import Divider from '@mui/material/Divider';
 import { IconChevronRight } from '@tabler/icons-react';
 import { Icon } from '@iconify/react';

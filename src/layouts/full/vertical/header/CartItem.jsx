@@ -1,5 +1,5 @@
 import { Box, Typography, Button } from "@mui/material";
-import { Link } from 'react-router';
+import { Link } from 'react-router-dom';
 import emptyCart from "src/assets/images/products/empty-shopping-cart.svg";
 
 

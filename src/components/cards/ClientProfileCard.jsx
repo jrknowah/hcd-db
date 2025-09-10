@@ -1,4 +1,6 @@
-import React, { useState, useMemo } from 'react';
+// Updated ClientProfileCard.jsx with working edit functionality
+
+import React, { useEffect, useState, useMemo } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import {
   Card,
@@ -11,7 +13,6 @@ import {
   Button,
   IconButton,
   Divider,
-  LinearProgress,
   List,
   ListItem,
   ListItemIcon,
@@ -20,102 +21,51 @@ import {
   AccordionSummary,
   AccordionDetails,
   Badge,
-  Tooltip,
   Alert,
   CircularProgress,
   Stack,
-  Paper
 } from '@mui/material';
 import {
   Person as PersonIcon,
   Edit as EditIcon,
-  Assignment as AssignmentIcon,
-  Home as HomeIcon,
   Phone as PhoneIcon,
   Email as EmailIcon,
   LocationOn as LocationIcon,
   CalendarToday as CalendarIcon,
   Security as SecurityIcon,
-  MedicalServices as MedicalIcon,
   ExpandMore as ExpandMoreIcon,
-  CheckCircle as CheckCircleIcon,
-  Warning as WarningIcon,
-  Schedule as ScheduleIcon,
   Close as CloseIcon,
   Visibility as VisibilityIcon,
-  Print as PrintIcon,
-  Share as ShareIcon
+  Home as HomeIcon,
 } from '@mui/icons-material';
+import { fetchClientById } from 'src/store/slices/clientSlice';
 
-// Mock data for demonstration - replace with actual Redux selectors
-const getMockClient = (clientID) => ({
-  clientID: clientID,
-  clientFirstName: 'John',
-  clientLastName: 'Doe',
-  clientDOB: '1980-05-15',
-  clientSite: '104th',
-  clientGender: 'Male',
-  clientPronouns: 'He/him/his',
-  clientEthnicity: 'Non-Hispanic/Non-Latino',
-  clientRace: 'White',
-  clientVetStatus: 'Protected Veteran',
-  clientCitizenship: 'US Citizen',
-  clientPrimaryLang: 'English',
-  clientMaritalStatus: 'Single',
-  clientAdmitDate: '2025-01-15',
-  status: 'active',
-  avatar: null,
-  lastActivity: '2025-01-20T10:30:00Z',
-  caseworker: 'Sarah Johnson',
-  emergencyContact: {
-    name: 'Jane Doe',
-    relationship: 'Sister',
-    phone: '(555) 123-4567'
-  }
-});
-
-// Mock form completion data
-const getMockFormCompletion = (clientID) => ({
-  orientation: { completed: true, completedAt: '2025-01-16T09:00:00Z' },
-  clientRights: { completed: true, completedAt: '2025-01-16T09:30:00Z' },
-  consentTreatment: { completed: false, completedAt: null },
-  privacyPractice: { completed: true, completedAt: '2025-01-16T10:00:00Z' },
-  lahmis: { completed: false, completedAt: null },
-  phiRelease: { completed: true, completedAt: '2025-01-17T14:00:00Z' },
-  housingAgreement: { completed: true, completedAt: '2025-01-17T15:00:00Z' },
-  overallCompletion: 71
-});
-
-const ClientProfileCard = ({ clientID, onClose }) => {
+const ClientProfileCard = ({ 
+  clientID, 
+  onClose, 
+  onEditClient,    // ✅ Add this prop for edit functionality
+  onViewForms      // ✅ Add this prop for view forms functionality
+}) => {
   const dispatch = useDispatch();
+  const selectedClient = useSelector((state) => state.clients.selectedClient);
+  const loading = useSelector((state) => state.clients.loading);
   
-  // Redux selectors - replace with actual selectors
-  const selectedClient = useSelector((state) => state.clients?.selectedClient);
-  const loading = useSelector((state) => state.clients?.loading || false);
-  const authForms = useSelector((state) => state.authSig?.forms || {});
-  
-  // Local state
   const [expandedSection, setExpandedSection] = useState(null);
-  const [showAllForms, setShowAllForms] = useState(false);
+  const [localLoading, setLocalLoading] = useState(false);
 
-  // Get client data - use mock for now, replace with actual data
-  const client = useMemo(() => {
-    if (selectedClient && selectedClient.clientID === clientID) {
-      return selectedClient;
+  useEffect(() => {
+    if (clientID && (!selectedClient || selectedClient.clientID !== clientID)) {
+      setLocalLoading(true);
+      dispatch(fetchClientById(clientID))
+        .finally(() => setLocalLoading(false));
     }
-    return getMockClient(clientID);
-  }, [clientID, selectedClient]);
-
-  // Get form completion data
-  const formCompletion = useMemo(() => {
-    return getMockFormCompletion(clientID);
-  }, [clientID, authForms]);
+  }, [clientID, selectedClient, dispatch]);
 
   // Calculate age
   const age = useMemo(() => {
-    if (!client?.clientDOB) return null;
+    if (!selectedClient?.clientDOB) return null;
     const today = new Date();
-    const birthDate = new Date(client.clientDOB);
+    const birthDate = new Date(selectedClient.clientDOB);
     const age = today.getFullYear() - birthDate.getFullYear();
     const monthDiff = today.getMonth() - birthDate.getMonth();
     
@@ -123,48 +73,62 @@ const ClientProfileCard = ({ clientID, onClose }) => {
       return age - 1;
     }
     return age;
-  }, [client?.clientDOB]);
+  }, [selectedClient?.clientDOB]);
 
   // Generate avatar initials
   const avatarInitials = useMemo(() => {
-    if (!client) return '';
-    const firstName = client.clientFirstName || '';
-    const lastName = client.clientLastName || '';
+    if (!selectedClient) return '';
+    const firstName = selectedClient.clientFirstName || '';
+    const lastName = selectedClient.clientLastName || '';
     return `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase();
-  }, [client]);
+  }, [selectedClient]);
 
   // Calculate days since admission
   const daysSinceAdmission = useMemo(() => {
-    if (!client?.clientAdmitDate) return null;
-    const admitDate = new Date(client.clientAdmitDate);
+    if (!selectedClient?.clientAdmitDate) return null;
+    const admitDate = new Date(selectedClient.clientAdmitDate);
     const today = new Date();
     const diffTime = Math.abs(today - admitDate);
     return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-  }, [client?.clientAdmitDate]);
+  }, [selectedClient?.clientAdmitDate]);
 
   // Handle accordion expand
   const handleAccordionChange = (panel) => (event, isExpanded) => {
     setExpandedSection(isExpanded ? panel : null);
   };
 
-  // Handle edit client
+  // ✅ Fixed event handlers to use prop functions with debugging
   const handleEditClient = () => {
-    // Navigate to edit client form or open edit modal
-    console.log('Edit client:', clientID);
+    console.log('🔧 ClientProfileCard handleEditClient called');
+    console.log('🔧 clientID:', clientID);
+    console.log('🔧 onEditClient function exists:', typeof onEditClient);
+    
+    if (onEditClient && clientID) {
+      console.log('🔧 Calling onEditClient with:', clientID);
+      onEditClient(clientID);
+    } else {
+      console.warn('❌ onEditClient prop not provided or clientID missing');
+      console.log('🔧 onEditClient:', onEditClient);
+      console.log('🔧 clientID:', clientID);
+    }
   };
 
-  // Handle view forms
   const handleViewForms = () => {
-    // Navigate to authorization forms
-    console.log('View forms for client:', clientID);
+    console.log('📋 ClientProfileCard handleViewForms called');
+    console.log('🔧 clientID:', clientID);
+    console.log('🔧 onViewForms function exists:', typeof onViewForms);
+    
+    if (onViewForms && clientID) {
+      console.log('📋 Calling onViewForms with:', clientID);
+      onViewForms(clientID);
+    } else {
+      console.warn('❌ onViewForms prop not provided or clientID missing');
+      console.log('🔧 onViewForms:', onViewForms);
+      console.log('🔧 clientID:', clientID);
+    }
   };
 
-  // Handle print profile
-  const handlePrintProfile = () => {
-    window.print();
-  };
-
-  if (loading) {
+  if (loading || localLoading) {
     return (
       <Card elevation={2}>
         <CardContent sx={{ textAlign: 'center', py: 4 }}>
@@ -175,22 +139,17 @@ const ClientProfileCard = ({ clientID, onClose }) => {
     );
   }
 
-  if (!client) {
+  if (!selectedClient) {
     return (
       <Card elevation={2}>
         <CardContent>
-          <Alert severity="error">
-            Client not found
+          <Alert severity="info">
+            Select a client to view their profile
           </Alert>
         </CardContent>
       </Card>
     );
   }
-
-  const completedForms = Object.values(formCompletion).filter(form => 
-    typeof form === 'object' && form.completed
-  ).length;
-  const totalForms = Object.keys(formCompletion).length - 1; // Exclude overallCompletion
 
   return (
     <Card elevation={3} sx={{ position: 'sticky', top: 20 }}>
@@ -226,7 +185,7 @@ const ClientProfileCard = ({ clientID, onClose }) => {
                   width: 16,
                   height: 16,
                   borderRadius: '50%',
-                  bgcolor: client.status === 'active' ? 'success.main' : 'grey.500',
+                  bgcolor: 'success.main',
                   border: '2px solid white'
                 }}
               />
@@ -247,13 +206,13 @@ const ClientProfileCard = ({ clientID, onClose }) => {
           
           <Box sx={{ ml: 2, flex: 1 }}>
             <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-              {client.clientFirstName} {client.clientLastName}
+              {selectedClient.clientFirstName} {selectedClient.clientLastName}
             </Typography>
             <Typography variant="body2" sx={{ opacity: 0.9 }}>
-              ID: {client.clientID}
+              ID: {selectedClient.clientID}
             </Typography>
             <Chip 
-              label={client.status?.toUpperCase() || 'ACTIVE'}
+              label="ACTIVE"
               size="small"
               sx={{ 
                 mt: 1,
@@ -280,7 +239,7 @@ const ClientProfileCard = ({ clientID, onClose }) => {
           </Box>
           <Box sx={{ textAlign: 'center' }}>
             <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-              {formCompletion.overallCompletion}%
+              --
             </Typography>
             <Typography variant="caption">Forms</Typography>
           </Box>
@@ -288,43 +247,6 @@ const ClientProfileCard = ({ clientID, onClose }) => {
       </Box>
 
       <CardContent sx={{ p: 0 }}>
-        {/* Form Completion Status */}
-        <Box sx={{ p: 2 }}>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-            <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
-              Authorization Forms
-            </Typography>
-            <Chip 
-              label={`${completedForms}/${totalForms} Complete`}
-              size="small"
-              color={completedForms === totalForms ? 'success' : 'warning'}
-            />
-          </Box>
-          
-          <LinearProgress 
-            variant="determinate" 
-            value={formCompletion.overallCompletion} 
-            sx={{ 
-              height: 8, 
-              borderRadius: 4,
-              mb: 2
-            }}
-            color={formCompletion.overallCompletion === 100 ? 'success' : 'primary'}
-          />
-
-          <Button
-            fullWidth
-            variant="outlined"
-            startIcon={<AssignmentIcon />}
-            onClick={handleViewForms}
-            size="small"
-          >
-            View Authorization Forms
-          </Button>
-        </Box>
-
-        <Divider />
-
         {/* Basic Information */}
         <Accordion 
           expanded={expandedSection === 'basic'} 
@@ -342,28 +264,28 @@ const ClientProfileCard = ({ clientID, onClose }) => {
                 <ListItemIcon><CalendarIcon fontSize="small" /></ListItemIcon>
                 <ListItemText 
                   primary="Date of Birth" 
-                  secondary={client.clientDOB ? new Date(client.clientDOB).toLocaleDateString() : 'Not provided'} 
+                  secondary={selectedClient.clientDOB ? new Date(selectedClient.clientDOB).toLocaleDateString() : 'Not provided'} 
                 />
               </ListItem>
               <ListItem>
                 <ListItemIcon><PersonIcon fontSize="small" /></ListItemIcon>
                 <ListItemText 
                   primary="Gender" 
-                  secondary={client.clientGender || 'Not specified'} 
+                  secondary={selectedClient.clientGender || 'Not specified'} 
                 />
               </ListItem>
               <ListItem>
                 <ListItemIcon><PersonIcon fontSize="small" /></ListItemIcon>
                 <ListItemText 
                   primary="Pronouns" 
-                  secondary={client.clientPronouns || 'Not specified'} 
+                  secondary={selectedClient.clientPronouns || 'Not specified'} 
                 />
               </ListItem>
               <ListItem>
                 <ListItemIcon><LocationIcon fontSize="small" /></ListItemIcon>
                 <ListItemText 
                   primary="Site" 
-                  secondary={client.clientSite || 'Not assigned'} 
+                  secondary={selectedClient.clientSite || 'Not assigned'} 
                 />
               </ListItem>
             </List>
@@ -386,31 +308,31 @@ const ClientProfileCard = ({ clientID, onClose }) => {
               <ListItem>
                 <ListItemText 
                   primary="Ethnicity" 
-                  secondary={client.clientEthnicity || 'Not specified'} 
+                  secondary={selectedClient.clientEthnicity || 'Not specified'} 
                 />
               </ListItem>
               <ListItem>
                 <ListItemText 
                   primary="Race" 
-                  secondary={client.clientRace || 'Not specified'} 
+                  secondary={selectedClient.clientRace || 'Not specified'} 
                 />
               </ListItem>
               <ListItem>
                 <ListItemText 
                   primary="Veteran Status" 
-                  secondary={client.clientVetStatus || 'Not specified'} 
+                  secondary={selectedClient.clientVetStatus || 'Not specified'} 
                 />
               </ListItem>
               <ListItem>
                 <ListItemText 
                   primary="Citizenship" 
-                  secondary={client.clientCitizenship || 'Not specified'} 
+                  secondary={selectedClient.clientCitizenship || 'Not specified'} 
                 />
               </ListItem>
               <ListItem>
                 <ListItemText 
                   primary="Primary Language" 
-                  secondary={client.clientPrimaryLang || 'Not specified'} 
+                  secondary={selectedClient.clientPrimaryLang || 'Not specified'} 
                 />
               </ListItem>
             </List>
@@ -433,99 +355,18 @@ const ClientProfileCard = ({ clientID, onClose }) => {
               <ListItem>
                 <ListItemText 
                   primary="Admit Date" 
-                  secondary={client.clientAdmitDate ? new Date(client.clientAdmitDate).toLocaleDateString() : 'Not provided'} 
+                  secondary={selectedClient.clientAdmitDate ? new Date(selectedClient.clientAdmitDate).toLocaleDateString() : 'Not provided'} 
                 />
               </ListItem>
               <ListItem>
                 <ListItemText 
-                  primary="Caseworker" 
-                  secondary={client.caseworker || 'Not assigned'} 
-                />
-              </ListItem>
-              <ListItem>
-                <ListItemText 
-                  primary="Last Activity" 
-                  secondary={client.lastActivity ? new Date(client.lastActivity).toLocaleDateString() : 'No recent activity'} 
+                  primary="Created Date" 
+                  secondary={selectedClient.createdAt ? new Date(selectedClient.createdAt).toLocaleDateString() : 'Not available'} 
                 />
               </ListItem>
             </List>
           </AccordionDetails>
         </Accordion>
-
-        {/* Emergency Contact */}
-        {client.emergencyContact && (
-          <Accordion 
-            expanded={expandedSection === 'emergency'} 
-            onChange={handleAccordionChange('emergency')}
-          >
-            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-              <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                <PhoneIcon sx={{ mr: 1, color: 'warning.main' }} />
-                <Typography sx={{ fontWeight: 600 }}>Emergency Contact</Typography>
-              </Box>
-            </AccordionSummary>
-            <AccordionDetails>
-              <List dense>
-                <ListItem>
-                  <ListItemText 
-                    primary="Name" 
-                    secondary={client.emergencyContact.name} 
-                  />
-                </ListItem>
-                <ListItem>
-                  <ListItemText 
-                    primary="Relationship" 
-                    secondary={client.emergencyContact.relationship} 
-                  />
-                </ListItem>
-                <ListItem>
-                  <ListItemIcon><PhoneIcon fontSize="small" /></ListItemIcon>
-                  <ListItemText 
-                    primary="Phone" 
-                    secondary={client.emergencyContact.phone} 
-                  />
-                </ListItem>
-              </List>
-            </AccordionDetails>
-          </Accordion>
-        )}
-
-        {/* Recent Forms Activity */}
-        <Box sx={{ p: 2 }}>
-          <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 2 }}>
-            Recent Form Activity
-          </Typography>
-          
-          <Stack spacing={1}>
-            {Object.entries(formCompletion)
-              .filter(([key, value]) => key !== 'overallCompletion' && value.completed)
-              .slice(0, showAllForms ? undefined : 3)
-              .map(([formType, data]) => (
-                <Paper key={formType} variant="outlined" sx={{ p: 1 }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                      <CheckCircleIcon sx={{ color: 'success.main', mr: 1, fontSize: 20 }} />
-                      <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                        {formType.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}
-                      </Typography>
-                    </Box>
-                    <Typography variant="caption" color="text.secondary">
-                      {data.completedAt ? new Date(data.completedAt).toLocaleDateString() : ''}
-                    </Typography>
-                  </Box>
-                </Paper>
-              ))}
-            
-            {Object.keys(formCompletion).length > 4 && (
-              <Button
-                size="small"
-                onClick={() => setShowAllForms(!showAllForms)}
-              >
-                {showAllForms ? 'Show Less' : 'Show More'}
-              </Button>
-            )}
-          </Stack>
-        </Box>
       </CardContent>
 
       {/* Action Buttons */}
@@ -537,6 +378,7 @@ const ClientProfileCard = ({ clientID, onClose }) => {
             onClick={handleEditClient}
             size="small"
             fullWidth
+            disabled={!onEditClient} // ✅ Disable if no handler provided
           >
             Edit
           </Button>
@@ -546,14 +388,10 @@ const ClientProfileCard = ({ clientID, onClose }) => {
             onClick={handleViewForms}
             size="small"
             fullWidth
+            disabled={!onViewForms} // ✅ Disable if no handler provided
           >
             Forms
           </Button>
-          <Tooltip title="Print Profile">
-            <IconButton onClick={handlePrintProfile} size="small">
-              <PrintIcon />
-            </IconButton>
-          </Tooltip>
         </Stack>
       </CardActions>
     </Card>

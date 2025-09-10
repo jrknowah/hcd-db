@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const sql = require("mssql");
-const { connectToAzureSQL } = require("../db");
+const { connectToAzureSQL } = require("../store/azureSql");
 
 router.get("/getClientDischarge/:clientID", async (req, res) => {
   try {

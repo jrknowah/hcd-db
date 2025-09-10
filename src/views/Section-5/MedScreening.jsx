@@ -327,9 +327,12 @@ const MedScreening = ({ clientID }) => {
                   styles={customSelectStyles}
                 />
               </Grid>
+            </Grid>
+            <Grid container spacing={3} sx={{ mt: 2 }}>
               <Grid item xs={12} md={6}>
+                <Typography>Are you at risk for alcohol withdrawal or seizures?</Typography>
                 <FormControl fullWidth>
-                  <InputLabel>Are you at risk for alcohol withdrawal or seizures?</InputLabel>
+                  <InputLabel></InputLabel>
                   <MuiSelect
                     name="clientAlcoholRisk"
                     value={formData.clientAlcoholRisk || ""}
@@ -343,8 +346,9 @@ const MedScreening = ({ clientID }) => {
                 </FormControl>
               </Grid>
               <Grid item xs={12} md={6}>
+                <Typography>Were you getting medications in the hospital with alcohol withdrawal?</Typography>
                 <FormControl fullWidth>
-                  <InputLabel>Were you getting medications in the hospital with alcohol withdrawal?</InputLabel>
+                  <InputLabel></InputLabel>
                   <MuiSelect
                     name="clientAlcoholRiskMed"
                     value={formData.clientAlcoholRiskMed}
@@ -372,10 +376,11 @@ const MedScreening = ({ clientID }) => {
           <AccordionDetails>
             <Grid container spacing={3}>
               <Grid item xs={12} md={6}>
+                <Typography>Your last TB skin test (PPD) or chest x-ray</Typography>
                 <TextField
                   fullWidth
                   type="date"
-                  label="Your last TB skin test (PPD) or chest x-ray"
+                  label=""
                   name="clientLastTBTest"
                   value={formData.clientLastTBTest}
                   onChange={handleChange}
@@ -383,8 +388,9 @@ const MedScreening = ({ clientID }) => {
                 />
               </Grid>
               <Grid item xs={12} md={6}>
+                <Typography>Results</Typography>
                 <FormControl fullWidth>
-                  <InputLabel>Results</InputLabel>
+                  <InputLabel></InputLabel>
                   <MuiSelect
                     name="clientLastTBTestResults"
                     value={formData.clientLastTBTestResults}
@@ -399,8 +405,9 @@ const MedScreening = ({ clientID }) => {
                 </FormControl>
               </Grid>
               <Grid item xs={12} md={6}>
+                <Typography>If positive, did you receive treatment?</Typography>
                 <FormControl fullWidth>
-                  <InputLabel>If positive, did you receive treatment?</InputLabel>
+                  <InputLabel></InputLabel>
                   <MuiSelect
                     name="clientLastTBTestResultsTreatment"
                     value={formData.clientLastTBTestResultsTreatment}
@@ -414,17 +421,19 @@ const MedScreening = ({ clientID }) => {
                 </FormControl>
               </Grid>
               <Grid item xs={12} md={6}>
+                <Typography>Outcome of treatment</Typography>
                 <TextField
                   fullWidth
-                  label="Outcome of Treatment"
+                  label=""
                   name="clientLastTBTestResultsTreatmentOutcome"
                   value={formData.clientLastTBTestResultsTreatmentOutcome}
                   onChange={handleChange}
                 />
               </Grid>
               <Grid item xs={12} md={4}>
+                <Typography>Do you have a cough lasting longer than 3 weeks?</Typography>
                 <FormControl fullWidth>
-                  <InputLabel>Do you have a cough lasting longer than 3 weeks?</InputLabel>
+                  <InputLabel></InputLabel>
                   <MuiSelect
                     name="tbCough"
                     value={formData.tbCough}
@@ -438,8 +447,9 @@ const MedScreening = ({ clientID }) => {
                 </FormControl>
               </Grid>
               <Grid item xs={12} md={4}>
+                <Typography>Are you coughing up blood?</Typography>
                 <FormControl fullWidth>
-                  <InputLabel>Are you coughing up blood?</InputLabel>
+                  <InputLabel></InputLabel>
                   <MuiSelect
                     name="tbCoughBlood"
                     value={formData.tbCoughBlood}
@@ -453,8 +463,9 @@ const MedScreening = ({ clientID }) => {
                 </FormControl>
               </Grid>
               <Grid item xs={12} md={4}>
+                <Typography>Have you had new severe night sweats in the last month?</Typography>
                 <FormControl fullWidth>
-                  <InputLabel>Have you had new severe night sweats in the last month?</InputLabel>
+                  <InputLabel></InputLabel>
                   <MuiSelect
                     name="medSweat"
                     value={formData.medSweat}
@@ -468,8 +479,9 @@ const MedScreening = ({ clientID }) => {
                 </FormControl>
               </Grid>
               <Grid item xs={12} md={6}>
+                <Typography>Have you had weight loss without reason in the last couple months?</Typography>
                 <FormControl fullWidth>
-                  <InputLabel>Have you had weight loss without reason in the last couple months?</InputLabel>
+                  <InputLabel></InputLabel>
                   <MuiSelect
                     name="clientWeightLoss"
                     value={formData.clientWeightLoss}
@@ -483,8 +495,9 @@ const MedScreening = ({ clientID }) => {
                 </FormControl>
               </Grid>
               <Grid item xs={12} md={6}>
+                <Typography>Have you had high fevers without reason in the last few weeks?</Typography>
                 <FormControl fullWidth>
-                  <InputLabel>Have you had high fevers without reason in the last few weeks?</InputLabel>
+                  <InputLabel></InputLabel>
                   <MuiSelect
                     name="clientFever"
                     value={formData.clientFever}
@@ -634,8 +647,9 @@ const MedScreening = ({ clientID }) => {
           <AccordionDetails>
             <Grid container spacing={3}>
               <Grid item xs={12} md={4}>
+                <Typography>Are you currently on birth control?</Typography>
                 <FormControl fullWidth>
-                  <InputLabel>Are you currently on birth control?</InputLabel>
+                  <InputLabel></InputLabel>
                   <MuiSelect
                     name="clientBC"
                     value={formData.clientBC}
@@ -649,19 +663,21 @@ const MedScreening = ({ clientID }) => {
                 </FormControl>
               </Grid>
               <Grid item xs={12} md={4}>
+                <Typography>Name of Birth Control</Typography>
                 <TextField
                   fullWidth
-                  label="Name of Birth Control"
+                  label=""
                   name="clientBCName"
                   value={formData.clientBCName}
                   onChange={handleChange}
                 />
               </Grid>
               <Grid item xs={12} md={4}>
+                <Typography>Date of Last Dose</Typography>
                 <TextField
                   fullWidth
                   type="date"
-                  label="Date of last dose"
+                  label=""
                   name="clientBCDate"
                   value={formData.clientBCDate}
                   onChange={handleChange}
@@ -669,28 +685,31 @@ const MedScreening = ({ clientID }) => {
                 />
               </Grid>
               <Grid item xs={12} md={4}>
+                <Typography>Location where you receive birth control</Typography>
                 <TextField
                   fullWidth
-                  label="Location Receiving Birth Control"
+                  label=""
                   name="clientBCLoc"
                   value={formData.clientBCLoc}
                   onChange={handleChange}
                 />
               </Grid>
               <Grid item xs={12} md={4}>
+                <Typography>Total # of Pregnancies</Typography>
                 <TextField
                   fullWidth
-                  label="Total # of Pregnancies?"
+                  label=""
                   name="clientBCPreg"
                   value={formData.clientBCPreg}
                   onChange={handleChange}
                 />
               </Grid>
               <Grid item xs={12} md={4}>
+                <Typography>Date of last pregnancy</Typography>
                 <TextField
                   fullWidth
                   type="date"
-                  label="Date of last pregnancy"
+                  label=""
                   name="clientBCPregDate"
                   value={formData.clientBCPregDate}
                   onChange={handleChange}
@@ -698,10 +717,11 @@ const MedScreening = ({ clientID }) => {
                 />
               </Grid>
               <Grid item xs={12} md={6}>
+                <Typography>Date of Last Pap smear</Typography>
                 <TextField
                   fullWidth
                   type="date"
-                  label="Date of Last Pap smear"
+                  label=""
                   name="clientBCPap"
                   value={formData.clientBCPap}
                   onChange={handleChange}
@@ -709,10 +729,11 @@ const MedScreening = ({ clientID }) => {
                 />
               </Grid>
               <Grid item xs={12} md={6}>
+                <Typography>Date of Last Mammogram</Typography>
                 <TextField
                   fullWidth
                   type="date"
-                  label="Date of last Mammogram"
+                  label=""
                   name="clientBCMam"
                   value={formData.clientBCMam}
                   onChange={handleChange}
@@ -734,8 +755,9 @@ const MedScreening = ({ clientID }) => {
           <AccordionDetails>
             <Grid container spacing={3}>
               <Grid item xs={12} md={4}>
+                <Typography>How many sexual partners in the past year?</Typography>
                 <FormControl fullWidth>
-                  <InputLabel>How many sexual partners in the past year?</InputLabel>
+                  <InputLabel></InputLabel>
                   <MuiSelect
                     name="clientSexLastYear"
                     value={formData.clientSexLastYear}
@@ -752,8 +774,9 @@ const MedScreening = ({ clientID }) => {
                 </FormControl>
               </Grid>
               <Grid item xs={12} md={4}>
+                <Typography>How many sexual partners in the past month?</Typography>
                 <FormControl fullWidth>
-                  <InputLabel>How many sexual partners in the past month?</InputLabel>
+                  <InputLabel></InputLabel>
                   <MuiSelect
                     name="clientSexLastMonth"
                     value={formData.clientSexLastMonth}
@@ -770,10 +793,11 @@ const MedScreening = ({ clientID }) => {
                 </FormControl>
               </Grid>
               <Grid item xs={12} md={4}>
+                <Typography>When was the last time you had sex?</Typography>
                 <TextField
                   fullWidth
                   type="date"
-                  label="When was the last time you had sex?"
+                  label=""
                   name="clientLastSexDate"
                   value={formData.clientLastSexDate}
                   onChange={handleChange}
@@ -781,8 +805,9 @@ const MedScreening = ({ clientID }) => {
                 />
               </Grid>
               <Grid item xs={12} md={4}>
+                <Typography>Have you had sexual relations with:</Typography>
                 <FormControl fullWidth>
-                  <InputLabel>Have you had sexual relations with:</InputLabel>
+                  <InputLabel></InputLabel>
                   <MuiSelect
                     name="clientSexRelations"
                     value={formData.clientSexRelations}
@@ -811,10 +836,11 @@ const MedScreening = ({ clientID }) => {
                 />
               </Grid>
               <Grid item xs={12} md={4}>
+                <Typography>Date last tested for a STD/STI?</Typography>
                 <TextField
                   fullWidth
                   type="date"
-                  label="Date last tested for a STD/STI?"
+                  label=""
                   name="clientSTDDate"
                   value={formData.clientSTDDate}
                   onChange={handleChange}
@@ -862,35 +888,39 @@ const MedScreening = ({ clientID }) => {
           <DialogContent>
             <Grid container spacing={2} sx={{ mt: 1 }}>
               <Grid item xs={12} sm={6}>
+                <Typography>Prescription</Typography>
                 <TextField
                   fullWidth
-                  label="Prescription"
+                  label=""
                   name="clientMedName"
                   value={formData.clientMedName}
                   onChange={handleChange}
                 />
               </Grid>
               <Grid item xs={12} sm={6}>
+                <Typography>Dosage/Frequency</Typography>
                 <TextField
                   fullWidth
-                  label="Dose/Frequency"
+                  label=""
                   name="clientMedDose"
                   value={formData.clientMedDose}
                   onChange={handleChange}
                 />
               </Grid>
               <Grid item xs={12} sm={6}>
+                <Typography>Side Effects</Typography>
                 <TextField
                   fullWidth
-                  label="Side Effects"
+                  label=""
                   name="clientMedSideEffects"
                   value={formData.clientMedSideEffects}
                   onChange={handleChange}
                 />
               </Grid>
               <Grid item xs={12} sm={6}>
+                <Typography>Currently Taking?</Typography>
                 <FormControl fullWidth>
-                  <InputLabel>Currently Taking?</InputLabel>
+                  <InputLabel></InputLabel>
                   <MuiSelect
                     name="clientMedTaking"
                     value={formData.clientMedTaking}
@@ -926,19 +956,21 @@ const MedScreening = ({ clientID }) => {
           <DialogContent>
             <Grid container spacing={2} sx={{ mt: 1 }}>
               <Grid item xs={12}>
+                <Typography>Type of Surgery/Hospitalization</Typography>
                 <TextField
                   fullWidth
-                  label="Type of Surgery/Hospitalization"
+                  label=""
                   name="clientSurgeryType"
                   value={formData.clientSurgeryType}
                   onChange={handleChange}
                 />
               </Grid>
               <Grid item xs={12} sm={6}>
+                <Typography>Date of Surgery/Hospitalization</Typography>
                 <TextField
                   fullWidth
                   type="date"
-                  label="Date"
+                  label=""
                   name="clientSurgeryDate"
                   value={formData.clientSurgeryDate}
                   onChange={handleChange}

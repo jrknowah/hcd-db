@@ -61,12 +61,15 @@ import {
   weightBearing, locList, orientedToList, orientedToRoomList, clientPain,
   lungSounds, adlLevel,
   bowelBladder,
-  physicalFuncStat
+  physicalFuncStat,
+  hearingVision2
 } from "../../data/arrayList";
 
 // Import body diagram images - you'll need to add these
 // import frontBodyImage from './assets/front-body.png';
 // import rearBodyImage from './assets/rear-body.png';
+import frontBodyImage from '../../data/front.png';
+import rearBodyImage from '../../data/rear.png';
 
 const NursingAdmission = ({ clientID }) => {
   const dispatch = useDispatch();
@@ -402,13 +405,14 @@ export const store = configureStore({
             <AccordionDetails>
               <Grid container spacing={3}>
                 <Grid item xs={12} md={4}>
+                  <Typography variant="subtitle1" gutterBottom>Level of Consciousness (LOC)</Typography>
                   <Autocomplete
                     multiple
                     options={convertToOptions(locList)}
                     value={getSelectedValues('loc', locList)}
                     onChange={(event, newValue) => handleMultiSelectChange('loc', newValue)}
                     renderInput={(params) => (
-                      <TextField {...params} label="Level of Consciousness (LOC)" fullWidth />
+                      <TextField {...params} label="" fullWidth />
                     )}
                     renderTags={(value, getTagProps) =>
                       value.map((option, index) => (
@@ -423,13 +427,14 @@ export const store = configureStore({
                   />
                 </Grid>
                 <Grid item xs={12} md={4}>
+                  <Typography variant="subtitle1" gutterBottom>Oriented To</Typography>
                   <Autocomplete
                     multiple
                     options={convertToOptions(orientedToList)}
                     value={getSelectedValues('orientedToList', orientedToList)}
                     onChange={(event, newValue) => handleMultiSelectChange('orientedToList', newValue)}
                     renderInput={(params) => (
-                      <TextField {...params} label="Oriented To" fullWidth />
+                      <TextField {...params} label="" fullWidth />
                     )}
                     renderTags={(value, getTagProps) =>
                       value.map((option, index) => (
@@ -444,13 +449,14 @@ export const store = configureStore({
                   />
                 </Grid>
                 <Grid item xs={12} md={4}>
+                  <Typography variant="subtitle1" gutterBottom>Oriented To Room/Routine</Typography>
                   <Autocomplete
                     multiple
                     options={convertToOptions(orientedToRoomList)}
                     value={getSelectedValues('orientedToRoomList', orientedToRoomList)}
                     onChange={(event, newValue) => handleMultiSelectChange('orientedToRoomList', newValue)}
                     renderInput={(params) => (
-                      <TextField {...params} label="Oriented To Room/Routine" fullWidth />
+                      <TextField {...params} label="" fullWidth />
                     )}
                     renderTags={(value, getTagProps) =>
                       value.map((option, index) => (
@@ -524,72 +530,81 @@ export const store = configureStore({
                     }}
                   />
                 </Grid>
+              </Grid>
+              <Grid container spacing={3} sx={{ mt: 1 }}>
 
                 {/* Vital Signs Details */}
                 <Grid item xs={12} md={4}>
+                  <Typography variant="subtitle1" gutterBottom>Temperature Details</Typography>
                   <Autocomplete
                     multiple
                     options={convertToOptions(tList)}
                     value={getSelectedValues('tList', tList)}
                     onChange={(event, newValue) => handleMultiSelectChange('tList', newValue)}
                     renderInput={(params) => (
-                      <TextField {...params} label="Temperature Details" fullWidth />
+                      <TextField {...params} label="" fullWidth />
                     )}
                   />
                 </Grid>
                 <Grid item xs={12} md={4}>
+                  <Typography variant="subtitle1" gutterBottom>Pulse Details</Typography>
                   <Autocomplete
                     multiple
                     options={convertToOptions(pList)}
                     value={getSelectedValues('pList', pList)}
                     onChange={(event, newValue) => handleMultiSelectChange('pList', newValue)}
                     renderInput={(params) => (
-                      <TextField {...params} label="Pulse Details" fullWidth />
+                      <TextField {...params} label="" fullWidth />
                     )}
                   />
                 </Grid>
                 <Grid item xs={12} md={4}>
+                  <Typography variant="subtitle1" gutterBottom>Respiration Details</Typography>
                   <Autocomplete
                     multiple
                     options={convertToOptions(rList)}
                     value={getSelectedValues('rList', rList)}
                     onChange={(event, newValue) => handleMultiSelectChange('rList', newValue)}
                     renderInput={(params) => (
-                      <TextField {...params} label="Respiration Details" fullWidth />
+                      <TextField {...params} label="" fullWidth />
                     )}
                   />
                 </Grid>
-
+              </Grid>
                 {/* Medical History */}
                 <Grid item xs={12}>
                   <Typography variant="subtitle1" gutterBottom sx={{ mt: 2 }}>Medical History & Assessment</Typography>
                 </Grid>
+              <Grid container spacing={3} sx={{ mt: 1 }}>
                 <Grid item xs={12} md={4}>
+                  <Typography variant="subtitle1" gutterBottom>History Of</Typography>
                   <Autocomplete
                     multiple
                     options={convertToOptions(historyOf)}
                     value={getSelectedValues('historyOf', historyOf)}
                     onChange={(event, newValue) => handleMultiSelectChange('historyOf', newValue)}
                     renderInput={(params) => (
-                      <TextField {...params} label="History Of" fullWidth />
+                      <TextField {...params} label="" fullWidth />
                     )}
                   />
                 </Grid>
                 <Grid item xs={12} md={4}>
+                  <Typography variant="subtitle1" gutterBottom>Edema</Typography>
                   <Autocomplete
                     multiple
                     options={convertToOptions(edema)}
                     value={getSelectedValues('edema', edema)}
                     onChange={(event, newValue) => handleMultiSelectChange('edema', newValue)}
                     renderInput={(params) => (
-                      <TextField {...params} label="Edema" fullWidth />
+                      <TextField {...params} label="" fullWidth />
                     )}
                   />
                 </Grid>
                 <Grid item xs={12} md={4}>
+                  <Typography variant="subtitle1" gutterBottom>Edema Location</Typography>
                   <TextField
                     fullWidth
-                    label="Edema Location (if present)"
+                    label=""
                     value={formData.edemaLocation}
                     onChange={(e) => handleInputChange('edemaLocation', e.target.value)}
                   />
@@ -597,35 +612,38 @@ export const store = configureStore({
 
                 {/* Pain & Lung Assessment */}
                 <Grid item xs={12} md={4}>
+                  <Typography variant="subtitle1" gutterBottom>Pain Level</Typography>
                   <Autocomplete
                     multiple
                     options={convertToOptions(clientPain)}
                     value={getSelectedValues('clientPain', clientPain)}
                     onChange={(event, newValue) => handleMultiSelectChange('clientPain', newValue)}
                     renderInput={(params) => (
-                      <TextField {...params} label="Pain Level" fullWidth />
+                      <TextField {...params} label="" fullWidth />
                     )}
                   />
                 </Grid>
                 <Grid item xs={12} md={4}>
+                  <Typography variant="subtitle1" gutterBottom>Pain History/Frequency</Typography>
                   <Autocomplete
                     multiple
                     options={convertToOptions(painHistory)}
                     value={getSelectedValues('painHistory', painHistory)}
                     onChange={(event, newValue) => handleMultiSelectChange('painHistory', newValue)}
                     renderInput={(params) => (
-                      <TextField {...params} label="Pain History/Frequency" fullWidth />
+                      <TextField {...params} label="" fullWidth />
                     )}
                   />
                 </Grid>
                 <Grid item xs={12} md={4}>
+                  <Typography variant="subtitle1" gutterBottom>Lung Sounds</Typography>
                   <Autocomplete
                     multiple
                     options={convertToOptions(lungSounds)}
                     value={getSelectedValues('lungSounds', lungSounds)}
                     onChange={(event, newValue) => handleMultiSelectChange('lungSounds', newValue)}
                     renderInput={(params) => (
-                      <TextField {...params} label="Lung Sounds" fullWidth />
+                      <TextField {...params} label="" fullWidth />
                     )}
                   />
                 </Grid>
@@ -642,79 +660,87 @@ export const store = configureStore({
             <AccordionDetails>
               <Grid container spacing={3}>
                 <Grid item xs={12} md={3}>
+                  <Typography variant="subtitle1" gutterBottom>Bowel & Bladder</Typography>
                   <Autocomplete
                     multiple
                     options={convertToOptions(bowelBladder)}
                     value={getSelectedValues('bowelBladder', bowelBladder)}
                     onChange={(event, newValue) => handleMultiSelectChange('bowelBladder', newValue)}
                     renderInput={(params) => (
-                      <TextField {...params} label="Bowel & Bladder" fullWidth />
+                      <TextField {...params} label="" fullWidth />
                     )}
                   />
                 </Grid>
                 <Grid item xs={12} md={3}>
+                  <Typography variant="subtitle1" gutterBottom>Catheter Type</Typography>
                   <TextField
                     fullWidth
-                    label="Catheter Type"
+                    label=""
                     value={formData.cathType}
                     onChange={(e) => handleInputChange('cathType', e.target.value)}
                   />
                 </Grid>
                 <Grid item xs={12} md={3}>
+                  <Typography variant="subtitle1" gutterBottom>Catheter Size</Typography>
                   <TextField
                     fullWidth
-                    label="Catheter Size"
+                    label=""
                     value={formData.cathSize}
                     onChange={(e) => handleInputChange('cathSize', e.target.value)}
                   />
                 </Grid>
                 <Grid item xs={12} md={3}>
+                  <Typography variant="subtitle1" gutterBottom>Diagnosis for Use</Typography>
                   <TextField
                     fullWidth
-                    label="Diagnosis for Use"
+                    label=""
                     value={formData.cathDiag}
                     onChange={(e) => handleInputChange('cathDiag', e.target.value)}
                   />
                 </Grid>
                 <Grid item xs={12} md={3}>
+                  <Typography variant="subtitle1" gutterBottom>Elimination Methods Used</Typography>
                   <Autocomplete
                     multiple
                     options={convertToOptions(elimMethUsed)}
                     value={getSelectedValues('elimMethUsed', elimMethUsed)}
                     onChange={(event, newValue) => handleMultiSelectChange('elimMethUsed', newValue)}
                     renderInput={(params) => (
-                      <TextField {...params} label="Elimination Methods" fullWidth />
+                      <TextField {...params} label="" fullWidth />
                     )}
                   />
                 </Grid>
                 <Grid item xs={12} md={3}>
+                  <Typography variant="subtitle1" gutterBottom>Last Bowel Movement</Typography>
                   <TextField
                     fullWidth
                     type="date"
-                    label="Last Bowel Movement"
+                    label=""
                     value={formData.lastBowelDate}
                     onChange={(e) => handleInputChange('lastBowelDate', e.target.value)}
                     InputLabelProps={{ shrink: true }}
                   />
                 </Grid>
                 <Grid item xs={12} md={3}>
+                  <Typography variant="subtitle1" gutterBottom>Last Voiding</Typography>
                   <TextField
                     fullWidth
                     type="date"
-                    label="Last Voiding"
+                    label=""
                     value={formData.lastVoidDate}
                     onChange={(e) => handleInputChange('lastVoidDate', e.target.value)}
                     InputLabelProps={{ shrink: true }}
                   />
                 </Grid>
                 <Grid item xs={12} md={3}>
+                  <Typography variant="subtitle1" gutterBottom>Abdomen</Typography>
                   <Autocomplete
                     multiple
                     options={convertToOptions(abdomen)}
                     value={getSelectedValues('abdomen', abdomen)}
                     onChange={(event, newValue) => handleMultiSelectChange('abdomen', newValue)}
                     renderInput={(params) => (
-                      <TextField {...params} label="Abdomen" fullWidth />
+                      <TextField {...params} label="" fullWidth />
                     )}
                   />
                 </Grid>
@@ -731,66 +757,72 @@ export const store = configureStore({
             <AccordionDetails>
               <Grid container spacing={3}>
                 <Grid item xs={12} md={4}>
+                  <Typography variant="subtitle1" gutterBottom>Physical & Functional Status</Typography>
                   <Autocomplete
                     multiple
                     options={convertToOptions(physicalFuncStat)}
                     value={getSelectedValues('physicalFuncStat', physicalFuncStat)}
                     onChange={(event, newValue) => handleMultiSelectChange('physicalFuncStat', newValue)}
                     renderInput={(params) => (
-                      <TextField {...params} label="Physical & Functional Status" fullWidth />
+                      <TextField {...params} label="" fullWidth />
                     )}
                   />
                 </Grid>
                 <Grid item xs={12} md={4}>
+                  <Typography variant="subtitle1" gutterBottom>Weight-Bearing</Typography>
                   <Autocomplete
                     multiple
                     options={convertToOptions(weightBearing)}
                     value={getSelectedValues('weightBearing', weightBearing)}
                     onChange={(event, newValue) => handleMultiSelectChange('weightBearing', newValue)}
                     renderInput={(params) => (
-                      <TextField {...params} label="Weight-Bearing" fullWidth />
+                      <TextField {...params} label="" fullWidth />
                     )}
                   />
                 </Grid>
                 <Grid item xs={12} md={4}>
+                  <Typography variant="subtitle1" gutterBottom>Transfers</Typography>
                   <Autocomplete
                     multiple
                     options={convertToOptions(transfers)}
                     value={getSelectedValues('transfers', transfers)}
                     onChange={(event, newValue) => handleMultiSelectChange('transfers', newValue)}
                     renderInput={(params) => (
-                      <TextField {...params} label="Transfers" fullWidth />
+                      <TextField {...params} label="" fullWidth />
                     )}
                   />
                 </Grid>
                 <Grid item xs={12} md={4}>
+                  <Typography variant="subtitle1" gutterBottom>Ambulation</Typography>
                   <Autocomplete
                     multiple
                     options={convertToOptions(ambulation)}
                     value={getSelectedValues('ambulation', ambulation)}
                     onChange={(event, newValue) => handleMultiSelectChange('ambulation', newValue)}
                     renderInput={(params) => (
-                      <TextField {...params} label="Ambulation" fullWidth />
+                      <TextField {...params} label="" fullWidth />
                     )}
                   />
                 </Grid>
                 <Grid item xs={12} md={4}>
+                  <Typography variant="subtitle1" gutterBottom>Mobility Devices</Typography>
                   <Autocomplete
                     multiple
                     options={convertToOptions(mobDevices)}
                     value={getSelectedValues('mobDevices', mobDevices)}
                     onChange={(event, newValue) => handleMultiSelectChange('mobDevices', newValue)}
                     renderInput={(params) => (
-                      <TextField {...params} label="Mobility Devices" fullWidth />
+                      <TextField {...params} label="" fullWidth />
                     )}
                   />
                 </Grid>
                 <Grid item xs={12} md={4}>
+                  <Typography variant="subtitle1" gutterBottom>Additional Notes</Typography>
                   <TextField
                     fullWidth
                     multiline
                     rows={3}
-                    label="Additional Notes"
+                    label=""
                     value={formData.clientPhysicalFuncNotes}
                     onChange={(e) => handleInputChange('clientPhysicalFuncNotes', e.target.value)}
                   />
@@ -808,68 +840,74 @@ export const store = configureStore({
             <AccordionDetails>
               <Grid container spacing={3}>
                 <Grid item xs={12} md={3}>
+                  <Typography variant="subtitle1" gutterBottom>Nutrition/Hydration</Typography>
                   <Autocomplete
                     multiple
                     options={convertToOptions(nutrHyd)}
                     value={getSelectedValues('nutrHyd', nutrHyd)}
                     onChange={(event, newValue) => handleMultiSelectChange('nutrHyd', newValue)}
                     renderInput={(params) => (
-                      <TextField {...params} label="Nutrition/Hydration" fullWidth />
+                      <TextField {...params} label="" fullWidth />
                     )}
                   />
                 </Grid>
                 <Grid item xs={12} md={3}>
+                  <Typography variant="subtitle1" gutterBottom>Enteral Nutrition</Typography>
                   <Autocomplete
                     multiple
                     options={convertToOptions(enteral)}
                     value={getSelectedValues('enteral', enteral)}
                     onChange={(event, newValue) => handleMultiSelectChange('enteral', newValue)}
                     renderInput={(params) => (
-                      <TextField {...params} label="Enteral Nutrition" fullWidth />
+                      <TextField {...params} label="" fullWidth />
                     )}
                   />
                 </Grid>
                 <Grid item xs={12} md={3}>
+                  <Typography variant="subtitle1" gutterBottom>Oral</Typography>
                   <Autocomplete
                     multiple
                     options={convertToOptions(oral)}
                     value={getSelectedValues('oral', oral)}
                     onChange={(event, newValue) => handleMultiSelectChange('oral', newValue)}
                     renderInput={(params) => (
-                      <TextField {...params} label="Oral" fullWidth />
+                      <TextField {...params} label="" fullWidth />
                     )}
                   />
                 </Grid>
                 <Grid item xs={12} md={3}>
+                  <Typography variant="subtitle1" gutterBottom>Hearing</Typography>
                   <Autocomplete
                     multiple
                     options={convertToOptions(hearingVision)}
                     value={getSelectedValues('hearing', hearingVision)}
                     onChange={(event, newValue) => handleMultiSelectChange('hearing', newValue)}
                     renderInput={(params) => (
-                      <TextField {...params} label="Hearing" fullWidth />
+                      <TextField {...params} label="" fullWidth />
                     )}
                   />
                 </Grid>
                 <Grid item xs={12} md={6}>
+                  <Typography variant="subtitle1" gutterBottom>Vision</Typography>
                   <Autocomplete
                     multiple
-                    options={convertToOptions(hearingVision)}
-                    value={getSelectedValues('vision', hearingVision)}
+                    options={convertToOptions(hearingVision2)}
+                    value={getSelectedValues('vision', hearingVision2)}
                     onChange={(event, newValue) => handleMultiSelectChange('vision', newValue)}
                     renderInput={(params) => (
-                      <TextField {...params} label="Vision" fullWidth />
+                      <TextField {...params} label="" fullWidth />
                     )}
                   />
                 </Grid>
                 <Grid item xs={12} md={6}>
+                  <Typography variant="subtitle1" gutterBottom>Communication</Typography>
                   <Autocomplete
                     multiple
                     options={convertToOptions(communication)}
                     value={getSelectedValues('communication', communication)}
                     onChange={(event, newValue) => handleMultiSelectChange('communication', newValue)}
                     renderInput={(params) => (
-                      <TextField {...params} label="Communication" fullWidth />
+                      <TextField {...params} label="" fullWidth />
                     )}
                   />
                 </Grid>
@@ -979,9 +1017,9 @@ export const store = configureStore({
                       }}
                     >
                       <Typography color="text.secondary">
-                        Front Body Diagram<br />
-                        (Add front-body.png image here)
-                      </Typography>
+                        <br />
+                         <img src={frontBodyImage} alt="" style={{ maxWidth: '100%', maxHeight: '100%' }} />
+                        </Typography>
                     </Box>
                   </Box>
                 </Grid>
@@ -1039,7 +1077,6 @@ export const store = configureStore({
                 <Grid item xs={12} md={6}>
                   <Box textAlign="center" mb={2}>
                     <Typography variant="h6" gutterBottom>Rear Body Inspection</Typography>
-                    {/* Add your rear body image here */}
                     <Box 
                       sx={{ 
                         width: '100%', 
@@ -1052,8 +1089,15 @@ export const store = configureStore({
                       }}
                     >
                       <Typography color="text.secondary">
-                        Rear Body Diagram<br />
-                        (Add rear-body.png image here)
+                      <img 
+                          src={rearBodyImage} 
+                          alt="" 
+                          style={{ 
+                            maxWidth: '100%', 
+                            maxHeight: '100%',
+                            objectFit: 'contain'
+                          }} 
+                        />
                       </Typography>
                     </Box>
                   </Box>

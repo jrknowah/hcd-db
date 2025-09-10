@@ -221,59 +221,6 @@ const AuthUseDiscHMHInfo = ({ clientID: propClientID }) => {
             {/* Main Form */}
             <form onSubmit={handleSubmit}>
                 {/* Client Information Section */}
-                <Paper elevation={1} sx={{ p: 3, mb: 3 }}>
-                    <Typography variant="h6" gutterBottom sx={{ fontWeight: 600, color: 'primary.main' }}>
-                        Client Information
-                    </Typography>
-                    
-                    <Grid container spacing={2}>
-                        <Grid item xs={12} sm={6}>
-                            <TextField
-                                fullWidth
-                                label="Full Name"
-                                name="authClientName"
-                                value={formData.authClientName || ''}
-                                onChange={handleFieldChange('authClientName')}
-                                required
-                                variant="outlined"
-                            />
-                        </Grid>
-                        <Grid item xs={12} sm={6}>
-                            <TextField
-                                fullWidth
-                                label="Client ID"
-                                name="authClientCID"
-                                value={formData.authClientCID || ''}
-                                onChange={handleFieldChange('authClientCID')}
-                                variant="outlined"
-                            />
-                        </Grid>
-                        <Grid item xs={12} sm={6}>
-                            <TextField
-                                fullWidth
-                                label="Date of Birth"
-                                name="authClientDOB"
-                                type="date"
-                                value={formData.authClientDOB || ''}
-                                onChange={handleFieldChange('authClientDOB')}
-                                required
-                                InputLabelProps={{ shrink: true }}
-                                variant="outlined"
-                            />
-                        </Grid>
-                        <Grid item xs={12} sm={6}>
-                            <TextField
-                                fullWidth
-                                label="Social Security Number"
-                                name="authClientSSN"
-                                value={formData.authClientSSN || ''}
-                                onChange={handleFieldChange('authClientSSN')}
-                                variant="outlined"
-                                placeholder="XXX-XX-XXXX"
-                            />
-                        </Grid>
-                    </Grid>
-                </Paper>
 
                 {/* Authorization Section */}
                 <Paper elevation={1} sx={{ p: 3, mb: 3 }}>
@@ -564,15 +511,6 @@ const AuthUseDiscHMHInfo = ({ clientID: propClientID }) => {
 
                 {/* Action Buttons */}
                 <Box sx={{ display: 'flex', justifyContent: 'center', gap: 2, mt: 4 }}>
-                    <Button
-                        variant="outlined"
-                        size="large"
-                        onClick={handleSaveDraft}
-                        disabled={saving}
-                        sx={{ px: 4 }}
-                    >
-                        Save Draft
-                    </Button>
                     
                     <Button
                         type="submit"

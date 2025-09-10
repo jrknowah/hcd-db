@@ -1,6 +1,6 @@
 import React, { useContext } from 'react';
 import { useState } from 'react';
-import { useLocation } from 'react-router';
+import { useLocation } from 'react-router-dom';
 // mui imports
 import Collapse from '@mui/material/Collapse';
 import ListItemButton from '@mui/material/ListItemButton';

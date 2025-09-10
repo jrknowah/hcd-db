@@ -19,7 +19,7 @@ import {
   ListItemText,
   Collapse,
 } from '@mui/material';
-import { Link } from 'react-router';
+import { Link } from 'react-router-dom';
 import AppLinks from './AppLinks';
 import QuickLinks from './QuickLinks';
 

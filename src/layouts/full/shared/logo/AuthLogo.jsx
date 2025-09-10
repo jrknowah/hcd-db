@@ -1,5 +1,5 @@
 import { useContext } from 'react';
-import { Link } from 'react-router';
+import { Link } from 'react-router-dom';
 import { styled } from '@mui/material';
 import { CustomizerContext } from "src/context/CustomizerContext";
 

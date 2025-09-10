@@ -1,4 +1,4 @@
-import { Link } from 'react-router';
+import { Link } from 'react-router-dom';
 import { Grid, Box, Typography, Stack, Avatar } from "@mui/material";
 import PageContainer from 'src/components/container/PageContainer';
 import AuthLogo from "src/layouts/full/shared/logo/AuthLogo";

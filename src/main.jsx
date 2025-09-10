@@ -1,3 +1,4 @@
+// Fixed main.jsx with proper MSAL setup
 import React, { Suspense } from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
@@ -8,7 +9,7 @@ import { CustomizerContextProvider } from './context/CustomizerContext';
 import { Provider } from 'react-redux';
 import store from './store/store';
 
-// Azure AD / MSAL imports
+// ✅ Add back Azure AD / MSAL imports
 import { PublicClientApplication } from '@azure/msal-browser';
 import { MsalProvider } from '@azure/msal-react';
 import { msalConfig, validateConfig } from './config/authConfig';
@@ -22,7 +23,7 @@ if (!validateConfig()) {
 const msalInstance = new PublicClientApplication(msalConfig);
 
 ReactDOM.createRoot(document.getElementById('root')).render(
-  <MsalProvider instance={msalInstance}>
+  <MsalProvider instance={msalInstance}> {/* ✅ MSAL Provider first */}
     <CustomizerContextProvider>
       <Suspense fallback={<Spinner />}>
         <Provider store={store}>

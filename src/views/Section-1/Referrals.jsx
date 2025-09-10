@@ -1,6 +1,5 @@
-import React, { useEffect, useState } from "react";
-import axios from "axios";
-import { useSelector } from "react-redux";
+import React, { useEffect } from "react";
+import { useSelector, useDispatch } from "react-redux";
 import {
   Box,
   Grid,
@@ -11,101 +10,71 @@ import {
   CardContent,
   CardActions,
   Alert,
-  OutlinedInput
+  OutlinedInput,
+  LinearProgress
 } from "@mui/material";
-import logUserAction from "../../config/logAction";
-
-const HCD_API = `${import.meta.env.VITE_API_URL}`;
-
-// ✅ Static mock data outside component
-const MOCK_CLIENT = {
-  clientID: 'mock-123',
-  clientFirstName: 'John',
-  clientLastName: 'Doe',
-};
-
-const MOCK_USER = {
-  id: 'mock-user-123',
-  name: 'Test User',
-};
-
-const MOCK_REFERRALS_DATA = {
-  lahsaReferral: "LAHSA referral completed on 2024-03-10. Case worker: Jane Smith. Housing voucher approved.",
-  odrReferral: "ODR evaluation scheduled for 2024-03-20. Disability determination pending review.",
-  dhsReferral: "DHS benefits application submitted. CalFresh and Medi-Cal eligibility confirmed.",
-};
+import {
+  fetchReferralData,
+  saveReferralData,
+  uploadReferralFile,
+  updateReferralField,
+  setUploadProgress,
+  clearUploadProgress,
+  clearError,
+  clearSuccess,
+  setCurrentClient,
+  selectReferrals,
+  selectReferralsLoading,
+  selectReferralsSaving,
+  selectReferralsUploading,
+  selectReferralsError,
+  selectReferralsSuccess,
+  selectReferralsDataLoaded,
+  selectReferralUploadProgress
+} from "../../store/slices/referralSlice";
 
 const Referrals = ({ exportMode }) => {
-  // ✅ Simple selectors
-  const reduxSelectedClient = useSelector((state) => state?.clients?.selectedClient);
-  const reduxUser = useSelector((state) => state?.auth?.user);
-
-  // ✅ Simple computed values
-  const isDevelopment = import.meta.env.MODE === 'development';
-  const shouldUseMockData = isDevelopment && !import.meta.env.VITE_USE_REAL_DATA;
+  const dispatch = useDispatch();
   
-  const currentClient = shouldUseMockData && !reduxSelectedClient ? MOCK_CLIENT : reduxSelectedClient;
-  const currentUser = shouldUseMockData && !reduxUser ? MOCK_USER : reduxUser;
+  // ✅ Redux selectors
+  const referrals = useSelector(selectReferrals);
+  const loading = useSelector(selectReferralsLoading);
+  const saving = useSelector(selectReferralsSaving);
+  const uploading = useSelector(selectReferralsUploading);
+  const error = useSelector(selectReferralsError);
+  const successMessage = useSelector(selectReferralsSuccess);
+  const dataLoaded = useSelector(selectReferralsDataLoaded);
+  const uploadProgress = useSelector(selectReferralUploadProgress);
+  
+  // ✅ Get current client and user from Redux
+  const currentClient = useSelector((state) => state?.clients?.selectedClient);
+  const currentUser = useSelector((state) => state?.auth?.user);
 
-  // ✅ Component state
-  const [clientReferrals, setClientReferrals] = useState({
-    lahsaReferral: "",
-    odrReferral: "",
-    dhsReferral: "",
-  });
-
-  const [uploading, setUploading] = useState({});
-  const [filesToUpload, setFilesToUpload] = useState({});
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const [saveSuccess, setSaveSuccess] = useState(false);
-  const [dataLoaded, setDataLoaded] = useState(false);
+  // ✅ Local state for file uploads
+  const [filesToUpload, setFilesToUpload] = React.useState({});
 
   // ✅ Load data when client changes
   useEffect(() => {
-    if (!currentClient?.clientID) return;
-    if (dataLoaded && currentClient.clientID === clientReferrals.clientID) return;
-
-    setLoading(true);
-    setError(null);
-    setDataLoaded(false);
-
-    if (shouldUseMockData) {
-      // Mock data
-      setTimeout(() => {
-        setClientReferrals(MOCK_REFERRALS_DATA);
-        setLoading(false);
-        setDataLoaded(true);
-      }, 500);
-      return;
+    if (currentClient?.clientID) {
+      dispatch(setCurrentClient(currentClient.clientID));
+      if (!dataLoaded) {
+        dispatch(fetchReferralData(currentClient.clientID));
+      }
     }
+  }, [dispatch, currentClient?.clientID, dataLoaded]);
 
-    // Real API call
-    axios
-      .get(`${HCD_API}/clientReferrals/${currentClient.clientID}`)
-      .then((response) => {
-        if (response.data) {
-          setClientReferrals({
-            lahsaReferral: response.data.lahsaReferral || "",
-            odrReferral: response.data.odrReferral || "",
-            dhsReferral: response.data.dhsReferral || "",
-          });
-        }
-        setDataLoaded(true);
-        setLoading(false);
-      })
-      .catch((err) => {
-        console.error("❌ Error fetching client referrals:", err);
-        setError("Failed to load referral data");
-        setLoading(false);
-      });
-  }, [currentClient?.clientID, shouldUseMockData]);
+  // ✅ Clear success message automatically
+  useEffect(() => {
+    if (successMessage) {
+      const timer = setTimeout(() => {
+        dispatch(clearSuccess());
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [successMessage, dispatch]);
 
   const handleChange = (referralType, value) => {
-    setClientReferrals((prev) => ({
-      ...prev,
-      [referralType]: value,
-    }));
+    dispatch(updateReferralField({ field: referralType, value }));
   };
 
   const handleFileSelect = (referralType, file) => {
@@ -118,89 +87,44 @@ const Referrals = ({ exportMode }) => {
   const handleFileUpload = async (referralType) => {
     const file = filesToUpload[referralType];
     if (!currentClient?.clientID || !file) {
-      alert("Please select a client and file before uploading.");
+      dispatch(setError("Please select a client and file before uploading."));
       return;
     }
 
-    setUploading((prev) => ({ ...prev, [referralType]: true }));
-
     try {
-      if (shouldUseMockData) {
-        // Mock upload
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        alert(`✅ ${referralType} uploaded successfully (Mock).`);
-        setFilesToUpload((prev) => ({ ...prev, [referralType]: null }));
-        return;
-      }
-
-      // Real upload
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("clientID", currentClient.clientID);
-      formData.append("type", referralType);
-
-      await axios.post(`${HCD_API}/uploadReferral`, formData);
-
-      alert(`✅ ${referralType} uploaded successfully.`);
-
-      if (currentUser && currentUser.id !== 'mock-user-123') {
-        await logUserAction(currentUser, "UPLOAD_REFERRAL", {
-          clientID: currentClient.clientID,
-          referralType,
-          fileName: file.name,
-        });
-      }
-
+      await dispatch(uploadReferralFile({
+        file,
+        clientID: currentClient.clientID,
+        referralType
+      })).unwrap();
+      
+      // Clear the file input
       setFilesToUpload((prev) => ({ ...prev, [referralType]: null }));
     } catch (error) {
-      console.error(`❌ Error uploading ${referralType}:`, error);
-      alert(`Failed to upload ${referralType}.`);
-    } finally {
-      setUploading((prev) => ({ ...prev, [referralType]: false }));
+      // Error is handled by Redux
+      console.error('Upload failed:', error);
     }
   };
 
   const handleSave = async () => {
     if (!currentClient?.clientID) {
-      alert("Please select a client before saving.");
+      dispatch(setError("Please select a client before saving."));
       return;
     }
 
-    setLoading(true);
-    setSaveSuccess(false);
-
     try {
-      if (shouldUseMockData) {
-        // Mock save
-        setTimeout(() => {
-          setSaveSuccess(true);
-          setLoading(false);
-          setTimeout(() => setSaveSuccess(false), 3000);
-        }, 1000);
-        return;
-      }
-
-      // Real save
-      await axios.post(`${HCD_API}/saveClientReferrals`, {
+      await dispatch(saveReferralData({
         clientID: currentClient.clientID,
-        ...clientReferrals,
-      });
-
-      if (currentUser && currentUser.id !== 'mock-user-123') {
-        await logUserAction(currentUser, "SAVE_CLIENT_REFERRALS", {
-          clientID: currentClient.clientID,
-          referrals: clientReferrals,
-        });
-      }
-
-      setSaveSuccess(true);
-      setTimeout(() => setSaveSuccess(false), 3000);
+        referrals
+      })).unwrap();
     } catch (error) {
-      console.error("❌ Error saving referrals:", error);
-      setError("Failed to save referrals");
-    } finally {
-      setLoading(false);
+      // Error is handled by Redux
+      console.error('Save failed:', error);
     }
+  };
+
+  const handleClearErrors = () => {
+    dispatch(clearError());
   };
 
   const referralTypes = [
@@ -238,9 +162,9 @@ const Referrals = ({ exportMode }) => {
             multiline
             rows={3}
             label="Referral Notes"
-            value={clientReferrals[referralType.key]}
+            value={referrals[referralType.key] || ""}
             onChange={(e) => handleChange(referralType.key, e.target.value)}
-            disabled={loading}
+            disabled={loading || saving}
             sx={{ mb: 2 }}
           />
           
@@ -254,35 +178,56 @@ const Referrals = ({ exportMode }) => {
             fullWidth
             sx={{ mb: 1 }}
           />
+          
           {filesToUpload[referralType.key] && (
-            <Typography variant="body2" color="text.secondary">
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
               Selected: {filesToUpload[referralType.key].name}
             </Typography>
           )}
+          
+          {/* Upload progress */}
+          {uploadProgress[referralType.key] !== undefined && (
+            <Box sx={{ mb: 1 }}>
+              <LinearProgress variant="determinate" value={uploadProgress[referralType.key]} />
+              <Typography variant="caption" color="text.secondary">
+                Uploading... {uploadProgress[referralType.key]}%
+              </Typography>
+            </Box>
+          )}
         </CardContent>
+        
         <CardActions>
           <Button
             variant="contained"
             fullWidth
             onClick={() => handleFileUpload(referralType.key)}
-            disabled={uploading[referralType.key] || !filesToUpload[referralType.key]}
+            disabled={uploading || !filesToUpload[referralType.key]}
           >
-            {uploading[referralType.key] ? "Uploading..." : "Upload Document"}
+            {uploading ? "Uploading..." : "Upload Document"}
           </Button>
         </CardActions>
       </Card>
     </Grid>
   );
 
+  // ✅ Loading state
+  if (loading && !dataLoaded) {
+    return (
+      <Box sx={{ p: 2 }}>
+        <Box display="flex" justifyContent="center" alignItems="center" py={4}>
+          <LinearProgress sx={{ width: '100%', mr: 2 }} />
+          <Typography variant="body2">Loading referral data...</Typography>
+        </Box>
+      </Box>
+    );
+  }
+
   // ✅ No client selected
   if (!currentClient) {
     return (
       <Box sx={{ p: 2 }}>
         <Alert severity="info">
-          {isDevelopment 
-            ? `Development Mode: No client selected. Mock data ${shouldUseMockData ? 'enabled' : 'disabled'}.`
-            : "Please select a client to view referral information."
-          }
+          Please select a client to view referral information.
         </Alert>
       </Box>
     );
@@ -290,24 +235,17 @@ const Referrals = ({ exportMode }) => {
 
   return (
     <Box sx={{ p: 2 }}>
-      {/* ✅ Development indicator */}
-      {shouldUseMockData && (
-        <Alert severity="info" sx={{ mb: 2 }}>
-          🔧 Development Mode: Using mock referral data for {currentClient.clientFirstName} {currentClient.clientLastName}
-        </Alert>
-      )}
-
       {/* ✅ Error display */}
       {error && (
-        <Alert severity="error" sx={{ mb: 2 }}>
+        <Alert severity="error" sx={{ mb: 2 }} onClose={handleClearErrors}>
           {error}
         </Alert>
       )}
 
       {/* ✅ Success message */}
-      {saveSuccess && (
+      {successMessage && (
         <Alert severity="success" sx={{ mb: 2 }}>
-          ✅ Referral Data Saved Successfully!
+          {successMessage}
         </Alert>
       )}
 
@@ -319,29 +257,23 @@ const Referrals = ({ exportMode }) => {
         Manage referral documentation and notes for {currentClient.clientFirstName} {currentClient.clientLastName}
       </Typography>
 
-      {loading && !dataLoaded ? (
-        <Alert severity="info">Loading referral data...</Alert>
-      ) : (
-        <>
-          <Grid container spacing={3}>
-            {referralTypes.map(renderUploadCard)}
-          </Grid>
+      <Grid container spacing={3}>
+        {referralTypes.map(renderUploadCard)}
+      </Grid>
 
-          {/* ✅ Only show save button in non-export mode */}
-          {!exportMode && (
-            <Box sx={{ mt: 4, textAlign: "center" }}>
-              <Button 
-                variant="contained" 
-                color="success" 
-                size="large" 
-                onClick={handleSave}
-                disabled={loading}
-              >
-                {loading ? "Saving..." : "Save All Referrals"}
-              </Button>
-            </Box>
-          )}
-        </>
+      {/* ✅ Only show save button in non-export mode */}
+      {!exportMode && (
+        <Box sx={{ mt: 4, textAlign: "center" }}>
+          <Button 
+            variant="contained" 
+            color="success" 
+            size="large" 
+            onClick={handleSave}
+            disabled={loading || saving}
+          >
+            {saving ? "Saving..." : "Save All Referrals"}
+          </Button>
+        </Box>
       )}
     </Box>
   );

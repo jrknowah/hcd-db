@@ -1,5 +1,5 @@
 import { Grid, Typography, Box, Breadcrumbs, Stack } from '@mui/material';
-import { Link } from 'react-router';
+import { Link } from 'react-router-dom';
 import { IconChevronRight } from '@tabler/icons-react';
 import { useTheme } from '@mui/material/styles';
 import React from 'react';

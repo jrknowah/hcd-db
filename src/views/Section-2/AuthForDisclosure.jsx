@@ -820,7 +820,7 @@ const AuthForDisclosure = ({ clientID: propClientID, formConfig }) => {
         <Box component="form" onSubmit={handleSave}>
           <TextField
             fullWidth
-            label="Electronic Signature (type your name)"
+            label="Electronic Signature"
             variant="outlined"
             name="atrClientSign"
             value={formState.atrClientSign}

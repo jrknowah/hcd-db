@@ -37,13 +37,17 @@ import {
     Refresh as RefreshIcon
 } from '@mui/icons-material';
 import { useDispatch, useSelector } from "react-redux";
+
+// ✅ FIXED: Correct imports for Section 6
 import {
     fetchFaceSheet,
     fetchCaseStatus,
     fetchCaseTimeline,
-    fetchCaseMetrics
+    fetchCaseMetrics,
+    setActiveTab,
+    clearErrors
 } from "../../store/slices/section6Slice";
-import { section6List, ynd, gfp, statusList } from "../../data/arrayList";
+import { section6List } from "../../data/arrayList";
 
 // Import child components
 import IDTNoteCM from './IDTNoteCM';
@@ -55,16 +59,38 @@ const Section6 = ({ clientID = "CLIENT-123" }) => {
     const { 
         faceSheet, 
         faceSheetLoading, 
+        faceSheetError,
         caseStatus, 
         caseTimeline, 
         caseMetrics,
+        activeTab,
         useMockData 
     } = useSelector((state) => state.section6);
 
-    const [activeTab, setActiveTab] = useState(0);
+    // ✅ FIXED: Proper data fetching on component mount
+    useEffect(() => {
+        if (clientID) {
+            dispatch(fetchFaceSheet(clientID));
+            dispatch(fetchCaseStatus(clientID));
+            dispatch(fetchCaseTimeline(clientID));
+            dispatch(fetchCaseMetrics(clientID));
+        }
+    }, [clientID, dispatch]);
 
-    // Mock data for development
-    const mockFaceSheetData = {
+    // ✅ FIXED: Error handling
+    useEffect(() => {
+        if (faceSheetError) {
+            console.error('Section 6 Error:', faceSheetError);
+        }
+    }, [faceSheetError]);
+
+    // ✅ FIXED: Proper tab change handling
+    const handleTabChange = (event, newValue) => {
+        dispatch(setActiveTab(newValue));
+    };
+
+    // ✅ FIXED: Use real data from Redux store
+    const mockFaceSheetData = useMockData ? {
         caseNumber: "CS-2025-0717-001",
         caseStatus: "Active",
         admissionDate: "2025-07-10",
@@ -77,9 +103,9 @@ const Section6 = ({ clientID = "CLIENT-123" }) => {
         lengthOfStay: 7,
         targetLOS: 10,
         documentationComplete: false
-    };
+    } : faceSheet;
 
-    const mockMilestones = [
+    const mockMilestones = useMockData ? [
         { 
             id: 1, 
             title: "Initial Assessment Completed", 
@@ -114,49 +140,25 @@ const Section6 = ({ clientID = "CLIENT-123" }) => {
             completed: false, 
             dueDate: "2025-07-22",
             required: true 
-        },
-        { 
-            id: 6, 
-            title: "Final Documentation", 
-            completed: false, 
-            dueDate: "2025-07-24",
-            required: true 
         }
-    ];
+    ] : caseTimeline;
 
-    const mockCaseMetrics = {
-        totalMilestones: 6,
+    const mockCaseMetrics = useMockData ? {
+        totalMilestones: 5,
         completedMilestones: 3,
-        overdueTasks: 1,
+        overdueTasks: 0,
         documentsComplete: 12,
         documentsTotal: 18,
         satisfactionScore: 4.2,
         lastUpdate: "2025-07-17T10:30:00Z"
-    };
+    } : caseMetrics;
 
-    // ✅ Fetch data when component loads
-    useEffect(() => {
-        if (!useMockData) {
-            dispatch(fetchFaceSheet(clientID));
-            dispatch(fetchCaseStatus(clientID));
-            dispatch(fetchCaseTimeline(clientID));
-            dispatch(fetchCaseMetrics(clientID));
-        }
-    }, [dispatch, clientID, useMockData]);
-
-    // ✅ Handle tab change
-    const handleTabChange = (event, newValue) => {
-        setActiveTab(newValue);
-    };
-
-    // ✅ Get completion color
     const getCompletionColor = (percentage) => {
         if (percentage >= 80) return 'success';
         if (percentage >= 60) return 'warning';
         return 'error';
     };
 
-    // ✅ Get risk level color
     const getRiskColor = (level) => {
         switch (level?.toLowerCase()) {
             case 'low': return 'success';
@@ -166,7 +168,6 @@ const Section6 = ({ clientID = "CLIENT-123" }) => {
         }
     };
 
-    // ✅ Get priority level color
     const getPriorityColor = (level) => {
         switch (level?.toLowerCase()) {
             case 'low': return 'default';
@@ -176,7 +177,6 @@ const Section6 = ({ clientID = "CLIENT-123" }) => {
         }
     };
 
-    // ✅ Calculate days remaining
     const getDaysRemaining = (targetDate) => {
         if (!targetDate) return null;
         const today = new Date();
@@ -186,24 +186,33 @@ const Section6 = ({ clientID = "CLIENT-123" }) => {
         return diffDays;
     };
 
-    // ✅ Tab panel component
     const TabPanel = ({ children, value, index }) => (
         <div hidden={value !== index}>
             {value === index && <Box sx={{ pt: 3 }}>{children}</Box>}
         </div>
     );
 
-    // ✅ Case Face Sheet Dashboard
     const CaseFaceSheetDashboard = () => {
-        const data = useMockData ? mockFaceSheetData : faceSheet;
-        const milestones = useMockData ? mockMilestones : [];
-        const metrics = useMockData ? mockCaseMetrics : caseMetrics;
+        const data = mockFaceSheetData;
+        const milestones = mockMilestones;
+        const metrics = mockCaseMetrics;
 
-        if (faceSheetLoading && !useMockData) {
+        if (faceSheetLoading) {
             return (
                 <Box display="flex" justifyContent="center" py={4}>
                     <CircularProgress />
                 </Box>
+            );
+        }
+
+        if (faceSheetError) {
+            return (
+                <Alert severity="error" sx={{ mb: 3 }}>
+                    Error loading face sheet data: {faceSheetError}
+                    <Button onClick={() => dispatch(clearErrors())} sx={{ ml: 2 }}>
+                        Retry
+                    </Button>
+                </Alert>
             );
         }
 
@@ -218,7 +227,10 @@ const Section6 = ({ clientID = "CLIENT-123" }) => {
                                     Case Overview - {data.caseNumber}
                                 </Typography>
                                 <Tooltip title="Refresh Data">
-                                    <IconButton color="primary">
+                                    <IconButton 
+                                        color="primary"
+                                        onClick={() => dispatch(fetchFaceSheet(clientID))}
+                                    >
                                         <RefreshIcon />
                                     </IconButton>
                                 </Tooltip>

@@ -36,25 +36,44 @@ export const useAuth = () => {
   const permissions = useSelector(selectPermissions);
   const isLoadingGroups = useSelector(selectIsLoadingGroups);
 
-  const login = async () => {
-    try {
-      const response = await instance.loginPopup(loginRequest);
-      instance.setActiveAccount(response.account);
-      
-      // Dispatch Azure login to Redux
-      await dispatch(loginWithAzure({
-        azureAccount: response.account,
-        azureToken: response.accessToken,
-        msalInstance: instance,
-      })).unwrap();
-      
-      return response;
-    } catch (error) {
-      console.error('Login error:', error);
-      dispatch(setError(error.message || 'Login failed'));
-      throw error;
-    }
-  };
+  // Update your login function in useAuth.js with debugging
+const login = async () => {
+  try {
+    console.log('🔄 useAuth: Starting Azure login...');
+    
+    const response = await instance.loginPopup(loginRequest);
+    console.log('✅ useAuth: Azure login response:', response);
+    
+    instance.setActiveAccount(response.account);
+    
+    console.log('🔄 useAuth: Dispatching loginWithAzure action...');
+    console.log('📤 useAuth: Azure account data:', response.account);
+    console.log('📤 useAuth: Azure token:', response.accessToken ? 'Present' : 'Missing');
+    
+    // Dispatch Azure login to Redux
+    const result = await dispatch(loginWithAzure({
+      azureAccount: response.account,
+      azureToken: response.accessToken,
+      msalInstance: instance,
+    })).unwrap();
+    
+    console.log('✅ useAuth: loginWithAzure completed successfully:', result);
+    console.log('🔍 useAuth: Checking localStorage after login...');
+    console.log('📦 authToken:', localStorage.getItem('authToken'));
+    console.log('📦 userSession:', localStorage.getItem('userSession'));
+    
+    return response;
+  } catch (error) {
+    console.error('❌ useAuth: Login error:', error);
+    console.error('❌ useAuth: Error details:', {
+      message: error.message,
+      stack: error.stack,
+      name: error.name
+    });
+    dispatch(setError(error.message || 'Login failed'));
+    throw error;
+  }
+};
 
   const logout = async () => {
     try {

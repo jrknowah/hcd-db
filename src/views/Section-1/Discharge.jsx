@@ -1,6 +1,5 @@
-import React, { useEffect, useState } from "react";
-import { useSelector } from "react-redux";
-import axios from "axios";
+import React, { useEffect } from "react";
+import { useSelector, useDispatch } from "react-redux";
 import {
   Box,
   Button,
@@ -8,151 +7,83 @@ import {
   TextField,
   Typography,
   Divider,
-  Alert
+  Alert,
+  LinearProgress
 } from "@mui/material";
-import logUserAction from "../../config/logAction";
-
-const HCD_API = `${import.meta.env.VITE_API_URL}`;
-
-// ✅ Static mock data outside component
-const MOCK_CLIENT = {
-  clientID: 'mock-123',
-  clientFirstName: 'John',
-  clientLastName: 'Doe',
-};
-
-const MOCK_USER = {
-  id: 'mock-user-123',
-  name: 'Test User',
-};
-
-const MOCK_DISCHARGE_DATA = {
-  clientDischargeDate: "2024-03-15",
-  clientDischargeDiag: "Acute myocardial infarction, resolved",
-  clientDischargI: "Patient is a 65-year-old male who presented with acute MI. Recovery goals include cardiac rehabilitation and medication compliance.",
-  clientDischargII: "Patient will be discharged to home with spouse as primary caregiver.",
-  clientDischargIII: "Metoprolol 50mg BID, Lisinopril 10mg daily, Atorvastatin 40mg at bedtime. Take medications as prescribed.",
-  clientDischargIV: "Blood pressure monitor, pill organizer, emergency contact list.",
-  clientDischargV: "Home health nursing visits 2x weekly for vital signs and medication compliance assessment.",
-  clientDischargVI: "Follow-up with cardiologist in 1 week, primary care physician in 2 weeks.",
-  clientDischargVII: "Patient and spouse educated on heart-healthy diet, medication management, and when to seek emergency care.",
-};
+import {
+  fetchClientDischarge,
+  saveClientDischarge,
+  updateDischargeField,
+  clearError,
+  clearSuccess,
+  setCurrentClient,
+  selectDischargeData,
+  selectDischargeLoading,
+  selectDischargeSaving,
+  selectDischargeError,
+  selectDischargeSuccess,
+  selectDischargeDataLoaded
+} from "../../store/slices/dischargeSlice";
 
 const Discharge = ({ exportMode }) => {
-  // ✅ Simple selectors
-  const reduxSelectedClient = useSelector((state) => state?.clients?.selectedClient);
-  const reduxUser = useSelector((state) => state?.auth?.user);
-
-  // ✅ Simple computed values
-  const isDevelopment = import.meta.env.MODE === 'development';
-  const shouldUseMockData = isDevelopment && !import.meta.env.VITE_USE_REAL_DATA;
+  const dispatch = useDispatch();
   
-  const currentClient = shouldUseMockData && !reduxSelectedClient ? MOCK_CLIENT : reduxSelectedClient;
-  const currentUser = shouldUseMockData && !reduxUser ? MOCK_USER : reduxUser;
-
-  // ✅ Component state
-  const [form, setForm] = useState({
-    clientDischargeDate: "",
-    clientDischargeDiag: "",
-    clientDischargI: "",
-    clientDischargII: "",
-    clientDischargIII: "",
-    clientDischargIV: "",
-    clientDischargV: "",
-    clientDischargVI: "",
-    clientDischargVII: "",
-  });
-
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const [saveSuccess, setSaveSuccess] = useState(false);
-  const [dataLoaded, setDataLoaded] = useState(false);
+  // ✅ Redux selectors
+  const dischargeData = useSelector(selectDischargeData);
+  const loading = useSelector(selectDischargeLoading);
+  const saving = useSelector(selectDischargeSaving);
+  const error = useSelector(selectDischargeError);
+  const successMessage = useSelector(selectDischargeSuccess);
+  const dataLoaded = useSelector(selectDischargeDataLoaded);
+  
+  // ✅ Get current client and user from Redux
+  const currentClient = useSelector((state) => state?.clients?.selectedClient);
+  const currentUser = useSelector((state) => state?.auth?.user);
 
   // ✅ Load data when client changes
   useEffect(() => {
-    if (!currentClient?.clientID) return;
-    if (dataLoaded && currentClient.clientID === form.clientID) return;
-
-    setLoading(true);
-    setError(null);
-    setDataLoaded(false);
-
-    if (shouldUseMockData) {
-      // Mock data
-      setTimeout(() => {
-        setForm(MOCK_DISCHARGE_DATA);
-        setLoading(false);
-        setDataLoaded(true);
-      }, 500);
-      return;
+    if (currentClient?.clientID) {
+      dispatch(setCurrentClient(currentClient.clientID));
+      if (!dataLoaded) {
+        dispatch(fetchClientDischarge(currentClient.clientID));
+      }
     }
+  }, [dispatch, currentClient?.clientID, dataLoaded]);
 
-    // Real API call
-    axios
-      .get(`${HCD_API}/getClientDischarge/${currentClient.clientID}`)
-      .then((res) => {
-        if (res.data) {
-          setForm((prev) => ({
-            ...prev,
-            ...res.data,
-          }));
-        }
-        setDataLoaded(true);
-        setLoading(false);
-      })
-      .catch((err) => {
-        console.error("❌ Error fetching client discharge data:", err);
-        setError("Failed to load discharge data");
-        setLoading(false);
-      });
-  }, [currentClient?.clientID, shouldUseMockData]);
+  // ✅ Clear success message automatically
+  useEffect(() => {
+    if (successMessage) {
+      const timer = setTimeout(() => {
+        dispatch(clearSuccess());
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [successMessage, dispatch]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setForm((prev) => ({ ...prev, [name]: value }));
+    dispatch(updateDischargeField({ field: name, value }));
   };
 
   const handleSubmit = async () => {
     if (!currentClient) {
-      alert("⚠️ Please select a client before submitting.");
+      dispatch(setError("Please select a client before submitting."));
       return;
     }
 
-    setLoading(true);
-    setSaveSuccess(false);
-
     try {
-      if (shouldUseMockData) {
-        // Mock save
-        setTimeout(() => {
-          setSaveSuccess(true);
-          setLoading(false);
-          setTimeout(() => setSaveSuccess(false), 3000);
-        }, 1000);
-        return;
-      }
-
-      // Real API calls
-      await axios.post(`${HCD_API}/saveClientDischarge`, {
-        ...form,
+      await dispatch(saveClientDischarge({
         clientID: currentClient.clientID,
-      });
-
-      if (currentUser && currentUser.id !== 'mock-user-123') {
-        await logUserAction(currentUser, "SAVE_CLIENT_DISCHARGE", {
-          clientID: currentClient.clientID,
-          dischargeData: form,
-        });
-      }
-
-      setSaveSuccess(true);
-      setTimeout(() => setSaveSuccess(false), 3000);
+        dischargeData
+      })).unwrap();
     } catch (error) {
-      console.error("❌ Error saving discharge data:", error);
-      setError("Failed to save client discharge data");
-    } finally {
-      setLoading(false);
+      // Error is handled by Redux
+      console.error('Save failed:', error);
     }
+  };
+
+  const handleClearErrors = () => {
+    dispatch(clearError());
   };
 
   const sections = [
@@ -193,15 +124,24 @@ const Discharge = ({ exportMode }) => {
     },
   ];
 
+  // ✅ Loading state
+  if (loading && !dataLoaded) {
+    return (
+      <Box sx={{ p: 2 }}>
+        <Box display="flex" justifyContent="center" alignItems="center" py={4}>
+          <LinearProgress sx={{ width: '100%', mr: 2 }} />
+          <Typography variant="body2">Loading discharge data...</Typography>
+        </Box>
+      </Box>
+    );
+  }
+
   // ✅ No client selected
   if (!currentClient) {
     return (
       <Box sx={{ p: 2 }}>
         <Alert severity="info">
-          {isDevelopment 
-            ? `Development Mode: No client selected. Mock data ${shouldUseMockData ? 'enabled' : 'disabled'}.`
-            : "Please select a client to view discharge information."
-          }
+          Please select a client to view discharge information.
         </Alert>
       </Box>
     );
@@ -209,29 +149,26 @@ const Discharge = ({ exportMode }) => {
 
   return (
     <Box sx={{ p: 2 }}>
-      {/* ✅ Development indicator */}
-      {shouldUseMockData && (
-        <Alert severity="info" sx={{ mb: 2 }}>
-          🔧 Development Mode: Using mock discharge data for {currentClient.clientFirstName} {currentClient.clientLastName}
-        </Alert>
-      )}
-
       {/* ✅ Error display */}
       {error && (
-        <Alert severity="error" sx={{ mb: 2 }}>
+        <Alert severity="error" sx={{ mb: 2 }} onClose={handleClearErrors}>
           {error}
         </Alert>
       )}
 
       {/* ✅ Success message */}
-      {saveSuccess && (
+      {successMessage && (
         <Alert severity="success" sx={{ mb: 2 }}>
-          ✅ Client Discharge Data Saved Successfully!
+          {successMessage}
         </Alert>
       )}
 
       <Typography variant="h6" gutterBottom>
         Client Discharge Summary
+      </Typography>
+      
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+        Discharge planning for {currentClient.clientFirstName} {currentClient.clientLastName}
       </Typography>
 
       <Grid container spacing={2}>
@@ -242,9 +179,9 @@ const Discharge = ({ exportMode }) => {
             label="Discharge Date"
             name="clientDischargeDate"
             InputLabelProps={{ shrink: true }}
-            value={form.clientDischargeDate}
+            value={dischargeData.clientDischargeDate || ""}
             onChange={handleChange}
-            disabled={loading}
+            disabled={loading || saving}
           />
         </Grid>
         <Grid item xs={12} md={9}>
@@ -253,9 +190,9 @@ const Discharge = ({ exportMode }) => {
             multiline
             label="Primary Diagnosis"
             name="clientDischargeDiag"
-            value={form.clientDischargeDiag}
+            value={dischargeData.clientDischargeDiag || ""}
             onChange={handleChange}
-            disabled={loading}
+            disabled={loading || saving}
           />
         </Grid>
       </Grid>
@@ -275,9 +212,9 @@ const Discharge = ({ exportMode }) => {
             multiline
             rows={3}
             name={section.name}
-            value={form[section.name]}
+            value={dischargeData[section.name] || ""}
             onChange={handleChange}
-            disabled={loading}
+            disabled={loading || saving}
           />
         </Box>
       ))}
@@ -288,9 +225,9 @@ const Discharge = ({ exportMode }) => {
           variant="contained" 
           size="large" 
           onClick={handleSubmit}
-          disabled={loading}
+          disabled={loading || saving}
         >
-          {loading ? "Saving..." : "Save"}
+          {saving ? "Saving..." : "Save Discharge Summary"}
         </Button>
       )}
     </Box>

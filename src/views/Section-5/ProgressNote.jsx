@@ -545,12 +545,14 @@ const ProgressNote = ({ clientID }) => {
                     required
                   />
                 </Grid>
+              </Grid>
+              <Grid container spacing={2} sx={{ mt: 1 }}>
                 <Grid item xs={12} md={6}>
+                  <Typography variant="subtitle1" gutterBottom>Site</Typography>
                   <FormControl fullWidth required>
-                    <InputLabel>Site</InputLabel>
                     <Select
                       value={formData.nurseNoteSite}
-                      label="Site"
+                      label=""
                       onChange={(e) => handleInputChange('nurseNoteSite', e.target.value)}
                     >
                       {hhhSiteList.map((site) => (
@@ -560,11 +562,11 @@ const ProgressNote = ({ clientID }) => {
                   </FormControl>
                 </Grid>
                 <Grid item xs={12} md={6}>
+                  <Typography variant="subtitle1" gutterBottom>Category</Typography>
                   <FormControl fullWidth>
-                    <InputLabel>Category</InputLabel>
                     <Select
                       value={formData.noteCategory}
-                      label="Category"
+                      label=""
                       onChange={(e) => handleInputChange('noteCategory', e.target.value)}
                     >
                       {noteCategories.map((category) => (
@@ -574,11 +576,11 @@ const ProgressNote = ({ clientID }) => {
                   </FormControl>
                 </Grid>
                 <Grid item xs={12} md={6}>
+                  <Typography variant="subtitle1" gutterBottom>Priority</Typography>
                   <FormControl fullWidth>
-                    <InputLabel>Priority</InputLabel>
                     <Select
                       value={formData.notePriority}
-                      label="Priority"
+                      label=""
                       onChange={(e) => handleInputChange('notePriority', e.target.value)}
                     >
                       {notePriorities.map((priority) => (
@@ -587,12 +589,15 @@ const ProgressNote = ({ clientID }) => {
                     </Select>
                   </FormControl>
                 </Grid>
+              </Grid>
+              <Grid container spacing={2} sx={{ mt: 1 }}>
                 <Grid item xs={12}>
+                  <Typography variant="subtitle1" gutterBottom>Progress Note</Typography>
                   <TextField
                     fullWidth
                     multiline
                     rows={4}
-                    label="Progress Note"
+                    label=""
                     value={formData.nurseNote}
                     onChange={(e) => handleInputChange('nurseNote', e.target.value)}
                     required

@@ -1,6 +1,11 @@
+// Router.jsx - Updated to use App as root layout
 import React, { lazy } from 'react';
-import { Navigate, createBrowserRouter } from 'react-router';
+import { Navigate, createBrowserRouter } from 'react-router-dom';
 import Loadable from '../layouts/full/shared/loadable/Loadable';
+import NavigationDebugger from '../components/debug/NavigationDebugger';
+
+// Import App as the root layout
+import App from '../App';
 
 /* ***Layouts**** */
 const FullLayout = Loadable(lazy(() => import('../layouts/full/FullLayout')));
@@ -31,33 +36,40 @@ const Maintenance = Loadable(lazy(() => import('../views/authentication/Maintena
 const routesConfig = [
   {
     path: '/',
-    element: <FullLayout />,
+    element: <App />, // ✅ App is now the root layout with theme/auth
     children: [
-      { path: '/', element: <Navigate to="/dashboard" /> },
-      { path: '/sample-page', exact: true, element: <SamplePage /> },
-      { path: '/dashboard', exact: true, element: <Dashboard /> },
-      { path: '/Section1', name: 'Section 1', exact: true, element: <Identification /> },
-      { path: '/Section2', name: 'Section 2', exact: true, element: <Section2 /> },
-      { path: '/Section3', name: 'Section 3', exact: true, element: <Section3 /> },
-      { path: '/Section4', name: 'Section 4', exact: true, element: <Section4 /> },
-      { path: '/Section5', name: 'Section 5', exact: true, element: <Section5 /> },
-      { path: '/Section6', name: 'Section 6', exact: true, element: <Section6 /> },
-      { path: '*', element: <Navigate to="/auth/404" /> },
-    ],
-  },
-  {
-    path: '/auth',
-    element: <BlankLayout />,
-    children: [
-      { path: '404', element: <Error /> },
-      { path: '*', element: <Navigate to="/auth/404" /> },
-      { path: '/auth/auth1/login', element: <Login /> },
-      { path: '/auth/auth2/login', element: <Login2 /> },
-      { path: '/auth/auth1/register', element: <Register /> },
-      { path: '/auth/auth2/register', element: <Register2 /> },
-      { path: '/auth/auth1/forgot-password', element: <ForgotPassword /> },
-      { path: '/auth/auth2/forgot-password', element: <ForgotPassword2 /> },
-      { path: '/auth/maintenance', element: <Maintenance /> },
+      {
+        path: '/',
+        element: <FullLayout />, // ✅ FullLayout is a child of App
+        children: [
+          { path: '/', element: <Navigate to="/dashboard" /> },
+          { path: '/debug', element: <NavigationDebugger /> },
+          { path: '/sample-page', exact: true, element: <SamplePage /> },
+          { path: '/dashboard', exact: true, element: <Dashboard /> },
+          { path: '/Section1', name: 'Section 1', exact: true, element: <Identification /> },
+          { path: '/Section2', name: 'Section 2', exact: true, element: <Section2 /> },
+          { path: '/Section3', name: 'Section 3', exact: true, element: <Section3 /> },
+          { path: '/Section4', name: 'Section 4', exact: true, element: <Section4 /> },
+          { path: '/Section5', name: 'Section 5', exact: true, element: <Section5 /> },
+          { path: '/Section6', name: 'Section 6', exact: true, element: <Section6 /> },
+          { path: '*', element: <Navigate to="/auth/404" /> },
+        ],
+      },
+      {
+        path: '/auth',
+        element: <BlankLayout />,
+        children: [
+          { path: '404', element: <Error /> },
+          { path: '*', element: <Navigate to="/auth/404" /> },
+          { path: '/auth/auth1/login', element: <Login /> },
+          { path: '/auth/auth2/login', element: <Login2 /> },
+          { path: '/auth/auth1/register', element: <Register /> },
+          { path: '/auth/auth2/register', element: <Register2 /> },
+          { path: '/auth/auth1/forgot-password', element: <ForgotPassword /> },
+          { path: '/auth/auth2/forgot-password', element: <ForgotPassword2 /> },
+          { path: '/auth/maintenance', element: <Maintenance /> },
+        ],
+      },
     ],
   },
 ];
@@ -65,5 +77,4 @@ const routesConfig = [
 // Create the router
 const router = createBrowserRouter(routesConfig);
 
-// Export the router as default
 export default router;
