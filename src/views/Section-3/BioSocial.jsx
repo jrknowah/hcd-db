@@ -156,7 +156,7 @@ const BioSocial = () => {
     useEffect(() => {
         if (currentClient?.clientID) {
             setLoading(true);
-            axios.get(`${HCD_API}/getClientBioSocial/${currentClient.clientID}`)
+            axios.get(`${HCD_API}/bio-social/${currentClient.clientID}`)
                 .then((res) => {
                     if (res.data) {
                         setBioSocialForm({
@@ -222,7 +222,7 @@ const BioSocial = () => {
                 clientID: currentClient.clientID
             };
 
-            await axios.post(`${HCD_API}/saveClientBioSocial`, formDataToSend);
+            await axios.post(`${HCD_API}/bio-social/${currentClient.clientID}`, formDataToSend);
 
             if (user) {
                 await logUserAction(user, "SAVE_BIOSOCIAL", {
