@@ -24,7 +24,7 @@ const MOCK_ARREST_DATA = [
     location: 'Los Angeles, CA',
     timeServed: '1 day',
     result: 'Fine paid',
-    createdAt: '2024-03-01T10:00:00Z'
+    createdAt: '2024-03-01T10:00:00Z' 
   },
   {
     id: 2,

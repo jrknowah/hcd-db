@@ -204,7 +204,7 @@ export const fetchFinancialSummary = createAsyncThunk(
             return rejectWithValue(error.response?.data || 'Failed to fetch financial summary');
         }
     }
-);
+); 
 
 // ✅ Initial State
 const initialState = {

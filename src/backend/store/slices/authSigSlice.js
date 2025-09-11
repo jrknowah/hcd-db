@@ -27,7 +27,7 @@ export const fetchAuthorizationForms = createAsyncThunk(
                             "Privacy Practices Notice": true,
                             "Consent for Treatment and Services": true,
                             "clientAuthHI": true,
-                            "clientAuthRel": true
+                            "clientAuthRel": true 
                         },
                         signature: "John Doe",
                         completionPercentage: 100

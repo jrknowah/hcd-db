@@ -23,7 +23,7 @@ const mockAssessmentData = {
     createdBy: "system@example.com",
     createdAt: "2025-07-10T09:00:00Z",
     updatedBy: "dr.rodriguez@example.com",
-    updatedAt: "2025-07-17T14:30:00Z"
+    updatedAt: "2025-07-17T14:30:00Z" 
 };
 
 const mockAssessmentStatus = {
