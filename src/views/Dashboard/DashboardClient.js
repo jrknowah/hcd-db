@@ -61,7 +61,9 @@ import {
   selectClientsError,
   fetchClientById,
   setSelectedClient
-} from 'src/store/slices/clientSlice';
+} from '../../backend/store/slices/clientSlice';
+
+
 
 const DashboardClient = () => {
   const dispatch = useDispatch();

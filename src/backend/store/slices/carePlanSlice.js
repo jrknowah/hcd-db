@@ -209,7 +209,7 @@ const initialState = {
   status: "idle", // idle | loading | succeeded | failed
   error: null,
   lastUpdated: null,
-};
+}; 
 
 const carePlanSlice = createSlice({
   name: "carePlans",
