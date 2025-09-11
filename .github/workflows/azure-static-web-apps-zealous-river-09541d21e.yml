@@ -43,8 +43,8 @@ jobs:
         env:
           VITE_AZURE_CLIENT_ID: ${{ secrets.VITE_AZURE_CLIENT_ID }}
           VITE_AZURE_TENANT_ID: ${{ secrets.VITE_AZURE_TENANT_ID }}
-          VITE_AZURE_REDIRECT_URI: ${{ secrets.VITE_AZURE_REDIRECT_URI }}
-          VITE_API_BASE_URL: ${{ secrets.VITE_API_BASE_URL }}
+          VITE_AZURE_REDIRECT_URI: https://zealous-river-09541d21e.1.azurestaticapps.net
+          VITE_API_BASE_URL: https://hcd-db-backend-fdfmekfgehbhf0db.westus2-01.azurewebsites.net
   close_pull_request_job:
     if: github.event_name == 'pull_request' && github.event.action == 'closed'
     runs-on: ubuntu-latest
@@ -55,3 +55,4 @@ jobs:
         uses: Azure/static-web-apps-deploy@v1
         with:
           action: "close"
+
