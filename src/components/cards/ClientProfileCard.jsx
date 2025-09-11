@@ -38,7 +38,7 @@ import {
   Visibility as VisibilityIcon,
   Home as HomeIcon,
 } from '@mui/icons-material';
-import { fetchClientById } from 'src/store/slices/clientSlice';
+import { fetchClientById } from '../../backend/store/slices/clientSlice';
 
 const ClientProfileCard = ({ 
   clientID, 
