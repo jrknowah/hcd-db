@@ -37,7 +37,7 @@ import {
   addClient, 
   updateClient, 
   setSelectedClient 
-} from 'src/store/slices/clientSlice';
+} from '../../backend/store/slices/clientSlice';
 
 const NewClient = ({ onClientCreated, editMode = false, clientData = null }) => {
   const dispatch = useDispatch();
