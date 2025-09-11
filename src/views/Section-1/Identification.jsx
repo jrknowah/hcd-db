@@ -18,7 +18,7 @@ import axios from 'axios';
 import html2pdf from 'html2pdf.js';
 import { azureBlobService } from '../../backend/services/azureBlobService'; // Import our service
 import { useSearchParams } from 'react-router-dom';
-import { fetchClientById, setSelectedClient } from 'src/store/slices/clientSlice';
+import { fetchClientById, setSelectedClient } from '../../backend/store/slices/clientSlice';
 import logUserAction from '../../backend/config/logAction';
 import ClientFace from './ClientFace';
 import Referrals from './Referrals';
