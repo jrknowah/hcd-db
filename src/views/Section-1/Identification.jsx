@@ -16,10 +16,10 @@ import {
 import { useSelector, useDispatch } from 'react-redux';
 import axios from 'axios';
 import html2pdf from 'html2pdf.js';
-import { azureBlobService } from '../../services/azureBlobService'; // Import our service
+import { azureBlobService } from '../../backend/services/azureBlobService'; // Import our service
 import { useSearchParams } from 'react-router-dom';
 import { fetchClientById, setSelectedClient } from 'src/store/slices/clientSlice';
-import logUserAction from '../../config/logAction';
+import logUserAction from '../../backend/config/logAction';
 import ClientFace from './ClientFace';
 import Referrals from './Referrals';
 import Discharge from './Discharge';

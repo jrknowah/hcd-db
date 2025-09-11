@@ -50,7 +50,7 @@ import {
   selectFormLoading,
   selectSaving,
   selectSaveSuccess
-} from '../../store/slices/authSigSlice';
+} from '../../backend/store/slices/authSigSlice';
 
 const PrivacyPractice = ({ clientID: propClientID }) => {
   const dispatch = useDispatch();

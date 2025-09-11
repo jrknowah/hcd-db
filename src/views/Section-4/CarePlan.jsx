@@ -34,8 +34,8 @@ import {
 } from "@mui/icons-material";
 import PropTypes from "prop-types";
 import { useDispatch, useSelector } from "react-redux";
-import { fetchCarePlans, addCarePlan, editCarePlan, deleteCarePlan } from "../../store/slices/carePlanSlice";
-import logUserAction from "../../config/logAction";
+import { fetchCarePlans, addCarePlan, editCarePlan, deleteCarePlan } from "../../backend/store/slices/carePlanSlice";
+import logUserAction from "../../backend/config/logAction";
 
 // ✅ Static mock data outside component
 const MOCK_CLIENT = {

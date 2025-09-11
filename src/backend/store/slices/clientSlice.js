@@ -1,6 +1,6 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import axios from 'axios';
-import mockData from '../../utils/mockData';
+import mockData from '../../../utils/mockData';
 
 
 

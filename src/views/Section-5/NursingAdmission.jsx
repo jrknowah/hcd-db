@@ -46,8 +46,8 @@ import {
   fetchNursingAdmission,
   saveNursingAdmission,
   setMockData
-} from "../../store/slices/nursingAdmissionSlice";
-import logUserAction from "../../config/logAction";
+} from "../../backend/store/slices/nursingAdmissionSlice";
+import logUserAction from "../../backend/config/logAction";
 import {
   abdomen,
   ambulation, communication,

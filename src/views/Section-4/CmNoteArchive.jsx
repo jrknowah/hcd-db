@@ -19,7 +19,7 @@ import {
   Error as ErrorIcon
 } from "@mui/icons-material";
 import { useDispatch, useSelector } from "react-redux";
-import { uploadNoteFile } from "../../store/slices/noteArchiveSlice";
+import { uploadNoteFile } from "../../backend/store/slices/noteArchiveSlice";
 
 const CmNoteArchive = () => {
   const dispatch = useDispatch();

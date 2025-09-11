@@ -35,7 +35,7 @@ import { ynd } from "../../data/arrayList";
 import { 
     fetchIDTNoteProvider, 
     saveIDTNoteProvider
-} from "../../store/slices/idtProviderSlice";
+} from "../../backend/store/slices/idtProviderSlice";
 
 const IDTNoteProvider = () => {
     const dispatch = useDispatch();

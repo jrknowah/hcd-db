@@ -55,7 +55,7 @@ import {
   setCategoryFilter,
   setStatusFilter,
   setSearchQuery
-} from "../../store/slices/personalInventorySlice";
+} from "../../backend/store/slices/personalInventorySlice";
 
 // Styled components for file upload
 const VisuallyHiddenInput = styled('input')({

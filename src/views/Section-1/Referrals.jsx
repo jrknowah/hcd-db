@@ -31,7 +31,7 @@ import {
   selectReferralsSuccess,
   selectReferralsDataLoaded,
   selectReferralUploadProgress
-} from "../../store/slices/referralSlice";
+} from "../../backend/store/slices/referralSlice";
 
 const Referrals = ({ exportMode }) => {
   const dispatch = useDispatch();

@@ -47,7 +47,7 @@ import {
   fetchDocumentSummary,
   fetchDocumentCategories,
   downloadDocument
-} from "../../store/slices/miscDocSlice";
+} from "../../backend/store/slices/miscDocSlice";
 
 // Styled components for file upload
 const VisuallyHiddenInput = styled('input')({

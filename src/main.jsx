@@ -1,18 +1,23 @@
 // Fixed main.jsx with proper MSAL setup
 import React, { Suspense } from 'react';
 import ReactDOM from 'react-dom/client';
+
+// ✅ Add Buffer polyfill for Azure Blob Storage SDK
+import { Buffer } from 'buffer';
+window.Buffer = Buffer;
+
 import App from './App';
 import Spinner from './views/spinner/Spinner';
 import './utils/i18n';
 import { BrowserRouter } from 'react-router-dom';
 import { CustomizerContextProvider } from './context/CustomizerContext';
 import { Provider } from 'react-redux';
-import store from './store/store';
+import store from './backend/store/store';
 
 // ✅ Add back Azure AD / MSAL imports
 import { PublicClientApplication } from '@azure/msal-browser';
 import { MsalProvider } from '@azure/msal-react';
-import { msalConfig, validateConfig } from './config/authConfig';
+import { msalConfig, validateConfig } from './backend/config/authConfig';
 
 // Validate Azure configuration before starting
 if (!validateConfig()) {

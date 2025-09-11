@@ -16,9 +16,9 @@ import {
   removeHospitalizationLocal,
   addMedicationLocal,
   removeMedicationLocal
-} from '../../store/slices/MentalHealthSlice';
-import { fetchArrestData, saveArrestData } from '../../store/slices//arrestActions';
-import logUserAction from "../../config/logAction";
+} from '../../backend/store/slices/MentalHealthSlice';
+import { fetchArrestData, saveArrestData } from '../../backend/store/slices/arrestActions';
+import logUserAction from "../../backend/config/logAction";
 import {
   cmOb1, cmOb2, cmOb3, cmOb4, cmOb5, cmOb6, cmOb7, cmOb8, cmOb9, cmOb10, cmOb11, cmObNone,
   legalList, energyLevelList, gadList, mhList, sleepPatternList, substanceAbuseOften, 

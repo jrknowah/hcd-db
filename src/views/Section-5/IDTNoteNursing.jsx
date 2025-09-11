@@ -34,8 +34,8 @@ import {
   fetchIDTNoteNursing,
   saveIDTNoteNursing,
   setMockData
-} from "../../store/slices/idtNursingSlice";
-import logUserAction from "../../config/logAction";
+} from "../../backend/store/slices/idtNursingSlice";
+import logUserAction from "../../backend/config/logAction";
 
 const IDTNoteNursing = ({ clientID }) => {
   const dispatch = useDispatch();

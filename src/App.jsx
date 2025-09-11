@@ -5,7 +5,7 @@ import RTL from './layouts/full/shared/customizer/RTL';
 import { CssBaseline, ThemeProvider, Box, Typography, CircularProgress } from '@mui/material';
 import { CustomizerContext } from 'src/context/CustomizerContext';
 import { MsalProvider } from '@azure/msal-react';
-import { msalInstance, initializeMsal } from './config/authConfig';
+import { msalInstance, initializeMsal } from './backend/config/authConfig';
 import AuthGuard from './components/Auth/AuthGuard';
 import AssessCarePlans from './views/Section-3/AssessCarePlans';
 

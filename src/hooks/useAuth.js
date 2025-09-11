@@ -16,9 +16,9 @@ import {
   selectUserRoles,
   selectPermissions,
   selectIsLoadingGroups,
-} from '../store/slices/authSlice';
-import { hasAccessToSection } from '../config/groupConfig';
-import { loginRequest } from '../config/authConfig';
+} from '../backend/store/slices/authSlice';
+import { hasAccessToSection } from '../backend/config/groupConfig';
+import { loginRequest } from '../backend/config/authConfig';
 
 export const useAuth = () => {
   const { instance, accounts } = useMsal();

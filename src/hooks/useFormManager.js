@@ -15,7 +15,7 @@ import {
   selectAutoSaving,
   selectSaveSuccess,
   selectUnsavedChanges
-} from '../store/slices/authSigSlice';
+} from '../backend/store/slices/authSigSlice';
 
 /**
  * Custom hook for managing form state, validation, and auto-save functionality

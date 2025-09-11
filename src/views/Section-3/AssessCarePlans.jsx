@@ -41,7 +41,7 @@ import {
     fetchAssessmentData,
     fetchAssessmentStatus,
     fetchAssessmentMetrics
-} from "../../store/slices/assessCarePlansSlice";
+} from "../../backend/store/slices/assessCarePlansSlice";
 import { acpList } from "../../data/arrayList";
 
 // Import child components

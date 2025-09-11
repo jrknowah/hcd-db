@@ -30,8 +30,8 @@ import {
 import PropTypes from "prop-types";
 import { useDispatch, useSelector } from "react-redux";
 import Select from 'react-select';
-import { addEncounterNote, editEncounterNote, fetchEncounterNotes } from '../../store/slices/encounterNoteSlice';
-import logUserAction from "../../config/logAction";
+import { addEncounterNote, editEncounterNote, fetchEncounterNotes } from '../../backend/store/slices/encounterNoteSlice';
+import logUserAction from "../../backend/config/logAction";
 import { hhhSiteList2, cmNoteType } from "../../data/arrayList";
 
 // ✅ Static mock data outside component

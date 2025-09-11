@@ -61,7 +61,7 @@ import {
   selectAutoSaving,
   selectSaveSuccess,
   selectUnsavedChanges
-} from '../../store/slices/authSigSlice';
+} from '../../backend/store/slices/authSigSlice';
 
 // Import custom hooks
 import { useFormAccordion } from '../../hooks/useFormManager';

@@ -23,7 +23,7 @@ import {
   selectDischargeError,
   selectDischargeSuccess,
   selectDischargeDataLoaded
-} from "../../store/slices/dischargeSlice";
+} from "../../backend/store/slices/dischargeSlice";
 
 const Discharge = ({ exportMode }) => {
   const dispatch = useDispatch();

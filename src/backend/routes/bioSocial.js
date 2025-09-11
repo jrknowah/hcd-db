@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const sql = require('mssql');
-const { logUserAction } = require('../config/logAction');
+const { logUserAction } = require('../backend/config/logAction');
 
 // Try to load azureSql module (following your existing pattern)
 let getDbConnection;

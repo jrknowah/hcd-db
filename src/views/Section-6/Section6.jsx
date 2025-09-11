@@ -46,7 +46,7 @@ import {
     fetchCaseMetrics,
     setActiveTab,
     clearErrors
-} from "../../store/slices/section6Slice";
+} from "../../backend/store/slices/section6Slice";
 import { section6List } from "../../data/arrayList";
 
 // Import child components

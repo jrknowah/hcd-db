@@ -42,7 +42,7 @@ import {
   selectIDTSaving,
   selectIDTSaveSuccess,
   selectAPIConnected
-} from "../../store/slices/idtNoteCmSlice";
+} from "../../backend/store/slices/idtNoteCmSlice";
 
 // ✅ SIMPLE: Inline data - no external dependencies
 const identityList = [

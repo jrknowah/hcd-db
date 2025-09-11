@@ -7,7 +7,7 @@ const fs = require('fs').promises;
 const crypto = require('crypto');
 const { v4: uuidv4 } = require('uuid');
 const mime = require('mime-types');
-const { logUserAction } = require('../config/logAction');
+const { logUserAction } = require('../backend/config/logAction');
 
 // ✅ Database connection configuration
 // Update this to match your Azure SQL configuration

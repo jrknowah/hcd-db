@@ -44,7 +44,7 @@ import {
     Label
 } from '@mui/icons-material';
 import { useSelector, useDispatch } from "react-redux";
-import logUserAction from "../../config/logAction";
+import logUserAction from "../../backend/config/logAction";
 import {
     cmOb1, cmOb2, cmOb3, cmOb4, cmOb5, cmOb6, cmOb7, cmOb8, cmOb9, cmOb10, cmOb11, cmObNone
 } from "../../data/arrayList";
@@ -60,7 +60,7 @@ import {
     selectCompletionStatus,
     selectIsLoading,
     selectIsSaving
-} from "../../store/slices/reassessmentSlice";
+} from "../../backend/store/slices/reassessmentSlice";
 
 const ReAssessment = () => {
     const dispatch = useDispatch();

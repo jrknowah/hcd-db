@@ -11,8 +11,8 @@ import {
   selectAuthLoading,
   selectAuthError,
   selectIsAuthenticated,
-} from '../../store/slices/authSlice';
-import { GROUP_TO_ROLE, ROLE_PERMISSIONS } from '../../config/groupConfig';
+} from '../../backend/store/slices/authSlice';
+import { GROUP_TO_ROLE, ROLE_PERMISSIONS } from '../../backend/config/groupConfig';
 import Login from '../../views/authentication/auth1/Login';
 
 // Helper functions

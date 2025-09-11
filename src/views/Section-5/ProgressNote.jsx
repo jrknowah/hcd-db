@@ -52,8 +52,8 @@ import {
   editProgressNote,
   deleteProgressNote,
   fetchNotesSummary
-} from "../../store/slices/progressNoteSlice";
-import logUserAction from "../../config/logAction";
+} from "../../backend/store/slices/progressNoteSlice";
+import logUserAction from "../../backend/config/logAction";
 import { hhhSiteList } from "../../data/arrayList";
 
 const ProgressNote = ({ clientID }) => {

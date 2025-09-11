@@ -46,7 +46,7 @@ import {
   selectFormLoading,
   selectSaving,
   selectSaveSuccess
-} from '../../store/slices/authSigSlice';
+} from '../../backend/store/slices/authSigSlice';
 
 const LAHMIS = ({ clientID: propClientID }) => {
   const dispatch = useDispatch();

@@ -10,7 +10,7 @@ import { Link } from 'react-router-dom';
 import ProfileImg from 'src/assets/images/profile/user-1.jpg';
 import SidebarProfileBgImg from 'src/assets/images/backgrounds/sidebar-profile-bg.jpg';
 import { CustomizerContext } from "src/context/CustomizerContext";
-import { useAzureProfile } from '../../../../../services/azureProfileService'; // Adjust path as needed
+import { useAzureProfile } from '../../../../../backend/services/azureProfileService'; // Adjust path as needed
 
 const StyledMenu = styled((props) => (
   <Menu

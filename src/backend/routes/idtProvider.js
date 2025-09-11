@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const sql = require('mssql');
-const { logUserAction } = require('../config/logAction');
+const { logUserAction } = require('../backend/config/logAction');
 
 // ✅ Database connection configuration
 // Update this to match your Azure SQL configuration

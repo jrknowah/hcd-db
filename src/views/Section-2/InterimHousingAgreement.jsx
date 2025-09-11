@@ -54,7 +54,7 @@ import {
   selectAutoSaving,
   selectSaveSuccess,
   selectUnsavedChanges
-} from '../../store/slices/authSigSlice';
+} from '../../backend/store/slices/authSigSlice';
 
 const InterimHousingAgreement = ({ clientID: propClientID, formConfig }) => {
   const theme = useTheme();

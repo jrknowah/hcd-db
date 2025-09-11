@@ -47,8 +47,8 @@ import {
   editAppointment,
   deleteAppointment,
   fetchClientAllergies,
-} from "../../store/slices/medFaceSheetSlice";
-import logUserAction from "../../config/logAction";
+} from "../../backend/store/slices/medFaceSheetSlice";
+import logUserAction from "../../backend/config/logAction";
 import { medCond, allergyList } from "../../data/arrayList";
 
 // Custom styles for react-select to match Material-UI theme

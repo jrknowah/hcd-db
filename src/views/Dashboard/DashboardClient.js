@@ -163,7 +163,7 @@ const DashboardClient = () => {
         setSelectedClientID(clientIDFromURL);
       }
     }
-  }, [clientIDFromURL, selectedClient, loading, dispatch]);
+  }, [ searchParams, selectedClient, loading, dispatch]);
 
   // Fetch clients on component mount
   useEffect(() => {

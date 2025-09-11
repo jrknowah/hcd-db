@@ -5,7 +5,7 @@ import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import axios from 'axios';
 import { createSelector } from '@reduxjs/toolkit';
 // ✅ FIXED: Changed 'groupConfig' to 'groupsConfig' (added 's')
-import { GROUP_TO_ROLE, ROLE_PERMISSIONS, hasAccessToSection } from '../../config/groupConfig';
+import { GROUP_TO_ROLE, ROLE_PERMISSIONS, hasAccessToSection } from '../../backend/config/groupConfig';
 
 const API_URL = `${import.meta.env.VITE_API_URL}/auth`;
 

@@ -46,7 +46,7 @@ import {
 import { useDispatch, useSelector } from "react-redux";
 import PropTypes from "prop-types";
 import Select from 'react-select';
-import { fetchMedScreening, saveMedScreening } from "../../store/slices/medScreeningSlice";
+import { fetchMedScreening, saveMedScreening } from "../../backend/store/slices/medScreeningSlice";
 import {
   medCond2, medCond3,
   medCond4, medCond5, medicationData

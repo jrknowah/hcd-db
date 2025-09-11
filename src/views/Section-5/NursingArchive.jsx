@@ -56,7 +56,7 @@ import {
     downloadDocument,
     searchDocuments,
     fetchCategories
-} from "../../store/slices/nursingArchiveSlice";
+} from "../../backend/store/slices/nursingArchiveSlice";
 
 const NursingArchive = ({ clientID = "CLIENT-123" }) => {
     const dispatch = useDispatch();

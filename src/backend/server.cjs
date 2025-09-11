@@ -8,7 +8,7 @@ let dbConnected = false;
 let dbModule = null;
 
 try {
-  dbModule = require("./azureSql.js");
+  dbModule = require("./store/azureSql.js");
   dbModule.getPool()
     .then(() => {
       console.log('✅ Database connected successfully');
@@ -136,55 +136,55 @@ let mentalArchiveRouterLoaded = false;
 
 // ✅ NEW: Try to load your actual routes first
 try {
-  const clientsRouter = require('../routes/clients.js');
+  const clientsRouter = require('./routes/clients.js');
   app.use('/api/clients', clientsRouter);
-  console.log('✅ Real clients router loaded from ../routes/clients.js');
+  console.log('✅ Real clients router loaded from ./routes/clients.js');
   clientsRouterLoaded = true;
 } catch (err) {
-  console.log('⚠️  Could not load ../routes/clients.js:', err.message);
+  console.log('⚠️  Could not load ./routes/clients.js:', err.message);
 }
 
 try {
-  const clientFaceRouter = require('../routes/clientFace.js');
+  const clientFaceRouter = require('./routes/clientFace.js');
   app.use('/api', clientFaceRouter);
-  console.log('✅ ClientFace router loaded from ../routes/clientFace.js');
+  console.log('✅ ClientFace router loaded from ./routes/clientFace.js');
   clientFaceRouterLoaded = true;
 } catch (err) {
-  console.log('⚠️  Could not load ../routes/clientFace.js:', err.message);
+  console.log('⚠️  Could not load ./routes/clientFace.js:', err.message);
 }
 
 try {
-  const referralsRouter = require('../routes/referrals.js');
+  const referralsRouter = require('./routes/referrals.js');
   app.use('/api', referralsRouter);
-  console.log('✅ Referrals router loaded from ../routes/referrals.js');
+  console.log('✅ Referrals router loaded from ./routes/referrals.js');
   referralsRouterLoaded = true;
 } catch (err) {
-  console.log('⚠️  Could not load ../routes/referrals.js:', err.message);
+  console.log('⚠️  Could not load ./routes/referrals.js:', err.message);
 }
 
 try {
-  const dischargeRouter = require('../routes/discharge.js');
+  const dischargeRouter = require('./routes/discharge.js');
   app.use('/api', dischargeRouter);
-  console.log('✅ Discharge router loaded from ../routes/discharge.js');
+  console.log('✅ Discharge router loaded from ./routes/discharge.js');
   dischargeRouterLoaded = true;
 } catch (err) {
-  console.log('⚠️  Could not load ../routes/discharge.js:', err.message);
+  console.log('⚠️  Could not load ./routes/discharge.js:', err.message);
 }
 
 // ✅ NEW: Try to load files router for Azure Blob Storage
 try {
-  const filesRouter = require('../routes/files.js');
+  const filesRouter = require('./routes/files.js');
   app.use('/api', filesRouter);
-  console.log('✅ Files router loaded from ../routes/files.js');
+  console.log('✅ Files router loaded from ./routes/files.js');
   filesRouterLoaded = true;
 } catch (err) {
-  console.log('⚠️  Could not load ../routes/files.js:', err.message);
+  console.log('⚠️  Could not load ./routes/files.js:', err.message);
 }
 //Section 3: Client Assessment===========================================================
 
 // Add these to your server.js after line 50
 try {
-  const bioSocialRouter = require('../routes/bioSocial.js');
+  const bioSocialRouter = require('./routes/bioSocial.js');
   app.use('/api', bioSocialRouter);
   console.log('✅ Bio-Social router loaded');
   bioSocialRouterLoaded = true;
@@ -193,7 +193,7 @@ try {
 }
 
 try {
-  const mentalHealthRouter = require('../routes/mentalHealth.js');
+  const mentalHealthRouter = require('./routes/mentalHealth.js');
   app.use('/api', mentalHealthRouter);
   console.log('✅ Mental Health router loaded');
   mentalHealthRouterLoaded = true;
@@ -202,7 +202,7 @@ try {
 }
 
 try {
-  const reassessmentRouter = require('../routes/reassessment.js');
+  const reassessmentRouter = require('./routes/reassessment.js');
   app.use('/api', reassessmentRouter);
   console.log('✅ Reassessment router loaded');
   reassessmentRouterLoaded = true;
@@ -211,32 +211,32 @@ try {
 }
 // ===== MENTAL ARCHIVE ROUTES =====
 try {
-  const mentalArchiveRouter = require('../routes/MentalArchive.js');
+  const mentalArchiveRouter = require('./routes/MentalArchive.js');
   app.use('/api', mentalArchiveRouter);
-  console.log('✅ Mental Archive router loaded from ../routes/MentalArchive.js');
+  console.log('✅ Mental Archive router loaded from ./routes/MentalArchive.js');
   mentalArchiveRouterLoaded = true;
 } catch (err) {
-  console.log('⚠️  Could not load ../routes/MentalArchive.js:', err.message);
+  console.log('⚠️  Could not load ./routes/MentalArchive.js:', err.message);
 }
 
 // ✅ NEW: Section 4 Routes - CarePlans
 try {
-  const carePlansRouter = require('../routes/carePlan.js');
+  const carePlansRouter = require('./routes/carePlan.js');
   app.use('/api/care-plans', carePlansRouter);
-  console.log('✅ CarePlans router loaded from ../routes/carePlans.js');
+  console.log('✅ CarePlans router loaded from ./routes/carePlans.js');
   carePlansRouterLoaded = true;
 } catch (err) {
-  console.log('⚠️  Could not load ../routes/carePlans.js:', err.message);
+  console.log('⚠️  Could not load ./routes/carePlans.js:', err.message);
 }
 
 // ✅ NEW: Section 4 Routes - EncounterNotes
 try {
-  const encounterNotesRouter = require('../routes/encounterNote.js');
+  const encounterNotesRouter = require('./routes/encounterNote.js');
   app.use('/api/encounter-notes', encounterNotesRouter);
-  console.log('✅ EncounterNotes router loaded from ../routes/encounterNotes.js');
+  console.log('✅ EncounterNotes router loaded from ./routes/encounterNotes.js');
   encounterNotesRouterLoaded = true;
 } catch (err) {
-  console.log('⚠️  Could not load ../routes/encounterNotes.js:', err.message);
+  console.log('⚠️  Could not load ./routes/encounterNotes.js:', err.message);
 }
 // Health check endpoint
 app.get('/api/health', (req, res) => {
@@ -448,81 +448,81 @@ console.log('🏥 Loading Section 5 Medical Routes...');
 
 // ===== MEDICAL FACE SHEET ROUTES =====
 try {
-  const medFaceSheetRouter = require('../routes/medFaceSheet.js');
+  const medFaceSheetRouter = require('./routes/medFaceSheet.js');
   app.use('/api', medFaceSheetRouter);
-  console.log('✅ Medical Face Sheet router loaded from ../routes/medFaceSheet.js');
+  console.log('✅ Medical Face Sheet router loaded from ./routes/medFaceSheet.js');
   medFaceSheetRouterLoaded = true;
 } catch (err) {
-  console.log('⚠️  Could not load ../routes/medFaceSheet.js:', err.message);
+  console.log('⚠️  Could not load ./routes/medFaceSheet.js:', err.message);
 }
 
 //Alternative path for medical routes
 try {
-  const medicalRouter = require('../routes/medical.js');
+  const medicalRouter = require('./routes/medical.js');
   app.use('/api/medical', medicalRouter);
-  console.log('✅ Medical router loaded from ../routes/medical.js');
+  console.log('✅ Medical router loaded from ./routes/medical.js');
 } catch (err) {
-  console.log('⚠️  Could not load ../routes/medical.js:', err.message);
+  console.log('⚠️  Could not load ./routes/medical.js:', err.message);
 }
 
 // ===== MEDICAL SCREENING ROUTES =====
 try {
-  const medScreeningRouter = require('../routes/medScreening.js');
+  const medScreeningRouter = require('./routes/medScreening.js');
   app.use('/api', medScreeningRouter);
-  console.log('✅ Medical Screening router loaded from ../routes/medScreening.js');
+  console.log('✅ Medical Screening router loaded from ./routes/medScreening.js');
   medScreeningRouterLoaded = true;
 } catch (err) {
-  console.log('⚠️  Could not load ../routes/medScreening.js:', err.message);
+  console.log('⚠️  Could not load ./routes/medScreening.js:', err.message);
 }
 
 // ===== NURSING ADMISSION ROUTES =====
 try {
-  const nursingAdmissionRouter = require('../routes/nursingAdmission.js');
+  const nursingAdmissionRouter = require('./routes/nursingAdmission.js');
   app.use('/api/nursing-admission', nursingAdmissionRouter);
-  console.log('✅ Nursing Admission router loaded from ../routes/nursingAdmission.js');
+  console.log('✅ Nursing Admission router loaded from ./routes/nursingAdmission.js');
   nursingAdmissionRouterLoaded = true;
 } catch (err) {
-  console.log('⚠️  Could not load ../routes/nursingAdmission.js:', err.message);
+  console.log('⚠️  Could not load ./routes/nursingAdmission.js:', err.message);
 }
 
 // ===== PROGRESS NOTES ROUTES =====
 try {
-  const progressNoteRouter = require('../routes/progressNote.js');
+  const progressNoteRouter = require('./routes/progressNote.js');
   app.use('/api/progress-notes', progressNoteRouter);
-  console.log('✅ Progress Notes router loaded from ../routes/progressNote.js');
+  console.log('✅ Progress Notes router loaded from ./routes/progressNote.js');
   progressNoteRouterLoaded = true;
 } catch (err) {
-  console.log('⚠️  Could not load ../routes/progressNote.js:', err.message);
+  console.log('⚠️  Could not load ./routes/progressNote.js:', err.message);
 }
 
 // ===== IDT PROVIDER ROUTES =====
 try {
-  const idtProviderRouter = require('../routes/idtProvider.js');
+  const idtProviderRouter = require('./routes/idtProvider.js');
   app.use('/api/idt-provider', idtProviderRouter);
-  console.log('✅ IDT Provider router loaded from ../routes/idtProvider.js');
+  console.log('✅ IDT Provider router loaded from ./routes/idtProvider.js');
   idtProviderRouterLoaded = true;
 } catch (err) {
-  console.log('⚠️  Could not load ../routes/idtProvider.js:', err.message);
+  console.log('⚠️  Could not load ./routes/idtProvider.js:', err.message);
 }
 
 // ===== IDT NURSING ROUTES =====
 try {
-  const idtNursingRouter = require('../routes/idtNursing.js');
+  const idtNursingRouter = require('./routes/idtNursing.js');
   app.use('/api/idt-nursing', idtNursingRouter);
-  console.log('✅ IDT Nursing router loaded from ../routes/idtNursing.js');
+  console.log('✅ IDT Nursing router loaded from ./routes/idtNursing.js');
   idtNursingRouterLoaded = true;
 } catch (err) {
-  console.log('⚠️  Could not load ../routes/idtNursing.js:', err.message);
+  console.log('⚠️  Could not load ./routes/idtNursing.js:', err.message);
 }
 
 // ===== NURSING ARCHIVE ROUTES =====
 try {
-  const nursingArchiveRouter = require('../routes/nursingArchive.js');
+  const nursingArchiveRouter = require('./routes/nursingArchive.js');
   app.use('/api/nursing-archive', nursingArchiveRouter);
-  console.log('✅ Nursing Archive router loaded from ../routes/nursingArchive.js');
+  console.log('✅ Nursing Archive router loaded from ./routes/nursingArchive.js');
   nursingArchiveRouterLoaded = true;
 } catch (err) {
-  console.log('⚠️  Could not load ../routes/nursingArchive.js:', err.message);
+  console.log('⚠️  Could not load ./routes/nursingArchive.js:', err.message);
 }
 
 // ============================================================================

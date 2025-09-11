@@ -42,7 +42,7 @@ import {
 } from '@mui/icons-material';
 import { useDispatch, useSelector } from "react-redux";
 import axios from 'axios';
-import logUserAction from "../../config/logAction";
+import logUserAction from "../../backend/config/logAction";
 
 // Import your existing data arrays
 import {
