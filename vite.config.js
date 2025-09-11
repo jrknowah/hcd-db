@@ -4,12 +4,15 @@ import { resolve } from 'path';
 import fs from 'fs/promises';
 import svgr from '@svgr/rollup';
 
-// https://vitejs.dev/config/
 export default defineConfig({
   resolve: {
     alias: {
       src: resolve(__dirname, 'src'),
+      buffer: 'buffer', // Add buffer alias
     },
+  },
+  define: {
+    global: 'globalThis', // Add global definition
   },
   esbuild: {
     loader: 'jsx',
@@ -34,10 +37,5 @@ export default defineConfig({
       ],
     },
   },
-
-  // plugins: [react(),svgr({
-  //   exportAsDefault: true
-  // })],
-
   plugins: [svgr(), react()],
 });

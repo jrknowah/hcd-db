@@ -13,10 +13,12 @@ import {
   Visibility as ViewIcon,
   Close as CloseIcon
 } from '@mui/icons-material';
-import { useSelector } from 'react-redux';
+import { useSelector, useDispatch } from 'react-redux';
 import axios from 'axios';
 import html2pdf from 'html2pdf.js';
 import { azureBlobService } from '../../services/azureBlobService'; // Import our service
+import { useSearchParams } from 'react-router-dom';
+import { fetchClientById, setSelectedClient } from 'src/store/slices/clientSlice';
 import logUserAction from '../../config/logAction';
 import ClientFace from './ClientFace';
 import Referrals from './Referrals';
@@ -58,6 +60,9 @@ const MOCK_FILES = [
 
 const Identification = () => {
   const API_URL = import.meta.env.VITE_APP_API_URL;
+  const [searchParams] = useSearchParams();
+  const dispatch = useDispatch();
+  
   
   // ✅ Simple state
   const [forceMockData, setForceMockData] = useState(false);
@@ -130,7 +135,29 @@ const Identification = () => {
       return () => clearTimeout(timer);
     }
   }, [successMessage]);
-
+  useEffect(() => {
+    const clientID = searchParams.get('clientID');
+    
+    if (clientID && !reduxSelectedClient) {
+      console.log('🔄 Section1: Restoring client from URL:', clientID);
+      
+      // Check sessionStorage first for quick restoration
+      const cached = sessionStorage.getItem(`client_${clientID}`);
+      if (cached) {
+        try {
+          const clientData = JSON.parse(cached);
+          dispatch(setSelectedClient(clientData));
+          console.log('✅ Restored from cache');
+        } catch {
+          console.log('📡 Cache invalid, fetching from server');
+          dispatch(fetchClientById(clientID));
+        }
+      } else {
+        console.log('📡 No cache, fetching from server');
+        dispatch(fetchClientById(clientID));
+      }
+    }
+  }, [searchParams, reduxSelectedClient, dispatch]);
   const handleTabChange = (event, newValue) => setTabIndex(newValue);
 
   const handleFileSelect = (docType, file) => {

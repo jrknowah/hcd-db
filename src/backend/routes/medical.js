@@ -443,7 +443,43 @@ router.get("/stats/:clientID", async (req, res) => {
     });
   }
 });
+// POST /api/medical/allergies/:clientID - Save client allergies
+router.post("/allergies/:clientID", async (req, res) => {
+  const { clientID } = req.params;
+  const { allergies } = req.body;
 
+  try {
+    const pool = await connectToAzureSQL();
+    
+    // Save to ClientAllergies table or update MedicalInfo
+    const result = await pool
+      .request()
+      .input("clientID", sql.NVarChar, clientID)
+      .input("allergies", sql.NVarChar(sql.MAX), JSON.stringify(allergies || []))
+      .input("updatedAt", sql.DateTime, new Date())
+      .query(`
+        UPDATE MedicalInfo 
+        SET clientAllergies = @allergies,
+            updatedAt = @updatedAt
+        WHERE clientID = @clientID
+      `);
+
+    console.log(`✅ Saved allergies for client ${clientID}`);
+    res.json({ 
+      success: true,
+      clientID,
+      allergies,
+      updatedAt: new Date().toISOString()
+    });
+    
+  } catch (err) {
+    console.error("❌ Error saving allergies:", err);
+    res.status(500).json({ 
+      error: "Error saving allergies",
+      details: err.message 
+    });
+  }
+});
 // Error handling middleware
 router.use((error, req, res, next) => {
   console.error("❌ Medical Routes Error:", error);

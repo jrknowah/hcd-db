@@ -103,7 +103,7 @@ const DashboardClient = () => {
     
     // Test API call directly
     console.log('🧪 Testing API call...');
-    fetch(`${import.meta.env.VITE_API_URL}/clients`)
+    fetch(`${import.meta.env.VITE_API_URL}/api/clients`)
       .then(response => {
         console.log('🌐 API Response status:', response.status);
         return response.json();
@@ -134,6 +134,36 @@ const DashboardClient = () => {
       }
     }
   }, [location.pathname, searchParams, dispatch, clients]);
+
+  // Restore client data on page load
+  // Restore client from cache on page refresh
+  useEffect(() => {
+    const clientIDFromURL = searchParams.get('clientID');
+    
+    if (clientIDFromURL && !selectedClient && !loading) {
+      console.log('🔄 Attempting to restore client:', clientIDFromURL);
+      
+      // Check sessionStorage first
+      const cachedClient = sessionStorage.getItem(`client_${clientIDFromURL}`);
+      
+      if (cachedClient) {
+        try {
+          const clientData = JSON.parse(cachedClient);
+          console.log('✅ Restoring from cache:', clientData);
+          dispatch(setSelectedClient(clientData));
+          setSelectedClientID(clientIDFromURL);
+        } catch (e) {
+          console.error('Failed to parse cached client:', e);
+          dispatch(fetchClientById(clientIDFromURL));
+        }
+      } else {
+        // No cache, fetch from server
+        console.log('📡 No cache found, fetching from server');
+        dispatch(fetchClientById(clientIDFromURL));
+        setSelectedClientID(clientIDFromURL);
+      }
+    }
+  }, [clientIDFromURL, selectedClient, loading, dispatch]);
 
   // Fetch clients on component mount
   useEffect(() => {
@@ -263,9 +293,15 @@ const DashboardClient = () => {
   }, [dispatch]);
 
   const handleSelectClient = useCallback((clientID) => {
-    console.log('👤 Client selected for sidebar:', clientID);
+    console.log('👤 Client selected:', clientID);
     setSelectedClientID(clientID);
-  }, []);
+    
+    // Update URL to include clientID
+    setSearchParams({ clientID });
+    
+    // Also store in localStorage as backup
+    localStorage.setItem('selectedClientID', clientID);
+  }, [setSearchParams]);
 
   // Edit handler - opens modal only
   const handleEditClient = useCallback((clientID) => {

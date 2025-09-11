@@ -168,7 +168,7 @@ export const loginWithAzure = createAsyncThunk(
 
       // Send Azure token and user info to your backend for validation/sync
       const axiosInstance = createAuthenticatedAxios(azureToken);
-      const response = await axiosInstance.post('/azure-login', {
+      const response = await axiosInstance.post('/api/auth/azure-login', {
         user: azureUserData,
         token: azureToken,
       });

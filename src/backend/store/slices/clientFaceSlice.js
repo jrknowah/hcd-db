@@ -38,8 +38,8 @@ export const fetchClientFaceData = createAsyncThunk(
       }
 
       const [faceResponse, allergiesResponse] = await Promise.allSettled([
-        axios.get(`${HCD_API}/getClientFace/${clientID}`),
-        axios.get(`${HCD_API}/getClientAllergies/${clientID}`)
+        axios.get(`${HCD_API}/api/getClientFace/${clientID}`),
+        axios.get(`${HCD_API}/api/getClientAllergies/${clientID}`)
       ]);
 
       const formData = faceResponse.status === 'fulfilled' ? faceResponse.value.data : {};
@@ -71,13 +71,13 @@ export const saveClientFaceData = createAsyncThunk(
         };
       }
 
-      await axios.post(`${HCD_API}/saveClientFace`, {
+      await axios.post(`${HCD_API}/api/saveClientFace`, {
         ...formData,
         clientID
       });
 
       if (allergies && allergies.length > 0) {
-        await axios.post(`${HCD_API}/saveClientAllergies`, {
+        await axios.post(`${HCD_API}/api/saveClientAllergies`, {
           clientID,
           allergies
         });

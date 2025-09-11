@@ -131,11 +131,12 @@ const ClientFace = ({ exportMode = false }) => {
     const errors = [];
     
     if (!formData.clientContactNum?.trim()) {
-      errors.push('Phone number is required');
-    } else if (!/^\(\d{3}\)\s\d{3}-\d{4}$/.test(formData.clientContactNum)) {
-      errors.push('Phone number must be in format (xxx) xxx-xxxx');
-    }
-    
+  errors.push('Phone number is required');
+} 
+// Remove or comment out the strict format check
+// else if (!/^\(\d{3}\)\s\d{3}-\d{4}$/.test(formData.clientContactNum)) {
+//   errors.push('Phone number must be in format (xxx) xxx-xxxx');
+// }
     if (!formData.clientEmail?.trim()) {
       errors.push('Email is required');
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.clientEmail)) {

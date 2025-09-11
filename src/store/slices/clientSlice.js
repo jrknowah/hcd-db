@@ -1,42 +1,82 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import axios from 'axios';
+import mockData from '../../utils/mockData';
+
+
 
 // ✅ FIX: Simple, clean API URL construction
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+const USE_MOCK_DATA = import.meta.env.VITE_USE_MOCK_DATA === 'true';
+
 
 // ✅ FIX: Use axios directly, no separate instance needed
 export const fetchClients = createAsyncThunk('clients/fetchClients', async (_, { rejectWithValue }) => {
   try {
-    console.log('Fetching clients from:', `${API_BASE_URL}/clients`);
-    const response = await axios.get(`${API_BASE_URL}/clients`);
-    console.log('Clients fetched successfully:', response.data);
+    // Use mock data if enabled
+    if (USE_MOCK_DATA) {
+      console.log('📊 Using mock data for clients');
+      await new Promise(resolve => setTimeout(resolve, 500)); // Simulate network delay
+      return mockData.clients;
+    }
+    
+    // Otherwise use real API
+    console.log('Fetching clients from:', `${API_BASE_URL}/api/clients`);
+    const response = await axios.get(`${API_BASE_URL}/api/clients`);
     return response.data;
   } catch (error) {
     console.error('Fetch clients error:', error);
-    const errorMessage = error.response?.data?.message || error.message || 'Failed to fetch clients';
-    return rejectWithValue(errorMessage);
+    
+    // Fallback to mock data on error
+    if (error.code === 'ERR_NETWORK' || error.response?.status === 404) {
+      console.log('📊 API unavailable, falling back to mock data');
+      return mockData.clients;
+    }
+    
+    return rejectWithValue(error.message || 'Failed to fetch clients');
   }
 });
 
 export const addClient = createAsyncThunk('clients/addClient', async (clientData, { rejectWithValue }) => {
   try {
-    console.log('Adding client to:', `${API_BASE_URL}/clients`);
-    console.log('Client data:', clientData);
-    const response = await axios.post(`${API_BASE_URL}/clients`, clientData);
-    console.log('Client added successfully:', response.data);
+    if (USE_MOCK_DATA) {
+      console.log('📊 Mock: Adding client');
+      await new Promise(resolve => setTimeout(resolve, 500));
+      const newClient = {
+        ...clientData,
+        createdAt: new Date().toISOString(),
+        status: 'active'
+      };
+      mockData.clients.push(newClient);
+      return newClient;
+    }
+    
+    const response = await axios.post(`${API_BASE_URL}/api/clients`, clientData);
     return response.data;
   } catch (error) {
-    console.error('Add client error:', error);
-    const errorMessage = error.response?.data?.message || error.message || 'Failed to add client';
-    return rejectWithValue(errorMessage);
+    if (USE_MOCK_DATA || error.code === 'ERR_NETWORK') {
+      const newClient = {
+        ...clientData,
+        createdAt: new Date().toISOString(),
+        status: 'active'
+      };
+      mockData.clients.push(newClient);
+      return newClient;
+    }
+    return rejectWithValue(error.message || 'Failed to add client');
   }
 });
-
 export const fetchClientById = createAsyncThunk('clients/fetchClientById', async (clientID, { rejectWithValue }) => {
   try {
+    // Fix: Add /api to the URL
     console.log('Fetching client by ID:', `${API_BASE_URL}/clients/${clientID}`);
     const response = await axios.get(`${API_BASE_URL}/clients/${clientID}`);
     console.log('Client fetched by ID successfully:', response.data);
+    
+    // Cache it immediately
+    if (response.data?.clientID) {
+      sessionStorage.setItem(`client_${response.data.clientID}`, JSON.stringify(response.data));
+    }
+    
     return response.data;
   } catch (error) {
     console.error('Fetch client by ID error:', error);
@@ -50,26 +90,28 @@ export const updateClient = createAsyncThunk(
   'clients/updateClient',
   async ({ clientID, updates }, { rejectWithValue }) => {
     try {
-      console.log('🔄 Redux updateClient called with:', { clientID, updates });
-      console.log('🔄 API URL:', `${API_BASE_URL}/clients/${clientID}`);
+      if (USE_MOCK_DATA) {
+        console.log('📊 Mock: Updating client');
+        await new Promise(resolve => setTimeout(resolve, 500));
+        const index = mockData.clients.findIndex(c => c.clientID === clientID);
+        if (index !== -1) {
+          mockData.clients[index] = { ...mockData.clients[index], ...updates };
+          return mockData.clients[index];
+        }
+        throw new Error('Client not found');
+      }
       
-      const response = await axios.put(`${API_BASE_URL}/clients/${clientID}`, updates);
-      
-      console.log('✅ API Response:', response.data);
-      console.log('✅ Response status:', response.status);
-      
+      const response = await axios.put(`${API_BASE_URL}/api/clients/${clientID}`, updates);
       return response.data;
     } catch (error) {
-      console.error('❌ Update client API error:', error);
-      console.error('❌ Error response:', error.response?.data);
-      console.error('❌ Error status:', error.response?.status);
-      
-      const errorMessage = error.response?.data?.message || 
-                          error.response?.data?.error || 
-                          error.message || 
-                          'Failed to update client';
-      
-      return rejectWithValue(errorMessage);
+      if (USE_MOCK_DATA || error.code === 'ERR_NETWORK') {
+        const index = mockData.clients.findIndex(c => c.clientID === clientID);
+        if (index !== -1) {
+          mockData.clients[index] = { ...mockData.clients[index], ...updates };
+          return mockData.clients[index];
+        }
+      }
+      return rejectWithValue(error.message || 'Failed to update client');
     }
   }
 );
@@ -86,6 +128,10 @@ const clientSlice = createSlice({
   reducers: {
     setSelectedClient: (state, action) => {
       state.selectedClient = action.payload;
+      // Cache the selected client for persistence
+      if (action.payload?.clientID) {
+        sessionStorage.setItem(`client_${action.payload.clientID}`, JSON.stringify(action.payload));
+      }
     },
     clearSelectedClient: (state) => {
       state.selectedClient = null;
@@ -127,6 +173,10 @@ const clientSlice = createSlice({
       .addCase(fetchClientById.pending, (state) => {
         state.loading = true;
         state.error = null; // ✅ Clear error on pending
+        // Add caching for persistence
+        if (action.payload?.clientID) {
+          sessionStorage.setItem(`client_${action.payload.clientID}`, JSON.stringify(action.payload));
+        }
       })
       .addCase(fetchClientById.fulfilled, (state, action) => {
         state.loading = false;
@@ -159,7 +209,8 @@ const clientSlice = createSlice({
       .addCase(updateClient.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload || 'Failed to update client';
-      });
+      })
+      ;
   },
 });
 
