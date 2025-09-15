@@ -5,6 +5,7 @@ import { styled } from '@mui/material/styles';
 import { IconCaretDownFilled } from '@tabler/icons-react';
 import { useContext, useState } from 'react';
 import { useSelector } from 'react-redux';
+import { useMsal } from '@azure/msal-react';
 import { Icon } from '@iconify/react';
 import { Link } from 'react-router-dom';
 import ProfileImg from 'src/assets/images/profile/user-1.jpg';
@@ -50,11 +51,25 @@ const StyledMenu = styled((props) => (
 export const Profile = () => {
   const { isCollapse, isSidebarHover } = useContext(CustomizerContext);
   
-  // ✅ Get auth data from your existing Redux store
+  // Get auth data from Redux
   const authUser = useSelector(state => state.auth.user);
   const isAuthenticated = useSelector(state => state.auth.isAuthenticated);
   const userRoles = useSelector(state => state.auth.userRoles);
   const authLoading = useSelector(state => state.auth.loading);
+  
+  // Get MSAL data directly
+  const { accounts } = useMsal();
+  const msalAccount = accounts?.[0];
+  
+  // Debug logging
+  console.log('🔍 Profile Component Data:', {
+    authUser,
+    isAuthenticated,
+    userRoles,
+    msalAccount,
+    msalAccountName: msalAccount?.name,
+    msalAccountEmail: msalAccount?.username,
+  });
   
   // ✅ Get Azure profile data
   const { 

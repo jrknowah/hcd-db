@@ -9,31 +9,36 @@ class AzureProfileService {
   /**
    * Get access token from your Redux store
    */
-  getAccessToken() {
-    try {
-      // ✅ Get from your existing Redux store
-      const store = window.store || window.__REDUX_STORE__;
-      const token = store?.getState()?.auth?.token;
-      
-      if (token) {
-        console.log('🔑 Using token from Redux store');
-        return token;
-      }
-      
-      // ✅ Fallback to localStorage (your auth slice stores it there)
-      const localStorageToken = localStorage.getItem('authToken');
-      if (localStorageToken) {
-        console.log('🔑 Using token from localStorage');
-        return localStorageToken;
-      }
-      
-      console.warn('⚠️ No Azure access token found');
-      return null;
-    } catch (error) {
-      console.error('❌ Error getting access token:', error);
-      return null;
+  // In azureProfileService.js, update the getAccessToken method:
+// In azureProfileService.js
+getAccessToken() {
+  try {
+    // Get from Redux store
+    const store = window.__REDUX_STORE__;
+    const state = store?.getState();
+    
+    // ✅ Correct path: azureToken not token
+    const token = state?.auth?.azureToken;
+    
+    if (token && token !== 'no-token') {
+      console.log('🔑 Using token from Redux store');
+      return token;
     }
+    
+    // Fallback to localStorage
+    const localStorageToken = localStorage.getItem('azureToken');
+    if (localStorageToken && localStorageToken !== 'no-token') {
+      console.log('🔑 Using token from localStorage');
+      return localStorageToken;
+    }
+    
+    console.warn('⚠️ No Azure access token found');
+    return null;
+  } catch (error) {
+    console.error('❌ Error getting access token:', error);
+    return null;
   }
+}
 
   /**
    * Make authenticated request to Microsoft Graph API
@@ -383,9 +388,9 @@ export const useAzureProfile = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  // ✅ Watch for authentication changes in your Redux store
+  // ✅ Fix: Use correct Redux state paths
   const isAuthenticated = useSelector(state => state.auth.isAuthenticated);
-  const authToken = useSelector(state => state.auth.token);
+  const authToken = useSelector(state => state.auth.azureToken); // Changed from state.auth.token
   const authUser = useSelector(state => state.auth.user);
 
   const loadProfile = async () => {
@@ -420,6 +425,9 @@ export const useAzureProfile = () => {
         setProfile({
           displayName: authUser.name,
           mail: authUser.email,
+          jobTitle: authUser.jobTitle,
+          officeLocation: authUser.officeLocation,
+          department: authUser.department,
           initials: azureProfileService.getInitials(authUser.name),
           shortName: azureProfileService.getShortName(authUser.name)
         });
@@ -429,7 +437,7 @@ export const useAzureProfile = () => {
     }
   };
 
-  // ✅ Load profile when authentication changes
+  // Load profile when authentication changes
   useEffect(() => {
     loadProfile();
   }, [isAuthenticated, authToken]);
@@ -441,10 +449,10 @@ export const useAzureProfile = () => {
     error,
     reload: loadProfile,
     clearCache: () => azureProfileService.clearCache(),
-    // ✅ Helper methods for display
+    // Helper methods for display
     getDisplayName: () => profile?.displayName || authUser?.name || 'User',
-    getJobTitle: () => profile?.jobTitle || null,
-    getOfficeLocation: () => profile?.officeLocation || profile?.department || null,
+    getJobTitle: () => profile?.jobTitle || authUser?.jobTitle || null,
+    getOfficeLocation: () => profile?.officeLocation || authUser?.officeLocation || null,
     getInitials: () => profile?.initials || azureProfileService.getInitials(authUser?.name) || '??'
   };
 };

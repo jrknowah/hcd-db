@@ -53,6 +53,7 @@ import ClientTable from 'src/components/tables/ClientTable';
 import NewClient from './NewClient';
 import NavigationDebugger from '../../components/debug/NavigationDebugger';
 
+
 // Import Redux actions
 import { 
   fetchClients, 

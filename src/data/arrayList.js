@@ -321,7 +321,7 @@ export const encTypeList = [
 ];
 
 export const hhhSiteList = [ 
-    {id: "41st", value: "41st"},
+    // {id: "41st", value: "41st"},
     {id: "97th", value: "97th"},
     {id: "104th", value: "104th"},
     {id: "238th", value: "238th"},
@@ -329,8 +329,8 @@ export const hhhSiteList = [
     {id: "Heritage House", value: "Heritage House"},
     {id: "Northridge", value: "Northridge"},
     {id: "Pacific", value: "Pacific"},
-    {id: "South Harmony", value: "South Harmony"},
-    {id: "South Harmony", value: "South Harmony"},
+    // {id: "South Harmony", value: "South Harmony"},
+    {id: "Casa Amore", value: "Casa Amore"},
     {id: "Eubanks", value: "Eubanks"},
     {id: "Heart Haven", value: "Heart Haven"},
     {id: "Hope Haven", value: "Hope Haven"}
@@ -348,14 +348,36 @@ export const section4List2 = [
 ];
 
 export const hhhSiteList2 = [
-    { value: '41st', label: '41st Street' },
-    { value: '97th', label: '97th Street' },
-    { value: 'Pacific', label: 'Pacific Avenue' },
-    { value: 'Heritage House', label: 'Heritage House' },
-    { value: 'Northridge', label: 'Northridge Center' },
-    { value: 'Downtown', label: 'Downtown Office' },
-    { value: 'Mobile', label: 'Mobile Unit' },
-    { value: 'Community', label: 'Community Location' }
+    // {value: "41st", label: "41st"},
+    {value: "97th", label: "97th"},
+    {value: "104th", label: "104th"},
+    {value: "238th", label: "238th"},
+    {value: "Downey", label: "Downey"},
+    {value: "Heritage House", label: "Heritage House"},
+    {value: "Northridge", label: "Northridge"},
+    {value: "Pacific", label: "Pacific"},
+    // {value: "South Harmony", label: "South Harmony"},
+    {value: "Casa Amore", label: "Casa Amore"},
+    {value: "Eubanks", label: "Eubanks"},
+    {value: "Heart Haven", label: "Heart Haven"},
+    {value: "Hope Haven", label: "Hope Haven"}
+
+    // { v: '41st', label: '41st Street' },
+    // { value: '97th', label: '97th Street' },
+    // { value: '104th', label: '104th' },
+    // { value: '238th', label: '238th' },
+    // { value: 'Pacific', label: 'Pacific Avenue' },
+    // { value: 'Heritage House', label: 'Heritage House' },
+    // { value: 'Heart Haven', label: 'Heart Haven' },
+    // { value: 'Hope Haven', label: 'Hope Haven' },
+    // { value: 'Eubanks', label: 'Eubanks' },
+    // { value: 'Casa Amore', label: 'Casa Amore' },
+    // { value: '', label: '' },
+    // { value: '', label: '' },
+    // { value: 'Northridge', label: 'Northridge' },
+    // { value: 'Downtown', label: 'Downtown Office' },
+    // { value: 'Mobile', label: 'Mobile Unit' },
+    // { value: 'Community', label: 'Community Location' }
 ];
 
 export const cmNoteType = [

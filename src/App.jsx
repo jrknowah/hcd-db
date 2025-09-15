@@ -8,6 +8,7 @@ import { MsalProvider } from '@azure/msal-react';
 import { msalInstance, initializeMsal } from './backend/config/authConfig';
 import AuthGuard from './components/Auth/AuthGuard';
 import AssessCarePlans from './views/Section-3/AssessCarePlans';
+import  store  from './backend/store/store'; // Add this import
 
 // ✅ Import your real components with error boundaries
 const FullLayout = React.lazy(() => import('./layouts/full/FullLayout'));
@@ -297,6 +298,31 @@ function App() {
       window.location.reload();
     }, 1000);
   };
+
+  useEffect(() => {
+  const setupMsal = async () => {
+    try {
+      console.log('🚀 App starting MSAL setup...');
+      
+      // Wait for MSAL to fully initialize
+      await initializeMsal();
+      
+      // ✅ Make store accessible for Azure Profile Service
+      window.__REDUX_STORE__ = store;
+      
+      console.log('✅ MSAL setup complete');
+      setMsalInitialized(true);
+      
+    } catch (error) {
+      console.error('❌ MSAL setup failed:', error);
+      setInitError(error.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  setupMsal();
+}, []);
 
   // Show loading state while MSAL initializes
   if (isLoading || !msalInitialized) {

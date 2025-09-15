@@ -2,7 +2,7 @@ import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 
 // ✅ API Base URL - Update this to match your backend
 const API_BASE_URL = process.env.NODE_ENV === 'development' 
-    ? 'http://localhost:3001' 
+    ? 'http://localhost:5000' 
     : '';
 
 // ✅ Async Thunks for API Calls
@@ -136,13 +136,17 @@ export const fetchFormData = createAsyncThunk(
     }
 );
 
-// Save form data
+// Save form data - SINGLE DEFINITION (removed duplicate)
 export const saveFormData = createAsyncThunk(
     'authSig/saveFormData',
     async ({ clientID, formType, formData }, { rejectWithValue, getState }) => {
         const { authSig } = getState();
         
+        console.log(`Attempting to save form: ${formType} for client: ${clientID}`);
+        console.log('Mock data enabled:', authSig.useMockData);
+        
         if (authSig.useMockData) {
+            console.log('Using mock data for save');
             return {
                 formID: 'MOCK-' + formType.toUpperCase() + '-' + Date.now(),
                 clientID,
@@ -154,24 +158,63 @@ export const saveFormData = createAsyncThunk(
         }
 
         try {
+            // Transform data based on form type before sending
+            let transformedData = { ...formData };
+            
+            // Special handling for consentPhoto form
+            if (formType === 'consentPhoto') {
+                // Convert object arrays to string arrays for backend
+                if (Array.isArray(formData.clientReleaseItems)) {
+                    transformedData.clientReleaseItems = formData.clientReleaseItems.map(item => 
+                        typeof item === 'object' ? item.value : item
+                    );
+                }
+                if (Array.isArray(formData.clientReleasePurposes)) {
+                    transformedData.clientReleasePurposes = formData.clientReleasePurposes.map(item => 
+                        typeof item === 'object' ? item.value : item
+                    );
+                }
+                if (Array.isArray(formData.clientReleasePHTItems)) {
+                    transformedData.clientReleasePHTItems = formData.clientReleasePHTItems.map(item => 
+                        typeof item === 'object' ? item.value : item
+                    );
+                }
+            }
+            
+            // Add clientID to the data
+            transformedData.clientID = clientID;
+            
+            console.log(`Sending POST request to: ${API_BASE_URL}/api/authorization/${clientID}/form/${formType}`);
+            
             const response = await fetch(`${API_BASE_URL}/api/authorization/${clientID}/form/${formType}`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify(formData),
+                body: JSON.stringify(transformedData),
             });
+
+            console.log(`Response status: ${response.status}`);
 
             if (!response.ok) {
                 const errorData = await response.json().catch(() => ({}));
+                console.error(`Failed to save ${formType}:`, errorData);
                 throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
             }
 
             const data = await response.json();
-            return data;
+            console.log(`Save successful for ${formType}:`, data);
+            
+            return {
+                ...data,
+                formType // Ensure formType is included in response
+            };
         } catch (error) {
-            console.error('Save form data failed:', error);
-            return rejectWithValue(error.message || 'Failed to save form data');
+            console.error(`Save form data failed for ${formType}:`, error);
+            return rejectWithValue({
+                message: error.message || 'Failed to save form data',
+                formType
+            });
         }
     }
 );
@@ -344,7 +387,7 @@ const initialState = {
     // Settings
     autoSaveEnabled: true,
     autoSaveInterval: 30000, // 30 seconds
-    useMockData: process.env.NODE_ENV === 'development' ? true : false,
+    useMockData: false, // Changed to false to use real API
     
     // Submission tracking
     submissionStatus: 'draft', // 'draft', 'submitted', 'approved', 'rejected'
@@ -409,6 +452,7 @@ const authSigSlice = createSlice({
         
         toggleMockData: (state) => {
             state.useMockData = !state.useMockData;
+            console.log('Mock data toggled to:', !state.useMockData);
         },
         
         // Reset form data
@@ -472,7 +516,7 @@ const authSigSlice = createSlice({
                 state.formErrors[formType] = action.payload || `Failed to fetch ${formType} data`;
             })
             
-            // ✅ Save Form Data
+            // ✅ Save Form Data - FIXED
             .addCase(saveFormData.pending, (state) => {
                 state.saving = true;
                 state.saveError = null;
@@ -480,16 +524,47 @@ const authSigSlice = createSlice({
             })
             .addCase(saveFormData.fulfilled, (state, action) => {
                 state.saving = false;
-                const { formType } = action.payload;
-                state.forms[formType] = action.payload;
+                
+                // Get formType from payload or meta
+                const formType = action.payload?.formType || action.meta?.arg?.formType;
+                
+                if (formType) {
+                    // Update the form data
+                    state.forms[formType] = {
+                        ...state.forms[formType],
+                        ...action.payload,
+                        lastSaved: new Date().toISOString()
+                    };
+                    
+                    // Update completion tracking
+                    if (action.payload.status === 'completed' && state.forms[formType].status !== 'completed') {
+                        state.completedForms = (state.completedForms || 0) + 1;
+                        state.overallCompletion = Math.round((state.completedForms / state.totalForms) * 100);
+                    }
+                }
+                
                 state.saveSuccess = true;
                 state.saveError = null;
                 state.unsavedChanges = false;
+                
+                console.log(`Form ${formType} saved successfully in Redux`);
             })
             .addCase(saveFormData.rejected, (state, action) => {
                 state.saving = false;
-                state.saveError = action.payload || 'Failed to save form data';
+                
+                // Get formType from payload or meta
+                const formType = action.payload?.formType || action.meta?.arg?.formType;
+                const errorMessage = action.payload?.message || action.payload || 'Failed to save form data';
+                
+                state.saveError = errorMessage;
+                
+                if (formType) {
+                    state.formErrors[formType] = errorMessage;
+                }
+                
                 state.saveSuccess = false;
+                
+                console.error(`Save failed for form ${formType}:`, errorMessage);
             })
             
             // ✅ Auto-save Form Data
@@ -500,10 +575,6 @@ const authSigSlice = createSlice({
                 state.autoSaving = false;
                 state.autoSaveSuccess = true;
                 state.lastAutoSave = action.payload.autoSavedAt;
-                // Clear the success flag after 3 seconds
-                setTimeout(() => {
-                    state.autoSaveSuccess = false;
-                }, 3000);
             })
             .addCase(autoSaveFormData.rejected, (state) => {
                 state.autoSaving = false;
@@ -537,9 +608,13 @@ const authSigSlice = createSlice({
             .addCase(saveBulkForms.fulfilled, (state, action) => {
                 state.saving = false;
                 // Update all saved forms
-                action.payload.savedForms.forEach(form => {
-                    state.forms[form.formType] = form;
-                });
+                if (action.payload?.savedForms) {
+                    action.payload.savedForms.forEach(form => {
+                        if (form.formType) {
+                            state.forms[form.formType] = form;
+                        }
+                    });
+                }
                 state.saveSuccess = true;
                 state.saveError = null;
             })
@@ -575,6 +650,7 @@ export const selectFormLoading = (formType) => (state) => state.authSig.formLoad
 export const selectSaving = (state) => state.authSig.saving;
 export const selectAutoSaving = (state) => state.authSig.autoSaving;
 export const selectSaveSuccess = (state) => state.authSig.saveSuccess;
+export const selectSaveError = (state) => state.authSig.saveError;
 export const selectOverallCompletion = (state) => state.authSig.overallCompletion;
 export const selectActiveForm = (state) => state.authSig.activeForm;
 export const selectUnsavedChanges = (state) => state.authSig.unsavedChanges;

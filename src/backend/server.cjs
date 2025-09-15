@@ -180,6 +180,335 @@ try {
 } catch (err) {
   console.log('⚠️  Could not load ./routes/files.js:', err.message);
 }
+  // ============================================================================
+// Section 2: Authorization & Signatures Routes
+// ============================================================================
+
+let authSigRouterLoaded = false;
+
+console.log('📝 Loading Section 2 Authorization & Signatures Routes...');
+
+// Try to load the Authorization & Signatures router
+try {
+  const authSigRouter = require('./routes/authSig.js');
+  app.use('/api/authorization', authSigRouter);
+  console.log('✅ Authorization & Signatures router loaded from ./routes/authSig.js');
+  authSigRouterLoaded = true;
+  console.log('✅ AuthSig router loaded from ./routes/authSig.js');
+} catch (err) {
+  console.log('⚠️  Could not load ./routes/authSig.js:', err.message);
+  console.log('🔄 Creating fallback mock Authorization & Signatures router...');
+  authSigRouterLoaded = false;
+  // Add a fallback route to see what's happening
+  app.use('/api/authorization/*', (req, res) => {
+    console.log('Authorization route hit but not implemented:', req.path);
+    res.status(501).json({ 
+      error: 'Authorization routes not implemented',
+      path: req.path,
+      message: 'The authSig.js router failed to load'
+    });
+  });
+  
+  // Create mock router for Authorization & Signatures
+  const createMockAuthSigRouter = () => {
+    const router = express.Router();
+    
+    // In-memory storage for mock data
+    let mockAuthorizationForms = {};
+    
+    // GET /api/authorization/:clientID/forms - Get all forms status
+    router.get('/:clientID/forms', (req, res) => {
+      const { clientID } = req.params;
+      console.log('📋 Getting all authorization forms (MOCK):', clientID);
+      
+      const mockData = {
+        clientID,
+        forms: {
+          orientation: {
+            completed: true,
+            completedAt: "2025-01-15T10:30:00Z",
+            completedBy: "john.doe@hospital.com",
+            checkboxes: {
+              "Client Rights and Responsibilities": true,
+              "Privacy Practices Notice": true,
+              "Consent for Treatment and Services": true,
+              "clientAuthHI": true,
+              "clientAuthRel": true
+            },
+            signature: "John Doe",
+            completionPercentage: 100
+          },
+          clientRights: {
+            completed: false,
+            completedAt: null,
+            completedBy: null,
+            signature: null,
+            completionPercentage: 0
+          },
+          consentTreatment: {
+            completed: true,
+            completedAt: "2025-01-15T11:15:00Z",
+            completedBy: "john.doe@hospital.com",
+            signature: "John Doe",
+            completionPercentage: 100
+          },
+          consentPhoto: {
+            completed: false,
+            completedAt: null,
+            completedBy: null,
+            completionPercentage: 50
+          },
+          authDisclosure: {
+            completed: false,
+            completedAt: null,
+            completedBy: null,
+            completionPercentage: 0
+          },
+          advDirective: {
+            completed: false,
+            completedAt: null,
+            completedBy: null,
+            completionPercentage: 0
+          },
+          housingAgree: {
+            completed: false,
+            completedAt: null,
+            completedBy: null,
+            completionPercentage: 0
+          }
+        },
+        lastUpdated: "2025-01-15T11:15:00Z",
+        overallCompletion: 33,
+        totalForms: 15,
+        completedForms: 5
+      };
+      
+      res.json(mockData);
+    });
+    
+    // GET /api/authorization/:clientID/form/:formType - Get specific form
+    router.get('/:clientID/form/:formType', (req, res) => {
+      const { clientID, formType } = req.params;
+      console.log('📋 Getting form data (MOCK):', clientID, formType);
+      
+      // Check if we have saved data for this form
+      const formKey = `${clientID}_${formType}`;
+      if (mockAuthorizationForms[formKey]) {
+        return res.json(mockAuthorizationForms[formKey]);
+      }
+      
+      // Return default mock data based on form type
+      const mockFormData = {
+        orientation: {
+          formID: 'MOCK-ORIENT-001',
+          clientID,
+          formType: 'orientation',
+          checkboxes: {
+            "Client Rights and Responsibilities": false,
+            "Privacy Practices Notice": false,
+            "Consent for Treatment and Services": false,
+            "clientAuthHI": false,
+            "clientAuthRel": false
+          },
+          signature: "",
+          completionPercentage: 0,
+          status: 'not_started'
+        },
+        clientRights: {
+          formID: 'MOCK-RIGHTS-001',
+          clientID,
+          formType: 'clientRights',
+          acknowledged: false,
+          signature: "",
+          completionPercentage: 0,
+          status: 'not_started'
+        },
+        consentPhoto: {
+          formID: 'MOCK-PHOTO-001',
+          clientID,
+          formType: 'consentPhoto',
+          clientReleaseItems: [],
+          clientReleasePurposes: [],
+          clientReleasePHTItems: [],
+          consentPhotoSign1: "",
+          consentPhotoEffectiveDate: "",
+          consentPhotoExpireDate: "",
+          completionPercentage: 0,
+          status: 'not_started'
+        },
+        authDisclosure: {
+          formID: 'MOCK-DISCLOSURE-001',
+          clientID,
+          formType: 'authDisclosure',
+          atrClientSign: "",
+          mentalHealthAuth: false,
+          hivAidsAuth: false,
+          substanceUseAuth: false,
+          completionPercentage: 0,
+          status: 'not_started'
+        },
+        advDirective: {
+          formID: 'MOCK-DIRECTIVE-001',
+          clientID,
+          formType: 'advDirective',
+          factSheetGiven: "",
+          factSheetNotGivenReason: "",
+          hasDirective: "",
+          clientSignature: "",
+          responsibleAdultSignature: "",
+          witnessSignature: "",
+          relationshipToClient: "",
+          completionPercentage: 0,
+          status: 'not_started'
+        },
+        housingAgree: {
+          formID: 'MOCK-HOUSING-001',
+          clientID,
+          formType: 'housingAgree',
+          housingAgreeeSign: "",
+          acknowledgmentConfirmed: false,
+          clientUnderstanding: false,
+          dateAcknowledged: "",
+          completionPercentage: 0,
+          status: 'not_started'
+        }
+      };
+      
+      const formData = mockFormData[formType];
+      if (!formData) {
+        return res.status(404).json({ 
+          message: 'Form type not found',
+          validTypes: Object.keys(mockFormData)
+        });
+      }
+      
+      res.json(formData);
+    });
+    
+    // POST /api/authorization/:clientID/form/:formType - Save form
+    router.post('/:clientID/form/:formType', (req, res) => {
+      const { clientID, formType } = req.params;
+      const data = req.body;
+      console.log('💾 Saving form data (MOCK):', clientID, formType);
+      
+      // Transform data for specific form types
+      let transformedData = { ...data };
+      
+      // Handle consentPhoto array transformations
+      if (formType === 'consentPhoto') {
+        ['clientReleaseItems', 'clientReleasePurposes', 'clientReleasePHTItems'].forEach(field => {
+          if (Array.isArray(data[field])) {
+            transformedData[field] = data[field].map(item => 
+              typeof item === 'object' ? item : { value: item }
+            );
+          }
+        });
+      }
+      
+      // Save to mock storage
+      const formKey = `${clientID}_${formType}`;
+      mockAuthorizationForms[formKey] = {
+        formID: `MOCK-${formType.toUpperCase()}-${Date.now()}`,
+        clientID,
+        formType,
+        ...transformedData,
+        savedAt: new Date().toISOString(),
+        status: data.signature || data.clientSignature || data.consentPhotoSign1 || data.atrClientSign || data.housingAgreeeSign 
+          ? 'completed' 
+          : 'in_progress'
+      };
+      
+      console.log('✅ Form saved successfully (MOCK)');
+      res.json(mockAuthorizationForms[formKey]);
+    });
+    
+    // POST /api/authorization/:clientID/form/:formType/autosave - Auto-save
+    router.post('/:clientID/form/:formType/autosave', (req, res) => {
+      const { clientID, formType } = req.params;
+      console.log('⏱️ Auto-saving form (MOCK):', clientID, formType);
+      
+      const formKey = `${clientID}_${formType}_autosave`;
+      mockAuthorizationForms[formKey] = {
+        ...req.body,
+        autoSavedAt: new Date().toISOString()
+      };
+      
+      res.json({
+        message: 'Auto-save successful',
+        clientID,
+        formType,
+        autoSavedAt: new Date().toISOString()
+      });
+    });
+    
+    // POST /api/authorization/:clientID/forms/bulk - Bulk save
+    router.post('/:clientID/forms/bulk', (req, res) => {
+      const { clientID } = req.params;
+      const { forms } = req.body;
+      console.log('💾 Bulk saving forms (MOCK):', clientID);
+      
+      const savedForms = [];
+      
+      if (Array.isArray(forms)) {
+        forms.forEach(form => {
+          const formKey = `${clientID}_${form.formType}`;
+          mockAuthorizationForms[formKey] = {
+            ...form,
+            clientID,
+            savedAt: new Date().toISOString()
+          };
+          savedForms.push(mockAuthorizationForms[formKey]);
+        });
+      }
+      
+      res.json({
+        message: 'Bulk save successful',
+        clientID,
+        savedForms,
+        totalSaved: savedForms.length
+      });
+    });
+    
+    // POST /api/authorization/:clientID/submit - Submit forms
+    router.post('/:clientID/submit', (req, res) => {
+      const { clientID } = req.params;
+      const { submissionNotes } = req.body;
+      console.log('📤 Submitting forms for approval (MOCK):', clientID);
+      
+      res.json({
+        message: 'Forms submitted successfully',
+        submission: {
+          submissionID: `SUB-${Date.now()}`,
+          clientID,
+          submittedAt: new Date().toISOString(),
+          status: 'submitted_for_review',
+          submissionNotes
+        }
+      });
+    });
+    
+    // GET /api/authorization/:clientID/submission-status
+    router.get('/:clientID/submission-status', (req, res) => {
+      const { clientID } = req.params;
+      console.log('📊 Getting submission status (MOCK):', clientID);
+      
+      res.json({
+        submissionID: `SUB-MOCK-001`,
+        clientID,
+        status: 'draft',
+        lastUpdated: new Date().toISOString(),
+        message: 'No submissions found (mock data)'
+      });
+    });
+    
+    return router;
+  };
+  
+  // Use the mock router
+  app.use('/api/authorization', createMockAuthSigRouter());
+  console.log('✅ Mock Authorization & Signatures router created');
+}
+
 //Section 3: Client Assessment===========================================================
 
 // Add these to your server.js after line 50
@@ -220,6 +549,15 @@ try {
 }
 
 // ✅ NEW: Section 4 Routes - CarePlans
+// ✅ Section 4 Routes - Assessment Care Plans
+try {
+  const assessmentCarePlansRouter = require('./routes/accessCarePlan.js');
+  app.use('/api/assessment-care-plans', assessmentCarePlansRouter);
+  console.log('✅ Assessment Care Plans router loaded from ./routes/accessCarePlan.js');
+  // Add a flag if you're tracking loaded routes
+} catch (err) {
+  console.log('⚠️  Could not load ./routes/accessCarePlan.js:', err.message);
+}
 try {
   const carePlansRouter = require('./routes/carePlan.js');
   app.use('/api/care-plans', carePlansRouter);
@@ -238,6 +576,15 @@ try {
 } catch (err) {
   console.log('⚠️  Could not load ./routes/encounterNotes.js:', err.message);
 }
+
+// Note Archive Route
+try {
+  const noteArchiveRouter = require('./routes/noteArchive.js');
+  app.use('/api/note-archive', noteArchiveRouter);
+  console.log('✅ Note Archive router loaded');
+} catch (err) {
+  console.log('⚠️  Could not load noteArchive.js:', err.message);
+}
 // Health check endpoint
 app.get('/api/health', (req, res) => {
   res.json({ 
@@ -247,10 +594,13 @@ app.get('/api/health', (req, res) => {
     database: dbConnected ? 'Connected' : 'Mock data',
     azureStorage: process.env.AZURE_STORAGE_CONNECTION_STRING ? 'Configured' : 'Not configured',
     routes: {
-      // Section 1 & 2
+      // Section 1
       clients: clientsRouterLoaded ? 'Real Azure SQL router' : 'Fallback mock router',
       clientFace: clientFaceRouterLoaded ? 'Real Azure SQL router' : 'Not loaded',
       
+      //Section 2 - Authorization & Signatures
+      authSig: authSigRouterLoaded ? 'Real Azure SQL router' : 'Fallback mock router',
+
       // Section 3 - Assessment & Care Plans
       bioSocial: bioSocialRouterLoaded ? 'Real Azure SQL router' : 'Not loaded',
       mentalHealth: mentalHealthRouterLoaded ? 'Real Azure SQL router' : 'Not loaded',
@@ -702,6 +1052,8 @@ app.use((req, res) => {
   });
 });
 
+// Replace your existing app.listen at the bottom of server.js with this updated version:
+
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
@@ -712,9 +1064,12 @@ app.listen(PORT, () => {
   console.log(`🔍 Debug endpoint: http://localhost:${PORT}/api/debug/database`);
   
   console.log('📋 Routes loaded:');
-  console.log('  Section 1 & 2:');
+  console.log('  📁 Section 1 - Client Information:');
   console.log(`    Clients: ${clientsRouterLoaded ? '✅ Real Azure SQL' : '⚠️  Mock fallback'}`);
   console.log(`    ClientFace: ${clientFaceRouterLoaded ? '✅ Real Azure SQL' : '❌ Not loaded'}`);
+  
+  console.log('  📝 Section 2 - Authorization & Signatures:');
+  console.log(`    AuthSig: ${authSigRouterLoaded ? '✅ Real Azure SQL' : '⚠️  Mock fallback'}`);
   
   console.log('  🧠 Section 3 - Assessment & Care Plans:');
   console.log(`    BioSocial: ${bioSocialRouterLoaded ? '✅ Real Azure SQL' : '❌ Not loaded'}`);
@@ -722,7 +1077,7 @@ app.listen(PORT, () => {
   console.log(`    Reassessment: ${reassessmentRouterLoaded ? '✅ Real Azure SQL' : '❌ Not loaded'}`);
   console.log(`    MentalArchive: ${mentalArchiveRouterLoaded ? '✅ Real Azure SQL' : '❌ Not loaded'}`);
   
-  console.log('  Section 4 - Client Progress:');
+  console.log('  📊 Section 4 - Client Progress:');
   console.log(`    CarePlans: ${carePlansRouterLoaded ? '✅ Real Azure SQL' : '⚠️  Mock fallback'}`);
   console.log(`    EncounterNotes: ${encounterNotesRouterLoaded ? '✅ Real Azure SQL' : '⚠️  Mock fallback'}`);
   
@@ -735,62 +1090,37 @@ app.listen(PORT, () => {
   console.log(`    IDTNursing: ${idtNursingRouterLoaded ? '✅ Real Azure SQL' : '⚠️  Mock fallback'}`);
   console.log(`    NursingArchive: ${nursingArchiveRouterLoaded ? '✅ Real Azure SQL' : '⚠️  Mock fallback'}`);
   
-  console.log('  File Management:');
+  console.log('  📂 File Management:');
   console.log(`    Files: ${filesRouterLoaded ? '✅ Real Azure Blob' : '⚠️  Mock fallback'}`);
   console.log(`    Referrals: ${referralsRouterLoaded ? '✅ Real Azure SQL' : '⚠️  Mock fallback'}`);
   console.log(`    Discharge: ${dischargeRouterLoaded ? '✅ Real Azure SQL' : '⚠️  Mock fallback'}`);
-});
-
-// const PORT = process.env.PORT || 5000;
-// app.listen(PORT, () => {
-//   console.log(`🚀 Server running on port ${PORT}`);
-//   console.log(`📝 Environment: ${process.env.NODE_ENV || 'development'}`);
-//   console.log(`💾 Database: ${dbConnected ? '✅ Azure SQL Connected' : '⚠️  Mock Data Only'}`);
-//   console.log(`☁️  Azure Storage: ${process.env.AZURE_STORAGE_CONNECTION_STRING ? '✅ Configured' : '⚠️  Not configured'}`);
-//   console.log(`🔗 Health check: http://localhost:${PORT}/api/health`);
-//   console.log(`🔍 Debug endpoint: http://localhost:${PORT}/api/debug/database`);
-//   console.log('📋 Routes loaded:');
-//   console.log(`  Clients: ${clientsRouterLoaded ? '✅ Real Azure SQL' : '⚠️  Mock fallback'}`);
-//   console.log(`  ClientFace: ${clientFaceRouterLoaded ? '✅ Real Azure SQL' : '❌ Mock fallback'}`);
-//   console.log(`  Referrals: ${referralsRouterLoaded ? '✅ Real Azure SQL' : '⚠️  Mock fallback'}`);
-//   console.log(`  Discharge: ${dischargeRouterLoaded ? '✅ Real Azure SQL' : '⚠️  Mock fallback'}`);
-//   console.log(`  Files: ${filesRouterLoaded ? '✅ Real Azure Blob' : '⚠️  Mock fallback'}`);
-//   console.log(`  CarePlans: ${carePlansRouterLoaded ? '✅ Real Azure SQL' : '⚠️  Mock fallback'}`);
-//   console.log(`  EncounterNotes: ${encounterNotesRouterLoaded ? '✅ Real Azure SQL' : '⚠️  Mock fallback'}`);
-//   // ✅ NEW: Section 5 route status
-//   console.log('🏥 Section 5 Medical Routes:');
-//   console.log(`  MedFaceSheet: ${medFaceSheetRouterLoaded ? '✅ Real Azure SQL' : '⚠️  Mock fallback'}`);
-//   console.log(`  MedScreening: ${medScreeningRouterLoaded ? '✅ Real Azure SQL' : '⚠️  Mock fallback'}`);
-//   console.log(`  NursingAdmission: ${nursingAdmissionRouterLoaded ? '✅ Real Azure SQL' : '⚠️  Mock fallback'}`);
-//   console.log(`  ProgressNotes: ${progressNoteRouterLoaded ? '✅ Real Azure SQL' : '⚠️  Mock fallback'}`);
-//   console.log(`  IDTProvider: ${idtProviderRouterLoaded ? '✅ Real Azure SQL' : '⚠️  Mock fallback'}`);
-//   console.log(`  IDTNursing: ${idtNursingRouterLoaded ? '✅ Real Azure SQL' : '⚠️  Mock fallback'}`);
-//   console.log(`  NursingArchive: ${nursingArchiveRouterLoaded ? '✅ Real Azure SQL' : '⚠️  Mock fallback'}`);
   
-//   console.log('📋 Available Section 5 endpoints:');
-//   console.log('  🏥 Medical Face Sheet:');
-//   console.log('    GET    /api/medical/info/:clientID');
-//   console.log('    POST   /api/medical/info/:clientID');
-//   console.log('    GET    /api/medical/appointments/:clientID');
-//   console.log('    POST   /api/medical/appointments/:clientID');
-//   console.log('  🏥 Medical Screening:');
-//   console.log('    GET    /api/medical-screening/:clientID');
-//   console.log('    POST   /api/medical-screening/:clientID');
-//   console.log('  🏥 Nursing Admission:');
-//   console.log('    GET    /api/nursing-admission/:clientID');
-//   console.log('    POST   /api/nursing-admission/:clientID');
-//   console.log('  🏥 Progress Notes:');
-//   console.log('    GET    /api/progress-notes/:clientID');
-//   console.log('    POST   /api/progress-notes/:clientID');
-//   console.log('  🏥 IDT Provider:');
-//   console.log('    GET    /api/idt-provider/:clientID');
-//   console.log('    POST   /api/idt-provider/:clientID');
-//   console.log('  🏥 IDT Nursing:');
-//   console.log('    GET    /api/idt-nursing/:clientID');
-//   console.log('    POST   /api/idt-nursing/:clientID');
-//   console.log('  🏥 Nursing Archive:');
-//   console.log('    GET    /api/nursing-archive/:clientID');
-//   console.log('    POST   /api/nursing-archive/:clientID/upload');
-// });
-
+  // Section 2 specific endpoints
+  console.log('\n📝 Section 2 - Authorization & Signatures endpoints:');
+  console.log('  📄 Forms Management:');
+  console.log('    GET    /api/authorization/:clientID/forms           - Get all forms status');
+  console.log('    GET    /api/authorization/:clientID/form/:formType  - Get specific form');
+  console.log('    POST   /api/authorization/:clientID/form/:formType  - Save form data');
+  console.log('    POST   /api/authorization/:clientID/form/:formType/autosave - Auto-save');
+  console.log('    POST   /api/authorization/:clientID/forms/bulk      - Bulk save forms');
+  console.log('    POST   /api/authorization/:clientID/submit          - Submit for approval');
+  console.log('    GET    /api/authorization/:clientID/submission-status - Get status');
+  
+  console.log('\n  📄 Available Form Types:');
+  console.log('    - orientation      : Patient Orientation Information');
+  console.log('    - clientRights     : Client Rights & Responsibilities');
+  console.log('    - consentTreatment : Consent for Treatment');
+  console.log('    - consentPhoto     : Photo/Media Consent');
+  console.log('    - authDisclosure   : Authorization for Disclosure');
+  console.log('    - advDirective     : Advance Healthcare Directive');
+  console.log('    - housingAgree     : Housing Agreement');
+  console.log('    - privacyPractice  : Privacy Practices');
+  console.log('    - lahmis          : LAHMIS Consent');
+  console.log('    - phiRelease      : PHI Release');
+  console.log('    - residencePolicy : Residence Policy');
+  console.log('    - grievances      : Client Grievances');
+  console.log('    - healthDisclosure: Health Info Disclosure');
+  console.log('    - interimHousing  : Interim Housing Agreement');
+  console.log('    - termination     : Termination Policy');
+});
 module.exports = app;

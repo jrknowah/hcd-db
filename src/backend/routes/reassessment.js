@@ -7,7 +7,7 @@ const router = express.Router();
 const { body, validationResult } = require('express-validator');
 const ReassessmentService = require('../services/reassessmentService');
 const authMiddleware = require('../middleware/auth');
-const { logMiddleware } = require('../backend/config/logAction');
+const { logMiddleware } = require('../config/logAction');
 
 // ✅ Validation Rules
 const reassessmentValidation = [

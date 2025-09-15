@@ -74,7 +74,7 @@ const MockComponent = ({ title }) => (
 // Form configuration data - this replaces all the repetitive state management
 const FORM_CONFIGS = [
   {
-    id: 'orientation',
+    id: 'ClientOrientation',
     title: 'Patient Orientation Information Sheet',
     description: 'Essential orientation information for new patients',
     icon: AssignmentIcon,
@@ -85,7 +85,7 @@ const FORM_CONFIGS = [
     estimatedTime: '5 min'
   },
   {
-    id: 'clientRights', 
+    id: 'ClientRights', 
     title: 'Client Rights',
     description: 'Understanding your rights as a client',
     icon: VerifiedIcon,
@@ -96,7 +96,7 @@ const FORM_CONFIGS = [
     estimatedTime: '3 min'
   },
   {
-    id: 'consentTreatment',
+    id: 'ConsentForTreatment',
     title: 'Consent for Treatment and Services',
     description: 'Authorization for medical treatment',
     icon: MedicalIcon,
@@ -118,7 +118,7 @@ const FORM_CONFIGS = [
     estimatedTime: '10 min'
   },
   {
-    id: 'privacyPractice',
+    id: 'PrivacyPractice',
     title: 'LA County Notice Of Private Practices',
     description: 'Privacy practices and procedures notice',
     icon: SecurityIcon,
@@ -129,7 +129,7 @@ const FORM_CONFIGS = [
     estimatedTime: '4 min'
   },
   {
-    id: 'lahmis',
+    id: 'LAHMIS',
     title: 'LA HMIS Consent',
     description: 'Homeless Management Information System consent',
     icon: BusinessIcon,
@@ -140,7 +140,7 @@ const FORM_CONFIGS = [
     estimatedTime: '6 min'
   },
   {
-    id: 'phiRelease',
+    id: 'ReleasePHI',
     title: 'Client PHI Release',
     description: 'Protected Health Information release form',
     icon: SecurityIcon,
@@ -151,7 +151,7 @@ const FORM_CONFIGS = [
     estimatedTime: '5 min'
   },
   {
-    id: 'residencePolicy',
+    id: 'ResidencePolicy',
     title: 'Rules of Residence & Security Policy',
     description: 'Facility rules and security procedures',
     icon: PolicyIcon,
@@ -162,7 +162,7 @@ const FORM_CONFIGS = [
     estimatedTime: '8 min'
   },
   {
-    id: 'authDisclosure',
+    id: 'AuthForDisclosure',
     title: 'Authorization To Share Information',
     description: 'Permission to share information with third parties',
     icon: SecurityIcon,
@@ -173,8 +173,8 @@ const FORM_CONFIGS = [
     estimatedTime: '4 min'
   },
   {
-    id: 'interimHousingAgreement',
-    title: 'Interim Housing Agreement',
+    id: 'InterimHousingAgreement',
+    title: 'Termination Policy & Procedure',
     description: 'Understanding termination policies',
     icon: PolicyIcon,
     component: InterimHousingAgreement,
@@ -184,7 +184,7 @@ const FORM_CONFIGS = [
     estimatedTime: '6 min'
   },
   {
-    id: 'advDirective',
+    id: 'AdvCareAck',
     title: 'Advance Healthcare Directive Form',
     description: 'Advanced healthcare decisions and directives',
     icon: MedicalIcon,
@@ -195,7 +195,7 @@ const FORM_CONFIGS = [
     estimatedTime: '12 min'
   },
   {
-    id: 'grievances',
+    id: 'ClientGrievances',
     title: 'Client Grievances',
     description: 'Process for filing complaints and grievances',
     icon: AssignmentIcon,
@@ -206,7 +206,7 @@ const FORM_CONFIGS = [
     estimatedTime: '3 min'
   },
   {
-    id: 'healthDisclosure',
+    id: 'AuthUseDiscHMHInfo',
     title: 'Authorization For Use and/or Disclosure of Health/Mental Health Information',
     description: 'Mental health information sharing authorization',
     icon: MedicalIcon,
@@ -217,7 +217,7 @@ const FORM_CONFIGS = [
     estimatedTime: '8 min'
   },
   {
-    id: 'consentPhoto',
+    id: 'ConsentPhoto',
     title: 'Consent to Taking / Sharing Photograph',
     description: 'Photography and media sharing consent',
     icon: CameraIcon,
@@ -228,7 +228,7 @@ const FORM_CONFIGS = [
     estimatedTime: '2 min'
   },
   {
-    id: 'housingAgreement',
+    id: 'HousingAgree',
     title: 'Interim Housing (Shelter) Agreement',
     description: 'Temporary housing terms and agreement',
     icon: HomeIcon,

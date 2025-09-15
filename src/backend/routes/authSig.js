@@ -4,18 +4,30 @@ const sql = require('mssql');
 const { logUserAction } = require('../config/logAction');
 
 // ✅ Database connection configuration
-// Update this to match your Azure SQL configuration
 const dbConfig = {
-    user: process.env.DB_USER,
-    password: process.env.DB_PASSWORD,
-    server: process.env.DB_SERVER,
-    database: process.env.DB_NAME,
+    user: process.env.DB_USER || 'fallback_user',
+    password: process.env.DB_PASSWORD || 'fallback_password',
+    server: process.env.DB_SERVER || 'clientintakeserver.database.windows.net',
+    database: process.env.DB_NAME || 'your_database',
     options: {
         encrypt: true,
-        trustServerCertificate: false
+        trustServerCertificate: false,
+        connectTimeout: 30000,
+        requestTimeout: 30000
     }
 };
 
+// Add connection testing
+async function testConnection() {
+    try {
+        const pool = await sql.connect(dbConfig);
+        console.log('✅ AuthSig connected to database');
+        return pool;
+    } catch (error) {
+        console.error('❌ AuthSig database connection failed:', error.message);
+        return null;
+    }
+}
 // ✅ Form type mappings
 const FORM_TYPES = {
     'orientation': 'patient_orientation',

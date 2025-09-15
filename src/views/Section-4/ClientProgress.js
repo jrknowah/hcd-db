@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Card,
   CardContent,
@@ -24,14 +24,19 @@ import {
   Assignment as CarePlanIcon,
   Archive as ArchiveIcon
 } from '@mui/icons-material';
-import { useSelector } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 import { section4List } from "../../data/arrayList";
 import EncounterNote from "./EncounterNote";
 import CarePlan from "./CarePlan";
 import CmNoteArchive from "./CmNoteArchive";
+import { useClientManager } from '../../hooks/useClientManager';
+import { fetchCarePlans } from '../../backend/store/slices/carePlanSlice';
+import { fetchEncounterNotes } from '../../backend/store/slices/encounterNoteSlice';
+import { fetchAssessmentData, fetchAssessmentMilestones } from '../../backend/store/slices/assessCarePlansSlice';
 
 const ClientProgress = () => {
-  const selectedClient = useSelector((state) => state.clients?.selectedClient);
+  const dispatch = useDispatch();
+  const { clientID, selectedClient, hasClient } = useClientManager();
   const [activeTab, setActiveTab] = useState(0);
 
   // ✅ Environment detection for mock data
@@ -46,6 +51,30 @@ const ClientProgress = () => {
   };
   
   const currentClient = shouldUseMockData && !selectedClient ? MOCK_CLIENT : selectedClient;
+  const effectiveClientID = clientID || currentClient?.clientID;
+
+  // ✅ ADD THIS: Load data when client changes
+  useEffect(() => {
+    if (effectiveClientID) {
+      console.log('Loading data for client:', effectiveClientID);
+      
+      // Dispatch actions to load data
+      dispatch(fetchCarePlans(effectiveClientID));
+      dispatch(fetchEncounterNotes(effectiveClientID));
+      dispatch(fetchAssessmentData(effectiveClientID));
+      dispatch(fetchAssessmentMilestones(effectiveClientID));
+    }
+  }, [effectiveClientID, dispatch]);
+
+  // ✅ ADD THIS: Debug logging for persistence
+  useEffect(() => {
+    console.log('Client Persistence Check:');
+    console.log('- URL clientID:', clientID);
+    console.log('- Redux selectedClient:', selectedClient);
+    console.log('- Has client:', hasClient);
+    console.log('- Effective clientID:', effectiveClientID);
+    console.log('- SessionStorage:', sessionStorage.getItem('redux_cache'));
+  }, [clientID, selectedClient, hasClient, effectiveClientID]);
 
   const handleTabChange = (event, newValue) => {
     setActiveTab(newValue);
@@ -58,6 +87,17 @@ const ClientProgress = () => {
     { section4Title: 'Mental Health Evaluation', section4Date: '' },
     { section4Title: 'Employment Screening', section4Date: '' },
   ];
+
+  // ✅ ADD THIS: Show message if no client selected
+  if (!hasClient && !shouldUseMockData) {
+    return (
+      <Box sx={{ p: 3 }}>
+        <Alert severity="warning">
+          No client selected. Please select a client to view progress information.
+        </Alert>
+      </Box>
+    );
+  }
 
   return (
     <Box sx={{ width: '100%' }}>
