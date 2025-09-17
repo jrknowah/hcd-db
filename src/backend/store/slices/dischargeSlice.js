@@ -1,8 +1,8 @@
-// store/slices/dischargeSlice.js - Enhanced version
+// store/slices/dischargeSlice.js - Complete Fixed Version
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
 
-const API = import.meta.env.VITE_API_URL;
+const API = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
 // Mock data for development
 const MOCK_DISCHARGE_DATA = {
@@ -30,7 +30,7 @@ export const fetchClientDischarge = createAsyncThunk(
         return MOCK_DISCHARGE_DATA;
       }
 
-      const response = await axios.get(`${API}/getClientDischarge/${clientID}`);
+      const response = await axios.get(`${API}/api/getClientDischarge/${clientID}`);
       return response.data;
     } catch (error) {
       return rejectWithValue(error.response?.data?.message || 'Failed to fetch discharge data');
@@ -52,7 +52,7 @@ export const saveClientDischarge = createAsyncThunk(
       }
 
       const payload = { ...dischargeData, clientID };
-      await axios.post(`${API}/saveClientDischarge`, payload);
+      await axios.post(`${API}/api/saveClientDischarge`, payload);
       return payload;
     } catch (error) {
       return rejectWithValue(error.response?.data?.message || 'Failed to save discharge data');
@@ -63,7 +63,7 @@ export const saveClientDischarge = createAsyncThunk(
 const dischargeSlice = createSlice({
   name: "discharge",
   initialState: {
-    data: {
+    dischargeData: {
       clientDischargeDate: "",
       clientDischargeDiag: "",
       clientDischargI: "",
@@ -83,12 +83,17 @@ const dischargeSlice = createSlice({
   },
   reducers: {
     setDischargeForm: (state, action) => {
-      state.data = { ...state.data, ...action.payload };
+      state.dischargeData = { ...state.dischargeData, ...action.payload };
     },
     
     updateDischargeField: (state, action) => {
       const { field, value } = action.payload;
-      state.data[field] = value;
+      state.dischargeData[field] = value;
+    },
+    
+    // ADD THIS: The missing setError action
+    setError: (state, action) => {
+      state.error = action.payload;
     },
     
     clearError: (state) => {
@@ -102,7 +107,7 @@ const dischargeSlice = createSlice({
     setCurrentClient: (state, action) => {
       if (action.payload !== state.currentClientID) {
         state.currentClientID = action.payload;
-        state.data = {
+        state.dischargeData = {
           clientDischargeDate: "",
           clientDischargeDiag: "",
           clientDischargI: "",
@@ -120,7 +125,7 @@ const dischargeSlice = createSlice({
     },
     
     resetDischarge: (state) => {
-      state.data = {
+      state.dischargeData = {
         clientDischargeDate: "",
         clientDischargeDiag: "",
         clientDischargI: "",
@@ -145,7 +150,7 @@ const dischargeSlice = createSlice({
       })
       .addCase(fetchClientDischarge.fulfilled, (state, action) => {
         state.loading = false;
-        state.data = { ...state.data, ...action.payload };
+        state.dischargeData = { ...state.dischargeData, ...action.payload };
         state.dataLoaded = true;
       })
       .addCase(fetchClientDischarge.rejected, (state, action) => {
@@ -162,7 +167,7 @@ const dischargeSlice = createSlice({
       })
       .addCase(saveClientDischarge.fulfilled, (state, action) => {
         state.saving = false;
-        state.data = action.payload;
+        state.dischargeData = action.payload;
         state.successMessage = '✅ Discharge data saved successfully';
       })
       .addCase(saveClientDischarge.rejected, (state, action) => {
@@ -175,18 +180,19 @@ const dischargeSlice = createSlice({
 export const { 
   setDischargeForm,
   updateDischargeField,
+  setError,  // Export the missing action
   clearError,
   clearSuccess,
   setCurrentClient,
   resetDischarge
 } = dischargeSlice.actions;
 
-// Selectors
-export const selectDischargeData = (state) => state.discharge.data;
-export const selectDischargeLoading = (state) => state.discharge.loading;
-export const selectDischargeSaving = (state) => state.discharge.saving;
-export const selectDischargeError = (state) => state.discharge.error;
-export const selectDischargeSuccess = (state) => state.discharge.successMessage;
-export const selectDischargeDataLoaded = (state) => state.discharge.dataLoaded;
+// Selectors - with safe fallbacks
+export const selectDischargeData = (state) => state.discharge?.dischargeData || {};
+export const selectDischargeLoading = (state) => state.discharge?.loading || false;
+export const selectDischargeSaving = (state) => state.discharge?.saving || false;
+export const selectDischargeError = (state) => state.discharge?.error || null;
+export const selectDischargeSuccess = (state) => state.discharge?.successMessage || null;
+export const selectDischargeDataLoaded = (state) => state.discharge?.dataLoaded || false;
 
 export default dischargeSlice.reducer;

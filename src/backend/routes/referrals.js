@@ -4,53 +4,48 @@ const multer = require("multer");
 const path = require("path");
 const sql = require("mssql");
 const { poolPromise } = require("../store/azureSql");
+const { BlobServiceClient } = require('@azure/storage-blob');
+const fs = require('fs').promises;
 
-// ✅ FIXED: Handle missing Azure Storage connection string gracefully
+// Configure Azure Blob Storage
 const AZURE_STORAGE_CONNECTION_STRING = process.env.AZURE_STORAGE_CONNECTION_STRING;
-let blobServiceClient = null;
+const CONTAINER_NAME = "client-docs";
 
+// Initialize blob service client
+let blobServiceClient = null;
 if (AZURE_STORAGE_CONNECTION_STRING) {
   try {
-    const { BlobServiceClient } = require('@azure/storage-blob');
     blobServiceClient = BlobServiceClient.fromConnectionString(AZURE_STORAGE_CONNECTION_STRING);
     console.log('✅ Azure Blob Storage initialized for referrals');
   } catch (error) {
-    console.warn('⚠️ Azure Blob Storage initialization failed for referrals:', error.message);
+    console.error('❌ Failed to initialize Azure Blob Storage:', error.message);
   }
 } else {
-  console.warn('⚠️ AZURE_STORAGE_CONNECTION_STRING not found - referral file uploads will use local storage');
+  console.warn('⚠️ AZURE_STORAGE_CONNECTION_STRING not found - file uploads will use local storage');
 }
 
-const CONTAINER_NAME = "client-docs";
-
-// ✅ Configure multer for local storage as fallback
+// Configure multer to use memory storage for Azure uploads
 const upload = multer({ 
-  dest: "uploads/",
+  storage: multer.memoryStorage(),  // Keep file in memory for Azure upload
   limits: {
     fileSize: 10 * 1024 * 1024 // 10MB limit
   }
 });
 
-// ✅ Middleware for logging
-router.use((req, res, next) => {
-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.originalUrl}`);
-  next();
-});
-
-// ===================================================================
-// GET ROUTES
-// ===================================================================
-
-// GET /api/clientReferrals/:clientID - Get referral data for a client
+// GET /api/clientReferrals/:clientID - Get referral data
 router.get("/clientReferrals/:clientID", async (req, res) => {
   try {
     const pool = await poolPromise;
     const result = await pool.request()
-      .input("clientID", sql.Int, req.params.clientID)
+      .input("clientID", sql.NVarChar, req.params.clientID)
       .query("SELECT lahsaReferral, odrReferral, dhsReferral FROM ClientReferrals WHERE clientID = @clientID");
 
     console.log(`✅ Retrieved referrals for client ${req.params.clientID}`);
-    res.json(result.recordset[0] || {});
+    res.json(result.recordset[0] || {
+      lahsaReferral: "",
+      odrReferral: "",
+      dhsReferral: ""
+    });
   } catch (err) {
     console.error("❌ Error fetching referrals:", err);
     res.status(500).json({ 
@@ -60,46 +55,10 @@ router.get("/clientReferrals/:clientID", async (req, res) => {
   }
 });
 
-// GET /api/referralFiles/:clientID - Get uploaded files for a client
-router.get("/referralFiles/:clientID", async (req, res) => {
-  try {
-    const pool = await poolPromise;
-    const result = await pool.request()
-      .input("clientID", sql.Int, req.params.clientID)
-      .query(`
-        SELECT 
-          fileID,
-          clientID,
-          referralType,
-          fileName,
-          filePath,
-          uploadedBy,
-          uploadedAt
-        FROM ReferralFiles 
-        WHERE clientID = @clientID 
-        ORDER BY uploadedAt DESC
-      `);
-
-    console.log(`✅ Retrieved ${result.recordset.length} referral files for client ${req.params.clientID}`);
-    res.json(result.recordset);
-  } catch (err) {
-    console.error("❌ Error fetching referral files:", err);
-    res.status(500).json({ 
-      error: "Error fetching referral files",
-      details: err.message 
-    });
-  }
-});
-
-// ===================================================================
-// POST ROUTES
-// ===================================================================
-
 // POST /api/saveClientReferrals - Save referral notes
 router.post("/saveClientReferrals", async (req, res) => {
   const { clientID, lahsaReferral, odrReferral, dhsReferral } = req.body;
 
-  // Validation
   if (!clientID) {
     return res.status(400).json({ 
       error: "Missing required field: clientID" 
@@ -109,10 +68,10 @@ router.post("/saveClientReferrals", async (req, res) => {
   try {
     const pool = await poolPromise;
     await pool.request()
-      .input("clientID", sql.Int, clientID)
-      .input("lahsaReferral", sql.VarChar, lahsaReferral || '')
-      .input("odrReferral", sql.VarChar, odrReferral || '')
-      .input("dhsReferral", sql.VarChar, dhsReferral || '')
+      .input("clientID", sql.NVarChar, clientID)
+      .input("lahsaReferral", sql.NVarChar, lahsaReferral || '')
+      .input("odrReferral", sql.NVarChar, odrReferral || '')
+      .input("dhsReferral", sql.NVarChar, dhsReferral || '')
       .query(`
         MERGE ClientReferrals AS target
         USING (SELECT @clientID AS clientID) AS source
@@ -143,11 +102,10 @@ router.post("/saveClientReferrals", async (req, res) => {
   }
 });
 
-// POST /api/uploadReferral - Upload referral file
+// POST /api/uploadReferral - Upload referral file to Azure Blob Storage
 router.post("/uploadReferral", upload.single("file"), async (req, res) => {
   const { clientID, type } = req.body;
 
-  // Validation
   if (!req.file) {
     return res.status(400).json({ error: "No file uploaded" });
   }
@@ -159,60 +117,87 @@ router.post("/uploadReferral", upload.single("file"), async (req, res) => {
   }
 
   const fileName = req.file.originalname;
-  let filePath = `/uploads/${req.file.filename}`;
-  let fileUrl = filePath;
+  let filePath = '';
+  let fileUrl = '';
+  let storageLocation = 'local';
 
   try {
-    // ✅ Try to upload to Azure Blob Storage if available
+    // Try to upload to Azure Blob Storage
     if (blobServiceClient) {
       try {
         const containerClient = blobServiceClient.getContainerClient(CONTAINER_NAME);
-        const blobName = `referrals/${clientID}/${Date.now()}-${fileName}`;
+        
+        // Create container if it doesn't exist
+        await containerClient.createIfNotExists({
+          access: 'blob'
+        });
+        
+        // Generate unique blob name
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const blobName = `referrals/${clientID}/${type}/${timestamp}_${fileName}`;
         const blockBlobClient = containerClient.getBlockBlobClient(blobName);
         
-        // Upload file to Azure
-        const fs = require('fs');
-        const uploadBlobResponse = await blockBlobClient.uploadFile(req.file.path);
+        // Upload file buffer directly to Azure
+        console.log(`📤 Uploading ${fileName} to Azure Blob Storage...`);
+        const uploadBlobResponse = await blockBlobClient.upload(
+          req.file.buffer,
+          req.file.buffer.length,
+          {
+            blobHTTPHeaders: {
+              blobContentType: req.file.mimetype
+            },
+            metadata: {
+              clientID: clientID,
+              referralType: type,
+              originalName: fileName
+            }
+          }
+        );
         
-        // Update file path to Azure URL
         filePath = blobName;
         fileUrl = blockBlobClient.url;
+        storageLocation = 'azure';
         
-        // Clean up local file
-        fs.unlinkSync(req.file.path);
-        
-        console.log('✅ File uploaded to Azure Blob Storage:', blobName);
+        console.log(`✅ File uploaded to Azure Blob Storage: ${blobName}`);
       } catch (azureError) {
-        console.warn('⚠️ Azure upload failed, using local storage:', azureError.message);
-        // Keep using local file path as fallback
+        console.error('❌ Azure upload failed:', azureError.message);
+        throw azureError; // Re-throw to handle in outer catch
       }
+    } else {
+      console.warn('⚠️ Azure Blob Storage not configured, cannot upload file');
+      return res.status(503).json({ 
+        error: "Storage service unavailable",
+        details: "Azure Blob Storage is not configured on the server"
+      });
     }
 
     // Save file info to database
     const pool = await poolPromise;
     const result = await pool.request()
-      .input("clientID", sql.Int, clientID)
-      .input("referralType", sql.VarChar, type)
-      .input("fileName", sql.VarChar, fileName)
-      .input("filePath", sql.VarChar, filePath)
-      .input("fileUrl", sql.VarChar, fileUrl)
-      .input("uploadedBy", sql.VarChar, req.user?.email || 'System')
+      .input("clientID", sql.NVarChar, clientID)
+      .input("referralType", sql.NVarChar, type)
+      .input("fileName", sql.NVarChar, fileName)
+      .input("filePath", sql.NVarChar, filePath)
+      .input("fileUrl", sql.NVarChar, fileUrl)
+      .input("storageLocation", sql.NVarChar, storageLocation)
+      .input("uploadedBy", sql.NVarChar, req.user?.email || 'System')
       .input("uploadedAt", sql.DateTime, new Date())
       .query(`
         INSERT INTO ReferralFiles (clientID, referralType, fileName, filePath, fileUrl, uploadedBy, uploadedAt)
-        OUTPUT INSERTED.fileID, INSERTED.fileName, INSERTED.filePath, INSERTED.uploadedAt
+        OUTPUT INSERTED.fileID, INSERTED.fileName, INSERTED.filePath, INSERTED.fileUrl, INSERTED.uploadedAt
         VALUES (@clientID, @referralType, @fileName, @filePath, @fileUrl, @uploadedBy, @uploadedAt);
       `);
 
-    console.log(`✅ Referral file uploaded for client ${clientID}`);
+    console.log(`✅ File record saved to database for client ${clientID}`);
     res.status(200).json({ 
       success: true,
-      message: "File uploaded successfully", 
+      message: "File uploaded successfully to Azure Blob Storage", 
       file: result.recordset[0],
-      fileUrl
+      fileUrl,
+      storageLocation
     });
   } catch (err) {
-    console.error("❌ Error saving referral file:", err);
+    console.error("❌ Error in file upload:", err);
     res.status(500).json({ 
       error: "Error uploading referral file",
       details: err.message 
@@ -220,18 +205,46 @@ router.post("/uploadReferral", upload.single("file"), async (req, res) => {
   }
 });
 
-// ===================================================================
-// DELETE ROUTES
-// ===================================================================
+// GET /api/referralFiles/:clientID - Get uploaded files
+router.get("/referralFiles/:clientID", async (req, res) => {
+  try {
+    const pool = await poolPromise;
+    const result = await pool.request()
+      .input("clientID", sql.NVarChar, req.params.clientID)
+      .query(`
+        SELECT 
+          fileID,
+          clientID,
+          referralType,
+          fileName,
+          filePath,
+          fileUrl,
+          uploadedBy,
+          uploadedAt
+        FROM ReferralFiles 
+        WHERE clientID = @clientID 
+        ORDER BY uploadedAt DESC
+      `);
 
-// DELETE /api/referralFiles/:fileID - Delete a referral file
+    console.log(`✅ Retrieved ${result.recordset.length} files for client ${req.params.clientID}`);
+    res.json(result.recordset);
+  } catch (err) {
+    console.error("❌ Error fetching referral files:", err);
+    res.status(500).json({ 
+      error: "Error fetching referral files",
+      details: err.message 
+    });
+  }
+});
+
+// DELETE /api/referralFiles/:fileID - Delete file from Azure and database
 router.delete("/referralFiles/:fileID", async (req, res) => {
   const { fileID } = req.params;
 
   try {
     const pool = await poolPromise;
     
-    // First get file info
+    // Get file info first
     const fileResult = await pool.request()
       .input("fileID", sql.Int, fileID)
       .query("SELECT * FROM ReferralFiles WHERE fileID = @fileID");
@@ -242,27 +255,15 @@ router.delete("/referralFiles/:fileID", async (req, res) => {
 
     const fileInfo = fileResult.recordset[0];
 
-    // Delete from Azure Blob Storage if applicable
-    if (blobServiceClient && fileInfo.filePath.startsWith('referrals/')) {
+    // Delete from Azure Blob Storage if it's stored there
+    if (blobServiceClient && fileInfo.filePath.includes('/')) {
       try {
         const containerClient = blobServiceClient.getContainerClient(CONTAINER_NAME);
         const blockBlobClient = containerClient.getBlockBlobClient(fileInfo.filePath);
-        await blockBlobClient.delete();
-        console.log('✅ File deleted from Azure Blob Storage');
+        await blockBlobClient.deleteIfExists();
+        console.log(`✅ File deleted from Azure Blob Storage: ${fileInfo.filePath}`);
       } catch (azureError) {
-        console.warn('⚠️ Azure delete failed:', azureError.message);
-      }
-    } else if (fileInfo.filePath.startsWith('/uploads/')) {
-      // Delete local file
-      try {
-        const fs = require('fs');
-        const localPath = path.join(__dirname, '..', fileInfo.filePath);
-        if (fs.existsSync(localPath)) {
-          fs.unlinkSync(localPath);
-          console.log('✅ Local file deleted');
-        }
-      } catch (fsError) {
-        console.warn('⚠️ Local file delete failed:', fsError.message);
+        console.error('❌ Failed to delete from Azure:', azureError.message);
       }
     }
 
@@ -271,32 +272,19 @@ router.delete("/referralFiles/:fileID", async (req, res) => {
       .input("fileID", sql.Int, fileID)
       .query("DELETE FROM ReferralFiles WHERE fileID = @fileID");
 
-    console.log(`✅ Referral file ${fileID} deleted successfully`);
+    console.log(`✅ File record deleted from database: ${fileID}`);
     res.json({ 
       success: true, 
       message: "File deleted successfully",
       fileID 
     });
   } catch (err) {
-    console.error("❌ Error deleting referral file:", err);
+    console.error("❌ Error deleting file:", err);
     res.status(500).json({ 
-      error: "Error deleting referral file",
+      error: "Error deleting file",
       details: err.message 
     });
   }
-});
-
-// ===================================================================
-// ERROR HANDLING
-// ===================================================================
-
-// Error handling middleware
-router.use((error, req, res, next) => {
-  console.error("❌ Referrals Routes Error:", error);
-  res.status(500).json({
-    error: "Internal server error in referrals routes",
-    details: error.message
-  });
 });
 
 module.exports = router;

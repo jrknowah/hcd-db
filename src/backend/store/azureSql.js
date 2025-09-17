@@ -1,5 +1,5 @@
 // store/azureSql.js
-require('dotenv').config({ path: '../../.env' });
+// require('dotenv').config({ path: '../../.env' });
 const sql = require('mssql');
 const { DefaultAzureCredential } = require('@azure/identity');
 

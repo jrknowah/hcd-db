@@ -399,7 +399,7 @@ const NewClient = ({ onClientCreated, editMode = false, clientData = null }) => 
           </Grid>
 
           <Grid item xs={12} sm={4}>
-            <Typography>SSN</Typography>
+            <Typography>SSN(XXX-XX-XXX)</Typography>
             <TextField
               fullWidth
               label="SSN"

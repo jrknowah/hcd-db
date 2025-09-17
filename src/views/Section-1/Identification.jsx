@@ -16,7 +16,7 @@ import {
 import { useSelector, useDispatch } from 'react-redux';
 import axios from 'axios';
 import html2pdf from 'html2pdf.js';
-import { azureBlobService } from '../../backend/services/azureBlobService'; // Import our service
+import { azureBlobService } from '../../backend/services/azureBlobService';
 import { useSearchParams } from 'react-router-dom';
 import { fetchClientById, setSelectedClient } from '../../backend/store/slices/clientSlice';
 import logUserAction from '../../backend/config/logAction';
@@ -24,7 +24,7 @@ import ClientFace from './ClientFace';
 import Referrals from './Referrals';
 import Discharge from './Discharge';
 
-// ✅ Move all static data outside component
+// Static data outside component
 const MOCK_CLIENT = {
   clientID: 'mock-123',
   clientFirstName: 'John',
@@ -63,8 +63,7 @@ const Identification = () => {
   const [searchParams] = useSearchParams();
   const dispatch = useDispatch();
   
-  
-  // ✅ Simple state
+  // State management
   const [forceMockData, setForceMockData] = useState(false);
   const [tabIndex, setTabIndex] = useState(0);
   const [files, setFiles] = useState([]);
@@ -84,11 +83,11 @@ const Identification = () => {
   const [filePreview, setFilePreview] = useState(null);
   const [previewOpen, setPreviewOpen] = useState(false);
 
-  // ✅ Simple selectors
+  // Redux selectors
   const reduxSelectedClient = useSelector((state) => state?.clients?.selectedClient);
   const reduxUser = useSelector((state) => state?.auth?.user);
 
-  // ✅ Simple computed values
+  // Computed values
   const isDevelopment = import.meta.env.MODE === 'development';
   const shouldUseMockData = forceMockData || (isDevelopment && !import.meta.env.VITE_USE_REAL_DATA);
   
@@ -97,7 +96,7 @@ const Identification = () => {
 
   const exportRef = useRef();
 
-  // ✅ Load files when client changes
+  // Load files when client changes
   useEffect(() => {
     if (!currentClient?.clientID) return;
 
@@ -135,6 +134,8 @@ const Identification = () => {
       return () => clearTimeout(timer);
     }
   }, [successMessage]);
+
+  // Handle client restoration from URL
   useEffect(() => {
     const clientID = searchParams.get('clientID');
     
@@ -158,6 +159,7 @@ const Identification = () => {
       }
     }
   }, [searchParams, reduxSelectedClient, dispatch]);
+
   const handleTabChange = (event, newValue) => setTabIndex(newValue);
 
   const handleFileSelect = (docType, file) => {
@@ -261,7 +263,12 @@ const Identification = () => {
       console.error(`❌ Upload Error for ${docType}:`, err);
       setError(`Failed to upload ${fileToUpload.name}: ${err.message}`);
     } finally {
-      setUploadProgress((prev) => ({ ...prev, [docType]: null }));
+      // FIX: Properly clear the upload progress
+      setUploadProgress((prev) => {
+        const newProgress = { ...prev };
+        delete newProgress[docType];  // Remove the key entirely
+        return newProgress;
+      });
     }
   };
 
@@ -411,7 +418,7 @@ const Identification = () => {
     return '📎';
   };
 
-  // ✅ No client selected
+  // No client selected
   if (!currentClient) {
     return (
       <Card sx={{ padding: 2 }}>
@@ -520,7 +527,7 @@ const Identification = () => {
                       </Box>
                     )}
                     
-                    {uploadProgress[docTitle] !== null && uploadProgress[docTitle] !== undefined && (
+                    {uploadProgress[docTitle] !== undefined && (
                       <Box sx={{ mb: 1 }}>
                         <LinearProgress variant="determinate" value={uploadProgress[docTitle]} />
                         <Typography variant="caption" color="text.secondary">
@@ -536,9 +543,9 @@ const Identification = () => {
                       fullWidth
                       startIcon={<UploadIcon />}
                       onClick={() => handleFileUpload(docTitle)}
-                      disabled={!filesToUpload[docTitle] || uploadProgress[docTitle] !== null}
+                      disabled={!filesToUpload[docTitle] || uploadProgress[docTitle] !== undefined}
                     >
-                      {uploadProgress[docTitle] !== null ? "Uploading..." : "Upload"}
+                      {uploadProgress[docTitle] !== undefined ? "Uploading..." : "Upload"}
                     </Button>
                   </CardActions>
                 </Card>

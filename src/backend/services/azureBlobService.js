@@ -1,99 +1,108 @@
-// services/azureBlobService.js
-import { BlobServiceClient } from '@azure/storage-blob';
-
-const AZURE_STORAGE_CONNECTION_STRING = import.meta.env.VITE_AZURE_STORAGE_CONNECTION_STRING;
-const CONTAINER_NAME = "client-docs";
+// services/azureBlobService.js - Browser Compatible Version
+import axios from 'axios';
 
 class AzureBlobService {
   constructor() {
-    if (!AZURE_STORAGE_CONNECTION_STRING) {
-      console.warn('⚠️ Azure Storage connection string not found in environment variables');
-      this.isConfigured = false;
-      return;
-    }
+    // Use backend API for all Azure operations since we're in browser
+    this.apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+    this.isConfigured = true;
     
-    try {
-      this.blobServiceClient = BlobServiceClient.fromConnectionString(AZURE_STORAGE_CONNECTION_STRING);
-      this.isConfigured = true;
-    } catch (error) {
-      console.error('❌ Failed to initialize Azure Blob Service:', error);
-      this.isConfigured = false;
-    }
+    // Check if we should use mock mode
+    this.useMockMode = import.meta.env.VITE_USE_REAL_DATA === 'false' || 
+                       import.meta.env.MODE === 'development';
+    
+    console.log('Azure Blob Service initialized');
+    console.log('API URL:', this.apiUrl);
+    console.log('Mode:', this.useMockMode ? 'Mock' : 'Backend API');
   }
 
   /**
-   * Upload a file to Azure Blob Storage
+   * Upload a file to Azure Blob Storage via backend
    * @param {File} file - The file to upload
    * @param {string} clientID - Client identifier
    * @param {string} docType - Document type/category
    * @returns {Promise<Object>} Upload result with blob URL and metadata
    */
   async uploadFile(file, clientID, docType) {
-    if (!this.isConfigured) {
-      throw new Error('Azure Blob Storage is not properly configured');
-    }
-
     try {
-      // Generate unique filename with timestamp
-      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-      const fileExtension = file.name.split('.').pop();
-      const blobName = `${clientID}/${docType}/${timestamp}_${file.name}`;
-      
-      // Get container client
-      const containerClient = this.blobServiceClient.getContainerClient(CONTAINER_NAME);
-      
-      // Ensure container exists
-      await containerClient.createIfNotExists({
-        access: 'blob' // Allow public read access to blobs
-      });
-      
-      // Get blob client
-      const blockBlobClient = containerClient.getBlockBlobClient(blobName);
-      
-      // Set blob metadata
-      const metadata = {
-        clientID: clientID.toString(),
-        docType: docType,
-        originalName: file.name,
-        uploadDate: new Date().toISOString(),
-        fileSize: file.size.toString(),
-        contentType: file.type || 'application/octet-stream'
-      };
-      
-      // Upload options
-      const uploadOptions = {
-        blobHTTPHeaders: {
-          blobContentType: file.type || 'application/octet-stream'
-        },
-        metadata: metadata,
-        tags: {
-          clientID: clientID.toString(),
+      // For mock mode, simulate upload
+      if (this.useMockMode) {
+        console.log(`Mock uploading ${file.name}...`);
+        
+        // Simulate upload delay
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const mockBlobName = `${clientID}/${docType}/${timestamp}_${file.name}`;
+        
+        return {
+          success: true,
+          blobName: mockBlobName,
+          blobUrl: `/mock/storage/${mockBlobName}`,
+          fileName: file.name,
+          fileSize: file.size,
+          contentType: file.type,
+          uploadDate: new Date().toISOString(),
           docType: docType,
-          uploadDate: new Date().toISOString().split('T')[0] // YYYY-MM-DD format
+          mock: true
+        };
+      }
+
+      // Real upload through backend API
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('clientID', clientID);
+      formData.append('docType', docType);
+
+      console.log(`Uploading ${file.name} to backend...`);
+
+      const response = await axios.post(
+        `${this.apiUrl}/api/upload`,
+        formData,
+        {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+          onUploadProgress: (progressEvent) => {
+            if (progressEvent.total) {
+              const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+              console.log(`Upload Progress: ${percentCompleted}%`);
+            }
+          }
         }
-      };
-      
-      // Upload the file
-      console.log(`📤 Uploading ${file.name} to Azure Blob Storage...`);
-      const uploadResponse = await blockBlobClient.uploadData(file, uploadOptions);
-      
-      console.log(`✅ Successfully uploaded ${file.name}`, uploadResponse);
-      
+      );
+
+      console.log(`Successfully uploaded ${file.name}`, response.data);
       return {
         success: true,
-        blobName: blobName,
-        blobUrl: blockBlobClient.url,
-        fileName: file.name,
-        fileSize: file.size,
-        contentType: file.type,
-        uploadDate: new Date().toISOString(),
-        etag: uploadResponse.etag,
-        requestId: uploadResponse.requestId
+        ...response.data
       };
       
     } catch (error) {
-      console.error(`❌ Failed to upload ${file.name}:`, error);
-      throw new Error(`Upload failed: ${error.message}`);
+      console.error(`Failed to upload ${file.name}:`, error);
+      
+      // If backend fails in development, fall back to mock
+      if (this.useMockMode && (error.response?.status === 404 || error.code === 'ERR_NETWORK')) {
+        console.log('Backend unavailable, using mock upload');
+        
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const mockBlobName = `${clientID}/${docType}/${timestamp}_${file.name}`;
+        
+        return {
+          success: true,
+          blobName: mockBlobName,
+          blobUrl: `/mock/storage/${mockBlobName}`,
+          fileName: file.name,
+          fileSize: file.size,
+          contentType: file.type,
+          uploadDate: new Date().toISOString(),
+          docType: docType,
+          mock: true,
+          fallback: true
+        };
+      }
+      
+      throw new Error(`Upload failed: ${error.response?.data?.message || error.message}`);
     }
   }
 
@@ -104,39 +113,79 @@ class AzureBlobService {
    * @returns {Promise<Array>} List of client files
    */
   async listClientFiles(clientID, docType = null) {
-  if (!this.isConfigured) {
-    console.warn('Azure Blob Storage not configured, returning empty array');
-    return []; // Return empty array instead of throwing error
-  }
+    try {
+      // For mock mode, return sample files
+      if (this.useMockMode) {
+        console.log(`Mock listing files for client ${clientID}`);
+        
+        // Simulate delay
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        return [
+          {
+            fileName: 'sample_id_card.pdf',
+            blobName: `${clientID}/Identification Card/sample_id_card.pdf`,
+            blobUrl: '/mock/storage/sample_id_card.pdf',
+            fileSize: 1024000,
+            contentType: 'application/pdf',
+            uploadDate: new Date(Date.now() - 86400000).toISOString(),
+            docType: 'Identification Card',
+            mock: true
+          },
+          {
+            fileName: 'sample_insurance.pdf',
+            blobName: `${clientID}/Insurance/sample_insurance.pdf`,
+            blobUrl: '/mock/storage/sample_insurance.pdf',
+            fileSize: 2048000,
+            contentType: 'application/pdf',
+            uploadDate: new Date(Date.now() - 172800000).toISOString(),
+            docType: 'Insurance',
+            mock: true
+          }
+        ];
+      }
 
-  try {
-    const containerClient = this.blobServiceClient.getContainerClient(CONTAINER_NAME);
-    const prefix = docType ? `${clientID}/${docType}/` : `${clientID}/`;
-    
-    const files = [];
-    
-    for await (const blob of containerClient.listBlobsFlat({ prefix })) {
-      const blobClient = containerClient.getBlobClient(blob.name);
+      // Real API call
+      console.log(`Fetching files for client ${clientID} from backend...`);
       
-      files.push({
-        fileName: blob.metadata?.originalName || blob.name.split('/').pop(),
-        blobName: blob.name,
-        blobUrl: blobClient.url,
-        fileSize: blob.properties.contentLength,
-        contentType: blob.properties.contentType,
-        uploadDate: blob.metadata?.uploadDate || blob.properties.lastModified,
-        docType: blob.metadata?.docType || 'unknown',
-        etag: blob.etag
-      });
+      const params = { clientID };
+      if (docType) params.docType = docType;
+      
+      const response = await axios.get(`${this.apiUrl}/api/files`, { params });
+      
+      console.log(`Found ${response.data.length} files for client ${clientID}`);
+      return response.data;
+      
+    } catch (error) {
+      console.error(`Failed to list files for client ${clientID}:`, error);
+      
+      // Return empty array on error instead of throwing
+      if (error.response?.status === 404) {
+        console.log('No files found for client');
+        return [];
+      }
+      
+      // If backend is unavailable in mock mode, return sample data
+      if (this.useMockMode && error.code === 'ERR_NETWORK') {
+        console.log('Backend unavailable, returning mock files');
+        return [
+          {
+            fileName: 'fallback_document.pdf',
+            blobName: `${clientID}/Document/fallback_document.pdf`,
+            blobUrl: '/mock/storage/fallback_document.pdf',
+            fileSize: 512000,
+            contentType: 'application/pdf',
+            uploadDate: new Date().toISOString(),
+            docType: 'Document',
+            mock: true,
+            fallback: true
+          }
+        ];
+      }
+      
+      return []; // Return empty array on other errors
     }
-    
-    return files.sort((a, b) => new Date(b.uploadDate) - new Date(a.uploadDate));
-    
-  } catch (error) {
-    console.error(`Failed to list files for client ${clientID}:`, error);
-    return []; // Return empty array on error
   }
-}
 
   /**
    * Delete a file from Azure Blob Storage
@@ -144,46 +193,68 @@ class AzureBlobService {
    * @returns {Promise<boolean>} Success status
    */
   async deleteFile(blobName) {
-    if (!this.isConfigured) {
-      throw new Error('Azure Blob Storage is not properly configured');
-    }
-
     try {
-      const containerClient = this.blobServiceClient.getContainerClient(CONTAINER_NAME);
-      const blobClient = containerClient.getBlobClient(blobName);
+      // For mock mode, simulate deletion
+      if (this.useMockMode) {
+        console.log(`Mock deleting ${blobName}`);
+        await new Promise(resolve => setTimeout(resolve, 500));
+        return true;
+      }
+
+      // Real API call
+      console.log(`Deleting ${blobName} via backend...`);
       
-      await blobClient.deleteIfExists();
-      console.log(`🗑️ Successfully deleted ${blobName}`);
+      const response = await axios.delete(`${this.apiUrl}/api/file`, {
+        data: { blobName }
+      });
       
+      console.log(`Successfully deleted ${blobName}`);
       return true;
+      
     } catch (error) {
-      console.error(`❌ Failed to delete ${blobName}:`, error);
-      throw new Error(`Delete failed: ${error.message}`);
+      console.error(`Failed to delete ${blobName}:`, error);
+      
+      // In mock mode, consider delete successful
+      if (this.useMockMode) {
+        console.log('Mock delete considered successful');
+        return true;
+      }
+      
+      throw new Error(`Delete failed: ${error.response?.data?.message || error.message}`);
     }
   }
 
   /**
-   * Generate a temporary download URL with SAS token
+   * Generate a temporary download URL
    * @param {string} blobName - Full blob name/path
    * @param {number} expiryHours - Hours until expiry (default: 1)
    * @returns {Promise<string>} Temporary download URL
    */
   async generateDownloadUrl(blobName, expiryHours = 1) {
-    if (!this.isConfigured) {
-      throw new Error('Azure Blob Storage is not properly configured');
-    }
-
     try {
-      const containerClient = this.blobServiceClient.getContainerClient(CONTAINER_NAME);
-      const blobClient = containerClient.getBlobClient(blobName);
+      // For mock mode, return a mock URL
+      if (this.useMockMode) {
+        const mockUrl = `${window.location.origin}/mock/downloads/${encodeURIComponent(blobName)}`;
+        console.log(`Mock download URL: ${mockUrl}`);
+        return mockUrl;
+      }
+
+      // Real API call
+      console.log(`Getting download URL for ${blobName} from backend...`);
       
-      // For simplicity, return the blob URL directly if container has public access
-      // In production, you might want to generate SAS tokens for private containers
-      return blobClient.url;
+      const response = await axios.get(`${this.apiUrl}/api/file/download-url`, {
+        params: { blobName, expiryHours }
+      });
+      
+      return response.data.url;
       
     } catch (error) {
-      console.error(`❌ Failed to generate download URL for ${blobName}:`, error);
-      throw new Error(`Failed to generate download URL: ${error.message}`);
+      console.error(`Failed to generate download URL for ${blobName}:`, error);
+      
+      // Fallback to direct backend download endpoint
+      const fallbackUrl = `${this.apiUrl}/api/file/download/${encodeURIComponent(blobName)}`;
+      console.log(`Using fallback download URL: ${fallbackUrl}`);
+      return fallbackUrl;
     }
   }
 }

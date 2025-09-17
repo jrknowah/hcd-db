@@ -1,8 +1,8 @@
-// store/slices/referralSlice.js - Enhanced version
+// store/slices/referralSlice.js - Fixed API URLs
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
 
-const API = import.meta.env.VITE_API_URL;
+const API = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
 // Mock data for development
 const MOCK_REFERRAL_DATA = {
@@ -24,7 +24,8 @@ export const fetchReferralData = createAsyncThunk(
         return MOCK_REFERRAL_DATA;
       }
 
-      const { data } = await axios.get(`${API}/clientReferrals/${clientID}`);
+      // FIX: Add /api prefix to the URL
+      const { data } = await axios.get(`${API}/api/clientReferrals/${clientID}`);
       return data;
     } catch (error) {
       return rejectWithValue(error.response?.data?.message || 'Failed to fetch referral data');
@@ -45,7 +46,8 @@ export const saveReferralData = createAsyncThunk(
         return referrals;
       }
 
-      await axios.post(`${API}/saveClientReferrals`, { clientID, ...referrals });
+      // FIX: Add /api prefix to the URL
+      await axios.post(`${API}/api/saveClientReferrals`, { clientID, ...referrals });
       return referrals;
     } catch (error) {
       return rejectWithValue(error.response?.data?.message || 'Failed to save referral data');
@@ -76,7 +78,8 @@ export const uploadReferralFile = createAsyncThunk(
       formData.append("clientID", clientID);
       formData.append("type", referralType);
 
-      const response = await axios.post(`${API}/uploadReferral`, formData, {
+      // FIX: Add /api prefix to the URL
+      const response = await axios.post(`${API}/api/uploadReferral`, formData, {
         headers: { "Content-Type": "multipart/form-data" }
       });
 
@@ -219,13 +222,13 @@ export const {
 } = referralSlice.actions;
 
 // Selectors
-export const selectReferrals = (state) => state.referrals.referrals;
-export const selectReferralsLoading = (state) => state.referrals.loading;
-export const selectReferralsSaving = (state) => state.referrals.saving;
-export const selectReferralsUploading = (state) => state.referrals.uploading;
-export const selectReferralsError = (state) => state.referrals.error;
-export const selectReferralsSuccess = (state) => state.referrals.successMessage;
-export const selectReferralsDataLoaded = (state) => state.referrals.dataLoaded;
-export const selectReferralUploadProgress = (state) => state.referrals.uploadProgress;
+export const selectReferrals = (state) => state.referrals?.referrals || {};
+export const selectReferralsLoading = (state) => state.referrals?.loading || false;
+export const selectReferralsSaving = (state) => state.referrals?.saving || false;
+export const selectReferralsUploading = (state) => state.referrals?.uploading || false;
+export const selectReferralsError = (state) => state.referrals?.error || null;
+export const selectReferralsSuccess = (state) => state.referrals?.successMessage || null;
+export const selectReferralsDataLoaded = (state) => state.referrals?.dataLoaded || false;
+export const selectReferralUploadProgress = (state) => state.referrals?.uploadProgress || {};
 
 export default referralSlice.reducer;
