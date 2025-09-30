@@ -1,7 +1,7 @@
 // src/store/apps/notes/progressNoteSlice.js
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 
-const API_URL = import.meta.env.VITE_API_URL;
+const API_URL = '';
 
 // ✅ Helper function to check if we should use mock data
 const shouldUseMockData = (clientID) => {
@@ -93,7 +93,7 @@ export const fetchProgressNotes = createAsyncThunk(
     }
 
     try {
-      const response = await fetch(`${API_URL}/api/progress-notes/${clientID}`, {
+      const response = await fetch(`/api/progress-notes/${clientID}`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -130,7 +130,7 @@ export const addProgressNote = createAsyncThunk(
     }
 
     try {
-      const response = await fetch(`${API_URL}/api/progress-notes/${clientID}`, {
+      const response = await fetch(`/api/progress-notes/${clientID}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -168,7 +168,7 @@ export const editProgressNote = createAsyncThunk(
     }
 
     try {
-      const response = await fetch(`${API_URL}/api/progress-notes/${noteId}`, {
+      const response = await fetch(`/api/progress-notes/${noteId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -200,7 +200,7 @@ export const deleteProgressNote = createAsyncThunk(
     }
 
     try {
-      const response = await fetch(`${API_URL}/api/progress-notes/${noteId}`, {
+      const response = await fetch(`/api/progress-notes/${noteId}`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
@@ -230,7 +230,7 @@ export const fetchNotesSummary = createAsyncThunk(
     }
 
     try {
-      const response = await fetch(`${API_URL}/api/progress-notes/${clientID}/summary`, {
+      const response = await fetch(`/api/progress-notes/${clientID}/summary`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -261,7 +261,7 @@ export const fetchRecentNotes = createAsyncThunk(
     }
 
     try {
-      const response = await fetch(`${API_URL}/api/progress-notes/${clientID}/recent`, {
+      const response = await fetch(`/api/progress-notes/${clientID}/recent`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -292,7 +292,7 @@ export const fetchNotesBySite = createAsyncThunk(
     }
 
     try {
-      const response = await fetch(`${API_URL}/api/progress-notes/site/${encodeURIComponent(siteID)}`, {
+      const response = await fetch(`/api/progress-notes/site/${encodeURIComponent(siteID)}`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',

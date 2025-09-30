@@ -2,7 +2,7 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
 
-const API_URL = import.meta.env.VITE_API_URL;
+const API_URL = '';
 
 // ✅ Helper function to check if we should use mock data
 const shouldUseMockData = (clientID) => {
@@ -153,7 +153,7 @@ export const fetchNursingAdmission = createAsyncThunk(
     }
 
     try {
-      const response = await axios.get(`${API_URL}/api/nursing-admission/${clientID}`);
+      const response = await axios.get(`/api/nursing-admission/${clientID}`);
       return response.data;
     } catch (error) {
       console.error("❌ Error fetching nursing admission:", error);
@@ -177,7 +177,7 @@ export const saveNursingAdmission = createAsyncThunk(
     }
 
     try {
-      const response = await axios.post(`${API_URL}/api/nursing-admission/${clientID}`, formData);
+      const response = await axios.post(`/api/nursing-admission/${clientID}`, formData);
       return response.data;
     } catch (error) {
       console.error("❌ Error saving nursing admission:", error);
@@ -197,7 +197,7 @@ export const fetchAdmissionSummary = createAsyncThunk(
     }
 
     try {
-      const response = await axios.get(`${API_URL}/api/nursing-admission/${clientID}/summary`);
+      const response = await axios.get(`/api/nursing-admission/${clientID}/summary`);
       return response.data;
     } catch (error) {
       console.error("❌ Error fetching admission summary:", error);
@@ -220,7 +220,7 @@ export const fetchBodyInspection = createAsyncThunk(
     }
 
     try {
-      const response = await axios.get(`${API_URL}/api/nursing-admission/${clientID}/body-inspection`);
+      const response = await axios.get(`/api/nursing-admission/${clientID}/body-inspection`);
       return response.data;
     } catch (error) {
       console.error("❌ Error fetching body inspection:", error);
@@ -240,7 +240,7 @@ export const fetchVitalsHistory = createAsyncThunk(
     }
 
     try {
-      const response = await axios.get(`${API_URL}/api/nursing-admission/${clientID}/vitals`);
+      const response = await axios.get(`/api/nursing-admission/${clientID}/vitals`);
       return response.data;
     } catch (error) {
       console.error("❌ Error fetching vitals history:", error);
@@ -264,7 +264,7 @@ export const updateNursingAdmission = createAsyncThunk(
     }
 
     try {
-      const response = await axios.put(`${API_URL}/api/nursing-admission/${admissionID}`, updatedData);
+      const response = await axios.put(`/api/nursing-admission/${admissionID}`, updatedData);
       return response.data;
     } catch (error) {
       console.error("❌ Error updating nursing admission:", error);
@@ -284,7 +284,7 @@ export const deleteNursingAdmission = createAsyncThunk(
     }
 
     try {
-      await axios.delete(`${API_URL}/api/nursing-admission/${admissionID}`);
+      await axios.delete(`/api/nursing-admission/${admissionID}`);
       return admissionID;
     } catch (error) {
       console.error("❌ Error deleting nursing admission:", error);

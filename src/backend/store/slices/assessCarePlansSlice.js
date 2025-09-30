@@ -1,7 +1,7 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import axios from 'axios';
 
-const HCD_API = `${import.meta.env.VITE_API_URL}`; // Adjust to your actual auth endpoint
+const HCD_API = ``; // Adjust to your actual auth endpoint
 
 // Mock data for development
 const mockAssessmentData = {
@@ -102,7 +102,7 @@ export const fetchAssessmentData = createAsyncThunk(
     'assessCarePlans/fetchAssessmentData',
     async (clientID, { rejectWithValue }) => {
         try {
-            const response = await axios.get(`${HCD_API}/api/assessment-care-plans/${clientID}`);
+            const response = await axios.get(`/api/assessment-care-plans/${clientID}`);
             return response.data;
         } catch (error) {
             console.error('Error fetching assessment data:', error);
@@ -115,7 +115,7 @@ export const fetchAssessmentStatus = createAsyncThunk(
     'assessCarePlans/fetchAssessmentStatus',
     async (clientID, { rejectWithValue }) => {
         try {
-            const response = await axios.get(`${HCD_API}/api/assessment-care-plans/${clientID}/status`);
+            const response = await axios.get(`/api/assessment-care-plans/${clientID}/status`);
             return response.data;
         } catch (error) {
             console.error('Error fetching assessment status:', error);
@@ -128,7 +128,7 @@ export const fetchAssessmentMetrics = createAsyncThunk(
     'assessCarePlans/fetchAssessmentMetrics',
     async (clientID, { rejectWithValue }) => {
         try {
-            const response = await axios.get(`${HCD_API}/api/assessment-care-plans/${clientID}/metrics`);
+            const response = await axios.get(`/api/assessment-care-plans/${clientID}/metrics`);
             return response.data;
         } catch (error) {
             console.error('Error fetching assessment metrics:', error);
@@ -141,7 +141,7 @@ export const fetchAssessmentMilestones = createAsyncThunk(
     'assessCarePlans/fetchAssessmentMilestones',
     async (clientID, { rejectWithValue }) => {
         try {
-            const response = await axios.get(`${HCD_API}/api/assessment-care-plans/${clientID}/milestones`);
+            const response = await axios.get(`/api/assessment-care-plans/${clientID}/milestones`);
             return response.data;
         } catch (error) {
             console.error('Error fetching assessment milestones:', error);
@@ -154,7 +154,7 @@ export const saveAssessmentData = createAsyncThunk(
     'assessCarePlans/saveAssessmentData',
     async ({ clientID, assessmentData }, { rejectWithValue }) => {
         try {
-            const response = await axios.post(`${HCD_API}/api/assessment-care-plans/${clientID}`, assessmentData);
+            const response = await axios.post(`/api/assessment-care-plans/${clientID}`, assessmentData);
             return response.data;
         } catch (error) {
             console.error('Error saving assessment data:', error);
@@ -167,7 +167,7 @@ export const updateAssessmentStatus = createAsyncThunk(
     'assessCarePlans/updateAssessmentStatus',
     async ({ assessmentID, statusData }, { rejectWithValue }) => {
         try {
-            const response = await axios.put(`${HCD_API}/api/assessment-care-plans/assessment/${assessmentID}/status`, statusData);
+            const response = await axios.put(`/api/assessment-care-plans/assessment/${assessmentID}/status`, statusData);
             return response.data;
         } catch (error) {
             console.error('Error updating assessment status:', error);
@@ -181,7 +181,7 @@ export const completeMilestone = createAsyncThunk(
     async ({ clientID, milestoneID, completionData }, { rejectWithValue }) => {
         try {
             const response = await axios.put(
-                `${HCD_API}/api/assessment-care-plans/${clientID}/milestones/${milestoneID}/complete`, 
+                `/api/assessment-care-plans/${clientID}/milestones/${milestoneID}/complete`, 
                 completionData
             );
             return response.data;
@@ -196,7 +196,7 @@ export const generateAssessmentReport = createAsyncThunk(
     'assessCarePlans/generateAssessmentReport',
     async (clientID, { rejectWithValue }) => {
         try {
-            const response = await axios.get(`${HCD_API}/api/assessment-care-plans/${clientID}/report`);
+            const response = await axios.get(`/api/assessment-care-plans/${clientID}/report`);
             return response.data;
         } catch (error) {
             console.error('Error generating assessment report:', error);

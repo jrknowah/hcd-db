@@ -2,7 +2,7 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import axios from 'axios';
 
-const HCD_API = `${import.meta.env.VITE_API_URL}`;
+const HCD_API = ``;
 
 // Mock data
 const MOCK_CLIENT_FACE_DATA = {
@@ -38,8 +38,8 @@ export const fetchClientFaceData = createAsyncThunk(
       }
 
       const [faceResponse, allergiesResponse] = await Promise.allSettled([
-        axios.get(`${HCD_API}/api/getClientFace/${clientID}`),
-        axios.get(`${HCD_API}/api/getClientAllergies/${clientID}`)
+        axios.get(`/api/getClientFace/${clientID}`),
+        axios.get(`/api/getClientAllergies/${clientID}`)
       ]);
 
       const formData = faceResponse.status === 'fulfilled' ? faceResponse.value.data : {};
@@ -71,13 +71,13 @@ export const saveClientFaceData = createAsyncThunk(
         };
       }
 
-      await axios.post(`${HCD_API}/api/saveClientFace`, {
+      await axios.post(`/api/saveClientFace`, {
         ...formData,
         clientID
       });
 
       if (allergies && allergies.length > 0) {
-        await axios.post(`${HCD_API}/api/saveClientAllergies`, {
+        await axios.post(`/api/saveClientAllergies`, {
           clientID,
           allergies
         });

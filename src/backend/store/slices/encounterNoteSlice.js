@@ -2,7 +2,7 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
 
-const API_URL = import.meta.env.VITE_API_URL;
+const API_URL = '';
 
 // ✅ Helper function to check if we should use mock data
 const shouldUseMockData = (clientID) => {
@@ -83,7 +83,7 @@ export const fetchEncounterNotes = createAsyncThunk(
     }
 
     try {
-      const response = await axios.get(`${API_URL}/api/encounter-notes/${clientID}`);
+      const response = await axios.get(`/api/encounter-notes/${clientID}`);
       return response.data;
     } catch (error) {
       console.error("❌ Error fetching encounter notes:", error);
@@ -109,7 +109,7 @@ export const addEncounterNote = createAsyncThunk(
     }
 
     try {
-      const response = await axios.post(`${API_URL}/api/encounter-notes/${clientID}`, noteData);
+      const response = await axios.post(`/api/encounter-notes/${clientID}`, noteData);
       return response.data;
     } catch (error) {
       console.error("❌ Error adding encounter note:", error);
@@ -133,7 +133,7 @@ export const editEncounterNote = createAsyncThunk(
     }
 
     try {
-      const response = await axios.put(`${API_URL}/api/encounter-notes/${noteId}`, updatedData);
+      const response = await axios.put(`/api/encounter-notes/${noteId}`, updatedData);
       return response.data;
     } catch (error) {
       console.error("❌ Error editing encounter note:", error);
@@ -153,7 +153,7 @@ export const deleteEncounterNote = createAsyncThunk(
     }
 
     try {
-      await axios.delete(`${API_URL}/api/encounter-notes/${noteId}`);
+      await axios.delete(`/api/encounter-notes/${noteId}`);
       return noteId;
     } catch (error) {
       console.error("❌ Error deleting encounter note:", error);

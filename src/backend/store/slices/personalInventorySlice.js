@@ -140,7 +140,6 @@ export const fetchPersonalInventory = createAsyncThunk(
     }
   }
 );
-
 export const addInventoryItem = createAsyncThunk(
   'personalInventory/addInventoryItem',
   async (itemData, { rejectWithValue }) => {

@@ -6,7 +6,7 @@ import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import axios from 'axios';
 
 // Base API URL - adjust according to your setup
-const HCD_API = `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}`;
+const HCD_API = '';
 
 // Mock data for development
 const mockReassessmentData = {
@@ -110,7 +110,7 @@ export const fetchReassessmentData = createAsyncThunk(
     'reassessment/fetchReassessmentData',
     async (clientID, { rejectWithValue }) => {
         try {
-            const response = await axios.get(`${HCD_API}/api/reassessment/${clientID}`);
+            const response = await axios.get(`/api/reassessment/${clientID}`);
             return response.data;
         } catch (error) {
             console.error('Error fetching reassessment data:', error);
@@ -123,7 +123,7 @@ export const fetchReassessmentByAssessment = createAsyncThunk(
     'reassessment/fetchReassessmentByAssessment', 
     async (assessmentID, { rejectWithValue }) => {
         try {
-            const response = await axios.get(`${HCD_API}/api/reassessment/assessment/${assessmentID}`);
+            const response = await axios.get(`/api/reassessment/assessment/${assessmentID}`);
             return response.data;
         } catch (error) {
             console.error('Error fetching reassessment by assessment:', error);
@@ -136,7 +136,7 @@ export const saveReassessmentData = createAsyncThunk(
     'reassessment/saveReassessmentData',
     async ({ clientID, reassessmentData }, { rejectWithValue }) => {
         try {
-            const response = await axios.post(`${HCD_API}/api/reassessment/${clientID}`, reassessmentData);
+            const response = await axios.post(`/api/reassessment/${clientID}`, reassessmentData);
             return response.data;
         } catch (error) {
             console.error('Error saving reassessment data:', error);
@@ -149,7 +149,7 @@ export const updateReassessmentData = createAsyncThunk(
     'reassessment/updateReassessmentData',
     async ({ reassessmentID, reassessmentData }, { rejectWithValue }) => {
         try {
-            const response = await axios.put(`${HCD_API}/api/reassessment/record/${reassessmentID}`, reassessmentData);
+            const response = await axios.put(`/api/reassessment/record/${reassessmentID}`, reassessmentData);
             return response.data;
         } catch (error) {
             console.error('Error updating reassessment data:', error);
@@ -162,7 +162,7 @@ export const completeReassessment = createAsyncThunk(
     'reassessment/completeReassessment',
     async ({ clientID, completionData }, { rejectWithValue }) => {
         try {
-            const response = await axios.put(`${HCD_API}/api/reassessment/${clientID}/complete`, completionData);
+            const response = await axios.put(`/api/reassessment/${clientID}/complete`, completionData);
             return response.data;
         } catch (error) {
             console.error('Error completing reassessment:', error);
@@ -175,7 +175,7 @@ export const generateReassessmentSummary = createAsyncThunk(
     'reassessment/generateReassessmentSummary',
     async (clientID, { rejectWithValue }) => {
         try {
-            const response = await axios.get(`${HCD_API}/api/reassessment/${clientID}/summary`);
+            const response = await axios.get(`/api/reassessment/${clientID}/summary`);
             return response.data;
         } catch (error) {
             console.error('Error generating reassessment summary:', error);
@@ -188,7 +188,7 @@ export const fetchAllReassessments = createAsyncThunk(
     'reassessment/fetchAllReassessments',
     async (_, { rejectWithValue }) => {
         try {
-            const response = await axios.get(`${HCD_API}/api/reassessment/all`);
+            const response = await axios.get(`/api/reassessment/all`);
             return response.data;
         } catch (error) {
             console.error('Error fetching all reassessments:', error);
@@ -202,7 +202,7 @@ export const searchReassessments = createAsyncThunk(
     async (searchParams, { rejectWithValue }) => {
         try {
             const params = new URLSearchParams(searchParams);
-            const response = await axios.get(`${HCD_API}/api/reassessment/search?${params}`);
+            const response = await axios.get(`/api/reassessment/search?${params}`);
             return response.data;
         } catch (error) {
             console.error('Error searching reassessments:', error);

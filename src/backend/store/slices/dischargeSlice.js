@@ -2,7 +2,7 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
 
-const API = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+const API = '';
 
 // Mock data for development
 const MOCK_DISCHARGE_DATA = {
@@ -30,7 +30,7 @@ export const fetchClientDischarge = createAsyncThunk(
         return MOCK_DISCHARGE_DATA;
       }
 
-      const response = await axios.get(`${API}/api/getClientDischarge/${clientID}`);
+      const response = await axios.get(`/api/getClientDischarge/${clientID}`);
       return response.data;
     } catch (error) {
       return rejectWithValue(error.response?.data?.message || 'Failed to fetch discharge data');
@@ -52,7 +52,7 @@ export const saveClientDischarge = createAsyncThunk(
       }
 
       const payload = { ...dischargeData, clientID };
-      await axios.post(`${API}/api/saveClientDischarge`, payload);
+      await axios.post(`/api/saveClientDischarge`, payload);
       return payload;
     } catch (error) {
       return rejectWithValue(error.response?.data?.message || 'Failed to save discharge data');
