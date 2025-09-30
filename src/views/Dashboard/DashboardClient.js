@@ -99,14 +99,14 @@ const DashboardClient = () => {
 
   // ✅ FIXED: useEffect now comes AFTER all variables are declared
   useEffect(() => {
-    console.log('🔗 API URL:', import.meta.env.VITE_API_URL);
+    console.log('🔗 API URL:');
     console.log('📊 Redux clients state:', clients);
     console.log('📊 Redux loading state:', loading);
     console.log('📊 Redux error state:', error);
     
     // Test API call directly
     console.log('🧪 Testing API call...');
-    fetch(`${import.meta.env.VITE_API_URL}/api/clients`)
+    fetch(`/api/clients`)
       .then(response => {
         console.log('🌐 API Response status:', response.status);
         return response.json();
