@@ -228,7 +228,10 @@ const clientSlice = createSlice({
 export const { setSelectedClient, clearSelectedClient, clearError, setClientsList } = clientSlice.actions;
 
 // Selectors
-export const selectAllClients = (state) => state.clients.clients;
+export const selectAllClients = (state) => {
+  const clients = state.clients?.clients;
+  return Array.isArray(clients) ? clients : [];
+};
 export const selectSelectedClient = (state) => state.clients.selectedClient;
 export const selectClientsLoading = (state) => state.clients.loading;
 export const selectClientsError = (state) => state.clients.error;

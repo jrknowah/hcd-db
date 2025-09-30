@@ -74,7 +74,7 @@ const DashboardClient = () => {
   
   // ✅ FIXED: Move Redux selectors to the TOP, before any useEffect that uses them
   const user = useSelector((state) => state.auth?.user);
-  const clients = useSelector(selectAllClients);
+  const clients = useSelector(selectAllClients) || [];
   const selectedClient = useSelector((state) => state.clients?.selectedClient);
   const loading = useSelector(selectClientsLoading);
   const error = useSelector(selectClientsError);
