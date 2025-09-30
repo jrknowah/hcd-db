@@ -3,6 +3,7 @@
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { useSearchParams, useLocation, useNavigate } from 'react-router-dom';
+import store from '../../backend/store/store';
 import {
   Box,
   Button,
@@ -97,6 +98,9 @@ const DashboardClient = () => {
   console.log('🔍 Current pathname:', location.pathname);
   console.log('🔍 URL Client ID from params:', searchParams.get('clientID'));
 
+   console.log('Store state on component mount:', store.getState());
+  console.log('Clients slice:', store.getState().clients);
+
   // ✅ FIXED: useEffect now comes AFTER all variables are declared
   // useEffect(() => {
   //   console.log('🔗 API URL:');
@@ -137,6 +141,14 @@ const DashboardClient = () => {
       }
     }
   }, [location.pathname, searchParams, dispatch, clients]);
+
+  useEffect(() => {
+  const state = store.getState();
+  console.log('Full Redux state:', state);
+  console.log('Clients slice:', state.clients);
+  console.log('Clients array:', state.clients?.clients);
+  console.log('Is array?', Array.isArray(state.clients?.clients));
+}, []);
 
   // Restore client data on page load
   // Restore client from cache on page refresh
