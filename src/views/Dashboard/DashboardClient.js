@@ -98,27 +98,27 @@ const DashboardClient = () => {
   console.log('🔍 URL Client ID from params:', searchParams.get('clientID'));
 
   // ✅ FIXED: useEffect now comes AFTER all variables are declared
-  useEffect(() => {
-    console.log('🔗 API URL:');
-    console.log('📊 Redux clients state:', clients);
-    console.log('📊 Redux loading state:', loading);
-    console.log('📊 Redux error state:', error);
+  // useEffect(() => {
+  //   console.log('🔗 API URL:');
+  //   console.log('📊 Redux clients state:', clients);
+  //   console.log('📊 Redux loading state:', loading);
+  //   console.log('📊 Redux error state:', error);
     
-    // Test API call directly
-    console.log('🧪 Testing API call...');
-    fetch(`/api/clients`)
-      .then(response => {
-        console.log('🌐 API Response status:', response.status);
-        return response.json();
-      })
-      .then(data => {
-        console.log('📋 Real clients from API:', data);
-        console.log('📋 Number of clients:', data?.length);
-      })
-      .catch(err => {
-        console.error('❌ API call failed:', err);
-      });
-  }, [clients, loading, error]);
+  //   // Test API call directly
+  //   console.log('🧪 Testing API call...');
+  //   fetch(`/api/clients`)
+  //     .then(response => {
+  //       console.log('🌐 API Response status:', response.status);
+  //       return response.json();
+  //     })
+  //     .then(data => {
+  //       console.log('📋 Real clients from API:', data);
+  //       console.log('📋 Number of clients:', data?.length);
+  //     })
+  //     .catch(err => {
+  //       console.error('❌ API call failed:', err);
+  //     });
+  // }, [clients, loading, error]);
 
   // ✅ Load client from URL on page load/refresh (only for dashboard)
   useEffect(() => {
