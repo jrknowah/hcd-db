@@ -12,113 +12,118 @@ class AzureProfileService {
   // In azureProfileService.js, update the getAccessToken method:
 // In azureProfileService.js
 // Update the getAccessToken method to handle token refresh:
+// In azureProfileService.js, replace the getAccessToken method:
 async getAccessToken() {
   try {
-    // First try to get fresh token from MSAL if available
+    // Check if MSAL instance is available
     if (window.msalInstance) {
       const accounts = window.msalInstance.getAllAccounts();
       
       if (accounts && accounts.length > 0) {
         try {
-          // Try silent token acquisition first
+          // Always try to get a fresh token silently
           const tokenResponse = await window.msalInstance.acquireTokenSilent({
             scopes: ['User.Read'],
-            account: accounts[0]
+            account: accounts[0],
+            forceRefresh: false // Don't force, let MSAL handle caching
           });
-          
-          // Update Redux with fresh token
-          if (window.__REDUX_STORE__) {
-            window.__REDUX_STORE__.dispatch({
-              type: 'auth/updateToken',
-              payload: tokenResponse.accessToken
-            });
-          }
           
           console.log('🔑 Got fresh token from MSAL');
           return tokenResponse.accessToken;
-        } catch (silentError) {
-          console.warn('⚠️ Silent token refresh failed:', silentError.message);
           
-          // If silent fails, token might be expired - try interactive
-          if (silentError.errorCode === 'interaction_required' || 
-              silentError.errorCode === 'consent_required' ||
-              silentError.errorCode === 'login_required') {
-            
+        } catch (silentError) {
+          console.warn('⚠️ Silent token acquisition failed:', silentError);
+          
+          // If silent fails, try popup
+          if (silentError.errorCode === 'interaction_required') {
             try {
               const tokenResponse = await window.msalInstance.acquireTokenPopup({
                 scopes: ['User.Read']
               });
-              
-              // Update Redux with fresh token
-              if (window.__REDUX_STORE__) {
-                window.__REDUX_STORE__.dispatch({
-                  type: 'auth/updateToken', 
-                  payload: tokenResponse.accessToken
-                });
-              }
-              
               return tokenResponse.accessToken;
             } catch (popupError) {
-              console.error('❌ Interactive token acquisition failed:', popupError);
+              console.error('❌ Popup token acquisition failed:', popupError);
               throw new Error('Please log in again');
             }
           }
+          
+          throw silentError;
         }
       }
     }
     
-    // Fallback to stored token if MSAL not available
+    // Fallback to stored token (probably expired)
     const store = window.__REDUX_STORE__;
     const token = store?.getState()?.auth?.azureToken;
     
     if (token && token !== 'no-token') {
-      console.log('⚠️ Using stored token (might be expired)');
+      console.warn('⚠️ Using stored token (may be expired)');
       return token;
     }
     
-    console.warn('⚠️ No Azure access token found');
-    return null;
+    throw new Error('No access token available');
   } catch (error) {
     console.error('❌ Error getting access token:', error);
-    return null;
+    throw error;
   }
 }
 
   /**
    * Make authenticated request to Microsoft Graph API
    */
-  async makeGraphRequest(endpoint, options = {}) {
-    const accessToken = this.getAccessToken();
+  async makeGraphRequest(endpoint, options = {}, retryCount = 0) {
+  try {
+    const accessToken = await this.getAccessToken();
     
     if (!accessToken) {
-      throw new Error('No Azure access token available. Please ensure user is logged in.');
+      throw new Error('No Azure access token available');
     }
 
-    try {
-      const response = await fetch(`${this.baseUrl}${endpoint}`, {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-          ...options.headers
-        },
-        ...options
-      });
+    const response = await fetch(`${this.baseUrl}${endpoint}`, {
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+        ...options.headers
+      },
+      ...options
+    });
 
-      if (!response.ok) {
-        if (response.status === 401) {
-          // Token expired - clear cache and throw error
-          this.clearCache();
-          throw new Error('Azure access token expired. Please log in again.');
+    if (!response.ok) {
+      if (response.status === 401 && retryCount === 0) {
+        // Token expired, clear cache and try once more with fresh token
+        this.clearCache();
+        console.log('🔄 Token expired, attempting refresh...');
+        
+        // Force token refresh
+        if (window.msalInstance) {
+          const accounts = window.msalInstance.getAllAccounts();
+          if (accounts?.length > 0) {
+            try {
+              const tokenResponse = await window.msalInstance.acquireTokenSilent({
+                scopes: ['User.Read'],
+                account: accounts[0],
+                forceRefresh: true // Force a fresh token
+              });
+              
+              // Retry the request with new token
+              return this.makeGraphRequest(endpoint, options, retryCount + 1);
+            } catch (refreshError) {
+              console.error('❌ Token refresh failed:', refreshError);
+            }
+          }
         }
-        throw new Error(`Microsoft Graph API error: ${response.status} ${response.statusText}`);
+        
+        throw new Error('Azure access token expired. Please log in again.');
       }
-
-      return response;
-    } catch (error) {
-      console.error('❌ Microsoft Graph request failed:', error);
-      throw error;
+      throw new Error(`Microsoft Graph API error: ${response.status} ${response.statusText}`);
     }
+
+    return response;
+  } catch (error) {
+    console.error('❌ Microsoft Graph request failed:', error);
+    throw error;
   }
+}
 
   /**
    * Get current user's profile information
