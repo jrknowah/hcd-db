@@ -266,26 +266,32 @@ function App() {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const setupMsal = async () => {
-      try {
-        console.log('🚀 App starting MSAL setup...');
-        
-        // Wait for MSAL to fully initialize
-        await initializeMsal();
-        
-        console.log('✅ MSAL setup complete');
-        setMsalInitialized(true);
-        
-      } catch (error) {
-        console.error('❌ MSAL setup failed:', error);
-        setInitError(error.message);
-      } finally {
-        setIsLoading(false);
-      }
-    };
+  const setupMsal = async () => {
+    try {
+      console.log('🚀 App starting MSAL setup...');
+      
+      // Wait for MSAL to fully initialize
+      await initializeMsal();
+      
+      // Make MSAL instance globally available for token refresh
+      window.msalInstance = msalInstance;
+      
+      // Also make Redux store available if you have it
+      window.__REDUX_STORE__ = store;
+      
+      console.log('✅ MSAL setup complete');
+      setMsalInitialized(true);
+      
+    } catch (error) {
+      console.error('❌ MSAL setup failed:', error);
+      setInitError(error.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-    setupMsal();
-  }, []);
+  setupMsal();
+}, []);
 
   // Retry function for failed initialization
   const retryInitialization = () => {

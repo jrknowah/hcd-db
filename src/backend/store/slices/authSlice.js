@@ -192,6 +192,10 @@ const authSlice = createSlice({
       const authData = { ...state };
       localStorage.setItem('authData', JSON.stringify(authData));
     },
+    updateToken: (state, action) => {
+      state.azureToken = action.payload;
+      localStorage.setItem('azureToken', action.payload);
+    },
   },
   extraReducers: (builder) => {
     builder

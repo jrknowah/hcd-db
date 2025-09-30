@@ -11,25 +11,69 @@ class AzureProfileService {
    */
   // In azureProfileService.js, update the getAccessToken method:
 // In azureProfileService.js
-getAccessToken() {
+// Update the getAccessToken method to handle token refresh:
+async getAccessToken() {
   try {
-    // Get from Redux store
-    const store = window.__REDUX_STORE__;
-    const state = store?.getState();
-    
-    // ✅ Correct path: azureToken not token
-    const token = state?.auth?.azureToken;
-    
-    if (token && token !== 'no-token') {
-      console.log('🔑 Using token from Redux store');
-      return token;
+    // First try to get fresh token from MSAL if available
+    if (window.msalInstance) {
+      const accounts = window.msalInstance.getAllAccounts();
+      
+      if (accounts && accounts.length > 0) {
+        try {
+          // Try silent token acquisition first
+          const tokenResponse = await window.msalInstance.acquireTokenSilent({
+            scopes: ['User.Read'],
+            account: accounts[0]
+          });
+          
+          // Update Redux with fresh token
+          if (window.__REDUX_STORE__) {
+            window.__REDUX_STORE__.dispatch({
+              type: 'auth/updateToken',
+              payload: tokenResponse.accessToken
+            });
+          }
+          
+          console.log('🔑 Got fresh token from MSAL');
+          return tokenResponse.accessToken;
+        } catch (silentError) {
+          console.warn('⚠️ Silent token refresh failed:', silentError.message);
+          
+          // If silent fails, token might be expired - try interactive
+          if (silentError.errorCode === 'interaction_required' || 
+              silentError.errorCode === 'consent_required' ||
+              silentError.errorCode === 'login_required') {
+            
+            try {
+              const tokenResponse = await window.msalInstance.acquireTokenPopup({
+                scopes: ['User.Read']
+              });
+              
+              // Update Redux with fresh token
+              if (window.__REDUX_STORE__) {
+                window.__REDUX_STORE__.dispatch({
+                  type: 'auth/updateToken', 
+                  payload: tokenResponse.accessToken
+                });
+              }
+              
+              return tokenResponse.accessToken;
+            } catch (popupError) {
+              console.error('❌ Interactive token acquisition failed:', popupError);
+              throw new Error('Please log in again');
+            }
+          }
+        }
+      }
     }
     
-    // Fallback to localStorage
-    const localStorageToken = localStorage.getItem('azureToken');
-    if (localStorageToken && localStorageToken !== 'no-token') {
-      console.log('🔑 Using token from localStorage');
-      return localStorageToken;
+    // Fallback to stored token if MSAL not available
+    const store = window.__REDUX_STORE__;
+    const token = store?.getState()?.auth?.azureToken;
+    
+    if (token && token !== 'no-token') {
+      console.log('⚠️ Using stored token (might be expired)');
+      return token;
     }
     
     console.warn('⚠️ No Azure access token found');
