@@ -8,6 +8,7 @@ const shouldUseMockData = () => {
   
   return isDevelopment && !forceRealData;
 };
+
 // Mock response for development
 const MOCK_UPLOAD_RESPONSE = {
   success: true,
