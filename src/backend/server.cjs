@@ -511,15 +511,6 @@ try {
 
 //Section 3: Client Assessment===========================================================
 
-try {
-  const filesRouter = require('./routes/files.js');
-  app.use('/api', filesRouter);
-  console.log('✅ Files router loaded from ./routes/files.js');
-  filesRouterLoaded = true;
-} catch (err) {
-  console.log('⚠️  Could not load ./routes/files.js:', err.message);
-}
-
 // Add these to your server.js after line 50
 try {
   const bioSocialRouter = require('./routes/bioSocial.js');

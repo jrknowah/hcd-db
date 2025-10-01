@@ -183,7 +183,7 @@ const calculateCompletionPercentage = (bioSocialData) => {
 // ===== BIO-SOCIAL ROUTES =====
 
 // 🔸 GET /api/bio-social/:clientID - Get bio-social data for client
-router.get('/:clientID', async (req, res) => {
+router.get('/bio-social/:clientID', async (req, res) => {
     const { clientID } = req.params;
     
     try {
@@ -231,7 +231,7 @@ router.get('/:clientID', async (req, res) => {
 });
 
 // 🔸 GET /api/bio-social/assessment/:assessmentID - Get bio-social data by assessment ID
-router.get('/assessment/:assessmentID', async (req, res) => {
+router.get('/bio-social/assessment/:assessmentID', async (req, res) => {
     const { assessmentID } = req.params;
     
     try {
@@ -273,7 +273,7 @@ router.get('/assessment/:assessmentID', async (req, res) => {
 });
 
 // 🔸 POST /api/bio-social/:clientID - Create/Save bio-social data
-router.post('/:clientID', async (req, res) => {
+router.post('/bio-social/:clientID', async (req, res) => {
     const { clientID } = req.params;
     const bioSocialData = req.body;
     
@@ -636,7 +636,7 @@ router.post('/:clientID', async (req, res) => {
 });
 
 // 🔸 PUT /api/bio-social/:clientID/complete - Complete bio-social assessment
-router.put('/:clientID/complete', async (req, res) => {
+router.put('/bio-social/:clientID/complete', async (req, res) => {
     const { clientID } = req.params;
     const { timeSpent, notes } = req.body;
     
@@ -687,7 +687,7 @@ router.put('/:clientID/complete', async (req, res) => {
 });
 
 // 🔸 GET /api/bio-social/:clientID/financial-summary - Get financial summary
-router.get('/:clientID/financial-summary', async (req, res) => {
+router.get('/bio-social/:clientID/financial-summary', async (req, res) => {
     const { clientID } = req.params;
     
     try {
@@ -786,7 +786,7 @@ router.get('/:clientID/financial-summary', async (req, res) => {
 });
 
 // 🔸 POST /api/bio-social/calculate-adl - Calculate ADL score
-router.post('/calculate-adl', async (req, res) => {
+router.post('/bio-social/calculate-adl', async (req, res) => {
     try {
         const adlData = req.body;
         const adlMetrics = calculateADLScore(adlData);
@@ -808,7 +808,7 @@ router.post('/calculate-adl', async (req, res) => {
 });
 
 // 🔸 GET /api/bio-social/:clientID/summary - Generate comprehensive summary
-router.get('/:clientID/summary', async (req, res) => {
+router.get('/bio-social/:clientID/summary', async (req, res) => {
     const { clientID } = req.params;
     
     try {
