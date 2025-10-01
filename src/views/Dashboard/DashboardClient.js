@@ -1,4 +1,4 @@
-// Fixed DashboardClient.js with working navigation
+// Fixed DashboardClient.js with array safety checks
 
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
@@ -53,7 +53,6 @@ import ClientTable from 'src/components/tables/ClientTable';
 import NewClient from './NewClient';
 import NavigationDebugger from '../../components/debug/NavigationDebugger';
 
-
 // Import Redux actions
 import { 
   fetchClients, 
@@ -64,22 +63,21 @@ import {
   setSelectedClient
 } from '../../backend/store/slices/clientSlice';
 
-
-
 const DashboardClient = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const location = useLocation();
   
-  // ✅ FIXED: Move Redux selectors to the TOP, before any useEffect that uses them
+  // Redux selectors with array safety
   const user = useSelector((state) => state.auth?.user);
-  const clients = useSelector(selectAllClients)|| [];
+  const clientsFromStore = useSelector(selectAllClients);
+  const clients = Array.isArray(clientsFromStore) ? clientsFromStore : [];
   const selectedClient = useSelector((state) => state.clients?.selectedClient);
   const loading = useSelector(selectClientsLoading);
   const error = useSelector(selectClientsError);
   
-  // ✅ FIXED: Local state comes AFTER Redux selectors
+  // Local state
   const [newClientModal, setNewClientModal] = useState(false);
   const [editClientModal, setEditClientModal] = useState(false);
   const [editingClientID, setEditingClientID] = useState(null);
@@ -93,42 +91,42 @@ const DashboardClient = () => {
   const [successMessage, setSuccessMessage] = useState('');
   const [showSuccess, setShowSuccess] = useState(false);
 
-  // ✅ FIXED: Debug logging AFTER variables are declared
-  console.log('🔍 Current pathname:', location.pathname);
-  console.log('🔍 URL Client ID from params:', searchParams.get('clientID'));
+  // Debug logging
+  console.log('Current pathname:', location.pathname);
+  console.log('URL Client ID from params:', searchParams.get('clientID'));
 
-  // ✅ FIXED: useEffect now comes AFTER all variables are declared
+  // API test effect
   useEffect(() => {
-    console.log('🔗 API URL:', import.meta.env.VITE_API_URL);
-    console.log('📊 Redux clients state:', clients);
-    console.log('📊 Redux loading state:', loading);
-    console.log('📊 Redux error state:', error);
+    console.log('API URL:', import.meta.env.VITE_API_URL);
+    console.log('Redux clients state:', clients);
+    console.log('Redux loading state:', loading);
+    console.log('Redux error state:', error);
     
     // Test API call directly
-    console.log('🧪 Testing API call...');
+    console.log('Testing API call...');
     fetch(`${import.meta.env.VITE_API_URL}/api/clients`)
       .then(response => {
-        console.log('🌐 API Response status:', response.status);
+        console.log('API Response status:', response.status);
         return response.json();
       })
       .then(data => {
-        console.log('📋 Real clients from API:', data);
-        console.log('📋 Number of clients:', data?.length);
+        console.log('Real clients from API:', data);
+        console.log('Number of clients:', data?.length);
       })
       .catch(err => {
-        console.error('❌ API call failed:', err);
+        console.error('API call failed:', err);
       });
   }, [clients, loading, error]);
 
-  // ✅ Load client from URL on page load/refresh (only for dashboard)
+  // Load client from URL on page load/refresh (only for dashboard)
   useEffect(() => {
     const isDashboard = location.pathname === '/dashboard' || location.pathname === '/';
     
     if (isDashboard) {
       const clientIDFromParams = searchParams.get('clientID');
       if (clientIDFromParams) {
-        console.log('🔄 Loading client from URL for dashboard:', clientIDFromParams);
-        const existingClient = clients?.find(c => c.clientID === clientIDFromParams);
+        console.log('Loading client from URL for dashboard:', clientIDFromParams);
+        const existingClient = clients.find(c => c.clientID === clientIDFromParams);
         if (existingClient) {
           dispatch(setSelectedClient(existingClient));
         } else {
@@ -138,13 +136,12 @@ const DashboardClient = () => {
     }
   }, [location.pathname, searchParams, dispatch, clients]);
 
-  // Restore client data on page load
   // Restore client from cache on page refresh
   useEffect(() => {
     const clientIDFromURL = searchParams.get('clientID');
     
     if (clientIDFromURL && !selectedClient && !loading) {
-      console.log('🔄 Attempting to restore client:', clientIDFromURL);
+      console.log('Attempting to restore client:', clientIDFromURL);
       
       // Check sessionStorage first
       const cachedClient = sessionStorage.getItem(`client_${clientIDFromURL}`);
@@ -152,7 +149,7 @@ const DashboardClient = () => {
       if (cachedClient) {
         try {
           const clientData = JSON.parse(cachedClient);
-          console.log('✅ Restoring from cache:', clientData);
+          console.log('Restoring from cache:', clientData);
           dispatch(setSelectedClient(clientData));
           setSelectedClientID(clientIDFromURL);
         } catch (e) {
@@ -161,12 +158,12 @@ const DashboardClient = () => {
         }
       } else {
         // No cache, fetch from server
-        console.log('📡 No cache found, fetching from server');
+        console.log('No cache found, fetching from server');
         dispatch(fetchClientById(clientIDFromURL));
         setSelectedClientID(clientIDFromURL);
       }
     }
-  }, [ searchParams, selectedClient, loading, dispatch]);
+  }, [searchParams, selectedClient, loading, dispatch]);
 
   // Fetch clients on component mount
   useEffect(() => {
@@ -175,9 +172,10 @@ const DashboardClient = () => {
     }
   }, [dispatch]);
 
-  // Filter and search logic
+  // Filter and search logic with array safety
   const filteredClients = useMemo(() => {
-    let filtered = clients || [];
+    // Ensure clients is always an array
+    let filtered = Array.isArray(clients) ? [...clients] : [];
 
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
@@ -217,23 +215,26 @@ const DashboardClient = () => {
     return filtered;
   }, [clients, searchQuery, filterBy]);
 
-  // Dashboard statistics
+  // Dashboard statistics with array safety
   const dashboardStats = useMemo(() => {
-    const totalClients = clients?.length || 0;
-    const newThisWeek = clients?.filter(client => {
+    // Ensure clients is an array
+    const clientsArray = Array.isArray(clients) ? clients : [];
+    const totalClients = clientsArray.length;
+    
+    const newThisWeek = clientsArray.filter(client => {
       if (!client.createdAt) return false;
       const createdDate = new Date(client.createdAt);
       const weekAgo = new Date();
       weekAgo.setDate(weekAgo.getDate() - 7);
       return createdDate > weekAgo;
-    }).length || 0;
+    }).length;
     
-    const veterans = clients?.filter(client => 
+    const veterans = clientsArray.filter(client => 
       client.clientVetStatus === 'Protected Veteran' || 
       client.clientVetStatus === 'I am a veteran, but I am not a protected veteran'
-    ).length || 0;
+    ).length;
 
-    const activeClients = clients?.filter(client => client.status === 'active').length || 0;
+    const activeClients = clientsArray.filter(client => client.status === 'active').length;
 
     return {
       total: totalClients,
@@ -244,49 +245,49 @@ const DashboardClient = () => {
     };
   }, [clients]);
 
-  // ✅ Clean React Router navigation (no page reload)
+  // Clean React Router navigation (no page reload)
   const handleGoToSection = useCallback((sectionName, clientID) => {
-    console.log('🔄 Navigating to section:', sectionName, 'with client:', clientID);
+    console.log('Navigating to section:', sectionName, 'with client:', clientID);
     
     if (clientID) {
       // Find and set the client data in Redux store before navigation
-      const client = clients?.find(c => c.clientID === clientID);
+      const client = clients.find(c => c.clientID === clientID);
       if (client) {
         dispatch(setSelectedClient(client));
-        console.log('✅ Client set in Redux:', client);
+        console.log('Client set in Redux:', client);
         
-        // ✅ Simple React Router navigation
+        // Simple React Router navigation
         const routeName = sectionName.charAt(0).toUpperCase() + sectionName.slice(1);
         const targetPath = `/${routeName}?clientID=${clientID}`;
         
-        console.log('🔄 Using React Router navigate to:', targetPath);
+        console.log('Using React Router navigate to:', targetPath);
         navigate(targetPath);
         
       } else {
-        console.error('❌ Client not found:', clientID);
+        console.error('Client not found:', clientID);
       }
     }
   }, [clients, dispatch, navigate]);
 
   const handleBackToDashboard = useCallback(() => {
-    console.log('🔄 Navigating back to Dashboard');
+    console.log('Navigating back to Dashboard');
     navigate('/dashboard');
   }, [navigate]);
 
-  // ✅ View Chart handler (navigates to Section1 - capitalized to match routes)
+  // View Chart handler (navigates to Section1 - capitalized to match routes)
   const handleViewChart = useCallback((clientID) => {
-    console.log('📊 View chart for client:', clientID);
-    handleGoToSection('section1', clientID); // lowercase input, will be converted to Section1
+    console.log('View chart for client:', clientID);
+    handleGoToSection('section1', clientID);
   }, [handleGoToSection]);
 
   const handleViewForms = useCallback((clientID) => {
-    console.log('📋 View forms for client:', clientID);
-    handleGoToSection('section2', clientID); // lowercase input, will be converted to Section2
+    console.log('View forms for client:', clientID);
+    handleGoToSection('section2', clientID);
   }, [handleGoToSection]);
 
   // Event handlers
   const handleClientCreated = useCallback((clientID) => {
-    console.log('✅ Client created:', clientID);
+    console.log('Client created:', clientID);
     setNewClientModal(false);
     setSuccessMessage('Client created successfully!');
     setShowSuccess(true);
@@ -296,7 +297,7 @@ const DashboardClient = () => {
   }, [dispatch]);
 
   const handleSelectClient = useCallback((clientID) => {
-    console.log('👤 Client selected:', clientID);
+    console.log('Client selected:', clientID);
     setSelectedClientID(clientID);
     
     // Update URL to include clientID
@@ -308,11 +309,11 @@ const DashboardClient = () => {
 
   // Edit handler - opens modal only
   const handleEditClient = useCallback((clientID) => {
-    console.log('🔧 Edit client clicked:', clientID);
+    console.log('Edit client clicked:', clientID);
     
-    const clientToEdit = clients?.find(c => c.clientID === clientID);
+    const clientToEdit = clients.find(c => c.clientID === clientID);
     if (!clientToEdit) {
-      console.error('❌ Client not found');
+      console.error('Client not found');
       return;
     }
     
@@ -354,7 +355,7 @@ const DashboardClient = () => {
 
   // Simple update handler - just show success message
   const handleClientUpdated = useCallback(() => {
-    console.log('✅ Client updated successfully');
+    console.log('Client updated successfully');
     setEditClientModal(false);
     setEditingClientID(null);
     setEditingClientData(null);
@@ -372,27 +373,27 @@ const DashboardClient = () => {
     setShowSuccess(false);
   }, []);
 
-  // ✅ This component only renders the dashboard - sections are separate routes
+  // This component only renders the dashboard - sections are separate routes
   // Handle both root path and dashboard path
   const isDashboardRoute = location.pathname === '/dashboard' || location.pathname === '/';
   
   if (!isDashboardRoute) {
-    console.log('🔍 Not on dashboard route, pathname:', location.pathname);
+    console.log('Not on dashboard route, pathname:', location.pathname);
     return null;
   }
 
   // Render dashboard statistics
   const renderDashboardStats = () => (
-  <Grid container spacing={3} sx={{ mb: 3 }}>
-    {process.env.NODE_ENV === 'development' && (
-      <Button
-        variant="outlined"
-        onClick={() => setShowDebugModal(true)}
-        sx={{ ml: 2 }}
-      >
-        🐛 Debug
-      </Button>
-    )}
+    <Grid container spacing={3} sx={{ mb: 3 }}>
+      {process.env.NODE_ENV === 'development' && (
+        <Button
+          variant="outlined"
+          onClick={() => setShowDebugModal(true)}
+          sx={{ ml: 2 }}
+        >
+          Debug
+        </Button>
+      )}
       <Grid item xs={12} sm={6} md={2.4}>
         <Card elevation={2} sx={{ 
           background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
@@ -552,7 +553,7 @@ const DashboardClient = () => {
 
       <Box sx={{ mt: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <Typography variant="body2" color="text.secondary">
-          Showing {filteredClients.length} of {clients?.length || 0} clients
+          Showing {filteredClients.length} of {clients.length} clients
           {searchQuery && ` for "${searchQuery}"`}
         </Typography>
         
@@ -649,7 +650,7 @@ const DashboardClient = () => {
                     loading={loading}
                     onEditClient={handleEditClient}
                     onViewForms={handleViewForms}
-                    onViewChart={handleViewChart} // ✅ View Chart functionality
+                    onViewChart={handleViewChart}
                   />
                 )}
 
@@ -816,13 +817,13 @@ const DashboardClient = () => {
       </Snackbar>
 
       <Dialog 
-  open={showDebugModal} 
-  onClose={() => setShowDebugModal(false)}
-  maxWidth="xl"
-  fullWidth
->
-  <NavigationDebugger />
-</Dialog>
+        open={showDebugModal} 
+        onClose={() => setShowDebugModal(false)}
+        maxWidth="xl"
+        fullWidth
+      >
+        <NavigationDebugger />
+      </Dialog>
     </Box>
   );
 };

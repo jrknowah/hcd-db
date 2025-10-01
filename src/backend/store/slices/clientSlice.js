@@ -2,8 +2,6 @@ import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import axios from 'axios';
 import mockData from '../../../utils/mockData';
 
-
-
 // ✅ FIX: Simple, clean API URL construction
 const API_BASE_URL = '';
 const USE_MOCK_DATA = import.meta.env.VITE_USE_MOCK_DATA === 'true' || false;
@@ -30,16 +28,6 @@ export const fetchClients = createAsyncThunk('clients/fetchClients', async (_, {
     return response.data;
   } catch (error) {
     console.error('❌ Fetch clients error:', error);
-    
-    // DON'T fallback to mock data on error - show the real error
-    // Remove this fallback to see actual API issues
-    /*
-    if (error.code === 'ERR_NETWORK' || error.response?.status === 404) {
-      console.log('📊 API unavailable, falling back to mock data');
-      return mockData.clients;
-    }
-    */
-    
     return rejectWithValue(error.message || 'Failed to fetch clients');
   }
 });
@@ -79,7 +67,6 @@ export const fetchClientById = createAsyncThunk('clients/fetchClientById', async
       throw new Error('Client not found in mock data');
     }
     
-    // Fix: Correct API endpoint
     console.log('🌐 Fetching real client by ID:', `${API_BASE_URL}/api/clients/${clientID}`);
     const response = await axios.get(`${API_BASE_URL}/api/clients/${clientID}`);
     console.log('✅ Client fetched by ID successfully:', response.data);
@@ -97,7 +84,6 @@ export const fetchClientById = createAsyncThunk('clients/fetchClientById', async
   }
 });
 
-// ✅ FIXED: updateClient to use axios and consistent URL pattern with better error handling
 export const updateClient = createAsyncThunk(
   'clients/updateClient',
   async ({ clientID, updates }, { rejectWithValue }) => {
@@ -160,11 +146,12 @@ const clientSlice = createSlice({
       })
       .addCase(fetchClients.fulfilled, (state, action) => {
         state.loading = false;
-        state.clients = action.payload;
+        state.clients = Array.isArray(action.payload) ? action.payload : [];
       })
       .addCase(fetchClients.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
+        state.clients = []; // Ensure clients is always an array
       })
       // Add client
       .addCase(addClient.pending, (state) => {
@@ -227,10 +214,10 @@ const clientSlice = createSlice({
 
 export const { setSelectedClient, clearSelectedClient, clearError, setClientsList } = clientSlice.actions;
 
-// Selectors
-export const selectAllClients = (state) => state.clients.clients;
-export const selectSelectedClient = (state) => state.clients.selectedClient;
-export const selectClientsLoading = (state) => state.clients.loading;
-export const selectClientsError = (state) => state.clients.error;
+// Selectors with safety checks
+export const selectAllClients = (state) => state.clients?.clients || [];
+export const selectSelectedClient = (state) => state.clients?.selectedClient;
+export const selectClientsLoading = (state) => state.clients?.loading || false;
+export const selectClientsError = (state) => state.clients?.error;
 
 export default clientSlice.reducer;
