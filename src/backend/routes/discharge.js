@@ -8,7 +8,7 @@ router.get("/getClientDischarge/:clientID", async (req, res) => {
     const pool = await connectToAzureSQL();
     const result = await pool
       .request()
-      .input("clientID", sql.Int, req.params.clientID)
+      .input("clientID", sql.VarChar, req.params.clientID)  // Changed from sql.Int
       .query("SELECT * FROM ClientDischarge WHERE clientID = @clientID");
     res.json(result.recordset[0] || {});
   } catch (err) {
@@ -35,7 +35,7 @@ router.post("/saveClientDischarge", async (req, res) => {
     const pool = await connectToAzureSQL();
 
     await pool.request()
-      .input("clientID", sql.Int, clientID)
+      .input("clientID", sql.VarChar, clientID)  // Changed from sql.Int
       .input("clientDischargeDate", sql.Date, clientDischargeDate)
       .input("clientDischargeDiag", sql.NVarChar, clientDischargeDiag)
       .input("clientDischargI", sql.NVarChar, clientDischargI)
