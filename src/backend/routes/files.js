@@ -140,52 +140,47 @@ router.post('/upload', upload.single('file'), async (req, res) => {
 });
 
 // ✅ Get file endpoint
-router.get('/file/:fileName', async (req, res) => {
+// GET files for a specific client
+router.get('/files/:clientID', async (req, res) => {
   try {
-    const { fileName } = req.params;
+    const { clientID } = req.params;
     
     if (isAzureBlobEnabled) {
       try {
         const containerName = process.env.AZURE_CONTAINER_NAME || 'uploads';
         const containerClient = blobServiceClient.getContainerClient(containerName);
-        const blockBlobClient = containerClient.getBlockBlobClient(fileName);
         
-        // Check if file exists
-        const exists = await blockBlobClient.exists();
-        if (!exists) {
-          return res.status(404).json({ error: 'File not found' });
+        const files = [];
+        
+        // List blobs with clientID prefix
+        for await (const blob of containerClient.listBlobsFlat({ prefix: `${clientID}/` })) {
+          files.push({
+            id: blob.name,
+            fileName: blob.name.split('/').pop(),
+            blobUrl: `${containerClient.url}/${blob.name}`,
+            blobName: blob.name,
+            docType: blob.metadata?.docType || 'Unknown',
+            uploadDate: blob.properties.lastModified,
+            fileSize: blob.properties.contentLength,
+            contentType: blob.properties.contentType
+          });
         }
         
-        // Get file properties
-        const properties = await blockBlobClient.getProperties();
-        
-        res.json({
-          fileName: fileName,
-          url: blockBlobClient.url,
-          size: properties.contentLength,
-          mimeType: properties.contentType,
-          lastModified: properties.lastModified,
-          storage: 'azure'
-        });
+        res.json(files);
         
       } catch (azureError) {
-        console.error('❌ Azure file retrieval failed:', azureError.message);
-        return res.status(404).json({ error: 'File not found or Azure error' });
+        console.error('Azure file listing failed:', azureError.message);
+        res.json([]);
       }
     } else {
-      // Local storage fallback
-      res.json({
-        fileName: fileName,
-        url: `/uploads/${fileName}`,
-        storage: 'local',
-        note: 'Azure Blob Storage not configured'
-      });
+      // Local storage fallback - return empty array
+      res.json([]);
     }
     
   } catch (error) {
-    console.error('❌ File retrieval error:', error);
+    console.error('File listing error:', error);
     res.status(500).json({ 
-      error: 'File retrieval failed', 
+      error: 'Failed to list client files', 
       message: error.message 
     });
   }
