@@ -146,7 +146,7 @@ router.get('/file/:fileName', async (req, res) => {
     
     if (isAzureBlobEnabled) {
       try {
-        const containerName = process.env.AZURE_CONTAINER_NAME || 'uploads';
+        const containerName = process.env.AZURE_CONTAINER_NAME || 'client-docs';
         const containerClient = blobServiceClient.getContainerClient(containerName);
         const blockBlobClient = containerClient.getBlockBlobClient(fileName);
         
