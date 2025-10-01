@@ -5,7 +5,7 @@ import mockData from '../../../utils/mockData';
 
 
 // ✅ FIX: Simple, clean API URL construction
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+const API_BASE_URL = '';
 const USE_MOCK_DATA = import.meta.env.VITE_USE_MOCK_DATA === 'true' || false;
 
 console.log('🔧 Client Slice Configuration:');
