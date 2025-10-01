@@ -2,7 +2,7 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
 
-const API_URL = '';
+const API_URL = import.meta.env.VITE_API_URL;
 
 // ✅ Helper function to check if we should use mock data
 const shouldUseMockData = (clientID) => {
@@ -92,7 +92,7 @@ export const fetchCarePlans = createAsyncThunk(
     }
 
     try {
-      const response = await axios.get(`/api/care-plans/${clientID}`);
+      const response = await axios.get(`${API_URL}/api/care-plans/${clientID}`);
       return response.data;
     } catch (error) {
       console.error("❌ Error fetching care plans:", error);
@@ -118,7 +118,7 @@ export const addCarePlan = createAsyncThunk(
     }
 
     try {
-      const response = await axios.post(`/api/care-plans/${clientID}`, {
+      const response = await axios.post(`${API_URL}/api/care-plans/${clientID}`, {
         ...carePlanData,
         createdBy: user?.email || "unknown",
         createdAt: new Date().toISOString(),
@@ -147,7 +147,7 @@ export const editCarePlan = createAsyncThunk(
     }
 
     try {
-      const response = await axios.put(`/api/care-plans/${id}`, {
+      const response = await axios.put(`${API_URL}/api/care-plans/${id}`, {
         ...updatedData,
         updatedBy: user?.email || "unknown",
         updatedAt: new Date().toISOString(),
@@ -171,7 +171,7 @@ export const deleteCarePlan = createAsyncThunk(
     }
 
     try {
-      await axios.delete(`/api/care-plans/${id}`, {
+      await axios.delete(`${API_URL}/api/care-plans/${id}`, {
         data: { deletedBy: user?.email || "unknown" }
       });
       return id;
@@ -191,7 +191,7 @@ export const updateCarePlanStatus = createAsyncThunk(
     }
 
     try {
-      const response = await axios.patch(`/api/care-plans/${id}/status`, {
+      const response = await axios.patch(`${API_URL}/api/care-plans/${id}/status`, {
         status,
         updatedBy: user?.email || "unknown",
         updatedAt: new Date().toISOString(),

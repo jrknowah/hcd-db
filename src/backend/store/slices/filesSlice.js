@@ -2,7 +2,7 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import axios from 'axios';
 
-const API_URL = '';
+const API_URL = import.meta.env.VITE_API_URL || import.meta.env.VITE_APP_API_URL;
 
 // Mock data for development
 const MOCK_FILES = [
@@ -54,7 +54,7 @@ export const uploadFile = createAsyncThunk(
       formData.append('clientID', clientID);
       formData.append('docType', docType);
 
-      const response = await axios.post(`/upload`, formData, {
+      const response = await axios.post(`${API_URL}/upload`, formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
@@ -90,7 +90,7 @@ export const fetchClientFiles = createAsyncThunk(
       }
 
       // Real API call
-      const response = await axios.get(`/files/${clientID}`);
+      const response = await axios.get(`${API_URL}/files/${clientID}`);
       return Array.isArray(response.data) ? response.data : [];
     } catch (error) {
       return rejectWithValue(error.response?.data?.message || error.message || 'Failed to fetch files');
@@ -112,7 +112,7 @@ export const deleteFile = createAsyncThunk(
       }
 
       // Real delete
-      await axios.delete(`/files/${fileId}`);
+      await axios.delete(`${API_URL}/files/${fileId}`);
       return { fileId, fileName };
     } catch (error) {
       return rejectWithValue(error.response?.data?.message || error.message || 'Failed to delete file');
@@ -134,7 +134,7 @@ export const downloadFile = createAsyncThunk(
       }
 
       // Real download - get download URL from backend
-      const response = await axios.get(`/files/${fileId}/download`);
+      const response = await axios.get(`${API_URL}/files/${fileId}/download`);
       
       // Create download link
       const link = document.createElement('a');

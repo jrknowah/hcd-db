@@ -1,7 +1,9 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 
 // ✅ API Base URL - Update this to match your backend
-const API_BASE_URL = '';
+const API_BASE_URL = process.env.NODE_ENV === 'development' 
+    ? 'http://localhost:3001' 
+    : '';
 
 // ✅ Async Thunks for API Calls
 
@@ -40,7 +42,7 @@ export const fetchFaceSheet = createAsyncThunk(
         }
 
         try {
-            const response = await fetch(`/api/section6/${clientID}/facesheet`, {
+            const response = await fetch(`${API_BASE_URL}/api/section6/${clientID}/facesheet`, {
                 method: 'GET',
                 headers: {
                     'Content-Type': 'application/json',
@@ -82,7 +84,7 @@ export const fetchCaseStatus = createAsyncThunk(
         }
 
         try {
-            const response = await fetch(`/api/section6/${clientID}/status`);
+            const response = await fetch(`${API_BASE_URL}/api/section6/${clientID}/status`);
             
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
@@ -162,7 +164,7 @@ export const fetchCaseTimeline = createAsyncThunk(
         }
 
         try {
-            const response = await fetch(`/api/section6/${clientID}/timeline`);
+            const response = await fetch(`${API_BASE_URL}/api/section6/${clientID}/timeline`);
             
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
@@ -200,7 +202,7 @@ export const fetchCaseMetrics = createAsyncThunk(
         }
 
         try {
-            const response = await fetch(`/api/section6/${clientID}/metrics`);
+            const response = await fetch(`${API_BASE_URL}/api/section6/${clientID}/metrics`);
             
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
@@ -230,7 +232,7 @@ export const saveFaceSheet = createAsyncThunk(
         }
 
         try {
-            const response = await fetch(`/api/section6/${clientID}/facesheet`, {
+            const response = await fetch(`${API_BASE_URL}/api/section6/${clientID}/facesheet`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -269,7 +271,7 @@ export const updateCaseStatus = createAsyncThunk(
         }
 
         try {
-            const response = await fetch(`/api/section6/${clientID}/status`, {
+            const response = await fetch(`${API_BASE_URL}/api/section6/${clientID}/status`, {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',
@@ -306,7 +308,7 @@ export const updateMilestone = createAsyncThunk(
         }
 
         try {
-            const response = await fetch(`/api/section6/${clientID}/milestone/${milestoneID}`, {
+            const response = await fetch(`${API_BASE_URL}/api/section6/${clientID}/milestone/${milestoneID}`, {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',

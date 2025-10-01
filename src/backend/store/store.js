@@ -2,7 +2,7 @@
 import { configureStore } from '@reduxjs/toolkit';
 import rootReducer from './reducers'; // or combineReducers
 import { persistenceMiddleware } from '../middleware/persistenceMiddleware';
-import { rehydrateState } from '../../utils/rehydrate';
+// import { rehydrateState } from '../../utils/rehydrate';
 import auth from './slices/authSlice';
 import clients from './slices/clientSlice';
 import authSigReducer from './slices/authSigSlice';
@@ -30,7 +30,7 @@ import discharge from './slices/dischargeSlice'; // ✅ Enhanced discharge slice
 import encounterNote from './slices/encounterNoteSlice'; // ✅ Encounter notes slice
 import carePlans from './slices/carePlanSlice.js'; // ✅ Care plans slice
 
-const preloadedState = rehydrateState();
+// const preloadedState = rehydrateState();
 
 const store = configureStore({
   reducer: {
@@ -61,7 +61,7 @@ const store = configureStore({
     encounterNote: encounterNote, // ✅ Encounter notes
     carePlans: carePlans,   // ✅ Care plans management
   },
-  preloadedState,
+  // preloadedState,
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({
       serializableCheck: {
@@ -80,7 +80,8 @@ const store = configureStore({
           'referrals.uploadProgress'       // Referral upload progress
         ]
       },
-    }).concat(persistenceMiddleware),
+    }),
+    // .concat(persistenceMiddleware),
   devTools: process.env.NODE_ENV !== 'production',
 });
 

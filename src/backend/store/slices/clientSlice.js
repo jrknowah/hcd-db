@@ -1,34 +1,45 @@
-import { createSlice, createSelector, createAsyncThunk } from '@reduxjs/toolkit';
+import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import axios from 'axios';
 import mockData from '../../../utils/mockData';
 
 
 
 // ✅ FIX: Simple, clean API URL construction
-const API_BASE_URL = '';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/';
 const USE_MOCK_DATA = import.meta.env.VITE_USE_MOCK_DATA === 'true' || false;
 
 console.log('🔧 Client Slice Configuration:');
-console.log('  API URL:', );
+console.log('  API URL:', API_BASE_URL);
 console.log('  USE_MOCK_DATA:', USE_MOCK_DATA);
-// console.log('  Environment Variable:', import.meta.env.VITE_USE_MOCK_DATA);
+console.log('  Environment Variable:', import.meta.env.VITE_USE_MOCK_DATA);
 
 // ✅ FIX: Use axios directly, no separate instance needed
 export const fetchClients = createAsyncThunk('clients/fetchClients', async (_, { rejectWithValue }) => {
   try {
-    console.log('🌐 Fetching real clients from:', `/api/clients`);
-    const response = await axios.get(`/api/clients`);
-    // const response = await axios.get('https://hcd-db-backend-fdfmekfgehbhf0db.westus2-01.azurewebsites.net/api/clients');
-    console.log('✅ Response received:', response);
-    console.log('✅ Response data:', response.data);
+    // Use mock data if enabled
+    if (USE_MOCK_DATA) {
+      console.log('📊 Using mock data for clients');
+      await new Promise(resolve => setTimeout(resolve, 500)); // Simulate network delay
+      return mockData.clients;
+    }
+    
+    // Otherwise use real API
+    console.log('🌐 Fetching real clients from:', `${API_BASE_URL}/api/clients`);
+    const response = await axios.get(`${API_BASE_URL}/api/clients`);
     console.log('✅ Real clients fetched:', response.data.length, 'clients');
     return response.data;
   } catch (error) {
-    console.error('❌ Fetch clients error details:', {
-      message: error.message,
-      response: error.response,
-      status: error.response?.status
-    });
+    console.error('❌ Fetch clients error:', error);
+    
+    // DON'T fallback to mock data on error - show the real error
+    // Remove this fallback to see actual API issues
+    /*
+    if (error.code === 'ERR_NETWORK' || error.response?.status === 404) {
+      console.log('📊 API unavailable, falling back to mock data');
+      return mockData.clients;
+    }
+    */
+    
     return rejectWithValue(error.message || 'Failed to fetch clients');
   }
 });
@@ -48,7 +59,7 @@ export const addClient = createAsyncThunk('clients/addClient', async (clientData
     }
     
     console.log('🌐 Adding real client to database');
-    const response = await axios.post(`/api/clients`, clientData);
+    const response = await axios.post(`${API_BASE_URL}/api/clients`, clientData);
     console.log('✅ Client added successfully');
     return response.data;
   } catch (error) {
@@ -69,8 +80,8 @@ export const fetchClientById = createAsyncThunk('clients/fetchClientById', async
     }
     
     // Fix: Correct API endpoint
-    console.log('🌐 Fetching real client by ID:', `/api/clients/${clientID}`);
-    const response = await axios.get(`/api/clients/${clientID}`);
+    console.log('🌐 Fetching real client by ID:', `${API_BASE_URL}/api/clients/${clientID}`);
+    const response = await axios.get(`${API_BASE_URL}/api/clients/${clientID}`);
     console.log('✅ Client fetched by ID successfully:', response.data);
     
     // Cache it immediately
@@ -103,7 +114,7 @@ export const updateClient = createAsyncThunk(
       }
       
       console.log('🌐 Updating real client in database');
-      const response = await axios.put(`/api/clients/${clientID}`, updates);
+      const response = await axios.put(`${API_BASE_URL}/api/clients/${clientID}`, updates);
       console.log('✅ Client updated successfully');
       return response.data;
     } catch (error) {
@@ -133,9 +144,9 @@ const clientSlice = createSlice({
     clearSelectedClient: (state) => {
       state.selectedClient = null;
     },
-    // setClientsList: (state, action) => {
-    //   state.clientsList = action.payload;
-    // },
+    setClientsList: (state, action) => {
+      state.clientsList = action.payload;
+    },
     clearError: (state) => {
       state.error = null;
     },
@@ -217,36 +228,7 @@ const clientSlice = createSlice({
 export const { setSelectedClient, clearSelectedClient, clearError, setClientsList } = clientSlice.actions;
 
 // Selectors
-// Make the selector more defensive
-export const selectAllClients = (state) => {
-  try {
-    // Check if state exists
-    if (!state) {
-      console.warn('State is undefined in selectAllClients');
-      return [];
-    }
-    
-    // Check if clients slice exists
-    if (!state.clients) {
-      console.warn('clients slice not found in state');
-      return [];
-    }
-    
-    // Get the clients array
-    const clientsArray = state.clients.clients;
-    
-    // Ensure it's an array
-    if (!Array.isArray(clientsArray)) {
-      console.warn('clients.clients is not an array:', clientsArray);
-      return [];
-    }
-    
-    return clientsArray;
-  } catch (error) {
-    console.error('Error in selectAllClients:', error);
-    return [];
-  }
-};
+export const selectAllClients = (state) => state.clients.clients;
 export const selectSelectedClient = (state) => state.clients.selectedClient;
 export const selectClientsLoading = (state) => state.clients.loading;
 export const selectClientsError = (state) => state.clients.error;

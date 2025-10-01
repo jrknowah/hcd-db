@@ -1,7 +1,7 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import axios from 'axios';
 
-const HCD_API = ``; // Adjust to your actual auth endpoint
+const HCD_API = `${import.meta.env.VITE_API_URL}/auth`; // Adjust to your actual auth endpoint
 
 // Mock data for development
 const mockBioSocialData = {
@@ -106,7 +106,7 @@ export const fetchBioSocialData = createAsyncThunk(
     'bioSocial/fetchBioSocialData',
     async (clientID, { rejectWithValue }) => {
         try {
-            const response = await axios.get(`/api/bio-social/${clientID}`);
+            const response = await axios.get(`${HCD_API}/api/bio-social/${clientID}`);
             return response.data;
         } catch (error) {
             console.error('Error fetching bio-social data:', error);
@@ -119,7 +119,7 @@ export const fetchBioSocialByAssessment = createAsyncThunk(
     'bioSocial/fetchBioSocialByAssessment',
     async (assessmentID, { rejectWithValue }) => {
         try {
-            const response = await axios.get(`/api/bio-social/assessment/${assessmentID}`);
+            const response = await axios.get(`${HCD_API}/api/bio-social/assessment/${assessmentID}`);
             return response.data;
         } catch (error) {
             console.error('Error fetching bio-social data by assessment:', error);
@@ -132,7 +132,7 @@ export const saveBioSocialData = createAsyncThunk(
     'bioSocial/saveBioSocialData',
     async ({ clientID, bioSocialData }, { rejectWithValue }) => {
         try {
-            const response = await axios.post(`/api/bio-social/${clientID}`, bioSocialData);
+            const response = await axios.post(`${HCD_API}/api/bio-social/${clientID}`, bioSocialData);
             return response.data;
         } catch (error) {
             console.error('Error saving bio-social data:', error);
@@ -145,7 +145,7 @@ export const updateBioSocialData = createAsyncThunk(
     'bioSocial/updateBioSocialData',
     async ({ bioSocialID, bioSocialData }, { rejectWithValue }) => {
         try {
-            const response = await axios.put(`/api/bio-social/record/${bioSocialID}`, bioSocialData);
+            const response = await axios.put(`${HCD_API}/api/bio-social/record/${bioSocialID}`, bioSocialData);
             return response.data;
         } catch (error) {
             console.error('Error updating bio-social data:', error);
@@ -158,7 +158,7 @@ export const completeBioSocialAssessment = createAsyncThunk(
     'bioSocial/completeBioSocialAssessment',
     async ({ clientID, completionData }, { rejectWithValue }) => {
         try {
-            const response = await axios.put(`/api/bio-social/${clientID}/complete`, completionData);
+            const response = await axios.put(`${HCD_API}/api/bio-social/${clientID}/complete`, completionData);
             return response.data;
         } catch (error) {
             console.error('Error completing bio-social assessment:', error);
@@ -171,7 +171,7 @@ export const generateBioSocialSummary = createAsyncThunk(
     'bioSocial/generateBioSocialSummary',
     async (clientID, { rejectWithValue }) => {
         try {
-            const response = await axios.get(`/api/bio-social/${clientID}/summary`);
+            const response = await axios.get(`${HCD_API}/api/bio-social/${clientID}/summary`);
             return response.data;
         } catch (error) {
             console.error('Error generating bio-social summary:', error);
@@ -184,7 +184,7 @@ export const calculateADLScore = createAsyncThunk(
     'bioSocial/calculateADLScore',
     async (adlData, { rejectWithValue }) => {
         try {
-            const response = await axios.post(`/api/bio-social/calculate-adl`, adlData);
+            const response = await axios.post(`${HCD_API}/api/bio-social/calculate-adl`, adlData);
             return response.data;
         } catch (error) {
             console.error('Error calculating ADL score:', error);
@@ -197,7 +197,7 @@ export const fetchFinancialSummary = createAsyncThunk(
     'bioSocial/fetchFinancialSummary',
     async (clientID, { rejectWithValue }) => {
         try {
-            const response = await axios.get(`/api/bio-social/${clientID}/financial-summary`);
+            const response = await axios.get(`${HCD_API}/api/bio-social/${clientID}/financial-summary`);
             return response.data;
         } catch (error) {
             console.error('Error fetching financial summary:', error);

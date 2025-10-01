@@ -2,7 +2,7 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
 
-const API_URL = '';
+const API_URL = import.meta.env.VITE_API_URL;
 
 // ✅ Helper function to check if we should use mock data
 const shouldUseMockData = (clientID) => {
@@ -91,7 +91,7 @@ export const fetchMedScreening = createAsyncThunk(
     }
 
     try {
-      const response = await axios.get(`/api/medical-screening/${clientID}`);
+      const response = await axios.get(`${API_URL}/api/medical-screening/${clientID}`);
       return response.data;
     } catch (error) {
       console.error("❌ Error fetching medical screening:", error);
@@ -118,7 +118,7 @@ export const saveMedScreening = createAsyncThunk(
     }
 
     try {
-      const response = await axios.post(`/api/medical-screening/${clientID}`, data);
+      const response = await axios.post(`${API_URL}/api/medical-screening/${clientID}`, data);
       return response.data;
     } catch (error) {
       console.error("❌ Error saving medical screening:", error);
@@ -142,7 +142,7 @@ export const updateMedScreening = createAsyncThunk(
     }
 
     try {
-      const response = await axios.put(`/api/medical-screening/${screeningID}`, screeningData);
+      const response = await axios.put(`${API_URL}/api/medical-screening/${screeningID}`, screeningData);
       return response.data;
     } catch (error) {
       console.error("❌ Error updating medical screening:", error);
@@ -171,7 +171,7 @@ export const getMedScreeningSummary = createAsyncThunk(
     }
 
     try {
-      const response = await axios.get(`/api/medical-screening/${clientID}/summary`);
+      const response = await axios.get(`${API_URL}/api/medical-screening/${clientID}/summary`);
       return response.data;
     } catch (error) {
       console.error("❌ Error fetching screening summary:", error);

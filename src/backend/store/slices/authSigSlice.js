@@ -1,7 +1,9 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 
 // ✅ API Base URL - Update this to match your backend
-const API_BASE_URL = '';
+const API_BASE_URL = process.env.NODE_ENV === 'development' 
+    ? 'http://localhost:3001' 
+    : '';
 
 // ✅ Async Thunks for API Calls
 
@@ -53,7 +55,7 @@ export const fetchAuthorizationForms = createAsyncThunk(
         }
 
         try {
-            const response = await fetch(`/api/authorization/${clientID}/forms`, {
+            const response = await fetch(`${API_BASE_URL}/api/authorization/${clientID}/forms`, {
                 method: 'GET',
                 headers: {
                     'Content-Type': 'application/json',
@@ -117,7 +119,7 @@ export const fetchFormData = createAsyncThunk(
         }
 
         try {
-            const response = await fetch(`/api/authorization/${clientID}/form/${formType}`);
+            const response = await fetch(`${API_BASE_URL}/api/authorization/${clientID}/form/${formType}`);
             
             if (!response.ok) {
                 if (response.status === 404) {
@@ -182,9 +184,9 @@ export const saveFormData = createAsyncThunk(
             // Add clientID to the data
             transformedData.clientID = clientID;
             
-            console.log(`Sending POST request to: /api/authorization/${clientID}/form/${formType}`);
+            console.log(`Sending POST request to: ${API_BASE_URL}/api/authorization/${clientID}/form/${formType}`);
             
-            const response = await fetch(`/api/authorization/${clientID}/form/${formType}`, {
+            const response = await fetch(`${API_BASE_URL}/api/authorization/${clientID}/form/${formType}`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -236,7 +238,7 @@ export const saveBulkForms = createAsyncThunk(
         }
 
         try {
-            const response = await fetch(`/api/authorization/${clientID}/forms/bulk`, {
+            const response = await fetch(`${API_BASE_URL}/api/authorization/${clientID}/forms/bulk`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -273,7 +275,7 @@ export const submitFormsForApproval = createAsyncThunk(
         }
 
         try {
-            const response = await fetch(`/api/authorization/${clientID}/submit`, {
+            const response = await fetch(`${API_BASE_URL}/api/authorization/${clientID}/submit`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -308,7 +310,7 @@ export const autoSaveFormData = createAsyncThunk(
         }
 
         try {
-            const response = await fetch(`/api/authorization/${clientID}/form/${formType}/autosave`, {
+            const response = await fetch(`${API_BASE_URL}/api/authorization/${clientID}/form/${formType}/autosave`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

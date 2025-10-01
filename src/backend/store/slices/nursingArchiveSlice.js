@@ -2,7 +2,7 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 
 // ✅ FIXED: Consistent API base URL using import.meta.env
-const API_BASE_URL = '';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
 // ✅ FIXED: Consistent mock data helper function
 const shouldUseMockData = (clientID) => {
@@ -71,7 +71,7 @@ export const fetchDocuments = createAsyncThunk(
         }
 
         try {
-            const response = await fetch(`/api/nursing-archive/${clientID}`, {
+            const response = await fetch(`${API_BASE_URL}/api/nursing-archive/${clientID}`, {
                 method: 'GET',
                 headers: {
                     'Content-Type': 'application/json',
@@ -119,7 +119,7 @@ export const uploadDocument = createAsyncThunk(
         }
 
         try {
-            const response = await fetch(`/api/nursing-archive/${clientID}/upload`, {
+            const response = await fetch(`${API_BASE_URL}/api/nursing-archive/${clientID}/upload`, {
                 method: 'POST',
                 body: formData, // FormData object
             });
@@ -155,7 +155,7 @@ export const downloadDocument = createAsyncThunk(
         }
 
         try {
-            const response = await fetch(`/api/nursing-archive/document/${documentID}/download`, {
+            const response = await fetch(`${API_BASE_URL}/api/nursing-archive/document/${documentID}/download`, {
                 method: 'GET',
             });
 
@@ -192,7 +192,7 @@ export const deleteDocument = createAsyncThunk(
         }
 
         try {
-            const response = await fetch(`/api/nursing-archive/document/${documentID}`, {
+            const response = await fetch(`${API_BASE_URL}/api/nursing-archive/document/${documentID}`, {
                 method: 'DELETE',
             });
 
@@ -232,7 +232,7 @@ export const searchDocuments = createAsyncThunk(
                 ...filters
             });
 
-            const response = await fetch(`/api/nursing-archive/${clientID}/search?${queryParams}`, {
+            const response = await fetch(`${API_BASE_URL}/api/nursing-archive/${clientID}/search?${queryParams}`, {
                 method: 'GET',
                 headers: {
                     'Content-Type': 'application/json',
@@ -273,7 +273,7 @@ export const fetchCategories = createAsyncThunk(
         }
 
         try {
-            const response = await fetch(`/api/nursing-archive/categories`, {
+            const response = await fetch(`${API_BASE_URL}/api/nursing-archive/categories`, {
                 method: 'GET',
                 headers: {
                     'Content-Type': 'application/json',
@@ -309,7 +309,7 @@ export const shareDocument = createAsyncThunk(
         }
 
         try {
-            const response = await fetch(`/api/nursing-archive/document/${documentID}/share`, {
+            const response = await fetch(`${API_BASE_URL}/api/nursing-archive/document/${documentID}/share`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

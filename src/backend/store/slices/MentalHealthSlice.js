@@ -2,7 +2,7 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
 
-const API_URL = '';
+const API_URL = import.meta.env.VITE_API_URL;
 
 // ✅ Helper function to check if we should use mock data
 const shouldUseMockData = (clientID) => {
@@ -110,7 +110,7 @@ export const fetchMentalHealthData = createAsyncThunk(
     }
 
     try {
-      const response = await axios.get(`/api/mental-health/${clientID}`);
+      const response = await axios.get(`${API_URL}/api/mental-health/${clientID}`);
       return response.data;
     } catch (error) {
       console.error("❌ Error fetching mental health data:", error);
@@ -129,7 +129,7 @@ export const saveMentalHealthData = createAsyncThunk(
     }
 
     try {
-      const response = await axios.post(`/api/mental-health/${clientId}`, {
+      const response = await axios.post(`${API_URL}/api/mental-health/${clientId}`, {
         ...formData,
         updatedBy: user?.email || "unknown",
         updatedAt: new Date().toISOString(),
@@ -151,7 +151,7 @@ export const addMentalHealthProvider = createAsyncThunk(
     }
 
     try {
-      const response = await axios.post(`/api/mental-health/${clientId}/providers`, providerData);
+      const response = await axios.post(`${API_URL}/api/mental-health/${clientId}/providers`, providerData);
       return response.data;
     } catch (error) {
       return thunkAPI.rejectWithValue(error.response?.data || "Add provider failed");
@@ -167,7 +167,7 @@ export const removeMentalHealthProvider = createAsyncThunk(
     }
 
     try {
-      await axios.delete(`/api/mental-health/${clientId}/providers/${providerId}`);
+      await axios.delete(`${API_URL}/api/mental-health/${clientId}/providers/${providerId}`);
       return providerId;
     } catch (error) {
       return thunkAPI.rejectWithValue(error.response?.data || "Remove provider failed");
@@ -184,7 +184,7 @@ export const addHospitalization = createAsyncThunk(
     }
 
     try {
-      const response = await axios.post(`/api/mental-health/${clientId}/hospitalizations`, hospitalizationData);
+      const response = await axios.post(`${API_URL}/api/mental-health/${clientId}/hospitalizations`, hospitalizationData);
       return response.data;
     } catch (error) {
       return thunkAPI.rejectWithValue(error.response?.data || "Add hospitalization failed");
@@ -201,7 +201,7 @@ export const addMedication = createAsyncThunk(
     }
 
     try {
-      const response = await axios.post(`/api/mental-health/${clientId}/medications`, medicationData);
+      const response = await axios.post(`${API_URL}/api/mental-health/${clientId}/medications`, medicationData);
       return response.data;
     } catch (error) {
       return thunkAPI.rejectWithValue(error.response?.data || "Add medication failed");

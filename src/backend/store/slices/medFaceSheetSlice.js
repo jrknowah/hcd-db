@@ -2,7 +2,7 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
 
-const API_URL = '';
+const API_URL = import.meta.env.VITE_API_URL;
 
 // ✅ Helper function to check if we should use mock data
 const shouldUseMockData = (clientID) => {
@@ -74,7 +74,7 @@ export const fetchMedicalInfo = createAsyncThunk(
     }
 
     try {
-      const response = await axios.get(`/api/medical/info/${clientID}`);
+      const response = await axios.get(`${API_URL}/api/medical/info/${clientID}`);
       return response.data;
     } catch (error) {
       console.error("❌ Error fetching medical info:", error);
@@ -98,7 +98,7 @@ export const saveMedicalInfo = createAsyncThunk(
     }
 
     try {
-      const response = await axios.post(`/api/medical/info/${clientID}`, medicalData);
+      const response = await axios.post(`${API_URL}/api/medical/info/${clientID}`, medicalData);
       return response.data;
     } catch (error) {
       console.error("❌ Error saving medical info:", error);
@@ -118,7 +118,7 @@ export const fetchAppointments = createAsyncThunk(
     }
 
     try {
-      const response = await axios.get(`/api/medical/appointments/${clientID}`);
+      const response = await axios.get(`${API_URL}/api/medical/appointments/${clientID}`);
       return response.data;
     } catch (error) {
       console.error("❌ Error fetching appointments:", error);
@@ -143,7 +143,7 @@ export const saveAppointment = createAsyncThunk(
     }
 
     try {
-      const response = await axios.post(`/api/medical/appointments/${clientID}`, appointmentData);
+      const response = await axios.post(`${API_URL}/api/medical/appointments/${clientID}`, appointmentData);
       return response.data;
     } catch (error) {
       console.error("❌ Error saving appointment:", error);
@@ -168,7 +168,7 @@ export const editAppointment = createAsyncThunk(
     }
 
     try {
-      const response = await axios.put(`/api/medical/appointments/${appointmentID}`, appointmentData);
+      const response = await axios.put(`${API_URL}/api/medical/appointments/${appointmentID}`, appointmentData);
       return response.data;
     } catch (error) {
       console.error("❌ Error updating appointment:", error);
@@ -188,7 +188,7 @@ export const deleteAppointment = createAsyncThunk(
     }
 
     try {
-      await axios.delete(`/api/medical/appointments/${appointmentID}`);
+      await axios.delete(`${API_URL}/api/medical/appointments/${appointmentID}`);
       return appointmentID;
     } catch (error) {
       console.error("❌ Error deleting appointment:", error);
@@ -208,7 +208,7 @@ export const fetchClientAllergies = createAsyncThunk(
     }
 
     try {
-      const response = await axios.get(`/api/medical/allergies/${clientID}`);
+      const response = await axios.get(`${API_URL}/api/medical/allergies/${clientID}`);
       return response.data;
     } catch (error) {
       console.error("❌ Error fetching client allergies:", error);
@@ -232,7 +232,7 @@ export const saveClientAllergies = createAsyncThunk(
     }
 
     try {
-      const response = await axios.post(`/api/medical/allergies/${clientID}`, { allergies });
+      const response = await axios.post(`${API_URL}/api/medical/allergies/${clientID}`, { allergies });
       return response.data;
     } catch (error) {
       console.error("❌ Error saving client allergies:", error);

@@ -10,7 +10,7 @@ const shouldUseMockData = (clientID) => {
 };
 
 // ✅ API Base URL - CONSISTENT naming
-const API_URL = '';
+const API_URL = import.meta.env.VITE_API_URL;
 
 // ✅ Async Thunks for API Calls
 
@@ -63,7 +63,7 @@ export const fetchIDTNoteProvider = createAsyncThunk(
 
         try {
             // ✅ FIXED: Use consistent API_URL variable
-            const response = await fetch(`/idt-provider/${clientID}`, {
+            const response = await fetch(`${API_URL}/idt-provider/${clientID}`, {
                 method: 'GET',
                 headers: {
                     'Content-Type': 'application/json',
@@ -106,7 +106,7 @@ export const saveIDTNoteProvider = createAsyncThunk(
             const { clientID, ...saveData } = idtData;
             
             // ✅ FIXED: Use consistent API_URL variable
-            const response = await fetch(`/idt-provider/${clientID}`, {
+            const response = await fetch(`${API_URL}/idt-provider/${clientID}`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -146,7 +146,7 @@ export const fetchIDTSummary = createAsyncThunk(
 
         try {
             // ✅ FIXED: Use consistent API_URL variable
-            const response = await fetch(`/idt-provider/${clientID}/summary`);
+            const response = await fetch(`${API_URL}/idt-provider/${clientID}/summary`);
             
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
@@ -181,7 +181,7 @@ export const fetchConsultationData = createAsyncThunk(
 
         try {
             // ✅ FIXED: Use consistent API_URL variable
-            const response = await fetch(`/idt-provider/${clientID}/consultations`);
+            const response = await fetch(`${API_URL}/idt-provider/${clientID}/consultations`);
             
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
@@ -214,7 +214,7 @@ export const fetchDischargePlanning = createAsyncThunk(
 
         try {
             // ✅ FIXED: Use consistent API_URL variable
-            const response = await fetch(`/idt-provider/${clientID}/discharge-planning`);
+            const response = await fetch(`${API_URL}/idt-provider/${clientID}/discharge-planning`);
             
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
@@ -255,7 +255,7 @@ export const fetchIDTHistory = createAsyncThunk(
 
         try {
             // ✅ FIXED: Use consistent API_URL variable
-            const response = await fetch(`/idt-provider/${clientID}/history`);
+            const response = await fetch(`${API_URL}/idt-provider/${clientID}/history`);
             
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);

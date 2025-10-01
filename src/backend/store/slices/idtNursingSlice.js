@@ -2,7 +2,7 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
 
-const API_URL = '';
+const API_URL = import.meta.env.VITE_API_URL;
 
 // ✅ Helper function to check if we should use mock data
 const shouldUseMockData = (clientID) => {
@@ -80,7 +80,7 @@ export const fetchIDTNoteNursing = createAsyncThunk(
     }
 
     try {
-      const response = await axios.get(`/api/idt-nursing/${clientID}`);
+      const response = await axios.get(`${API_URL}/api/idt-nursing/${clientID}`);
       return response.data;
     } catch (error) {
       console.error("❌ Error fetching IDT nursing note:", error);
@@ -104,7 +104,7 @@ export const saveIDTNoteNursing = createAsyncThunk(
     }
 
     try {
-      const response = await axios.post(`/api/idt-nursing/${idtData.clientID}`, idtData);
+      const response = await axios.post(`${API_URL}/api/idt-nursing/${idtData.clientID}`, idtData);
       return response.data;
     } catch (error) {
       console.error("❌ Error saving IDT nursing note:", error);
@@ -124,7 +124,7 @@ export const fetchIDTSummary = createAsyncThunk(
     }
 
     try {
-      const response = await axios.get(`/api/idt-nursing/${clientID}/summary`);
+      const response = await axios.get(`${API_URL}/api/idt-nursing/${clientID}/summary`);
       return response.data;
     } catch (error) {
       console.error("❌ Error fetching IDT summary:", error);
@@ -144,7 +144,7 @@ export const fetchGoals = createAsyncThunk(
     }
 
     try {
-      const response = await axios.get(`/api/idt-nursing/${clientID}/goals`);
+      const response = await axios.get(`${API_URL}/api/idt-nursing/${clientID}/goals`);
       return response.data;
     } catch (error) {
       console.error("❌ Error fetching goals:", error);
@@ -164,7 +164,7 @@ export const fetchComplianceHistory = createAsyncThunk(
     }
 
     try {
-      const response = await axios.get(`/api/idt-nursing/${clientID}/compliance`);
+      const response = await axios.get(`${API_URL}/api/idt-nursing/${clientID}/compliance`);
       return response.data;
     } catch (error) {
       console.error("❌ Error fetching compliance history:", error);
@@ -188,7 +188,7 @@ export const updateIDTNoteNursing = createAsyncThunk(
     }
 
     try {
-      const response = await axios.put(`/api/idt-nursing/${idtNursingID}`, updatedData);
+      const response = await axios.put(`${API_URL}/api/idt-nursing/${idtNursingID}`, updatedData);
       return response.data;
     } catch (error) {
       console.error("❌ Error updating IDT nursing note:", error);
@@ -208,7 +208,7 @@ export const deleteIDTNoteNursing = createAsyncThunk(
     }
 
     try {
-      await axios.delete(`/api/idt-nursing/${idtNursingID}`);
+      await axios.delete(`${API_URL}/api/idt-nursing/${idtNursingID}`);
       return idtNursingID;
     } catch (error) {
       console.error("❌ Error deleting IDT nursing note:", error);

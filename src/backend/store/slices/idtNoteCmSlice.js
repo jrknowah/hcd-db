@@ -9,7 +9,7 @@ const getApiBaseUrl = () => {
          (import.meta?.env?.DEV ? 'http://localhost:5000' : '');
 };
 
-const API_BASE_URL = '';
+const API_BASE_URL = getApiBaseUrl();
 
 // ✅ FIXED: Vite-compatible development detection
 const shouldUseMockData = (clientID) => {
@@ -17,7 +17,7 @@ const shouldUseMockData = (clientID) => {
   const isMockClient = clientID === 'mock-123' || clientID?.toString().startsWith('mock-');
   const forceMock = import.meta?.env?.VITE_USE_MOCK_DATA === 'true';
   
-  return isDevelopment && (isMockClient || forceMock);
+  return isDevelopment && (isMockClient || forceMock || !API_BASE_URL);
 };
 
 // ✅ ROBUST: Built-in mock data - no external dependencies
@@ -87,7 +87,7 @@ export const fetchIDTCaseManager = createAsyncThunk(
     }
 
     try {
-      const data = await safeFetch(`/api/section6/idt-case-manager/${clientID}`);
+      const data = await safeFetch(`${API_BASE_URL}/api/section6/idt-case-manager/${clientID}`);
       return data;
     } catch (error) {
       console.warn('🔄 IDT API failed, falling back to mock data:', error.message);
@@ -113,7 +113,7 @@ export const saveIDTCaseManager = createAsyncThunk(
     }
 
     try {
-      const data = await safeFetch(`/api/section6/idt-case-manager/${idtData.clientID}`, {
+      const data = await safeFetch(`${API_BASE_URL}/api/section6/idt-case-manager/${idtData.clientID}`, {
         method: 'POST',
         body: JSON.stringify(idtData),
       });
@@ -150,7 +150,7 @@ export const fetchIDTSummary = createAsyncThunk(
     }
 
     try {
-      const data = await safeFetch(`/api/section6/idt-case-manager/${clientID}/summary`);
+      const data = await safeFetch(`${API_BASE_URL}/api/section6/idt-case-manager/${clientID}/summary`);
       return data;
     } catch (error) {
       // ✅ Return mock summary on failure

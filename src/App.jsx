@@ -10,6 +10,19 @@ import AuthGuard from './components/Auth/AuthGuard';
 import AssessCarePlans from './views/Section-3/AssessCarePlans';
 import  store  from './backend/store/store'; // Add this import
 
+// At the very top of App.jsx, before any other code:
+if (typeof window !== 'undefined') {
+  const state = localStorage.getItem('redux_cache');
+  const sessionState = sessionStorage.getItem('redux_cache');
+  
+  if (state?.includes('<!DOCTYPE') || sessionState?.includes('<!DOCTYPE')) {
+    console.log('🧹 Clearing corrupted storage');
+    localStorage.clear();
+    sessionStorage.clear();
+    window.location.reload();
+  }
+}
+
 // ✅ Import your real components with error boundaries
 const FullLayout = React.lazy(() => import('./layouts/full/FullLayout'));
 const DashboardClient = React.lazy(() => import('./views/Dashboard/DashboardClient'));

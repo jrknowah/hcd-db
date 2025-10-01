@@ -2,7 +2,7 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
 
-const API = '';
+const API = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
 // Mock data for development
 const MOCK_REFERRAL_DATA = {
@@ -25,7 +25,7 @@ export const fetchReferralData = createAsyncThunk(
       }
 
       // FIX: Add /api prefix to the URL
-      const { data } = await axios.get(`/api/clientReferrals/${clientID}`);
+      const { data } = await axios.get(`${API}/api/clientReferrals/${clientID}`);
       return data;
     } catch (error) {
       return rejectWithValue(error.response?.data?.message || 'Failed to fetch referral data');
@@ -47,7 +47,7 @@ export const saveReferralData = createAsyncThunk(
       }
 
       // FIX: Add /api prefix to the URL
-      await axios.post(`/api/saveClientReferrals`, { clientID, ...referrals });
+      await axios.post(`${API}/api/saveClientReferrals`, { clientID, ...referrals });
       return referrals;
     } catch (error) {
       return rejectWithValue(error.response?.data?.message || 'Failed to save referral data');
@@ -79,7 +79,7 @@ export const uploadReferralFile = createAsyncThunk(
       formData.append("type", referralType);
 
       // FIX: Add /api prefix to the URL
-      const response = await axios.post(`/api/uploadReferral`, formData, {
+      const response = await axios.post(`${API}/api/uploadReferral`, formData, {
         headers: { "Content-Type": "multipart/form-data" }
       });
 

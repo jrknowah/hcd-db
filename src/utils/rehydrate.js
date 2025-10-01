@@ -25,7 +25,7 @@ export const rehydrateState = () => {
       selectedClient: urlClientID 
         ? { clientID: urlClientID }
         : persistedState.clientData || null,
-      clientsList: [],
+      clients: [],
       loading: false,
       error: null,
     },
