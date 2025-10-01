@@ -3,7 +3,6 @@
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { useSearchParams, useLocation, useNavigate } from 'react-router-dom';
-import store from '../../backend/store/store';
 import {
   Box,
   Button,
@@ -75,7 +74,7 @@ const DashboardClient = () => {
   
   // ✅ FIXED: Move Redux selectors to the TOP, before any useEffect that uses them
   const user = useSelector((state) => state.auth?.user);
-  const clients = useSelector(selectAllClients) || [];
+  const clients = useSelector(selectAllClients)|| [];
   const selectedClient = useSelector((state) => state.clients?.selectedClient);
   const loading = useSelector(selectClientsLoading);
   const error = useSelector(selectClientsError);
@@ -98,31 +97,28 @@ const DashboardClient = () => {
   console.log('🔍 Current pathname:', location.pathname);
   console.log('🔍 URL Client ID from params:', searchParams.get('clientID'));
 
-   console.log('Store state on component mount:', store.getState());
-  console.log('Clients slice:', store.getState().clients);
-
   // ✅ FIXED: useEffect now comes AFTER all variables are declared
-  // useEffect(() => {
-  //   console.log('🔗 API URL:');
-  //   console.log('📊 Redux clients state:', clients);
-  //   console.log('📊 Redux loading state:', loading);
-  //   console.log('📊 Redux error state:', error);
+  useEffect(() => {
+    console.log('🔗 API URL:', import.meta.env.VITE_API_URL);
+    console.log('📊 Redux clients state:', clients);
+    console.log('📊 Redux loading state:', loading);
+    console.log('📊 Redux error state:', error);
     
-  //   // Test API call directly
-  //   console.log('🧪 Testing API call...');
-  //   fetch(`/api/clients`)
-  //     .then(response => {
-  //       console.log('🌐 API Response status:', response.status);
-  //       return response.json();
-  //     })
-  //     .then(data => {
-  //       console.log('📋 Real clients from API:', data);
-  //       console.log('📋 Number of clients:', data?.length);
-  //     })
-  //     .catch(err => {
-  //       console.error('❌ API call failed:', err);
-  //     });
-  // }, [clients, loading, error]);
+    // Test API call directly
+    console.log('🧪 Testing API call...');
+    fetch(`${import.meta.env.VITE_API_URL}/api/clients`)
+      .then(response => {
+        console.log('🌐 API Response status:', response.status);
+        return response.json();
+      })
+      .then(data => {
+        console.log('📋 Real clients from API:', data);
+        console.log('📋 Number of clients:', data?.length);
+      })
+      .catch(err => {
+        console.error('❌ API call failed:', err);
+      });
+  }, [clients, loading, error]);
 
   // ✅ Load client from URL on page load/refresh (only for dashboard)
   useEffect(() => {
@@ -141,14 +137,6 @@ const DashboardClient = () => {
       }
     }
   }, [location.pathname, searchParams, dispatch, clients]);
-
-  useEffect(() => {
-  const state = store.getState();
-  console.log('Full Redux state:', state);
-  console.log('Clients slice:', state.clients);
-  console.log('Clients array:', state.clients?.clients);
-  console.log('Is array?', Array.isArray(state.clients?.clients));
-}, []);
 
   // Restore client data on page load
   // Restore client from cache on page refresh
