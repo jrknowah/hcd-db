@@ -151,7 +151,7 @@ class AzureBlobService {
       const params = { clientID };
       if (docType) params.docType = docType;
       
-      const response = await axios.get(`${this.apiUrl}/api/files`, { params });
+      const response = await axios.get(`${this.apiUrl}/api/files/${clientID}`);
       
       console.log(`Found ${response.data.length} files for client ${clientID}`);
       return response.data;
