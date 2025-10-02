@@ -1016,7 +1016,46 @@ app.get('/api/debug/storage', (req, res) => {
     containerName: process.env.AZURE_CONTAINER_NAME || 'not set'
   });
 });
+app.get('/api/test-storage', async (req, res) => {
+  try {
+    const { BlobServiceClient } = require('@azure/storage-blob');
+    const connectionString = process.env.AZURE_STORAGE_CONNECTION_STRING;
+    
+    if (!connectionString) {
+      return res.json({
+        success: false,
+        error: 'AZURE_STORAGE_CONNECTION_STRING not found in environment'
+      });
+    }
 
+    // Try to create a client
+    const blobServiceClient = BlobServiceClient.fromConnectionString(connectionString);
+    
+    // Try to list containers (this will fail if credentials are wrong)
+    const containerName = process.env.AZURE_CONTAINER_NAME || 'uploads';
+    const containerClient = blobServiceClient.getContainerClient(containerName);
+    
+    // This operation will throw if not authorized
+    const exists = await containerClient.exists();
+    
+    res.json({
+      success: true,
+      connectionStringConfigured: true,
+      containerName: containerName,
+      containerExists: exists,
+      message: exists ? 'Azure Storage connection successful!' : 'Connection OK but container does not exist'
+    });
+    
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      code: error.code,
+      statusCode: error.statusCode,
+      details: 'Azure Storage connection failed'
+    });
+  }
+});
 
 // Add this debug middleware to catch all requests
 app.use((req, res, next) => {
