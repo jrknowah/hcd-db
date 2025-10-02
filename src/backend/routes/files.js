@@ -70,7 +70,7 @@ router.post('/upload', upload.single('file'), async (req, res) => {
     if (isAzureBlobEnabled) {
       // Upload to Azure Blob Storage
       try {
-        const containerName = process.env.AZURE_CONTAINER_NAME || 'uploads';
+        const containerName = process.env.AZURE_CONTAINER_NAME || 'client-docs';
         const containerClient = blobServiceClient.getContainerClient(containerName);
         
         // Create container if it doesn't exist
