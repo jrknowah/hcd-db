@@ -1008,6 +1008,16 @@ if (!medFaceSheetRouterLoaded) {
 //End Section 5: Medical ===================================================================
 
 
+app.get('/api/debug/storage', (req, res) => {
+  res.json({
+    hasConnectionString: !!process.env.AZURE_STORAGE_CONNECTION_STRING,
+    connectionStringLength: process.env.AZURE_STORAGE_CONNECTION_STRING?.length || 0,
+    startsCorrectly: process.env.AZURE_STORAGE_CONNECTION_STRING?.startsWith('DefaultEndpointsProtocol='),
+    containerName: process.env.AZURE_CONTAINER_NAME || 'not set'
+  });
+});
+
+
 // Add this debug middleware to catch all requests
 app.use((req, res, next) => {
   console.log(`🔍 REQUEST: ${req.method} ${req.path}`);
@@ -1037,16 +1047,6 @@ app.use((req, res) => {
     ]
   });
 });
-
-app.get('/api/debug/storage', (req, res) => {
-  res.json({
-    hasConnectionString: !!process.env.AZURE_STORAGE_CONNECTION_STRING,
-    connectionStringLength: process.env.AZURE_STORAGE_CONNECTION_STRING?.length || 0,
-    startsCorrectly: process.env.AZURE_STORAGE_CONNECTION_STRING?.startsWith('DefaultEndpointsProtocol='),
-    containerName: process.env.AZURE_CONTAINER_NAME || 'not set'
-  });
-});
-
 // Replace your existing app.listen at the bottom of server.js with this updated version:
 
 const PORT = process.env.PORT || 5000;
