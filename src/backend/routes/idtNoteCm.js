@@ -9,7 +9,7 @@ const router = express.Router();
  * GET /api/idt-case-manager/:clientID
  * Get IDT Case Manager data for a specific client
  */
-router.get('/:clientID', async (req, res) => {
+router.get('/idt-case-manager/:clientID', async (req, res) => {
   try {
     const { clientID } = req.params;
     
@@ -88,7 +88,7 @@ router.get('/:clientID', async (req, res) => {
  * POST /api/idt-case-manager/:clientID
  * Save/update IDT Case Manager data for a client
  */
-router.post('/:clientID', async (req, res) => {
+router.post('/idt-case-manager/:clientID', async (req, res) => {
   try {
     const { clientID } = req.params;
     const {
@@ -198,7 +198,7 @@ router.post('/:clientID', async (req, res) => {
  * PUT /api/idt-case-manager/:idtCMID
  * Update specific IDT Case Manager record
  */
-router.put('/:idtCMID', async (req, res) => {
+router.put('/idt-case-manager/:idtCMID', async (req, res) => {
   try {
     const { idtCMID } = req.params;
     const updateData = req.body;
@@ -269,7 +269,7 @@ router.put('/:idtCMID', async (req, res) => {
  * DELETE /api/idt-case-manager/:idtCMID
  * Delete IDT Case Manager record
  */
-router.delete('/:idtCMID', async (req, res) => {
+router.delete('/idt-case-manager/:idtCMID', async (req, res) => {
   try {
     const { idtCMID } = req.params;
 
@@ -299,7 +299,7 @@ router.delete('/:idtCMID', async (req, res) => {
  * GET /api/idt-case-manager/:clientID/summary
  * Get IDT assessment summary for client
  */
-router.get('/:clientID/summary', async (req, res) => {
+router.get('/idt-case-manager/:clientID/summary', async (req, res) => {
   try {
     const { clientID } = req.params;
 
@@ -366,7 +366,7 @@ router.get('/:clientID/summary', async (req, res) => {
  * GET /api/idt-case-manager/:clientID/goals
  * Get client goals tracking
  */
-router.get('/:clientID/goals', async (req, res) => {
+router.get('/idt-case-manager/:clientID/goals', async (req, res) => {
   try {
     const { clientID } = req.params;
 
@@ -414,7 +414,7 @@ router.get('/:clientID/goals', async (req, res) => {
  * GET /api/idt-case-manager/:clientID/barriers
  * Get barrier assessment for client
  */
-router.get('/:clientID/barriers', async (req, res) => {
+router.get('/idt-case-manager/:clientID/barriers', async (req, res) => {
   try {
     const { clientID } = req.params;
 

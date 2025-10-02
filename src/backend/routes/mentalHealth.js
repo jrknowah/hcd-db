@@ -55,7 +55,7 @@ const stringifyArrayField = (field) => {
 };
 
 // GET /api/mental-health/:clientID - Fetch complete mental health assessment
-router.get('/:clientID', async (req, res) => {
+router.get('/mental-health/:clientID', async (req, res) => {
   try {
     const pool = await getPool();
     const { clientID } = req.params;
@@ -183,7 +183,7 @@ router.get('/:clientID', async (req, res) => {
 });
 
 // POST /api/mental-health/:clientID - Save mental health assessment
-router.post('/:clientID', async (req, res) => {
+router.post('/mental-health/:clientID', async (req, res) => {
   const pool = await getPool();
   let transaction;
   
@@ -489,7 +489,7 @@ router.post('/:clientID', async (req, res) => {
 });
 
 // POST /api/mental-health/:clientID/providers - Add mental health provider
-router.post('/:clientID/providers', async (req, res) => {
+router.post('/mental-health/:clientID/providers', async (req, res) => {
   try {
     const pool = await getPool();
     const { clientID } = req.params;
@@ -554,7 +554,7 @@ router.delete('/:clientID/providers/:providerID', async (req, res) => {
 });
 
 // POST /api/mental-health/:clientID/hospitalizations - Add hospitalization
-router.post('/:clientID/hospitalizations', async (req, res) => {
+router.post('/mental-health/:clientID/hospitalizations', async (req, res) => {
   try {
     const pool = await getPool();
     const { clientID } = req.params;
@@ -591,7 +591,7 @@ router.post('/:clientID/hospitalizations', async (req, res) => {
 });
 
 // POST /api/mental-health/:clientID/medications - Add medication
-router.post('/:clientID/medications', async (req, res) => {
+router.post('/mental-health/:clientID/medications', async (req, res) => {
   try {
     const pool = await getPool();
     const { clientID } = req.params;
@@ -628,7 +628,7 @@ router.post('/:clientID/medications', async (req, res) => {
 });
 
 // GET /api/mental-health/:clientID/arrests - Fetch arrest records
-router.get('/:clientID/arrests', async (req, res) => {
+router.get('/mental-health/:clientID/arrests', async (req, res) => {
   try {
     const pool = await getPool();
     const { clientID } = req.params;
@@ -656,7 +656,7 @@ router.get('/:clientID/arrests', async (req, res) => {
 });
 
 // POST /api/mental-health/:clientID/arrests - Add arrest record
-router.post('/:clientID/arrests', async (req, res) => {
+router.post('/mental-health/:clientID/arrests', async (req, res) => {
   try {
     const pool = await getPool();
     const { clientID } = req.params;
@@ -698,7 +698,7 @@ router.post('/:clientID/arrests', async (req, res) => {
 });
 
 // DELETE /api/mental-health/:clientID/arrests/:arrestID
-router.delete('/:clientID/arrests/:arrestID', async (req, res) => {
+router.delete('/mental-health/:clientID/arrests/:arrestID', async (req, res) => {
   try {
     const pool = await getPool();
     const { arrestID } = req.params;
@@ -722,7 +722,7 @@ router.delete('/:clientID/arrests/:arrestID', async (req, res) => {
 });
 
 // GET /api/mental-health/:clientID/summary - Get mental health summary
-router.get('/:clientID/summary', async (req, res) => {
+router.get('/mental-health/:clientID/summary', async (req, res) => {
   try {
     const pool = await getPool();
     const { clientID } = req.params;

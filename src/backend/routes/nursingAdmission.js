@@ -60,7 +60,7 @@ const safeParse = (str) => {
 };
 
 // GET /api/nursing-admission/:clientID - Get nursing admission for a client
-router.get('/:clientID', async (req, res) => {
+router.get('/nursing-admission/:clientID', async (req, res) => {
   try {
     const { clientID } = req.params;
     
@@ -167,7 +167,7 @@ router.get('/:clientID', async (req, res) => {
 });
 
 // POST /api/nursing-admission/:clientID - Create/update nursing admission
-router.post('/:clientID', async (req, res) => {
+router.post('/nursing-admission/:clientID', async (req, res) => {
   try {
     const { clientID } = req.params;
     const admissionData = req.body;
@@ -356,7 +356,7 @@ router.post('/:clientID', async (req, res) => {
 });
 
 // PUT /api/nursing-admission/:admissionID - Update specific admission record
-router.put('/:admissionID', async (req, res) => {
+router.put('/nursing-admission/:admissionID', async (req, res) => {
   try {
     const { admissionID } = req.params;
     const updateData = req.body;
@@ -424,7 +424,7 @@ router.put('/:admissionID', async (req, res) => {
 });
 
 // DELETE /api/nursing-admission/:admissionID - Delete admission record
-router.delete('/:admissionID', async (req, res) => {
+router.delete('/nursing-admission/:admissionID', async (req, res) => {
   try {
     const { admissionID } = req.params;
     
@@ -462,7 +462,7 @@ router.delete('/:admissionID', async (req, res) => {
 });
 
 // GET /api/nursing-admission/:clientID/summary - Get admission summary and statistics
-router.get('/:clientID/summary', async (req, res) => {
+router.get('/nursing-admission/:clientID/summary', async (req, res) => {
   try {
     const { clientID } = req.params;
     
@@ -546,7 +546,7 @@ router.get('/:clientID/summary', async (req, res) => {
 });
 
 // GET /api/nursing-admission/:clientID/body-inspection - Get body inspection data only
-router.get('/:clientID/body-inspection', async (req, res) => {
+router.get('/nursing-admission/:clientID/body-inspection', async (req, res) => {
   try {
     const { clientID } = req.params;
     
@@ -587,7 +587,7 @@ router.get('/:clientID/body-inspection', async (req, res) => {
 });
 
 // GET /api/nursing-admission/:clientID/vitals - Get vitals history
-router.get('/:clientID/vitals', async (req, res) => {
+router.get('/nursing-admission/:clientID/vitals', async (req, res) => {
   try {
     const { clientID } = req.params;
     const { limit = 10 } = req.query;

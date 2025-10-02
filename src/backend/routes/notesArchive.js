@@ -8,7 +8,7 @@ const upload = multer({ dest: 'uploads/' });
 let uploadedFiles = {};
 
 // POST /api/note-archive/upload
-router.post('/upload', upload.single('noteFile'), (req, res) => {
+router.post('note-archive/upload', upload.single('noteFile'), (req, res) => {
   try {
     const file = req.file;
     if (!file) {

@@ -128,7 +128,7 @@ const sanitizeIDTData = (data) => {
 };
 
 // ✅ GET /api/idt-provider/:clientID - Get IDT provider data for client
-router.get('/:clientID', async (req, res) => {
+router.get('/idt-provider/:clientID', async (req, res) => {
     try {
         const { clientID } = req.params;
         
@@ -164,7 +164,7 @@ router.get('/:clientID', async (req, res) => {
 });
 
 // ✅ POST /api/idt-provider/:clientID - Save/update IDT provider data
-router.post('/:clientID', async (req, res) => {
+router.post('/idt-provider/:clientID', async (req, res) => {
     try {
         const { clientID } = req.params;
         const rawData = req.body;
@@ -343,7 +343,7 @@ router.post('/:clientID', async (req, res) => {
 });
 
 // ✅ GET /api/idt-provider/:clientID/summary - Get IDT summary data
-router.get('/:clientID/summary', async (req, res) => {
+router.get('/idt-provider/:clientID/summary', async (req, res) => {
     try {
         const { clientID } = req.params;
         
@@ -376,7 +376,7 @@ router.get('/:clientID/summary', async (req, res) => {
 });
 
 // ✅ GET /api/idt-provider/:clientID/consultations - Get consultation data only
-router.get('/:clientID/consultations', async (req, res) => {
+router.get('/idt-provider/:clientID/consultations', async (req, res) => {
     try {
         const { clientID } = req.params;
         
@@ -411,7 +411,7 @@ router.get('/:clientID/consultations', async (req, res) => {
 });
 
 // ✅ GET /api/idt-provider/:clientID/discharge-planning - Get discharge planning data
-router.get('/:clientID/discharge-planning', async (req, res) => {
+router.get('/idt-provider/:clientID/discharge-planning', async (req, res) => {
     try {
         const { clientID } = req.params;
         
@@ -452,7 +452,7 @@ router.get('/:clientID/discharge-planning', async (req, res) => {
 });
 
 // ✅ GET /api/idt-provider/:clientID/history - Get IDT note history
-router.get('/:clientID/history', async (req, res) => {
+router.get('/idt-provider/:clientID/history', async (req, res) => {
     try {
         const { clientID } = req.params;
         
@@ -487,7 +487,7 @@ router.get('/:clientID/history', async (req, res) => {
 });
 
 // ✅ DELETE /api/idt-provider/:idtID - Delete specific IDT record
-router.delete('/:idtID', async (req, res) => {
+router.delete('/idt-provider/:idtID', async (req, res) => {
     try {
         const { idtID } = req.params;
         

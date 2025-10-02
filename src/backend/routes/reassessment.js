@@ -23,7 +23,7 @@ const reassessmentValidation = [
 ];
 
 // ✅ GET /api/reassessment/:clientID - Fetch reassessment data for a client
-router.get('/:clientID', 
+router.get('/reassessment/:clientID', 
     authMiddleware, 
     async (req, res) => {
         try {
@@ -48,7 +48,7 @@ router.get('/:clientID',
 );
 
 // ✅ GET /api/reassessment/assessment/:assessmentID - Fetch by assessment ID
-router.get('/assessment/:assessmentID',
+router.get('/reassessment/assessment/:assessmentID',
     authMiddleware,
     async (req, res) => {
         try {
@@ -69,7 +69,7 @@ router.get('/assessment/:assessmentID',
 );
 
 // ✅ POST /api/reassessment/:clientID - Create new reassessment record
-router.post('/:clientID', 
+router.post('/reassessment/:clientID', 
     authMiddleware, 
     reassessmentValidation,
     logMiddleware('CREATE_REASSESSMENT_RECORD'),
@@ -110,7 +110,7 @@ router.post('/:clientID',
 );
 
 // ✅ PUT /api/reassessment/:clientID - Update existing reassessment record
-router.put('/:clientID', 
+router.put('/reassessment/:clientID', 
     authMiddleware, 
     reassessmentValidation,
     logMiddleware('UPDATE_REASSESSMENT_RECORD'),
@@ -146,7 +146,7 @@ router.put('/:clientID',
 );
 
 // ✅ PUT /api/reassessment/record/:reassessmentID - Update by reassessment ID
-router.put('/record/:reassessmentID',
+router.put('/reassessment/record/:reassessmentID',
     authMiddleware,
     reassessmentValidation,
     logMiddleware('UPDATE_REASSESSMENT_BY_ID'),
@@ -174,7 +174,7 @@ router.put('/record/:reassessmentID',
 );
 
 // ✅ PUT /api/reassessment/:clientID/complete - Complete reassessment
-router.put('/:clientID/complete',
+router.put('/reassessment/:clientID/complete',
     authMiddleware,
     logMiddleware('COMPLETE_REASSESSMENT'),
     async (req, res) => {
@@ -203,7 +203,7 @@ router.put('/:clientID/complete',
 );
 
 // ✅ DELETE /api/reassessment/:clientID - Delete reassessment record
-router.delete('/:clientID', 
+router.delete('/reassessment/:clientID', 
     authMiddleware, 
     logMiddleware('DELETE_REASSESSMENT_RECORD'),
     async (req, res) => {
@@ -225,7 +225,7 @@ router.delete('/:clientID',
 );
 
 // ✅ GET /api/reassessment/all - Get all reassessment records (admin only)
-router.get('/all', 
+router.get('/reassessment/all', 
     authMiddleware,
     async (req, res) => {
         try {
@@ -244,7 +244,7 @@ router.get('/all',
 );
 
 // ✅ GET /api/reassessment/search - Search reassessment records
-router.get('/search', 
+router.get('/reassessment/search', 
     authMiddleware,
     async (req, res) => {
         try {
@@ -267,7 +267,7 @@ router.get('/search',
 );
 
 // ✅ GET /api/reassessment/:clientID/summary - Generate assessment summary
-router.get('/:clientID/summary',
+router.get('/reassessment/:clientID/summary',
     authMiddleware,
     async (req, res) => {
         try {

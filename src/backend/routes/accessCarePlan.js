@@ -47,7 +47,7 @@ const calculateDaysInProgress = (startDate) => {
 // ===== ASSESSMENT CARE PLANS ROUTES =====
 
 // 🔸 GET /api/assessment-care-plans/:clientID - Get assessment data for client
-router.get('/:clientID', async (req, res) => {
+router.get('/assessment-care-plans/:clientID', async (req, res) => {
     const { clientID } = req.params;
     
     try {
@@ -101,7 +101,7 @@ router.get('/:clientID', async (req, res) => {
 });
 
 // 🔸 POST /api/assessment-care-plans/:clientID - Create/Save assessment data
-router.post('/:clientID', async (req, res) => {
+router.post('/assessment-care-plans/:clientID', async (req, res) => {
     const { clientID } = req.params;
     const assessmentData = req.body;
     
@@ -238,7 +238,7 @@ router.post('/:clientID', async (req, res) => {
 });
 
 // 🔸 GET /api/assessment-care-plans/:clientID/status - Get assessment status
-router.get('/:clientID/status', async (req, res) => {
+router.get('/assessment-care-plans/:clientID/status', async (req, res) => {
     const { clientID } = req.params;
     
     try {
@@ -307,7 +307,7 @@ router.get('/:clientID/status', async (req, res) => {
 });
 
 // 🔸 GET /api/assessment-care-plans/:clientID/metrics - Get assessment metrics
-router.get('/:clientID/metrics', async (req, res) => {
+router.get('/assessment-care-plans/:clientID/metrics', async (req, res) => {
     const { clientID } = req.params;
     
     try {
@@ -386,7 +386,7 @@ router.get('/:clientID/metrics', async (req, res) => {
 });
 
 // 🔸 GET /api/assessment-care-plans/:clientID/milestones - Get assessment milestones
-router.get('/:clientID/milestones', async (req, res) => {
+router.get('/assessment-care-plans/:clientID/milestones', async (req, res) => {
     const { clientID } = req.params;
     
     try {
@@ -479,7 +479,7 @@ router.get('/:clientID/milestones', async (req, res) => {
 });
 
 // 🔸 PUT /api/assessment-care-plans/assessment/:assessmentID/status - Update assessment status
-router.put('/assessment/:assessmentID/status', async (req, res) => {
+router.put('/assessment-care-plans/assessment/:assessmentID/status', async (req, res) => {
     const { assessmentID } = req.params;
     const { assessmentStatus, completionPercentage, notes } = req.body;
     
@@ -537,7 +537,7 @@ router.put('/assessment/:assessmentID/status', async (req, res) => {
 });
 
 // 🔸 PUT /api/assessment-care-plans/:clientID/milestones/:milestoneID/complete - Complete milestone
-router.put('/:clientID/milestones/:milestoneID/complete', async (req, res) => {
+router.put('/assessment-care-plans/:clientID/milestones/:milestoneID/complete', async (req, res) => {
     const { clientID, milestoneID } = req.params;
     const { actualHours, notes } = req.body;
     
@@ -616,7 +616,7 @@ router.put('/:clientID/milestones/:milestoneID/complete', async (req, res) => {
 });
 
 // 🔸 GET /api/assessment-care-plans/:clientID/report - Generate assessment report
-router.get('/:clientID/report', async (req, res) => {
+router.get('/assessment-care-plans/:clientID/report', async (req, res) => {
     const { clientID } = req.params;
     
     try {
@@ -716,7 +716,7 @@ router.get('/:clientID/report', async (req, res) => {
 });
 
 // 🔸 DELETE /api/assessment-care-plans/assessment/:assessmentID - Delete assessment (soft delete)
-router.delete('/assessment/:assessmentID', async (req, res) => {
+router.delete('/assessment-care-plans/assessment/:assessmentID', async (req, res) => {
     const { assessmentID } = req.params;
     
     try {

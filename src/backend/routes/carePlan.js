@@ -53,7 +53,7 @@ const validateCarePlanData = (data, isUpdate = false) => {
 };
 
 // GET /api/care-plans/:clientID - Fetch care plans for client
-router.get('/:clientID', async (req, res) => {
+router.get('/care-plans/:clientID', async (req, res) => {
   try {
     const pool = await getPool();
     const { clientID } = req.params;
@@ -95,7 +95,7 @@ router.get('/:clientID', async (req, res) => {
 });
 
 // POST /api/care-plans/:clientID - Create new care plan
-router.post('/:clientID', async (req, res) => {
+router.post('/care-plans/:clientID', async (req, res) => {
   try {
     const pool = await getPool();
     const { clientID } = req.params;
@@ -167,7 +167,7 @@ router.post('/:clientID', async (req, res) => {
 });
 
 // PUT /api/care-plans/:carePlanID - Update care plan
-router.put('/:carePlanID', async (req, res) => {
+router.put('/care-plans/:carePlanID', async (req, res) => {
   try {
     const pool = await getPool();
     const { carePlanID } = req.params;
@@ -250,7 +250,7 @@ router.put('/:carePlanID', async (req, res) => {
 });
 
 // PATCH /api/care-plans/:carePlanID/status - Update status only
-router.patch('/:carePlanID/status', async (req, res) => {
+router.patch('/care-plans/:carePlanID/status', async (req, res) => {
   try {
     const pool = await getPool();
     const { carePlanID } = req.params;
@@ -313,7 +313,7 @@ router.patch('/:carePlanID/status', async (req, res) => {
 });
 
 // DELETE /api/care-plans/:carePlanID - Delete care plan
-router.delete('/:carePlanID', async (req, res) => {
+router.delete('/care-plans/:carePlanID', async (req, res) => {
   try {
     const pool = await getPool();
     const { carePlanID } = req.params;

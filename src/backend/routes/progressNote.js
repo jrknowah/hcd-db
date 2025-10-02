@@ -50,7 +50,7 @@ const validateProgressNote = (noteData) => {
 };
 
 // GET /api/progress-notes/:clientID - Get all progress notes for a client
-router.get('/:clientID', async (req, res) => {
+router.get('/progress-notes/:clientID', async (req, res) => {
   try {
     const { clientID } = req.params;
     const { limit = 100, offset = 0, site, category, priority, startDate, endDate } = req.query;
@@ -139,7 +139,7 @@ router.get('/:clientID', async (req, res) => {
 });
 
 // POST /api/progress-notes/:clientID - Create new progress note
-router.post('/:clientID', async (req, res) => {
+router.post('/progress-notes/:clientID', async (req, res) => {
   try {
     const { clientID } = req.params;
     const noteData = req.body;
@@ -198,7 +198,7 @@ router.post('/:clientID', async (req, res) => {
 });
 
 // PUT /api/progress-notes/:noteID - Update specific progress note
-router.put('/:noteID', async (req, res) => {
+router.put('/progress-notes/:noteID', async (req, res) => {
   try {
     const { noteID } = req.params;
     const updateData = req.body;
@@ -298,7 +298,7 @@ router.put('/:noteID', async (req, res) => {
 });
 
 // DELETE /api/progress-notes/:noteID - Delete progress note
-router.delete('/:noteID', async (req, res) => {
+router.delete('/progress-notes/:noteID', async (req, res) => {
   try {
     const { noteID } = req.params;
     
@@ -347,7 +347,7 @@ router.delete('/:noteID', async (req, res) => {
 });
 
 // GET /api/progress-notes/:clientID/summary - Get notes summary and statistics
-router.get('/:clientID/summary', async (req, res) => {
+router.get('/progress-notes/:clientID/summary', async (req, res) => {
   try {
     const { clientID } = req.params;
     
@@ -471,7 +471,7 @@ router.get('/:clientID/summary', async (req, res) => {
 });
 
 // GET /api/progress-notes/:clientID/recent - Get recent notes (last 30 days)
-router.get('/:clientID/recent', async (req, res) => {
+router.get('/progress-notes/:clientID/recent', async (req, res) => {
   try {
     const { clientID } = req.params;
     const { days = 30 } = req.query;
@@ -515,7 +515,7 @@ router.get('/:clientID/recent', async (req, res) => {
 });
 
 // GET /api/progress-notes/site/:siteID - Get notes by site
-router.get('/site/:siteID', async (req, res) => {
+router.get('/progress-notes/site/:siteID', async (req, res) => {
   try {
     const { siteID } = req.params;
     const { limit = 100, offset = 0 } = req.query;
@@ -560,7 +560,7 @@ router.get('/site/:siteID', async (req, res) => {
 });
 
 // GET /api/progress-notes/:clientID/follow-ups - Get notes requiring follow-up
-router.get('/:clientID/follow-ups', async (req, res) => {
+router.get('/progress-notes/:clientID/follow-ups', async (req, res) => {
   try {
     const { clientID } = req.params;
     

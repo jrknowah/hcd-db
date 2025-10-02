@@ -263,7 +263,7 @@ const sanitizeFormData = (data) => {
 };
 
 // ✅ GET /api/authorization/:clientID/form/:formType - Get specific form data
-router.get('/:clientID/form/:formType', async (req, res) => {
+router.get('/authorization/:clientID/form/:formType', async (req, res) => {
     try {
         const { clientID, formType } = req.params;
         
@@ -340,7 +340,7 @@ router.get('/:clientID/form/:formType', async (req, res) => {
 // ✅ POST /api/authorization/:clientID/form/:formType - Save/update form data
 // ✅ Enhanced POST route - Replace the existing POST route in your authSig.js
 
-router.post('/:clientID/form/:formType', async (req, res) => {
+router.post('/authorization/:clientID/form/:formType', async (req, res) => {
     try {
         const { clientID, formType } = req.params;
         let data = req.body;
@@ -601,7 +601,7 @@ router.post('/:clientID/form/:formType', async (req, res) => {
 });
 
 // ✅ POST /api/authorization/:clientID/form/:formType/autosave - Auto-save form data
-router.post('/:clientID/form/:formType/autosave', async (req, res) => {
+router.post('/authorization/:clientID/form/:formType/autosave', async (req, res) => {
     try {
         const { clientID, formType } = req.params;
         const data = req.body;
@@ -674,7 +674,7 @@ router.post('/:clientID/form/:formType/autosave', async (req, res) => {
 });
 
 // ✅ POST /api/authorization/:clientID/forms/bulk - Bulk save multiple forms
-router.post('/:clientID/forms/bulk', async (req, res) => {
+router.post('/authorization/:clientID/forms/bulk', async (req, res) => {
     try {
         const { clientID } = req.params;
         const { forms } = req.body;
@@ -788,7 +788,7 @@ router.post('/:clientID/forms/bulk', async (req, res) => {
 });
 
 // ✅ POST /api/authorization/:clientID/submit - Submit forms for approval
-router.post('/:clientID/submit', async (req, res) => {
+router.post('/authorization/:clientID/submit', async (req, res) => {
     try {
         const { clientID } = req.params;
         const { submissionNotes } = req.body;
@@ -862,7 +862,7 @@ router.post('/:clientID/submit', async (req, res) => {
 });
 
 // ✅ GET /api/authorization/:clientID/submission-status - Get submission status
-router.get('/:clientID/submission-status', async (req, res) => {
+router.get('/authorization/:clientID/submission-status', async (req, res) => {
     try {
         const { clientID } = req.params;
         

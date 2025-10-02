@@ -16,7 +16,7 @@ const dbConfig = {
 };
 
 // GET /api/idt-nursing/:clientID - Get IDT nursing data
-router.get('/:clientID', async (req, res) => {
+router.get('/idt-nursing/:clientID', async (req, res) => {
   try {
     const { clientID } = req.params;
     
@@ -49,7 +49,7 @@ router.get('/:clientID', async (req, res) => {
 });
 
 // POST /api/idt-nursing/:clientID - Save IDT nursing data
-router.post('/:clientID', async (req, res) => {
+router.post('/idt-nursing/:clientID', async (req, res) => {
   try {
     const { clientID } = req.params;
     const data = req.body;

@@ -53,7 +53,7 @@ const validateEncounterNoteData = (data, isUpdate = false) => {
 };
 
 // GET /api/encounter-notes/:clientID - Fetch encounter notes for client
-router.get('/:clientID', async (req, res) => {
+router.get('/encounter-notes/:clientID', async (req, res) => {
   try {
     const pool = await getPool();
     const { clientID } = req.params;
@@ -105,7 +105,7 @@ router.get('/:clientID', async (req, res) => {
 });
 
 // POST /api/encounter-notes/:clientID - Create new encounter note
-router.post('/:clientID', async (req, res) => {
+router.post('/encounter-notes/:clientID', async (req, res) => {
   try {
     const pool = await getPool();
     const { clientID } = req.params;
@@ -176,7 +176,7 @@ router.post('/:clientID', async (req, res) => {
 });
 
 // PUT /api/encounter-notes/:noteId - Update encounter note
-router.put('/:noteId', async (req, res) => {
+router.put('/encounter-notes/:noteId', async (req, res) => {
   try {
     const pool = await getPool();
     const { noteId } = req.params;
@@ -262,7 +262,7 @@ router.put('/:noteId', async (req, res) => {
 });
 
 // DELETE /api/encounter-notes/:noteId - Delete encounter note
-router.delete('/:noteId', async (req, res) => {
+router.delete('/encounter-notes/:noteId', async (req, res) => {
   try {
     const pool = await getPool();
     const { noteId } = req.params;
@@ -327,7 +327,7 @@ router.get('/summary/:clientID', async (req, res) => {
 });
 
 // GET /api/encounter-notes/bytype/:clientID/:noteType - Get notes by type
-router.get('/bytype/:clientID/:noteType', async (req, res) => {
+router.get('/encounter-notes/bytype/:clientID/:noteType', async (req, res) => {
   try {
     const pool = await getPool();
     const { clientID, noteType } = req.params;

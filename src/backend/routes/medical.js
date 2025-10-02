@@ -15,7 +15,7 @@ router.use((req, res, next) => {
 // ===================================================================
 
 // GET /api/medical/info/:clientID - Get medical information for a client
-router.get("/info/:clientID", async (req, res) => {
+router.get("/medical/info/:clientID", async (req, res) => {
   const { clientID } = req.params;
   
   try {
@@ -63,7 +63,7 @@ router.get("/info/:clientID", async (req, res) => {
 });
 
 // POST /api/medical/info/:clientID - Save/Update medical information
-router.post("/info/:clientID", async (req, res) => {
+router.post("/medical/info/:clientID", async (req, res) => {
   const { clientID } = req.params;
   const {
     clientMedConditions,
@@ -141,7 +141,7 @@ router.post("/info/:clientID", async (req, res) => {
 // ===================================================================
 
 // GET /api/medical/appointments/:clientID - Get all appointments for a client
-router.get("/appointments/:clientID", async (req, res) => {
+router.get("/medical/appointments/:clientID", async (req, res) => {
   const { clientID } = req.params;
   
   try {
@@ -180,7 +180,7 @@ router.get("/appointments/:clientID", async (req, res) => {
 });
 
 // POST /api/medical/appointments/:clientID - Add new appointment
-router.post("/appointments/:clientID", async (req, res) => {
+router.post("/medical/appointments/:clientID", async (req, res) => {
   const { clientID } = req.params;
   const {
     medApptDate,
@@ -258,7 +258,7 @@ router.post("/appointments/:clientID", async (req, res) => {
 });
 
 // PUT /api/medical/appointments/:appointmentID - Update existing appointment
-router.put("/appointments/:appointmentID", async (req, res) => {
+router.put("/medical/appointments/:appointmentID", async (req, res) => {
   const { appointmentID } = req.params;
   const {
     medApptDate,
@@ -332,7 +332,7 @@ router.put("/appointments/:appointmentID", async (req, res) => {
 });
 
 // DELETE /api/medical/appointments/:appointmentID - Delete appointment
-router.delete("/appointments/:appointmentID", async (req, res) => {
+router.delete("/medical/appointments/:appointmentID", async (req, res) => {
   const { appointmentID } = req.params;
 
   try {
@@ -372,7 +372,7 @@ router.delete("/appointments/:appointmentID", async (req, res) => {
 // ===================================================================
 
 // GET /api/medical/allergies/:clientID - Get available allergy options for client
-router.get("/allergies/:clientID", async (req, res) => {
+router.get("/medical/allergies/:clientID", async (req, res) => {
   const { clientID } = req.params;
   
   try {
@@ -407,7 +407,7 @@ router.get("/allergies/:clientID", async (req, res) => {
 // ===================================================================
 
 // GET /api/medical/stats/:clientID - Get medical statistics for a client
-router.get("/stats/:clientID", async (req, res) => {
+router.get("/medical/stats/:clientID", async (req, res) => {
   const { clientID } = req.params;
   
   try {
@@ -444,7 +444,7 @@ router.get("/stats/:clientID", async (req, res) => {
   }
 });
 // POST /api/medical/allergies/:clientID - Save client allergies
-router.post("/allergies/:clientID", async (req, res) => {
+router.post("/medical/allergies/:clientID", async (req, res) => {
   const { clientID } = req.params;
   const { allergies } = req.body;
 

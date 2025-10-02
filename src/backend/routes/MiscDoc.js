@@ -62,7 +62,7 @@ function generateChecksum(filePath) {
  * GET /api/misc-documents/:clientID
  * Get miscellaneous documents for a specific client
  */
-router.get('/:clientID', async (req, res) => {
+router.get('/misc-documents/:clientID', async (req, res) => {
   try {
     const { clientID } = req.params;
     const { category, archived, limit = 50, offset = 0 } = req.query;
@@ -140,7 +140,7 @@ router.get('/:clientID', async (req, res) => {
  * POST /api/misc-documents/:clientID/upload
  * Upload new miscellaneous document
  */
-router.post('/:clientID/upload', upload.single('file'), async (req, res) => {
+router.post('/misc-documents/:clientID/upload', upload.single('file'), async (req, res) => {
   try {
     const { clientID } = req.params;
     const {
@@ -229,7 +229,7 @@ router.post('/:clientID/upload', upload.single('file'), async (req, res) => {
  * PUT /api/misc-documents/:documentID
  * Update specific document metadata
  */
-router.put('/:documentID', async (req, res) => {
+router.put('/misc-documents/:documentID', async (req, res) => {
   try {
     const { documentID } = req.params;
     const updateData = req.body;
@@ -301,7 +301,7 @@ router.put('/:documentID', async (req, res) => {
  * DELETE /api/misc-documents/:documentID
  * Delete document
  */
-router.delete('/:documentID', async (req, res) => {
+router.delete('/misc-documents/:documentID', async (req, res) => {
   try {
     const { documentID } = req.params;
 
@@ -349,7 +349,7 @@ router.delete('/:documentID', async (req, res) => {
  * GET /api/misc-documents/:documentID/download
  * Download specific document
  */
-router.get('/:documentID/download', async (req, res) => {
+router.get('/misc-documents/:documentID/download', async (req, res) => {
   try {
     const { documentID } = req.params;
 
@@ -402,7 +402,7 @@ router.get('/:documentID/download', async (req, res) => {
  * GET /api/misc-documents/:clientID/categories
  * Get document categories with counts
  */
-router.get('/:clientID/categories', async (req, res) => {
+router.get('/misc-documents/:clientID/categories', async (req, res) => {
   try {
     const { clientID } = req.params;
 
@@ -455,7 +455,7 @@ router.get('/:clientID/categories', async (req, res) => {
  * GET /api/misc-documents/:clientID/summary
  * Get document summary statistics
  */
-router.get('/:clientID/summary', async (req, res) => {
+router.get('/misc-documents/:clientID/summary', async (req, res) => {
   try {
     const { clientID } = req.params;
 
@@ -532,7 +532,7 @@ router.get('/:clientID/summary', async (req, res) => {
  * POST /api/misc-documents/:documentID/approve
  * Approve document
  */
-router.post('/:documentID/approve', async (req, res) => {
+router.post('/misc-documents/:documentID/approve', async (req, res) => {
   try {
     const { documentID } = req.params;
     const { approvedBy } = req.body;
@@ -575,7 +575,7 @@ router.post('/:documentID/approve', async (req, res) => {
  * POST /api/misc-documents/:documentID/archive
  * Archive/unarchive document
  */
-router.post('/:documentID/archive', async (req, res) => {
+router.post('/misc-documents/:documentID/archive', async (req, res) => {
   try {
     const { documentID } = req.params;
     const { isArchived } = req.body;

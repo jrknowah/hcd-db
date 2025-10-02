@@ -108,7 +108,7 @@ const validateFileContent = async (filePath, mimeType) => {
 };
 
 // ✅ GET /api/nursing-archive/:clientID - Get all documents for client
-router.get('/:clientID', async (req, res) => {
+router.get('/nursing-archive/:clientID', async (req, res) => {
     try {
         const { clientID } = req.params;
         const { category, search, startDate, endDate } = req.query;
@@ -165,7 +165,7 @@ router.get('/:clientID', async (req, res) => {
 });
 
 // ✅ POST /api/nursing-archive/:clientID/upload - Upload new document(s)
-router.post('/:clientID/upload', upload.array('files', 10), async (req, res) => {
+router.post('/nursing-archive/:clientID/upload', upload.array('files', 10), async (req, res) => {
     try {
         const { clientID } = req.params;
         const { 
@@ -304,7 +304,7 @@ router.post('/:clientID/upload', upload.array('files', 10), async (req, res) => 
 });
 
 // ✅ GET /api/nursing-archive/document/:documentID - Get specific document details
-router.get('/document/:documentID', async (req, res) => {
+router.get('/nursing-archive/document/:documentID', async (req, res) => {
     try {
         const { documentID } = req.params;
         
@@ -352,7 +352,7 @@ router.get('/document/:documentID', async (req, res) => {
 });
 
 // ✅ GET /api/nursing-archive/document/:documentID/download - Download document
-router.get('/document/:documentID/download', async (req, res) => {
+router.get('/nursing-archive/document/:documentID/download', async (req, res) => {
     try {
         const { documentID } = req.params;
         
@@ -420,7 +420,7 @@ router.get('/document/:documentID/download', async (req, res) => {
 });
 
 // ✅ PUT /api/nursing-archive/document/:documentID - Update document metadata
-router.put('/document/:documentID', async (req, res) => {
+router.put('/nursing-archive/document/:documentID', async (req, res) => {
     try {
         const { documentID } = req.params;
         const { 
@@ -483,7 +483,7 @@ router.put('/document/:documentID', async (req, res) => {
 });
 
 // ✅ DELETE /api/nursing-archive/document/:documentID - Delete document
-router.delete('/document/:documentID', async (req, res) => {
+router.delete('/nursing-archive/document/:documentID', async (req, res) => {
     try {
         const { documentID } = req.params;
         
@@ -530,7 +530,7 @@ router.delete('/document/:documentID', async (req, res) => {
 });
 
 // ✅ GET /api/nursing-archive/categories - Get all document categories
-router.get('/categories', async (req, res) => {
+router.get('/nursing-archive/categories', async (req, res) => {
     try {
         const pool = await sql.connect(dbConfig);
         const result = await pool.request()
@@ -558,7 +558,7 @@ router.get('/categories', async (req, res) => {
 });
 
 // ✅ GET /api/nursing-archive/:clientID/search - Search documents
-router.get('/:clientID/search', async (req, res) => {
+router.get('/nursing-archive/:clientID/search', async (req, res) => {
     try {
         const { clientID } = req.params;
         const { q, category, startDate, endDate, confidentiality } = req.query;
@@ -627,7 +627,7 @@ router.get('/:clientID/search', async (req, res) => {
 });
 
 // ✅ GET /api/nursing-archive/:clientID/audit - Get document access audit
-router.get('/:clientID/audit', async (req, res) => {
+router.get('/nursing-archive/:clientID/audit', async (req, res) => {
     try {
         const { clientID } = req.params;
         const { startDate, endDate, accessType } = req.query;

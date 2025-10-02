@@ -54,7 +54,7 @@ const upload = multer({
 });
 
 // POST /api/notes/upload - Upload a note file
-router.post("/upload", upload.single('noteFile'), async (req, res) => {
+router.post("/notes/upload", upload.single('noteFile'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({
@@ -133,7 +133,7 @@ router.post("/upload", upload.single('noteFile'), async (req, res) => {
 });
 
 // GET /api/notes/uploads - Get list of uploaded files
-router.get("/uploads", async (req, res) => {
+router.get("/notes/uploads", async (req, res) => {
   try {
     const {
       uploadType = 'note-archive',
@@ -197,7 +197,7 @@ router.get("/uploads", async (req, res) => {
 });
 
 // GET /api/notes/download/:fileName - Download a file
-router.get("/download/:fileName", async (req, res) => {
+router.get("/notes/download/:fileName", async (req, res) => {
   try {
     const { fileName } = req.params;
     
@@ -249,7 +249,7 @@ router.get("/download/:fileName", async (req, res) => {
 });
 
 // DELETE /api/notes/uploads/:fileId - Delete an uploaded file
-router.delete("/uploads/:fileId", async (req, res) => {
+router.delete("/notes/uploads/:fileId", async (req, res) => {
   try {
     const { fileId } = req.params;
     
@@ -304,7 +304,7 @@ router.delete("/uploads/:fileId", async (req, res) => {
 });
 
 // GET /api/notes/uploads/stats - Get upload statistics
-router.get("/uploads/stats", async (req, res) => {
+router.get("/notes/uploads/stats", async (req, res) => {
   try {
     const pool = await connectToAzureSQL();
     

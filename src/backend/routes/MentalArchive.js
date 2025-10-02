@@ -104,7 +104,7 @@ const formatFileData = (file, clientID, documentType, description, uploadedBy) =
 // ===== MENTAL ARCHIVE ROUTES =====
 
 // 🔸 POST /api/mental-archive/upload/:clientID - Upload mental archive files
-router.post('/upload/:clientID', upload.array('files', 10), async (req, res) => {
+router.post('/mental-archive/upload/:clientID', upload.array('files', 10), async (req, res) => {
   const { clientID } = req.params;
   const { documentType, description, archiveDate, originalDate } = req.body;
   const files = req.files;
@@ -199,7 +199,7 @@ router.post('/upload/:clientID', upload.array('files', 10), async (req, res) => 
 });
 
 // 🔸 GET /api/mental-archive/:clientID - Get all mental archive files for client
-router.get('/:clientID', async (req, res) => {
+router.get('/mental-archive/:clientID', async (req, res) => {
   const { clientID } = req.params;
   const { documentType, category, limit = 50, offset = 0 } = req.query;
   
@@ -286,7 +286,7 @@ router.get('/:clientID', async (req, res) => {
 });
 
 // 🔸 GET /api/mental-archive/file/:fileId/download - Download mental archive file
-router.get('/file/:fileId/download', async (req, res) => {
+router.get('/mental-archive/file/:fileId/download', async (req, res) => {
   const { fileId } = req.params;
   
   try {
@@ -335,7 +335,7 @@ router.get('/file/:fileId/download', async (req, res) => {
 });
 
 // 🔸 DELETE /api/mental-archive/file/:fileId - Delete mental archive file
-router.delete('/file/:fileId', async (req, res) => {
+router.delete('/mental-archive/file/:fileId', async (req, res) => {
   const { fileId } = req.params;
   
   try {
@@ -400,7 +400,7 @@ router.delete('/file/:fileId', async (req, res) => {
 });
 
 // 🔸 GET /api/mental-archive/:clientID/summary - Get mental archive summary
-router.get('/:clientID/summary', async (req, res) => {
+router.get('/mental-archive/:clientID/summary', async (req, res) => {
   const { clientID } = req.params;
   
   try {
@@ -462,7 +462,7 @@ router.get('/:clientID/summary', async (req, res) => {
 });
 
 // 🔸 PUT /api/mental-archive/file/:fileId - Update mental archive file metadata
-router.put('/file/:fileId', async (req, res) => {
+router.put('/mental-archive/file/:fileId', async (req, res) => {
   const { fileId } = req.params;
   const { documentType, description, archiveDate, originalDate } = req.body;
   
