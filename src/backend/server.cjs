@@ -769,21 +769,7 @@ app.get('/api/debug/database', async (req, res) => {
   }
 });
 
-// Error handling middleware
-app.use((error, req, res, next) => {
-  console.error('Server error:', error);
-  res.status(500).json({ 
-    error: process.env.NODE_ENV === 'production' 
-      ? 'Internal server error' 
-      : error.message 
-  });
-});
 
-// 404 handler
-app.use((req, res) => {
-  console.log('❌ 404 - Route not found:', req.method, req.path);
-  res.status(404).json({ error: 'Route not found' });
-});
 
 //Section 5: Medical===================================================================
 let medFaceSheetRouterLoaded = false;
@@ -1123,4 +1109,21 @@ app.listen(PORT, () => {
   console.log('    - interimHousing  : Interim Housing Agreement');
   console.log('    - termination     : Termination Policy');
 });
+
+// Error handling middleware
+app.use((error, req, res, next) => {
+  console.error('Server error:', error);
+  res.status(500).json({ 
+    error: process.env.NODE_ENV === 'production' 
+      ? 'Internal server error' 
+      : error.message 
+  });
+});
+
+// 404 handler
+app.use((req, res) => {
+  console.log('❌ 404 - Route not found:', req.method, req.path);
+  res.status(404).json({ error: 'Route not found' });
+});
+
 module.exports = app;
