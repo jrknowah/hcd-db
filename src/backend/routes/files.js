@@ -35,7 +35,14 @@ if (!STORAGE_ACCOUNT) {
 
 /* --------------------------- Azure Blob Clients --------------------------- */
 
-const credential = new DefaultAzureCredential();
+const credential = new DefaultAzureCredential({
+  loggingOptions: {
+    allowLoggingAccountIdentifiers: true,
+    logLevel: 'info'
+  }
+});
+
+console.log('🔐 Attempting to authenticate with DefaultAzureCredential...');
 const blobServiceClient = new BlobServiceClient(
   `https://${STORAGE_ACCOUNT}.blob.core.windows.net`,
   credential
