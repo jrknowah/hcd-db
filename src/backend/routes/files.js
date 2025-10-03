@@ -169,7 +169,7 @@ router.post('/upload', upload.single('file'), async (req, res) => {
  *   - Back-compat: uses path parameter as a simple file at container root
  *   - Prefer: GET /file?blobName=<clientID/docType/ts-name.ext>
  */
-router.get('/file/:fileName?', async (req, res) => {
+router.get('/file/:fileName', async (req, res) => {
   try {
     const blobName = req.query.blobName || req.params.fileName;
     if (!blobName) return res.status(400).json({ message: 'blobName required (query or param)' });
@@ -260,9 +260,9 @@ router.get('/files/:clientID', async (req, res) => {
 /**
  * DELETE /file/:fileName
  *   - Back-compat: deletes by simple name at root
- *   - Prefer: DELETE /file?blobName=<clientID/docType/ts-name.ext>
+ *   - Prefer: DELETE /fileblobName=<clientID/docType/ts-name.ext>
  */
-router.delete('/file/:fileName?', async (req, res) => {
+router.delete('/file/:fileName', async (req, res) => {
   try {
     const blobName = req.query.blobName || req.params.fileName;
     if (!blobName) return res.status(400).json({ message: 'blobName required (query or param)' });
