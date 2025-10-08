@@ -243,7 +243,7 @@ const initialState = {
     updateSuccess: false,
 
     // Development settings
-    useMockData: process.env.NODE_ENV === 'development',
+    useMockData: import.meta.env.MODE === 'development',
 
     // Cache management
     lastFetched: null,

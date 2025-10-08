@@ -68,7 +68,7 @@ router.get('/assessment-care-plans/:clientID', async (req, res) => {
         `;
         
         const result = await pool.request()
-            .input('clientID', sql.VarChar, clientID)
+            .input('clientID', sql.NVarChar, clientID)
             .query(assessmentQuery);
 
         if (result.recordset.length === 0) {
@@ -116,7 +116,7 @@ router.post('/assessment-care-plans/:clientID', async (req, res) => {
         `;
         
         const existingResult = await pool.request()
-            .input('clientID', sql.VarChar, clientID)
+            .input('clientID', sql.NVarChar, clientID)
             .query(existingQuery);
 
         let assessmentID;
@@ -178,7 +178,7 @@ router.post('/assessment-care-plans/:clientID', async (req, res) => {
             
             await pool.request()
                 .input('assessmentID', sql.VarChar, assessmentID)
-                .input('clientID', sql.VarChar, clientID)
+                .input('clientID', sql.NVarChar, clientID)
                 .input('assessmentNumber', sql.VarChar, assessmentID) // Use same as ID for now
                 .input('assessmentType', sql.VarChar, assessmentData.assessmentType || 'Comprehensive')
                 .input('assessmentStatus', sql.VarChar, 'In Progress')
@@ -272,7 +272,7 @@ router.get('/assessment-care-plans/:clientID/status', async (req, res) => {
         `;
         
         const result = await pool.request()
-            .input('clientID', sql.VarChar, clientID)
+            .input('clientID', sql.NVarChar, clientID)
             .query(statusQuery);
 
         if (result.recordset.length === 0) {
@@ -337,7 +337,7 @@ router.get('/assessment-care-plans/:clientID/metrics', async (req, res) => {
         `;
         
         const result = await pool.request()
-            .input('clientID', sql.VarChar, clientID)
+            .input('clientID', sql.NVarChar, clientID)
             .query(metricsQuery);
 
         if (result.recordset.length === 0) {
@@ -400,7 +400,7 @@ router.get('/assessment-care-plans/:clientID/milestones', async (req, res) => {
         `;
         
         const assessmentResult = await pool.request()
-            .input('clientID', sql.VarChar, clientID)
+            .input('clientID', sql.NVarChar, clientID)
             .query(assessmentQuery);
 
         if (assessmentResult.recordset.length === 0) {
@@ -582,7 +582,7 @@ router.put('/assessment-care-plans/:clientID/milestones/:milestoneID/complete', 
         `;
         
         await pool.request()
-            .input('clientID', sql.VarChar, clientID)
+            .input('clientID', sql.NVarChar, clientID)
             .input('milestoneID', sql.Int, milestoneID)
             .input('updatedBy', sql.VarChar, userEmail)
             .query(updateAssessmentQuery);
@@ -640,7 +640,7 @@ router.get('/assessment-care-plans/:clientID/report', async (req, res) => {
         `;
         
         const result = await pool.request()
-            .input('clientID', sql.VarChar, clientID)
+            .input('clientID', sql.NVarChar, clientID)
             .query(reportQuery);
 
         if (result.recordset.length === 0) {

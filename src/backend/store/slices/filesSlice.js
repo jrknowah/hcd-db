@@ -54,7 +54,7 @@ export const uploadFile = createAsyncThunk(
       formData.append('clientID', clientID);
       formData.append('docType', docType);
 
-      const response = await axios.post(`${API_URL}/upload`, formData, {
+      const response = await axios.post(`${API_URL}/api/upload`, formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
@@ -90,9 +90,30 @@ export const fetchClientFiles = createAsyncThunk(
       }
 
       // Real API call
-      const response = await axios.get(`${API_URL}/files/${clientID}`);
+      const response = await axios.get(`${API_URL}/api/files/${clientID}`);
       return Array.isArray(response.data) ? response.data : [];
     } catch (error) {
+      return rejectWithValue(error.response?.data?.message || error.message || 'Failed to fetch files');
+    }
+  }
+);
+
+export const fetchMentalArchiveFiles = createAsyncThunk(
+  'files/fetchMentalArchiveFiles',
+  async (clientID, { rejectWithValue }) => {
+    try {
+      const isDevelopment = import.meta.env.MODE === 'development';
+      const shouldUseMockData = isDevelopment && !import.meta.env.VITE_USE_REAL_DATA;
+      
+      if (shouldUseMockData) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        return MOCK_FILES.filter(f => MENTAL_ARCHIVE_DOC_TYPES.includes(f.docType));
+      }
+
+      const response = await axios.get(`${API_URL}/api/mental-archive/${clientID}`);
+      return Array.isArray(response.data) ? response.data : [];
+    } catch (error) {
+      console.error('Fetch mental archive error:', error);
       return rejectWithValue(error.response?.data?.message || error.message || 'Failed to fetch files');
     }
   }
@@ -112,7 +133,7 @@ export const deleteFile = createAsyncThunk(
       }
 
       // Real delete
-      await axios.delete(`${API_URL}/files/${fileId}`);
+      await axios.delete(`${API_URL}/api/files/${fileId}`);
       return { fileId, fileName };
     } catch (error) {
       return rejectWithValue(error.response?.data?.message || error.message || 'Failed to delete file');
@@ -134,7 +155,7 @@ export const downloadFile = createAsyncThunk(
       }
 
       // Real download - get download URL from backend
-      const response = await axios.get(`${API_URL}/files/${fileId}/download`);
+      const response = await axios.get(`${API_URL}/api/files/${fileId}/download`);
       
       // Create download link
       const link = document.createElement('a');
@@ -250,7 +271,22 @@ const filesSlice = createSlice({
         state.files = [];
         state.filesLoaded = false;
       })
-      
+      // Fetch mental archive files
+      .addCase(fetchMentalArchiveFiles.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(fetchMentalArchiveFiles.fulfilled, (state, action) => {
+        state.loading = false;
+        state.files = action.payload || [];
+        state.filesLoaded = true;
+      })
+      .addCase(fetchMentalArchiveFiles.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload || 'Failed to fetch mental archive files';
+        state.files = [];
+        state.filesLoaded = false;
+      })
       // Delete file
       .addCase(deleteFile.pending, (state) => {
         state.deleting = true;
@@ -279,6 +315,7 @@ const filesSlice = createSlice({
         state.downloading = false;
         state.error = action.payload || 'Failed to download file';
       });
+
   }
 });
 

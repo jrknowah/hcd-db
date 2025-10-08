@@ -11,8 +11,11 @@ import {
   CardActions,
   Alert,
   OutlinedInput,
-  LinearProgress
+  LinearProgress,
+  IconButton
 } from "@mui/material";
+import DeleteIcon from '@mui/icons-material/Delete';
+import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import {
   fetchReferralData,
   saveReferralData,
@@ -36,7 +39,7 @@ import {
 const Referrals = ({ exportMode }) => {
   const dispatch = useDispatch();
   
-  // ✅ Redux selectors
+  // Redux selectors
   const referrals = useSelector(selectReferrals);
   const loading = useSelector(selectReferralsLoading);
   const saving = useSelector(selectReferralsSaving);
@@ -46,14 +49,15 @@ const Referrals = ({ exportMode }) => {
   const dataLoaded = useSelector(selectReferralsDataLoaded);
   const uploadProgress = useSelector(selectReferralUploadProgress);
   
-  // ✅ Get current client and user from Redux
+  // Get current client and user from Redux
   const currentClient = useSelector((state) => state?.clients?.selectedClient);
   const currentUser = useSelector((state) => state?.auth?.user);
 
-  // ✅ Local state for file uploads
+  // Local state for file uploads - track per referral type
   const [filesToUpload, setFilesToUpload] = React.useState({});
+  const [uploadingType, setUploadingType] = React.useState(null);
 
-  // ✅ Load data when client changes
+  // Load data when client changes
   useEffect(() => {
     if (currentClient?.clientID) {
       dispatch(setCurrentClient(currentClient.clientID));
@@ -63,7 +67,7 @@ const Referrals = ({ exportMode }) => {
     }
   }, [dispatch, currentClient?.clientID, dataLoaded]);
 
-  // ✅ Clear success message automatically
+  // Clear success message automatically
   useEffect(() => {
     if (successMessage) {
       const timer = setTimeout(() => {
@@ -87,10 +91,11 @@ const Referrals = ({ exportMode }) => {
   const handleFileUpload = async (referralType) => {
     const file = filesToUpload[referralType];
     if (!currentClient?.clientID || !file) {
-      dispatch(setError("Please select a client and file before uploading."));
       return;
     }
 
+    setUploadingType(referralType);
+    
     try {
       await dispatch(uploadReferralFile({
         file,
@@ -98,17 +103,22 @@ const Referrals = ({ exportMode }) => {
         referralType
       })).unwrap();
       
-      // Clear the file input
+      // Clear the file input after successful upload
       setFilesToUpload((prev) => ({ ...prev, [referralType]: null }));
+      
+      // Reset the file input element
+      const fileInput = document.querySelector(`input[data-type="${referralType}"]`);
+      if (fileInput) fileInput.value = '';
+      
     } catch (error) {
-      // Error is handled by Redux
       console.error('Upload failed:', error);
+    } finally {
+      setUploadingType(null);
     }
   };
 
-  const handleSave = async () => {
+  const handleSaveNotes = async () => {
     if (!currentClient?.clientID) {
-      dispatch(setError("Please select a client before saving."));
       return;
     }
 
@@ -118,7 +128,6 @@ const Referrals = ({ exportMode }) => {
         referrals
       })).unwrap();
     } catch (error) {
-      // Error is handled by Redux
       console.error('Save failed:', error);
     }
   };
@@ -130,87 +139,120 @@ const Referrals = ({ exportMode }) => {
   const referralTypes = [
     {
       key: "lahsaReferral",
-      label: "LAHSA Referral",
+      label: "LAHSA",
       description: "Los Angeles Homeless Services Authority referral documentation"
     },
     {
       key: "odrReferral", 
-      label: "ODR Referral",
+      label: "ODR",
       description: "Office of Disability Rights referral and assessment"
     },
     {
       key: "dhsReferral",
-      label: "DHS Referral", 
+      label: "DHS", 
       description: "Department of Health Services benefits and referral"
+    },
+    {
+      key: "dmhReferral",
+      label: "DMH", 
+      description: "Department of Mental Health"
     }
   ];
 
-  const renderUploadCard = (referralType) => (
-    <Grid item xs={12} md={4} key={referralType.key}>
-      <Card variant="outlined" sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-        <CardContent sx={{ flexGrow: 1 }}>
-          <Typography variant="h6" gutterBottom>
-            {referralType.label}
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            {referralType.description}
-          </Typography>
-          
-          {/* Text notes section */}
-          <TextField
-            fullWidth
-            multiline
-            rows={3}
-            label="Referral Notes"
-            value={referrals[referralType.key] || ""}
-            onChange={(e) => handleChange(referralType.key, e.target.value)}
-            disabled={loading || saving}
-            sx={{ mb: 2 }}
-          />
-          
-          {/* File upload section */}
-          <Typography variant="subtitle2" sx={{ mb: 1 }}>
-            Upload Document:
-          </Typography>
-          <OutlinedInput
-            type="file"
-            onChange={(e) => handleFileSelect(referralType.key, e.target.files[0])}
-            fullWidth
-            sx={{ mb: 1 }}
-          />
-          
-          {filesToUpload[referralType.key] && (
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-              Selected: {filesToUpload[referralType.key].name}
-            </Typography>
-          )}
-          
-          {/* Upload progress */}
-          {uploadProgress[referralType.key] !== undefined && (
-            <Box sx={{ mb: 1 }}>
-              <LinearProgress variant="determinate" value={uploadProgress[referralType.key]} />
-              <Typography variant="caption" color="text.secondary">
-                Uploading... {uploadProgress[referralType.key]}%
-              </Typography>
-            </Box>
-          )}
-        </CardContent>
-        
-        <CardActions>
-          <Button
-            variant="contained"
-            fullWidth
-            onClick={() => handleFileUpload(referralType.key)}
-            disabled={uploading || !filesToUpload[referralType.key]}
-          >
-            {uploading ? "Uploading..." : "Upload Document"}
-          </Button>
-        </CardActions>
-      </Card>
-    </Grid>
-  );
+  const renderUploadCard = (referralType) => {
+    const isUploading = uploadingType === referralType.key;
+    const hasFile = filesToUpload[referralType.key];
+    const currentProgress = uploadProgress[referralType.key];
 
-  // ✅ Loading state
+    return (
+      <Grid item xs={12} md={6} key={referralType.key}>
+        <Card variant="outlined" sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+          <CardContent sx={{ flexGrow: 1 }}>
+            <Typography variant="h6" gutterBottom>
+              {referralType.label}
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              {referralType.description}
+            </Typography>
+            
+            {/* Text notes section */}
+            <TextField
+              fullWidth
+              multiline
+              rows={3}
+              label="Referral Notes"
+              value={referrals[referralType.key] || ""}
+              onChange={(e) => handleChange(referralType.key, e.target.value)}
+              disabled={loading || saving || isUploading}
+              sx={{ mb: 2 }}
+            />
+            
+            {/* File upload section */}
+            <Typography variant="subtitle2" sx={{ mb: 1 }}>
+              Upload Document:
+            </Typography>
+            <OutlinedInput
+              type="file"
+              inputProps={{ 'data-type': referralType.key }}
+              onChange={(e) => handleFileSelect(referralType.key, e.target.files[0])}
+              fullWidth
+              disabled={isUploading}
+              sx={{ mb: 1 }}
+            />
+            
+            {hasFile && !isUploading && (
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                <Typography variant="body2" color="text.secondary" sx={{ flexGrow: 1 }}>
+                  Selected: {hasFile.name}
+                </Typography>
+                <IconButton 
+                  size="small" 
+                  onClick={() => {
+                    setFilesToUpload((prev) => ({ ...prev, [referralType.key]: null }));
+                    const fileInput = document.querySelector(`input[data-type="${referralType.key}"]`);
+                    if (fileInput) fileInput.value = '';
+                  }}
+                >
+                  <DeleteIcon fontSize="small" />
+                </IconButton>
+              </Box>
+            )}
+            
+            {/* Upload progress */}
+            {isUploading && currentProgress !== undefined && (
+              <Box sx={{ mb: 1 }}>
+                <LinearProgress variant="determinate" value={currentProgress} />
+                <Typography variant="caption" color="text.secondary">
+                  Uploading... {currentProgress}%
+                </Typography>
+              </Box>
+            )}
+
+            {/* Show uploaded file info */}
+            {referrals[`${referralType.key}File`] && !hasFile && (
+              <Alert severity="success" sx={{ mt: 1 }}>
+                File uploaded: {referrals[`${referralType.key}File`]}
+              </Alert>
+            )}
+          </CardContent>
+          
+          <CardActions>
+            <Button
+              variant="contained"
+              fullWidth
+              startIcon={<CloudUploadIcon />}
+              onClick={() => handleFileUpload(referralType.key)}
+              disabled={!hasFile || isUploading || uploading}
+            >
+              {isUploading ? "Uploading..." : "Upload Document"}
+            </Button>
+          </CardActions>
+        </Card>
+      </Grid>
+    );
+  };
+
+  // Loading state
   if (loading && !dataLoaded) {
     return (
       <Box sx={{ p: 2 }}>
@@ -222,7 +264,7 @@ const Referrals = ({ exportMode }) => {
     );
   }
 
-  // ✅ No client selected
+  // No client selected
   if (!currentClient) {
     return (
       <Box sx={{ p: 2 }}>
@@ -235,14 +277,14 @@ const Referrals = ({ exportMode }) => {
 
   return (
     <Box sx={{ p: 2 }}>
-      {/* ✅ Error display */}
+      {/* Error display */}
       {error && (
         <Alert severity="error" sx={{ mb: 2 }} onClose={handleClearErrors}>
           {error}
         </Alert>
       )}
 
-      {/* ✅ Success message */}
+      {/* Success message */}
       {successMessage && (
         <Alert severity="success" sx={{ mb: 2 }}>
           {successMessage}
@@ -261,17 +303,17 @@ const Referrals = ({ exportMode }) => {
         {referralTypes.map(renderUploadCard)}
       </Grid>
 
-      {/* ✅ Only show save button in non-export mode */}
+      {/* Save notes button - separate from file uploads */}
       {!exportMode && (
         <Box sx={{ mt: 4, textAlign: "center" }}>
           <Button 
             variant="contained" 
-            color="success" 
+            color="primary" 
             size="large" 
-            onClick={handleSave}
-            disabled={loading || saving}
+            onClick={handleSaveNotes}
+            disabled={loading || saving || uploading}
           >
-            {saving ? "Saving..." : "Save All Referrals"}
+            {saving ? "Saving..." : "Save Referral Notes"}
           </Button>
         </Box>
       )}

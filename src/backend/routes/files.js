@@ -332,6 +332,135 @@ router.get('/file/download-url', async (req, res) => {
   }
 });
 
+// Add these to files.js (before module.exports = router;)
+
+// POST /api/mental-archive-metadata - Save metadata after blob upload
+router.post('/mental-archive-metadata', async (req, res) => {
+  try {
+    const { DefaultAzureCredential } = require('@azure/identity');
+    const { connectToAzureSQL } = require('../store/azureSql'); // Adjust path as needed
+    const sql = require('mssql');
+    const { v4: uuidv4 } = require('uuid');
+    
+    const pool = await connectToAzureSQL();
+    const userEmail = req.user?.email || 'system@example.com';
+    
+    const { fileId, clientID, originalName, fileName, blobName, blobUrl, 
+            fileSize, mimeType, documentType, description, archiveDate, 
+            originalDate } = req.body;
+    
+    await pool.request()
+      .input('fileId', sql.VarChar, fileId || uuidv4())
+      .input('clientID', sql.NVarChar, clientID)
+      .input('originalName', sql.NVarChar, originalName)
+      .input('fileName', sql.VarChar, fileName)
+      .input('filePath', sql.VarChar, null)
+      .input('blobName', sql.NVarChar, blobName)
+      .input('blobUrl', sql.NVarChar, blobUrl)
+      .input('fileSize', sql.BigInt, fileSize)
+      .input('mimeType', sql.VarChar, mimeType)
+      .input('documentType', sql.VarChar, documentType)
+      .input('description', sql.NVarChar, description || null)
+      .input('category', sql.VarChar, 'Mental Archive')
+      .input('archiveDate', sql.Date, archiveDate || null)
+      .input('originalDate', sql.Date, originalDate || null)
+      .input('uploadedBy', sql.VarChar, userEmail)
+      .input('storageType', sql.VarChar, 'blob')
+      .query(`
+        INSERT INTO MentalArchiveFiles (
+          fileId, clientID, originalName, fileName, filePath, blobName, blobUrl,
+          fileSize, mimeType, documentType, description, category,
+          archiveDate, originalDate, uploadedBy, storageType
+        ) VALUES (
+          @fileId, @clientID, @originalName, @fileName, @filePath, @blobName, @blobUrl,
+          @fileSize, @mimeType, @documentType, @description, @category,
+          @archiveDate, @originalDate, @uploadedBy, @storageType
+        )
+      `);
+    
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error saving metadata:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/mental-archive-metadata/:clientID
+router.get('/mental-archive-metadata/:clientID', async (req, res) => {
+  try {
+    const { connectToAzureSQL } = require('../store/azureSql');
+    const sql = require('mssql');
+    
+    const { clientID } = req.params;
+    const pool = await connectToAzureSQL();
+    
+    const result = await pool.request()
+      .input('clientID', sql.NVarChar, clientID)
+      .query(`
+        SELECT 
+          fileId, clientID, originalName, fileName, blobName, blobUrl,
+          fileSize, mimeType, documentType, description, category,
+          archiveDate, originalDate, uploadedBy, uploadDate, storageType
+        FROM MentalArchiveFiles 
+        WHERE clientID = @clientID AND archived = 1
+        ORDER BY uploadDate DESC
+      `);
+
+    res.json({ files: result.recordset });
+  } catch (error) {
+    console.error('Error fetching metadata:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Add to files.js before module.exports = router;
+
+/**
+ * GET /mental-archive/:clientID - Get only mental health archive files
+ */
+router.get('/mental-archive/:clientID', async (req, res) => {
+  try {
+    const clientID = sanitizeSegment(req.params.clientID);
+    
+    // Mental health document types
+    const mentalHealthTypes = [
+      'Mental Health Archive', 'Assessment Report', 'Treatment Plan',
+      'Progress Notes', 'Discharge Summary', 'Psychiatric Evaluation',
+      'Therapy Notes', 'Medication Records', 'Crisis Intervention',
+      'Family Session Notes', 'Group Therapy Notes', 'Court Documents',
+      'Insurance Forms', 'Medical Records', 'Lab Results', 
+      'Imaging Studies', 'Historical Document', 'Paper Conversion', 'Other'
+    ];
+
+    const containerClient = await getContainerClient();
+    const files = [];
+
+    // List all files for this client
+    for await (const blob of containerClient.listBlobsFlat({ prefix: `${clientID}/` })) {
+      const docType = blob.name.split('/')[1] || 'Unknown';
+      
+      // Only include mental health document types
+      if (mentalHealthTypes.includes(docType)) {
+        files.push({
+          id: blob.name,
+          blobName: blob.name,
+          fileName: blob.name.split('/').pop(),
+          blobUrl: `${containerClient.url}/${blob.name}`,
+          docType: docType,
+          uploadDate: blob.properties.lastModified,
+          fileSize: blob.properties.contentLength,
+          contentType: blob.properties.contentType
+        });
+      }
+    }
+
+    return res.json(files);
+  } catch (err) {
+    console.error('Mental archive file listing failed:', err);
+    return res.status(500).json({ message: 'Failed to list mental archive files', detail: err.message });
+  }
+});
+
 /**
  * Health
  */

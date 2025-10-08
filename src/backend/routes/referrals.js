@@ -3,7 +3,7 @@ const router = express.Router();
 const multer = require("multer");
 const path = require("path");
 const sql = require("mssql");
-const { poolPromise } = require("../store/azureSql");
+const { connectToAzureSQL } = require("../store/azureSql");
 const { BlobServiceClient } = require('@azure/storage-blob');
 const fs = require('fs').promises;
 
@@ -35,7 +35,7 @@ const upload = multer({
 // GET /api/clientReferrals/:clientID - Get referral data
 router.get("/clientReferrals/:clientID", async (req, res) => {
   try {
-    const pool = await poolPromise;
+    const pool = await connectToAzureSQL();
     const result = await pool.request()
       .input("clientID", sql.NVarChar, req.params.clientID)
       .query("SELECT lahsaReferral, odrReferral, dhsReferral FROM ClientReferrals WHERE clientID = @clientID");
@@ -66,7 +66,7 @@ router.post("/saveClientReferrals", async (req, res) => {
   }
 
   try {
-    const pool = await poolPromise;
+    const pool = await connectToAzureSQL();
     await pool.request()
       .input("clientID", sql.NVarChar, clientID)
       .input("lahsaReferral", sql.NVarChar, lahsaReferral || '')
@@ -172,7 +172,7 @@ router.post("/uploadReferral", upload.single("file"), async (req, res) => {
     }
 
     // Save file info to database
-    const pool = await poolPromise;
+    const pool = await connectToAzureSQL();
     const result = await pool.request()
       .input("clientID", sql.NVarChar, clientID)
       .input("referralType", sql.NVarChar, type)
@@ -208,7 +208,7 @@ router.post("/uploadReferral", upload.single("file"), async (req, res) => {
 // GET /api/referralFiles/:clientID - Get uploaded files
 router.get("/referralFiles/:clientID", async (req, res) => {
   try {
-    const pool = await poolPromise;
+    const pool = await connectToAzureSQL();
     const result = await pool.request()
       .input("clientID", sql.NVarChar, req.params.clientID)
       .query(`
@@ -242,7 +242,7 @@ router.delete("/referralFiles/:fileID", async (req, res) => {
   const { fileID } = req.params;
 
   try {
-    const pool = await poolPromise;
+    const pool = await connectToAzureSQL();
     
     // Get file info first
     const fileResult = await pool.request()
