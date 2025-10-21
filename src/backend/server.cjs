@@ -784,29 +784,38 @@ let idtNursingRouterLoaded = false;
 let nursingArchiveRouterLoaded = false;
 
 console.log('🏥 Loading Section 5 Medical Routes...');
+console.log('🔍 Current directory:', __dirname);
 
 // Try loading medical.js first (with database)
 let routerLoaded = false;
 try {
+  console.log('🔍 Attempting to load ./routes/medical.js...');
   const medicalRouter = require('./routes/medical.js');
+  console.log('✅ medical.js file loaded successfully');
   app.use('/api/medical', medicalRouter);
-  console.log('✅ Medical router loaded from ./routes/medical.js');
+  console.log('✅ Medical router registered at /api/medical');
   routerLoaded = true;
   medFaceSheetRouterLoaded = true;
 } catch (err) {
-  console.log('⚠️  medical.js failed:', err.message);
+  console.error('❌ medical.js FAILED TO LOAD:');
+  console.error('   Error:', err.message);
+  console.error('   Stack:', err.stack);
 }
 
 // Try medFaceSheet.js if medical.js failed
 if (!routerLoaded) {
   try {
+    console.log('🔍 Attempting to load ./routes/medFaceSheet.js...');
     const medFaceSheetRouter = require('./routes/medFaceSheet.js');
+    console.log('✅ medFaceSheet.js file loaded successfully');
     app.use('/api/medical', medFaceSheetRouter);
-    console.log('✅ medFaceSheet router loaded from ./routes/medFaceSheet.js');
+    console.log('✅ medFaceSheet router registered at /api/medical');
     routerLoaded = true;
     medFaceSheetRouterLoaded = true;
   } catch (err) {
-    console.log('⚠️  medFaceSheet.js failed:', err.message);
+    console.error('❌ medFaceSheet.js FAILED TO LOAD:');
+    console.error('   Error:', err.message);
+    console.error('   Stack:', err.stack);
   }
 }
 
@@ -887,7 +896,8 @@ if (!routerLoaded) {
   medFaceSheetRouterLoaded = true;
 }
 
-// ===== OTHER MEDICAL SECTION ROUTES =====
+console.log('✅ Section 5 Medical Routes Loading Complete');
+console.log('   medFaceSheetRouterLoaded:', medFaceSheetRouterLoaded);
 
 // MEDICAL SCREENING
 try {
