@@ -1,3 +1,4 @@
+// MedFaceSheet.jsx - Fixed error handling
 import React, { useEffect, useState } from "react";
 import PropTypes from "prop-types";
 import { useDispatch, useSelector } from "react-redux";
@@ -224,6 +225,27 @@ const MedFaceSheet = ({ clientID }) => {
     }
   };
 
+  // ✅ Helper function to safely convert error to string
+  const getErrorMessage = (err) => {
+    if (!err) return null;
+    
+    // If error is a string, return it
+    if (typeof err === 'string') return err;
+    
+    // If error is an object with message property
+    if (err.message) return err.message;
+    
+    // If error is an object with error property
+    if (err.error) return err.error;
+    
+    // Try to stringify the error
+    try {
+      return JSON.stringify(err);
+    } catch {
+      return 'An unknown error occurred';
+    }
+  };
+
   if (loading) {
     return (
       <Box sx={{ p: 3 }}>
@@ -234,7 +256,7 @@ const MedFaceSheet = ({ clientID }) => {
   }
 
   return (
-    <Box sx={{ p: 12 }}>
+    <Box sx={{ p: 0 }}>
       {/* ✅ Development indicator */}
       {shouldUseMockData && (
         <Alert severity="info" sx={{ mb: 2 }}>
@@ -249,10 +271,10 @@ const MedFaceSheet = ({ clientID }) => {
         </Alert>
       )}
 
-      {/* Error Message */}
+      {/* ✅ FIXED: Error Message - Convert error object to string */}
       {error && (
         <Alert severity="error" sx={{ mb: 2 }}>
-          Error: {error}
+          Error: {getErrorMessage(error)}
         </Alert>
       )}
 
@@ -266,9 +288,9 @@ const MedFaceSheet = ({ clientID }) => {
             </Typography>
           </Box>
 
-          <Grid container spacing={1}>
+          <Grid container spacing={3}>
             {/* Medical Conditions */}
-            <Grid item >
+            <Grid item xs={12}>
               <Typography variant="body1" sx={{ mb: 1 }}>Medical Conditions</Typography>
               <Select
                 isMulti
@@ -279,8 +301,7 @@ const MedFaceSheet = ({ clientID }) => {
                 styles={customSelectStyles}
               />
             </Grid>
-          </Grid>
-          <Grid container spacing={3} sx={{ mt: 2 }}>
+
             {/* Additional Medical History */}
             <Grid item xs={12} md={6}>
               <Typography variant="body1" sx={{ mb: 1 }}>Additional Medical History</Typography>
@@ -288,7 +309,6 @@ const MedFaceSheet = ({ clientID }) => {
                 fullWidth
                 multiline
                 rows={4}
-                // label="Additional Medical History"
                 name="clientAddMedHistory"
                 value={formData.clientAddMedHistory}
                 onChange={handleInputChange}
@@ -302,7 +322,6 @@ const MedFaceSheet = ({ clientID }) => {
                 fullWidth
                 multiline
                 rows={4}
-                // label="Pertinent Information"
                 name="clientMedPertinent"
                 value={formData.clientMedPertinent}
                 onChange={handleInputChange}
@@ -317,8 +336,8 @@ const MedFaceSheet = ({ clientID }) => {
                   name="clientPreviousLab"
                   value={formData.clientPreviousLab}
                   onChange={handleInputChange}
-                  label="Review of Charts/Previous Lab Work"
                 >
+                  <MenuItem value="">Select...</MenuItem>
                   <MenuItem value="Yes">Yes</MenuItem>
                   <MenuItem value="No">No</MenuItem>
                 </MuiSelect>
@@ -332,21 +351,16 @@ const MedFaceSheet = ({ clientID }) => {
                 <Typography variant="body1">Allergy/Intolerance History</Typography>
               </Box>
               <Select
-                  isMulti
-                  options={allergyList?.map((item) => ({ 
-                    label: item.value, 
-                    value: item.value 
-                  })) || []}
-                  value={formData.clientAllergies}
-                  onChange={(value) => handleSelectChange("clientAllergies", value)}
-                  placeholder="Select allergies..."
-                  styles={{
-                    control: (base) => ({
-                      ...base,
-                      minHeight: '56px'
-                    })
-                  }}
-                /> 
+                isMulti
+                options={allergyList?.map((item) => ({ 
+                  label: item.value, 
+                  value: item.value 
+                })) || []}
+                value={formData.clientAllergies}
+                onChange={(value) => handleSelectChange("clientAllergies", value)}
+                placeholder="Select allergies..."
+                styles={customSelectStyles}
+              /> 
             </Grid>
 
             {/* Save Button */}
@@ -493,7 +507,7 @@ const MedFaceSheet = ({ clientID }) => {
                 onChange={handleAppointmentChange}
               />
             </Grid>
-            <Grid item xs={12} sm={12}>
+            <Grid item xs={12}>
               <Typography variant="body1" sx={{ mb: 1 }}>Transportation?</Typography>
               <FormControl fullWidth>
                 <MuiSelect

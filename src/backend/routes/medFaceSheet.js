@@ -18,7 +18,6 @@ try {
 const validateMedicalData = (data) => {
   const errors = {};
   
-  // Basic validation - add more as needed
   if (data.clientMedConditions && typeof data.clientMedConditions !== 'string') {
     try {
       JSON.stringify(data.clientMedConditions);
@@ -39,11 +38,11 @@ const validateMedicalData = (data) => {
 };
 
 // ============================================================================
-// MEDICAL FACE SHEET ENDPOINTS - FIXED ROUTES
+// MEDICAL FACE SHEET ENDPOINTS - FIXED ROUTES (removed /medical prefix)
 // ============================================================================
 
-// 🔧 FIXED: GET /api/medical/info/:clientID - Get medical face sheet
-router.get('/medical/info/:clientID', async (req, res) => {
+// 🔧 FIXED: GET /api/medical/info/:clientID
+router.get('/info/:clientID', async (req, res) => {
   try {
     const pool = await getPool();
     const { clientID } = req.params;
@@ -69,7 +68,6 @@ router.get('/medical/info/:clientID', async (req, res) => {
       `);
     
     if (result.recordset.length === 0) {
-      // Return empty structure if no data exists
       res.json({
         clientID,
         clientMedConditions: [],
@@ -81,7 +79,6 @@ router.get('/medical/info/:clientID', async (req, res) => {
     } else {
       const data = result.recordset[0];
       
-      // Parse JSON fields safely
       try {
         data.clientMedConditions = data.clientMedConditions ? JSON.parse(data.clientMedConditions) : [];
       } catch (e) {
@@ -106,17 +103,15 @@ router.get('/medical/info/:clientID', async (req, res) => {
   }
 });
 
-// 🔧 FIXED: POST /api/medical/info/:clientID - Create/Update medical face sheet
-router.post('/medical/info/:clientID', async (req, res) => {
+// 🔧 FIXED: POST /api/medical/info/:clientID
+router.post('/info/:clientID', async (req, res) => {
   try {
     const pool = await getPool();
     const { clientID } = req.params;
     const medicalData = req.body;
     
     console.log(`💾 Saving medical face sheet for client: ${clientID}`);
-    console.log(`📤 Medical data received:`, medicalData);
     
-    // Validate data
     const validationErrors = validateMedicalData(medicalData);
     if (validationErrors) {
       return res.status(400).json({
@@ -125,7 +120,6 @@ router.post('/medical/info/:clientID', async (req, res) => {
       });
     }
     
-    // Verify client exists
     const clientCheck = await pool.request()
       .input('clientID', sql.NVarChar(50), clientID)
       .query('SELECT clientID FROM Clients WHERE clientID = @clientID');
@@ -134,7 +128,6 @@ router.post('/medical/info/:clientID', async (req, res) => {
       return res.status(404).json({ error: 'Client not found' });
     }
     
-    // Check if record already exists
     const existingRecord = await pool.request()
       .input('clientID', sql.NVarChar(50), clientID)
       .query('SELECT id FROM medical_face_sheet WHERE clientID = @clientID');
@@ -150,7 +143,6 @@ router.post('/medical/info/:clientID', async (req, res) => {
     
     let query;
     if (existingRecord.recordset.length > 0) {
-      // Update existing record
       request.input('updatedBy', sql.NVarChar(255), medicalData.updatedBy || medicalData.createdBy || 'system');
       query = `
         UPDATE medical_face_sheet 
@@ -167,7 +159,6 @@ router.post('/medical/info/:clientID', async (req, res) => {
         SELECT TOP 1 * FROM medical_face_sheet WHERE clientID = @clientID ORDER BY updatedAt DESC;
       `;
     } else {
-      // Create new record
       query = `
         INSERT INTO medical_face_sheet (
           clientID, clientMedConditions, clientAddMedHistory, 
@@ -187,7 +178,6 @@ router.post('/medical/info/:clientID', async (req, res) => {
     const result = await request.query(query);
     const savedData = result.recordset[0];
     
-    // Parse JSON fields for response
     try {
       savedData.clientMedConditions = JSON.parse(savedData.clientMedConditions || '[]');
     } catch (e) {
@@ -201,7 +191,7 @@ router.post('/medical/info/:clientID', async (req, res) => {
     }
     
     console.log(`✅ Medical face sheet saved for client: ${clientID}`);
-    res.json(savedData);  // 🔧 FIXED: Return just the data, not wrapped in success object
+    res.json(savedData);
     
   } catch (err) {
     console.error('❌ Error saving medical face sheet:', err);
@@ -213,18 +203,17 @@ router.post('/medical/info/:clientID', async (req, res) => {
 });
 
 // ============================================================================
-// MEDICAL APPOINTMENTS ENDPOINTS - FIXED ROUTES
+// MEDICAL APPOINTMENTS ENDPOINTS
 // ============================================================================
 
-// 🔧 FIXED: GET /api/medical/appointments/:clientID - Get appointments for client
-router.get('/medical/appointments/:clientID', async (req, res) => {
+// 🔧 FIXED: GET /api/medical/appointments/:clientID
+router.get('/appointments/:clientID', async (req, res) => {
   try {
     const pool = await getPool();
     const { clientID } = req.params;
     
     console.log(`📅 Getting medical appointments for client: ${clientID}`);
     
-    // Verify client exists
     const clientCheck = await pool.request()
       .input('clientID', sql.NVarChar(50), clientID)
       .query('SELECT clientID FROM Clients WHERE clientID = @clientID');
@@ -253,8 +242,8 @@ router.get('/medical/appointments/:clientID', async (req, res) => {
   }
 });
 
-// 🔧 FIXED: POST /api/medical/appointments/:clientID - Create new appointment
-router.post('/medical/appointments/:clientID', async (req, res) => {
+// 🔧 FIXED: POST /api/medical/appointments/:clientID
+router.post('/appointments/:clientID', async (req, res) => {
   try {
     const pool = await getPool();
     const { clientID } = req.params;
@@ -262,7 +251,6 @@ router.post('/medical/appointments/:clientID', async (req, res) => {
     
     console.log(`📅 Creating medical appointment for client: ${clientID}`);
     
-    // Verify client exists
     const clientCheck = await pool.request()
       .input('clientID', sql.NVarChar(50), clientID)
       .query('SELECT clientID FROM Clients WHERE clientID = @clientID');
@@ -271,7 +259,6 @@ router.post('/medical/appointments/:clientID', async (req, res) => {
       return res.status(404).json({ error: 'Client not found' });
     }
     
-    // Validate appointment date
     if (appointmentData.medApptDate) {
       const apptDate = new Date(appointmentData.medApptDate);
       if (isNaN(apptDate.getTime())) {
@@ -305,7 +292,7 @@ router.post('/medical/appointments/:clientID', async (req, res) => {
     const newAppointment = result.recordset[0];
     
     console.log(`✅ Medical appointment created for client: ${clientID}, ID: ${newAppointment.appointmentID}`);
-    res.status(201).json(newAppointment);  // 🔧 FIXED: Return just the data
+    res.status(201).json(newAppointment);
     
   } catch (err) {
     console.error('❌ Error creating medical appointment:', err);
@@ -316,8 +303,8 @@ router.post('/medical/appointments/:clientID', async (req, res) => {
   }
 });
 
-// 🔧 FIXED: PUT /api/medical/appointments/:appointmentID - Update appointment
-router.put('/medical/appointments/:appointmentID', async (req, res) => {
+// 🔧 FIXED: PUT /api/medical/appointments/:appointmentID
+router.put('/appointments/:appointmentID', async (req, res) => {
   try {
     const pool = await getPool();
     const { appointmentID } = req.params;
@@ -325,7 +312,6 @@ router.put('/medical/appointments/:appointmentID', async (req, res) => {
     
     console.log(`📄 Updating medical appointment: ${appointmentID}`);
     
-    // Check if appointment exists
     const checkResult = await pool.request()
       .input('appointmentID', sql.BigInt, appointmentID)
       .query('SELECT * FROM medical_appointments WHERE appointmentID = @appointmentID');
@@ -334,7 +320,6 @@ router.put('/medical/appointments/:appointmentID', async (req, res) => {
       return res.status(404).json({ error: 'Appointment not found' });
     }
     
-    // Build update query dynamically
     const request = pool.request();
     request.input('appointmentID', sql.BigInt, appointmentID);
     
@@ -378,7 +363,7 @@ router.put('/medical/appointments/:appointmentID', async (req, res) => {
     const updatedAppointment = result.recordset[0];
     
     console.log(`✅ Medical appointment updated: ${appointmentID}`);
-    res.json(updatedAppointment);  // 🔧 FIXED: Return just the data
+    res.json(updatedAppointment);
     
   } catch (err) {
     console.error('❌ Error updating medical appointment:', err);
@@ -389,15 +374,14 @@ router.put('/medical/appointments/:appointmentID', async (req, res) => {
   }
 });
 
-// 🔧 FIXED: DELETE /api/medical/appointments/:appointmentID - Delete appointment
-router.delete('/medical/appointments/:appointmentID', async (req, res) => {
+// 🔧 FIXED: DELETE /api/medical/appointments/:appointmentID
+router.delete('/appointments/:appointmentID', async (req, res) => {
   try {
     const pool = await getPool();
     const { appointmentID } = req.params;
     
     console.log(`🗑️ Deleting medical appointment: ${appointmentID}`);
     
-    // Check if appointment exists
     const checkResult = await pool.request()
       .input('appointmentID', sql.BigInt, appointmentID)
       .query('SELECT * FROM medical_appointments WHERE appointmentID = @appointmentID');
@@ -423,13 +407,12 @@ router.delete('/medical/appointments/:appointmentID', async (req, res) => {
 });
 
 // ============================================================================
-// MEDICAL ALLERGIES ENDPOINTS (for autocomplete options) - FIXED ROUTES
+// MEDICAL ALLERGIES ENDPOINTS
 // ============================================================================
 
-// 🔧 FIXED: GET /api/medical/allergies/:clientID - Get allergy options
-router.get('/medical/allergies/:clientID', async (req, res) => {
+// 🔧 FIXED: GET /api/medical/allergies/:clientID
+router.get('/allergies/:clientID', async (req, res) => {
   try {
-    // For now, return static options - could be made dynamic later
     const allergyOptions = [
       { value: 'penicillin', label: 'Penicillin' },
       { value: 'shellfish', label: 'Shellfish' },

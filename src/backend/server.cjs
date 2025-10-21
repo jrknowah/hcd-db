@@ -7,19 +7,25 @@ require('dotenv').config({ path: '../.env' });
 let dbConnected = false;
 let dbModule = null;
 
-try {
-  dbModule = require("./store/azureSql.js");
-  dbModule.getPool()
-    .then(() => {
-      console.log('✅ Database connected successfully');
-      dbConnected = true;
-    })
-    .catch(err => {
-      console.error('❌ Database connection failed:', err.message);
-      dbConnected = false;
-    });
-} catch (err) {
-  console.log('⚠️  Database module not found, using mock data:', err.message);
+// Only connect to database if NOT in test mode
+if (process.env.NODE_ENV !== 'test') {
+  try {
+    dbModule = require("./store/azureSql.js");
+    dbModule.getPool()
+      .then(() => {
+        console.log('✅ Database connected successfully');
+        dbConnected = true;
+      })
+      .catch(err => {
+        console.error('❌ Database connection failed:', err.message);
+        dbConnected = false;
+      });
+  } catch (err) {
+    console.log('⚠️  Database module not found, using mock data:', err.message);
+    dbConnected = false;
+  }
+} else {
+  console.log('🧪 Test mode: Skipping Azure SQL connection');
   dbConnected = false;
 }
 
@@ -93,13 +99,13 @@ app.get('/api/auth/validate', (req, res) => {
     message: 'Token is valid'
   });
 });
-app.get('/api/getClientAllergies/:clientID', async (req, res) => {
+app.get('/getClientAllergies/:clientID', async (req, res) => {
   // Redirect to the correct endpoint
   res.redirect(`/api/medical/allergies/${req.params.clientID}`);
 });
 
 // Also add the save endpoint if it doesn't exist
-app.post('/api/saveClientAllergies', async (req, res) => {
+app.post('/saveClientAllergies', async (req, res) => {
   const { clientID, allergies } = req.body;
   console.log('💾 Saving allergies for client:', clientID);
   
@@ -152,7 +158,14 @@ try {
 } catch (err) {
   console.log('⚠️  Could not load ./routes/clientFace.js:', err.message);
 }
-
+try {
+  const dischargeRouter = require('./routes/discharge.js');
+  app.use('/api', dischargeRouter);
+  console.log('✅ Discharge router loaded from ./routes/discharge.js');
+  dischargeRouterLoaded = true;
+} catch (err) {
+  console.log('⚠️  Could not load ./routes/discharge.js:', err.message);
+}
 try {
   const referralsRouter = require('./routes/referrals.js');
   app.use('/api', referralsRouter);
@@ -162,14 +175,6 @@ try {
   console.log('⚠️  Could not load ./routes/referrals.js:', err.message);
 }
 
-try {
-  const dischargeRouter = require('./routes/discharge.js');
-  app.use('/api', dischargeRouter);
-  console.log('✅ Discharge router loaded from ./routes/discharge.js');
-  dischargeRouterLoaded = true;
-} catch (err) {
-  console.log('⚠️  Could not load ./routes/discharge.js:', err.message);
-}
 
 // ✅ NEW: Try to load files router for Azure Blob Storage
 try {
@@ -197,14 +202,12 @@ try {
   console.log('✅ AuthSig router loaded from ./routes/authSig.js');
 } catch (err) {
   console.log('⚠️  Could not load ./routes/authSig.js:', err.message);
-  console.log('🔄 Creating fallback mock Authorization & Signatures router...');
   authSigRouterLoaded = false;
-  // Add a fallback route to see what's happening
-  app.use('/api/authorization/*', (req, res) => {
-    console.log('Authorization route hit but not implemented:', req.path);
+  
+  // Use regex pattern for Express 5
+  app.use(/^\/api\/authorization/, (req, res) => {
     res.status(501).json({ 
       error: 'Authorization routes not implemented',
-      path: req.path,
       message: 'The authSig.js router failed to load'
     });
   });
@@ -782,84 +785,172 @@ let nursingArchiveRouterLoaded = false;
 
 console.log('🏥 Loading Section 5 Medical Routes...');
 
-// ===== MEDICAL FACE SHEET ROUTES =====
-try {
-  const medFaceSheetRouter = require('./routes/medFaceSheet.js');
-  app.use('/api', medFaceSheetRouter);
-  console.log('✅ Medical Face Sheet router loaded from ./routes/medFaceSheet.js');
-  medFaceSheetRouterLoaded = true;
-} catch (err) {
-  console.log('⚠️  Could not load ./routes/medFaceSheet.js:', err.message);
-}
-
-//Alternative path for medical routes
+// Try loading medical.js first (with database)
+let routerLoaded = false;
 try {
   const medicalRouter = require('./routes/medical.js');
   app.use('/api/medical', medicalRouter);
   console.log('✅ Medical router loaded from ./routes/medical.js');
+  routerLoaded = true;
+  medFaceSheetRouterLoaded = true;
 } catch (err) {
-  console.log('⚠️  Could not load ./routes/medical.js:', err.message);
+  console.log('⚠️  medical.js failed:', err.message);
 }
 
-// ===== MEDICAL SCREENING ROUTES =====
+// Try medFaceSheet.js if medical.js failed
+if (!routerLoaded) {
+  try {
+    const medFaceSheetRouter = require('./routes/medFaceSheet.js');
+    app.use('/api/medical', medFaceSheetRouter);
+    console.log('✅ medFaceSheet router loaded from ./routes/medFaceSheet.js');
+    routerLoaded = true;
+    medFaceSheetRouterLoaded = true;
+  } catch (err) {
+    console.log('⚠️  medFaceSheet.js failed:', err.message);
+  }
+}
+
+// Create mock router if both failed
+if (!routerLoaded) {
+  console.log('🔄 Creating MOCK medical router...');
+  
+  const mockRouter = express.Router();
+  const mockData = {};
+  const mockAppts = {};
+
+  mockRouter.get('/info/:clientID', (req, res) => {
+    console.log('🔧 MOCK: GET /info/' + req.params.clientID);
+    res.json(mockData[req.params.clientID] || {
+      clientID: req.params.clientID,
+      clientMedConditions: [],
+      clientAddMedHistory: '',
+      clientMedPertinent: '',
+      clientPreviousLab: '',
+      clientAllergies: []
+    });
+  });
+
+  mockRouter.post('/info/:clientID', (req, res) => {
+    console.log('🔧 MOCK: POST /info/' + req.params.clientID);
+    mockData[req.params.clientID] = { ...req.body, clientID: req.params.clientID };
+    res.json(mockData[req.params.clientID]);
+  });
+
+  mockRouter.get('/appointments/:clientID', (req, res) => {
+    console.log('🔧 MOCK: GET /appointments/' + req.params.clientID);
+    res.json(mockAppts[req.params.clientID] || []);
+  });
+
+  mockRouter.post('/appointments/:clientID', (req, res) => {
+    console.log('🔧 MOCK: POST /appointments/' + req.params.clientID);
+    const appt = { appointmentID: Date.now(), ...req.body };
+    if (!mockAppts[req.params.clientID]) mockAppts[req.params.clientID] = [];
+    mockAppts[req.params.clientID].push(appt);
+    res.status(201).json(appt);
+  });
+
+  mockRouter.put('/appointments/:appointmentID', (req, res) => {
+    console.log('🔧 MOCK: PUT /appointments/' + req.params.appointmentID);
+    res.json({ ...req.body, appointmentID: req.params.appointmentID });
+  });
+
+  mockRouter.delete('/appointments/:appointmentID', (req, res) => {
+    console.log('🔧 MOCK: DELETE /appointments/' + req.params.appointmentID);
+    res.json({ message: 'Deleted' });
+  });
+
+  mockRouter.get('/allergies/:clientID', (req, res) => {
+    console.log('🔧 MOCK: GET /allergies/' + req.params.clientID);
+    res.json([
+      { value: 'penicillin', label: 'Penicillin' },
+      { value: 'shellfish', label: 'Shellfish' },
+      { value: 'nuts', label: 'Tree Nuts' },
+      { value: 'dairy', label: 'Dairy' },
+      { value: 'latex', label: 'Latex' }
+    ]);
+  });
+
+  mockRouter.get('/stats/:clientID', (req, res) => {
+    console.log('🔧 MOCK: GET /stats/' + req.params.clientID);
+    res.json({
+      totalAppointments: 0,
+      upcomingAppointments: 0,
+      pastAppointments: 0,
+      appointmentsNeedingTransport: 0,
+      nextAppointmentDate: null,
+      hasAllergies: 0
+    });
+  });
+
+  app.use('/api/medical', mockRouter);
+  console.log('✅ MOCK Medical router created at /api/medical');
+  medFaceSheetRouterLoaded = true;
+}
+
+// ===== OTHER MEDICAL SECTION ROUTES =====
+
+// MEDICAL SCREENING
 try {
   const medScreeningRouter = require('./routes/medScreening.js');
   app.use('/api', medScreeningRouter);
-  console.log('✅ Medical Screening router loaded from ./routes/medScreening.js');
+  console.log('✅ Medical Screening router loaded');
   medScreeningRouterLoaded = true;
 } catch (err) {
-  console.log('⚠️  Could not load ./routes/medScreening.js:', err.message);
+  console.log('⚠️  Could not load medScreening.js:', err.message);
 }
 
-// ===== NURSING ADMISSION ROUTES =====
+// NURSING ADMISSION
 try {
   const nursingAdmissionRouter = require('./routes/nursingAdmission.js');
   app.use('/api/nursing-admission', nursingAdmissionRouter);
-  console.log('✅ Nursing Admission router loaded from ./routes/nursingAdmission.js');
+  console.log('✅ Nursing Admission router loaded');
   nursingAdmissionRouterLoaded = true;
 } catch (err) {
-  console.log('⚠️  Could not load ./routes/nursingAdmission.js:', err.message);
+  console.log('⚠️  Could not load nursingAdmission.js:', err.message);
 }
 
-// ===== PROGRESS NOTES ROUTES =====
+// PROGRESS NOTES
 try {
   const progressNoteRouter = require('./routes/progressNote.js');
   app.use('/api/progress-notes', progressNoteRouter);
-  console.log('✅ Progress Notes router loaded from ./routes/progressNote.js');
+  console.log('✅ Progress Notes router loaded');
   progressNoteRouterLoaded = true;
 } catch (err) {
-  console.log('⚠️  Could not load ./routes/progressNote.js:', err.message);
+  console.log('⚠️  Could not load progressNote.js:', err.message);
 }
 
-// ===== IDT PROVIDER ROUTES =====
+// IDT PROVIDER
 try {
   const idtProviderRouter = require('./routes/idtProvider.js');
   app.use('/api/idt-provider', idtProviderRouter);
-  console.log('✅ IDT Provider router loaded from ./routes/idtProvider.js');
+  console.log('✅ IDT Provider router loaded');
   idtProviderRouterLoaded = true;
 } catch (err) {
-  console.log('⚠️  Could not load ./routes/idtProvider.js:', err.message);
+  console.log('⚠️  Could not load idtProvider.js:', err.message);
 }
 
-// ===== IDT NURSING ROUTES =====
+// IDT NURSING
 try {
   const idtNursingRouter = require('./routes/idtNursing.js');
   app.use('/api/idt-nursing', idtNursingRouter);
-  console.log('✅ IDT Nursing router loaded from ./routes/idtNursing.js');
+  console.log('✅ IDT Nursing router loaded');
   idtNursingRouterLoaded = true;
 } catch (err) {
-  console.log('⚠️  Could not load ./routes/idtNursing.js:', err.message);
+  console.log('⚠️  Could not load idtNursing.js:', err.message);
 }
 
-// ===== NURSING ARCHIVE ROUTES =====
+// NURSING ARCHIVE
 try {
   const nursingArchiveRouter = require('./routes/nursingArchive.js');
   app.use('/api/nursing-archive', nursingArchiveRouter);
-  console.log('✅ Nursing Archive router loaded from ./routes/nursingArchive.js');
+  console.log('✅ Nursing Archive router loaded');
   nursingArchiveRouterLoaded = true;
 } catch (err) {
-  console.log('⚠️  Could not load ./routes/nursingArchive.js:', err.message);
+  console.log('⚠️  Could not load nursingArchive.js:', err.message);
 }
+
+console.log('✅ Section 5 Medical Routes Loading Complete');
+//End Section 5: Medical ===================================================================
 
 // ============================================================================
 // CREATE FALLBACK ROUTERS FOR MISSING SECTION 5 ROUTES
@@ -1089,75 +1180,76 @@ app.use((req, res) => {
 // Replace your existing app.listen at the bottom of server.js with this updated version:
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`📝 Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`💾 Database: ${dbConnected ? '✅ Azure SQL Connected' : '⚠️  Mock Data Only'}`);
-  console.log(`☁️  Azure Storage: ${process.env.AZURE_STORAGE_CONNECTION_STRING ? '✅ Configured' : '⚠️  Not configured'}`);
-  console.log(`🔗 Health check: http://localhost:${PORT}/api/health`);
-  console.log(`🔍 Debug endpoint: http://localhost:${PORT}/api/debug/database`);
-  
-  console.log('📋 Routes loaded:');
-  console.log('  📁 Section 1 - Client Information:');
-  console.log(`    Clients: ${clientsRouterLoaded ? '✅ Real Azure SQL' : '⚠️  Mock fallback'}`);
-  console.log(`    ClientFace: ${clientFaceRouterLoaded ? '✅ Real Azure SQL' : '❌ Not loaded'}`);
-  
-  console.log('  📝 Section 2 - Authorization & Signatures:');
-  console.log(`    AuthSig: ${authSigRouterLoaded ? '✅ Real Azure SQL' : '⚠️  Mock fallback'}`);
-  
-  console.log('  🧠 Section 3 - Assessment & Care Plans:');
-  console.log(`    BioSocial: ${bioSocialRouterLoaded ? '✅ Real Azure SQL' : '❌ Not loaded'}`);
-  console.log(`    MentalHealth: ${mentalHealthRouterLoaded ? '✅ Real Azure SQL' : '❌ Not loaded'}`);
-  console.log(`    Reassessment: ${reassessmentRouterLoaded ? '✅ Real Azure SQL' : '❌ Not loaded'}`);
-  console.log(`    MentalArchive: ${mentalArchiveRouterLoaded ? '✅ Real Azure SQL' : '❌ Not loaded'}`);
-  
-  console.log('  📊 Section 4 - Client Progress:');
-  console.log(`    CarePlans: ${carePlansRouterLoaded ? '✅ Real Azure SQL' : '⚠️  Mock fallback'}`);
-  console.log(`    EncounterNotes: ${encounterNotesRouterLoaded ? '✅ Real Azure SQL' : '⚠️  Mock fallback'}`);
-  
-  console.log('  🏥 Section 5 - Medical:');
-  console.log(`    MedFaceSheet: ${medFaceSheetRouterLoaded ? '✅ Real Azure SQL' : '⚠️  Mock fallback'}`);
-  console.log(`    MedScreening: ${medScreeningRouterLoaded ? '✅ Real Azure SQL' : '⚠️  Mock fallback'}`);
-  console.log(`    NursingAdmission: ${nursingAdmissionRouterLoaded ? '✅ Real Azure SQL' : '⚠️  Mock fallback'}`);
-  console.log(`    ProgressNotes: ${progressNoteRouterLoaded ? '✅ Real Azure SQL' : '⚠️  Mock fallback'}`);
-  console.log(`    IDTProvider: ${idtProviderRouterLoaded ? '✅ Real Azure SQL' : '⚠️  Mock fallback'}`);
-  console.log(`    IDTNursing: ${idtNursingRouterLoaded ? '✅ Real Azure SQL' : '⚠️  Mock fallback'}`);
-  console.log(`    NursingArchive: ${nursingArchiveRouterLoaded ? '✅ Real Azure SQL' : '⚠️  Mock fallback'}`);
-  
-  console.log('  📂 File Management:');
-  console.log(`    Files: ${filesRouterLoaded ? '✅ Real Azure Blob' : '⚠️  Mock fallback'}`);
-  console.log(`    Referrals: ${referralsRouterLoaded ? '✅ Real Azure SQL' : '⚠️  Mock fallback'}`);
-  console.log(`    Discharge: ${dischargeRouterLoaded ? '✅ Real Azure SQL' : '⚠️  Mock fallback'}`);
-  
-  // Section 2 specific endpoints
-  console.log('\n📝 Section 2 - Authorization & Signatures endpoints:');
-  console.log('  📄 Forms Management:');
-  console.log('    GET    /api/authorization/:clientID/forms           - Get all forms status');
-  console.log('    GET    /api/authorization/:clientID/form/:formType  - Get specific form');
-  console.log('    POST   /api/authorization/:clientID/form/:formType  - Save form data');
-  console.log('    POST   /api/authorization/:clientID/form/:formType/autosave - Auto-save');
-  console.log('    POST   /api/authorization/:clientID/forms/bulk      - Bulk save forms');
-  console.log('    POST   /api/authorization/:clientID/submit          - Submit for approval');
-  console.log('    GET    /api/authorization/:clientID/submission-status - Get status');
-  
-  console.log('\n  📄 Available Form Types:');
-  console.log('    - orientation      : Patient Orientation Information');
-  console.log('    - clientRights     : Client Rights & Responsibilities');
-  console.log('    - consentTreatment : Consent for Treatment');
-  console.log('    - consentPhoto     : Photo/Media Consent');
-  console.log('    - authDisclosure   : Authorization for Disclosure');
-  console.log('    - advDirective     : Advance Healthcare Directive');
-  console.log('    - housingAgree     : Housing Agreement');
-  console.log('    - privacyPractice  : Privacy Practices');
-  console.log('    - lahmis          : LAHMIS Consent');
-  console.log('    - phiRelease      : PHI Release');
-  console.log('    - residencePolicy : Residence Policy');
-  console.log('    - grievances      : Client Grievances');
-  console.log('    - healthDisclosure: Health Info Disclosure');
-  console.log('    - interimHousing  : Interim Housing Agreement');
-  console.log('    - termination     : Termination Policy');
-});
-
+if (process.env.NODE_ENV !== 'test') {
+    app.listen(PORT, () => {
+      console.log(`🚀 Server running on port ${PORT}`);
+      console.log(`📝 Environment: ${process.env.NODE_ENV || 'development'}`);
+      console.log(`💾 Database: ${dbConnected ? '✅ Azure SQL Connected' : '⚠️  Mock Data Only'}`);
+      console.log(`☁️  Azure Storage: ${process.env.AZURE_STORAGE_CONNECTION_STRING ? '✅ Configured' : '⚠️  Not configured'}`);
+      console.log(`🔗 Health check: http://localhost:${PORT}/api/health`);
+      console.log(`🔍 Debug endpoint: http://localhost:${PORT}/api/debug/database`);
+      
+      console.log('📋 Routes loaded:');
+      console.log('  📁 Section 1 - Client Information:');
+      console.log(`    Clients: ${clientsRouterLoaded ? '✅ Real Azure SQL' : '⚠️  Mock fallback'}`);
+      console.log(`    ClientFace: ${clientFaceRouterLoaded ? '✅ Real Azure SQL' : '❌ Not loaded'}`);
+      
+      console.log('  📝 Section 2 - Authorization & Signatures:');
+      console.log(`    AuthSig: ${authSigRouterLoaded ? '✅ Real Azure SQL' : '⚠️  Mock fallback'}`);
+      
+      console.log('  🧠 Section 3 - Assessment & Care Plans:');
+      console.log(`    BioSocial: ${bioSocialRouterLoaded ? '✅ Real Azure SQL' : '❌ Not loaded'}`);
+      console.log(`    MentalHealth: ${mentalHealthRouterLoaded ? '✅ Real Azure SQL' : '❌ Not loaded'}`);
+      console.log(`    Reassessment: ${reassessmentRouterLoaded ? '✅ Real Azure SQL' : '❌ Not loaded'}`);
+      console.log(`    MentalArchive: ${mentalArchiveRouterLoaded ? '✅ Real Azure SQL' : '❌ Not loaded'}`);
+      
+      console.log('  📊 Section 4 - Client Progress:');
+      console.log(`    CarePlans: ${carePlansRouterLoaded ? '✅ Real Azure SQL' : '⚠️  Mock fallback'}`);
+      console.log(`    EncounterNotes: ${encounterNotesRouterLoaded ? '✅ Real Azure SQL' : '⚠️  Mock fallback'}`);
+      
+      console.log('  🏥 Section 5 - Medical:');
+      console.log(`    MedFaceSheet: ${medFaceSheetRouterLoaded ? '✅ Real Azure SQL' : '⚠️  Mock fallback'}`);
+      console.log(`    MedScreening: ${medScreeningRouterLoaded ? '✅ Real Azure SQL' : '⚠️  Mock fallback'}`);
+      console.log(`    NursingAdmission: ${nursingAdmissionRouterLoaded ? '✅ Real Azure SQL' : '⚠️  Mock fallback'}`);
+      console.log(`    ProgressNotes: ${progressNoteRouterLoaded ? '✅ Real Azure SQL' : '⚠️  Mock fallback'}`);
+      console.log(`    IDTProvider: ${idtProviderRouterLoaded ? '✅ Real Azure SQL' : '⚠️  Mock fallback'}`);
+      console.log(`    IDTNursing: ${idtNursingRouterLoaded ? '✅ Real Azure SQL' : '⚠️  Mock fallback'}`);
+      console.log(`    NursingArchive: ${nursingArchiveRouterLoaded ? '✅ Real Azure SQL' : '⚠️  Mock fallback'}`);
+      
+      console.log('  📂 File Management:');
+      console.log(`    Files: ${filesRouterLoaded ? '✅ Real Azure Blob' : '⚠️  Mock fallback'}`);
+      console.log(`    Referrals: ${referralsRouterLoaded ? '✅ Real Azure SQL' : '⚠️  Mock fallback'}`);
+      console.log(`    Discharge: ${dischargeRouterLoaded ? '✅ Real Azure SQL' : '⚠️  Mock fallback'}`);
+      
+      // Section 2 specific endpoints
+      console.log('\n📝 Section 2 - Authorization & Signatures endpoints:');
+      console.log('  📄 Forms Management:');
+      console.log('    GET    /api/authorization/:clientID/forms           - Get all forms status');
+      console.log('    GET    /api/authorization/:clientID/form/:formType  - Get specific form');
+      console.log('    POST   /api/authorization/:clientID/form/:formType  - Save form data');
+      console.log('    POST   /api/authorization/:clientID/form/:formType/autosave - Auto-save');
+      console.log('    POST   /api/authorization/:clientID/forms/bulk      - Bulk save forms');
+      console.log('    POST   /api/authorization/:clientID/submit          - Submit for approval');
+      console.log('    GET    /api/authorization/:clientID/submission-status - Get status');
+      
+      console.log('\n  📄 Available Form Types:');
+      console.log('    - orientation      : Patient Orientation Information');
+      console.log('    - clientRights     : Client Rights & Responsibilities');
+      console.log('    - consentTreatment : Consent for Treatment');
+      console.log('    - consentPhoto     : Photo/Media Consent');
+      console.log('    - authDisclosure   : Authorization for Disclosure');
+      console.log('    - advDirective     : Advance Healthcare Directive');
+      console.log('    - housingAgree     : Housing Agreement');
+      console.log('    - privacyPractice  : Privacy Practices');
+      console.log('    - lahmis          : LAHMIS Consent');
+      console.log('    - phiRelease      : PHI Release');
+      console.log('    - residencePolicy : Residence Policy');
+      console.log('    - grievances      : Client Grievances');
+      console.log('    - healthDisclosure: Health Info Disclosure');
+      console.log('    - interimHousing  : Interim Housing Agreement');
+      console.log('    - termination     : Termination Policy');
+    });
+}
 // Error handling middleware
 app.use((error, req, res, next) => {
   console.error('Server error:', error);

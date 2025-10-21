@@ -1,8 +1,17 @@
 {
   "name": "hcd-backend",
   "version": "1.0.0",
+  "description": "Healthcare Dashboard Backend API",
+  "main": "server.cjs",
   "scripts": {
-    "start": "node server.cjs"
+    "start": "node server.cjs",
+    "dev": "nodemon server.cjs",
+    "test": "vitest",
+    "test:backend": "vitest --config vitest.config.backend.js",
+    "test:backend:watch": "vitest --config vitest.config.backend.js --watch",
+    "test:backend:coverage": "vitest --config vitest.config.backend.js --coverage",
+    "test:frontend": "vitest --config vitest.config.frontend.js",
+    "test:all": "npm run test:backend && npm run test:frontend"
   },
   "engines": {
     "node": "18.x"
@@ -17,5 +26,52 @@
     "jwks-rsa": "^3.2.0",
     "mssql": "^11.0.1",
     "multer": "^2.0.2"
-  }
+  },
+  "devDependencies": {
+    "dotenv-flow": "^4.1.0",
+    "jest": "^30.2.0",
+    "nodemon": "^3.0.2",
+    "supertest": "^7.1.4"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "testTimeout": 10000,
+    "setupFilesAfterEnv": [
+      "<rootDir>/tests/setup.js"
+    ],
+    "testPathIgnorePatterns": [
+      "/node_modules/"
+    ],
+    "coveragePathIgnorePatterns": [
+      "/node_modules/",
+      "/tests/"
+    ],
+    "testMatch": [
+      "**/__tests__/**/*.js",
+      "**/?(*.)+(spec|test).js"
+    ],
+    "collectCoverageFrom": [
+      "routes/**/*.js",
+      "store/**/*.js",
+      "server.cjs",
+      "!**/node_modules/**",
+      "!**/tests/**"
+    ],
+    "coverageReporters": [
+      "text",
+      "lcov",
+      "html"
+    ],
+    "verbose": true,
+    "forceExit": true,
+    "detectOpenHandles": true
+  },
+  "keywords": [
+    "healthcare",
+    "backend",
+    "api",
+    "azure"
+  ],
+  "author": "Your Name",
+  "license": "ISC"
 }

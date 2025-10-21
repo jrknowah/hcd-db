@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { useSearchParams, useLocation } from "react-router-dom";
-import Select from "react-select";
+import { useSearchParams, useLocation, useNavigate } from "react-router-dom";
 import {
   Box,
   Grid,
@@ -13,25 +12,26 @@ import {
   CardContent,
   LinearProgress,
   Chip,
-  Paper
+  Paper,
+  IconButton
 } from "@mui/material";
 import {
   ContactPhone as ContactPhoneIcon,
   Email as EmailIcon,
   LocalHospital as MedicalIcon,
-  Save as SaveIcon
+  Save as SaveIcon,
+  Warning as AllergyIcon,
+  Edit as EditIcon
 } from "@mui/icons-material";
 import {
   fetchClientFaceData,
   saveClientFaceData,
   updateFormField,
-  updateAllergies,
   setValidationErrors,
   clearErrors,
   clearSuccess,
   setCurrentClient,
   selectFormData,
-  selectAllergies,
   selectLoading,
   selectSaving,
   selectError,
@@ -39,19 +39,23 @@ import {
   selectSaveSuccess,
   selectDataLoaded
 } from "../../backend/store/slices/clientFaceSlice";
-import { allergyList } from "../../data/arrayList";
 
-// ✅ Safe hook wrapper
+// ✅ Import medical slice to fetch allergies
+import { fetchMedicalInfo } from "../../backend/store/slices/medFaceSheetSlice";
+
+// Safe hook wrapper
 const useSafeRouter = () => {
   try {
     const searchParams = useSearchParams();
     const location = useLocation();
-    return { searchParams: searchParams[0], location, hasRouter: true };
+    const navigate = useNavigate();
+    return { searchParams: searchParams[0], location, navigate, hasRouter: true };
   } catch (error) {
     console.warn('⚠️ ClientFace: Router context not available, using fallback');
     return { 
       searchParams: new URLSearchParams(), 
-      location: { pathname: '', search: '' }, 
+      location: { pathname: '', search: '' },
+      navigate: () => {},
       hasRouter: false 
     };
   }
@@ -60,12 +64,11 @@ const useSafeRouter = () => {
 const ClientFace = ({ exportMode = false }) => {
   const dispatch = useDispatch();
   
-  // ✅ Safe router hooks
-  const { searchParams, location, hasRouter } = useSafeRouter();
+  // Router hooks
+  const { searchParams, location, navigate, hasRouter } = useSafeRouter();
   
-  // ✅ Redux selectors - get data directly from store
+  // Redux selectors - ClientFace data
   const formData = useSelector(selectFormData);
-  const allergies = useSelector(selectAllergies);
   const loading = useSelector(selectLoading);
   const saving = useSelector(selectSaving);
   const error = useSelector(selectError);
@@ -73,22 +76,26 @@ const ClientFace = ({ exportMode = false }) => {
   const saveSuccess = useSelector(selectSaveSuccess);
   const dataLoaded = useSelector(selectDataLoaded);
   
-  // ✅ Get current client and user from Redux
+  // ✅ Get allergies from medical_face_sheet (Section 5)
+  const medicalInfo = useSelector((state) => state.medFaceSheet?.medicalInfo || {});
+  const medicalLoading = useSelector((state) => state.medFaceSheet?.medicalLoading || false);
+  const allergies = medicalInfo.clientAllergies || [];
+  
+  // Get current client and user from Redux
   const currentClient = useSelector((state) => state?.clients?.selectedClient);
   const currentUser = useSelector((state) => state?.auth?.user);
-  
-  // ✅ Local UI state only (not duplicating Redux data)
-  const [selectedAllergies, setSelectedAllergies] = useState([]);
 
-  // ✅ Load data when client changes
+  // Load data when client changes
   useEffect(() => {
     if (currentClient?.clientID) {
       dispatch(setCurrentClient(currentClient.clientID));
       dispatch(fetchClientFaceData(currentClient.clientID));
+      // ✅ Fetch allergies from medical_face_sheet
+      dispatch(fetchMedicalInfo(currentClient.clientID));
     }
   }, [dispatch, currentClient?.clientID]);
 
-  // ✅ Handle URL parameters only if router is available
+  // Handle URL parameters
   useEffect(() => {
     if (!hasRouter) {
       console.log('🔍 ClientFace: No router context, skipping URL parameter handling');
@@ -98,25 +105,10 @@ const ClientFace = ({ exportMode = false }) => {
     const clientIDFromURL = searchParams.get('clientID');
     if (clientIDFromURL && (!currentClient || currentClient.clientID !== clientIDFromURL)) {
       console.log('🔍 ClientFace: Client ID from URL:', clientIDFromURL);
-      // In this case, the parent component should handle loading the client
-      // We'll just log it for debugging
     }
   }, [hasRouter, searchParams, currentClient]);
 
-  // ✅ Sync allergies from Redux to local UI state
-  useEffect(() => {
-    if (allergies && allergies.length > 0) {
-      const allergyOptions = allergies.map((name) => ({ 
-        value: name, 
-        label: name 
-      }));
-      setSelectedAllergies(allergyOptions);
-    } else {
-      setSelectedAllergies([]);
-    }
-  }, [allergies]);
-
-  // ✅ Clear success message automatically
+  // Clear success message automatically
   useEffect(() => {
     if (saveSuccess) {
       const timer = setTimeout(() => {
@@ -126,17 +118,14 @@ const ClientFace = ({ exportMode = false }) => {
     }
   }, [saveSuccess, dispatch]);
 
-  // ✅ Form validation function
+  // Form validation function
   const validateForm = () => {
     const errors = [];
     
     if (!formData.clientContactNum?.trim()) {
-  errors.push('Phone number is required');
-} 
-// Remove or comment out the strict format check
-// else if (!/^\(\d{3}\)\s\d{3}-\d{4}$/.test(formData.clientContactNum)) {
-//   errors.push('Phone number must be in format (xxx) xxx-xxxx');
-// }
+      errors.push('Phone number is required');
+    }
+    
     if (!formData.clientEmail?.trim()) {
       errors.push('Email is required');
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.clientEmail)) {
@@ -150,7 +139,7 @@ const ClientFace = ({ exportMode = false }) => {
     return errors;
   };
 
-  // ✅ Calculate form completion percentage
+  // Calculate form completion percentage
   const getCompletionPercentage = () => {
     const requiredFields = ['clientContactNum', 'clientEmail', 'clientMedInsType'];
     const optionalFields = ['clientContactAltNum', 'clientEmgContactName', 'clientEmgContactNum', 
@@ -165,14 +154,13 @@ const ClientFace = ({ exportMode = false }) => {
       formData[field] && formData[field].trim() !== ''
     ).length;
     
-    // Weight required fields more heavily
     const score = (completedRequired * 2) + completedOptional;
     const maxScore = (requiredFields.length * 2) + optionalFields.length;
     
     return Math.round((score / maxScore) * 100);
   };
 
-  // ✅ Format phone number
+  // Format phone number
   const formatPhoneNumber = (value) => {
     const cleaned = value.replace(/\D/g, '');
     if (cleaned.length === 10) {
@@ -181,11 +169,10 @@ const ClientFace = ({ exportMode = false }) => {
     return value;
   };
 
-  // ✅ Handle form field changes
+  // Handle form field changes
   const handleFieldChange = (fieldName) => (event) => {
     let value = event.target.value;
     
-    // Format phone numbers automatically
     if (fieldName.includes('ContactNum') || fieldName.includes('Phone')) {
       value = formatPhoneNumber(value);
     }
@@ -193,41 +180,38 @@ const ClientFace = ({ exportMode = false }) => {
     dispatch(updateFormField({ field: fieldName, value }));
   };
 
-  // ✅ Handle allergy selection changes
-  const handleAllergyChange = (selectedOptions) => {
-    const allergyList = (selectedOptions || []).map(option => option.value);
-    setSelectedAllergies(selectedOptions || []);
-    dispatch(updateAllergies(allergyList));
+  // ✅ Navigate to Medical Section to edit allergies
+  const handleEditAllergies = () => {
+    if (hasRouter) {
+      navigate(`/medical-face-sheet?clientID=${currentClient.clientID}`);
+    } else {
+      alert('Please go to Section 5: Medical Face Sheet to edit allergies');
+    }
   };
 
-  // ✅ Handle form submission
+  // Handle form submission
   const handleSubmit = async (event) => {
     event.preventDefault();
     
-    // Validate form
     const errors = validateForm();
     if (errors.length > 0) {
       dispatch(setValidationErrors(errors));
       return;
     }
     
-    // Clear any existing errors
     dispatch(clearErrors());
     
-    // Save data
     try {
       await dispatch(saveClientFaceData({
         clientID: currentClient.clientID,
-        formData,
-        allergies
+        formData
+        // ❌ Removed: allergies parameter - now managed in Section 5
       })).unwrap();
     } catch (error) {
-      // Error is handled by Redux
       console.error('Save failed:', error);
     }
   };
 
-  // ✅ Clear errors handler
   const handleClearErrors = () => {
     dispatch(clearErrors());
   };
@@ -238,7 +222,7 @@ const ClientFace = ({ exportMode = false }) => {
                      formData.clientEmail && 
                      formData.clientMedInsType;
 
-  // ✅ Loading state
+  // Loading state
   if (loading && !dataLoaded) {
     return (
       <Box sx={{ maxWidth: 1200, mx: "auto", p: 3 }}>
@@ -252,7 +236,7 @@ const ClientFace = ({ exportMode = false }) => {
     );
   }
 
-  // ✅ No client selected
+  // No client selected
   if (!currentClient) {
     return (
       <Box sx={{ maxWidth: 1200, mx: "auto", p: 3 }}>
@@ -270,7 +254,7 @@ const ClientFace = ({ exportMode = false }) => {
 
   return (
     <Box sx={{ maxWidth: 1200, mx: "auto", p: 3 }}>
-      {/* ✅ Header Section */}
+      {/* Header Section */}
       <Paper elevation={2} sx={{ p: 3, mb: 3 }}>
         <Typography variant="h4" gutterBottom>
           Client Face Sheet
@@ -279,7 +263,7 @@ const ClientFace = ({ exportMode = false }) => {
           Essential client contact and medical information for {currentClient.clientFirstName} {currentClient.clientLastName}
         </Typography>
 
-        {/* ✅ Progress indicator */}
+        {/* Progress indicator */}
         <Box sx={{ mt: 2 }}>
           <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
             <Typography variant="body2">Form Completion</Typography>
@@ -293,24 +277,18 @@ const ClientFace = ({ exportMode = false }) => {
           />
         </Box>
 
-        {/* ✅ Status indicators */}
+        {/* Status indicators */}
         <Box display="flex" gap={1} mt={2}>
-          {saving && (
-            <Chip label="Saving..." color="info" size="small" />
-          )}
-          {isFormValid && (
-            <Chip label="Form Valid" color="success" size="small" />
-          )}
+          {saving && <Chip label="Saving..." color="info" size="small" />}
+          {isFormValid && <Chip label="Form Valid" color="success" size="small" />}
           {validationErrors.length > 0 && (
             <Chip label={`${validationErrors.length} Error(s)`} color="error" size="small" />
           )}
-          {!hasRouter && (
-            <Chip label="Standalone Mode" color="warning" size="small" />
-          )}
+          {!hasRouter && <Chip label="Standalone Mode" color="warning" size="small" />}
         </Box>
       </Paper>
 
-      {/* ✅ Error Alert */}
+      {/* Error Alert */}
       {error && (
         <Alert 
           severity="error" 
@@ -321,7 +299,7 @@ const ClientFace = ({ exportMode = false }) => {
         </Alert>
       )}
 
-      {/* ✅ Validation Errors */}
+      {/* Validation Errors */}
       {validationErrors.length > 0 && (
         <Alert severity="warning" sx={{ mb: 3 }}>
           <Typography variant="subtitle2" gutterBottom>
@@ -335,14 +313,14 @@ const ClientFace = ({ exportMode = false }) => {
         </Alert>
       )}
 
-      {/* ✅ Success message */}
+      {/* Success message */}
       {saveSuccess && (
         <Alert severity="success" sx={{ mb: 3 }}>
           ✅ Client Face Data Saved Successfully!
         </Alert>
       )}
 
-      {/* ✅ Main Form */}
+      {/* Main Form */}
       <form onSubmit={handleSubmit}>
         {/* Contact Information Section */}
         <Card elevation={1} sx={{ mb: 3 }}>
@@ -510,57 +488,73 @@ const ClientFace = ({ exportMode = false }) => {
           </CardContent>
         </Card>
 
-        {/* Allergies Section */}
-        <Card elevation={1} sx={{ mb: 3 }}>
+        {/* ✅ Allergies Section - READ ONLY with Edit Button 
+        <Card elevation={1} sx={{ mb: 3, bgcolor: 'grey.50' }}>
           <CardContent>
-            <Typography variant="h6" gutterBottom>
-              Allergies & Intolerances
-            </Typography>
+            <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
+              <Box display="flex" alignItems="center" gap={1}>
+                <AllergyIcon color="warning" />
+                <Typography variant="h6">Allergies & Intolerances</Typography>
+              </Box>
+              <Button
+                variant="outlined"
+                size="small"
+                startIcon={<EditIcon />}
+                onClick={handleEditAllergies}
+              >
+                Edit in Medical Section
+              </Button>
+            </Box>
             
-            <Grid container spacing={2}>
-              <Grid item xs={12} md={6}>
-                <Typography variant="body2" sx={{ mb: 1 }}>
-                  Select Known Allergies
-                </Typography>
-                <Select
-                  isMulti
-                  options={allergyList?.map((item) => ({ 
-                    label: item.value, 
-                    value: item.value 
-                  })) || []}
-                  value={selectedAllergies}
-                  onChange={handleAllergyChange}
-                  isDisabled={saving}
-                  placeholder="Select allergies..."
-                  styles={{
-                    control: (base) => ({
-                      ...base,
-                      minHeight: '56px'
-                    })
-                  }}
-                />
-              </Grid>
-              
-              <Grid item xs={12} md={6}>
-                <Typography> Allergy Comments & Details </Typography>
-                <TextField
-                  fullWidth
-                  multiline
-                  rows={4}
-                  label=""
-                  name="clientAllergyComments"
-                  value={formData.clientAllergyComments || ""}
-                  onChange={handleFieldChange('clientAllergyComments')}
-                  disabled={saving}
-                  helperText="Include severity, symptoms, and any special instructions"
-                />
-              </Grid>
-            </Grid>
-          </CardContent>
-        </Card>
+            <Alert severity="info" sx={{ mb: 2 }}>
+              Allergies are managed in Section 5: Medical Face Sheet. Click "Edit in Medical Section" to update.
+            </Alert>
 
-        {/* ✅ Submit Button - Only show in non-export mode */}
-        {/* ✅ Submit Button - Only show in non-export mode */}
+            {medicalLoading ? (
+              <Box display="flex" alignItems="center" gap={2}>
+                <LinearProgress sx={{ flexGrow: 1 }} />
+                <Typography variant="body2">Loading allergies...</Typography>
+              </Box>
+            ) : allergies && allergies.length > 0 ? (
+              <Box>
+                <Typography variant="body2" gutterBottom>
+                  Current Allergies:
+                </Typography>
+                <Box display="flex" flexWrap="wrap" gap={1} mt={1}>
+                  {allergies.map((allergy, index) => (
+                    <Chip
+                      key={index}
+                      label={allergy.label || allergy.value || allergy}
+                      color="warning"
+                      variant="outlined"
+                      icon={<AllergyIcon />}
+                    />
+                  ))}
+                </Box>
+              </Box>
+            ) : (
+              <Typography variant="body2" color="text.secondary">
+                No allergies recorded. Add allergies in Section 5: Medical Face Sheet.
+              </Typography>
+            )}*/}
+
+            {/* Allergy Comments - Read Only 
+            {formData.clientAllergyComments && (
+              <Box mt={2}>
+                <Typography variant="body2" gutterBottom>
+                  Allergy Comments:
+                </Typography>
+                <Paper variant="outlined" sx={{ p: 2, bgcolor: 'white' }}>
+                  <Typography variant="body2">
+                    {formData.clientAllergyComments}
+                  </Typography>
+                </Paper>
+              </Box>
+            )}
+          </CardContent>
+        </Card>*/}
+
+        {/* Submit Button */}
         {!exportMode && (
           <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
             <Button

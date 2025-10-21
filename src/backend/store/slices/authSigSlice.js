@@ -498,22 +498,29 @@ const authSigSlice = createSlice({
             
             // ✅ Fetch Form Data
             .addCase(fetchFormData.pending, (state, action) => {
-                const formType = action.meta.arg.formType;
-                state.formLoading[formType] = true;
-                state.formErrors[formType] = null;
-            })
-            .addCase(fetchFormData.fulfilled, (state, action) => {
-                const formType = action.meta.arg.formType;
-                state.formLoading[formType] = false;
-                if (action.payload) {
-                    state.forms[formType] = action.payload;
+                const formType = action.meta?.arg?.formType;
+                if (formType) {
+                    state.formLoading[formType] = true;
+                    state.formErrors[formType] = null;
                 }
-                state.formErrors[formType] = null;
+            })
+
+            .addCase(fetchFormData.fulfilled, (state, action) => {
+                const formType = action.meta?.arg?.formType;
+                if (formType) {
+                    state.formLoading[formType] = false;
+                    if (action.payload) {
+                        state.forms[formType] = action.payload;
+                    }
+                    state.formErrors[formType] = null;
+                }
             })
             .addCase(fetchFormData.rejected, (state, action) => {
-                const formType = action.meta.arg.formType;
-                state.formLoading[formType] = false;
-                state.formErrors[formType] = action.payload || `Failed to fetch ${formType} data`;
+                const formType = action.meta?.arg?.formType;
+                if (formType) {
+                    state.formLoading[formType] = false;
+                    state.formErrors[formType] = action.payload || `Failed to fetch ${formType} data`;
+                }
             })
             
             // ✅ Save Form Data - FIXED

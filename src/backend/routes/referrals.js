@@ -32,36 +32,69 @@ const upload = multer({
   }
 });
 
-// GET /api/clientReferrals/:clientID - Get referral data
-router.get("/clientReferrals/:clientID", async (req, res) => {
-  try {
-    const pool = await connectToAzureSQL();
-    const result = await pool.request()
-      .input("clientID", sql.NVarChar, req.params.clientID)
-      .query("SELECT lahsaReferral, odrReferral, dhsReferral FROM ClientReferrals WHERE clientID = @clientID");
+// ✅ GET /clientReferrals/:clientID - Get referral data (FIXED)
+router.get('/clientReferrals/:clientID', async (req, res) => {
+  const { clientID } = req.params;
+  
+  console.log(`${new Date().toISOString()} - GET /clientReferrals/${clientID}`);
 
-    console.log(`✅ Retrieved referrals for client ${req.params.clientID}`);
-    res.json(result.recordset[0] || {
-      lahsaReferral: "",
-      odrReferral: "",
-      dhsReferral: ""
+  try {
+    const pool = await connectToAzureSQL();  // ✅ FIXED: Use connectToAzureSQL() instead of sql.connect(azureConfig)
+    
+    // ✅ FIXED: Include ALL 4 referral fields in SELECT
+    const result = await pool.request()
+      .input('clientID', sql.NVarChar, clientID)
+      .query(`
+        SELECT 
+          lahsaReferral,
+          odrReferral,
+          dhsReferral,
+          dmhReferral
+        FROM ClientReferrals
+        WHERE clientID = @clientID
+      `);
+
+    if (result.recordset.length === 0) {
+      // Return empty strings for all 4 fields if client not found
+      return res.status(200).json({
+        lahsaReferral: '',
+        odrReferral: '',
+        dhsReferral: '',
+        dmhReferral: ''
+      });
+    }
+
+    const referrals = result.recordset[0];
+    
+    // ✅ FIXED: Ensure all 4 fields are in response
+    res.status(200).json({
+      lahsaReferral: referrals.lahsaReferral || '',
+      odrReferral: referrals.odrReferral || '',
+      dhsReferral: referrals.dhsReferral || '',
+      dmhReferral: referrals.dmhReferral || ''
     });
-  } catch (err) {
-    console.error("❌ Error fetching referrals:", err);
+
+    console.log(`✅ Retrieved referrals for client ${clientID}`);
+
+  } catch (error) {
+    console.error('Error retrieving referrals:', error);
     res.status(500).json({ 
-      error: "Error fetching referrals",
-      details: err.message 
+      error: 'Failed to retrieve referral data',
+      message: error.message 
     });
   }
 });
 
-// POST /api/saveClientReferrals - Save referral notes
+// ✅ POST /saveClientReferrals - Save referral notes (FIXED)
 router.post("/saveClientReferrals", async (req, res) => {
-  const { clientID, lahsaReferral, odrReferral, dhsReferral } = req.body;
+  const { clientID, lahsaReferral, odrReferral, dhsReferral, dmhReferral } = req.body;  // ✅ ADDED dmhReferral
+
+  console.log(`${new Date().toISOString()} - POST /api/saveClientReferrals`);
+  console.log('📤 Request body:', req.body);
 
   if (!clientID) {
     return res.status(400).json({ 
-      error: "Missing required field: clientID" 
+      error: "clientID is required" 
     });
   }
 
@@ -69,9 +102,10 @@ router.post("/saveClientReferrals", async (req, res) => {
     const pool = await connectToAzureSQL();
     await pool.request()
       .input("clientID", sql.NVarChar, clientID)
-      .input("lahsaReferral", sql.NVarChar, lahsaReferral || '')
-      .input("odrReferral", sql.NVarChar, odrReferral || '')
-      .input("dhsReferral", sql.NVarChar, dhsReferral || '')
+      .input("lahsaReferral", sql.NVarChar(sql.MAX), lahsaReferral || '')
+      .input("odrReferral", sql.NVarChar(sql.MAX), odrReferral || '')
+      .input("dhsReferral", sql.NVarChar(sql.MAX), dhsReferral || '')
+      .input("dmhReferral", sql.NVarChar(sql.MAX), dmhReferral || '')  // ✅ ADDED dmhReferral
       .query(`
         MERGE ClientReferrals AS target
         USING (SELECT @clientID AS clientID) AS source
@@ -81,18 +115,18 @@ router.post("/saveClientReferrals", async (req, res) => {
             lahsaReferral = @lahsaReferral, 
             odrReferral = @odrReferral, 
             dhsReferral = @dhsReferral,
-            updatedAt = GETDATE()
+            dmhReferral = @dmhReferral
         WHEN NOT MATCHED THEN
-          INSERT (clientID, lahsaReferral, odrReferral, dhsReferral, createdAt, updatedAt)
-          VALUES (@clientID, @lahsaReferral, @odrReferral, @dhsReferral, GETDATE(), GETDATE());
+          INSERT (clientID, lahsaReferral, odrReferral, dhsReferral, dmhReferral)
+          VALUES (@clientID, @lahsaReferral, @odrReferral, @dhsReferral, @dmhReferral);
       `);
 
     console.log(`✅ Saved referral notes for client ${clientID}`);
-    res.json({ 
-      success: true, 
-      message: "Referral notes saved successfully",
-      clientID 
-    });
+    res.status(200).json({ 
+        success: true, 
+        message: 'Client referrals saved successfully' 
+      });
+    
   } catch (err) {
     console.error("❌ Error saving referral notes:", err);
     res.status(500).json({ 
@@ -102,7 +136,7 @@ router.post("/saveClientReferrals", async (req, res) => {
   }
 });
 
-// POST /api/uploadReferral - Upload referral file to Azure Blob Storage
+// POST /uploadReferral - Upload referral file to Azure Blob Storage
 router.post("/uploadReferral", upload.single("file"), async (req, res) => {
   const { clientID, type } = req.body;
 
@@ -205,7 +239,7 @@ router.post("/uploadReferral", upload.single("file"), async (req, res) => {
   }
 });
 
-// GET /api/referralFiles/:clientID - Get uploaded files
+// GET /referralFiles/:clientID - Get uploaded files
 router.get("/referralFiles/:clientID", async (req, res) => {
   try {
     const pool = await connectToAzureSQL();
@@ -237,7 +271,7 @@ router.get("/referralFiles/:clientID", async (req, res) => {
   }
 });
 
-// DELETE /api/referralFiles/:fileID - Delete file from Azure and database
+// DELETE /referralFiles/:fileID - Delete file from Azure and database
 router.delete("/referralFiles/:fileID", async (req, res) => {
   const { fileID } = req.params;
 

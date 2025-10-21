@@ -128,10 +128,16 @@ const NewClient = ({ onClientCreated, editMode = false, clientData = null }) => 
       return false;
     }
     
-    // Additional validation
-    if (formData.clientSSN && formData.clientSSN.length !== 9) {
-      setLocalError('SSN must be exactly 9 digits.');
-      return false;
+    // ✅ FIXED: SSN validation - accept both formats (with or without dashes)
+    if (formData.clientSSN && formData.clientSSN.trim().length > 0) {
+      // Remove dashes and spaces for validation
+      const cleanSSN = formData.clientSSN.replace(/[-\s]/g, '');
+      
+      // Check if it's exactly 9 digits
+      if (!/^\d{9}$/.test(cleanSSN)) {
+        setLocalError('SSN must be exactly 9 digits (with or without dashes). Example: 123-45-6789 or 123456789');
+        return false;
+      }
     }
 
     setLocalError(null);
@@ -400,15 +406,18 @@ const NewClient = ({ onClientCreated, editMode = false, clientData = null }) => 
 
           <Grid item xs={12} sm={4}>
             <Typography>SSN(XXX-XX-XXX)</Typography>
-            <TextField
-              fullWidth
-              label="SSN"
-              inputProps={{ maxLength: 9 }}
-              value={formData.clientSSN}
-              onChange={handleChange('clientSSN')}
-              disabled={loading}
-              helperText="9 digits, no dashes"
-            />
+            // In NewClient.jsx:
+              <TextField
+                fullWidth
+                label="SSN"
+                inputProps={{ 
+                  maxLength: 11,  // ✅ Allow for dashes
+                  placeholder: "123-45-6789 or 123456789"
+                }}
+                value={formData.clientSSN}
+                onChange={handleChange('clientSSN')}
+                helperText="9 digits (with or without dashes)"  // ✅ Updated
+              />
           </Grid>
           <Grid item xs={12} sm={4}>
             <Typography>Gender</Typography>

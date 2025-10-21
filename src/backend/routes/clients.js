@@ -32,15 +32,24 @@ const generateClientID = () => {
 const mapClientForAuthForms = (client) => {
   if (!client) return null;
   
+  // Build full name including middle name
+  const nameParts = [
+    client.clientFirstName,
+    client.clientMiddleName,
+    client.clientLastName
+  ].filter(part => part && part.trim()); // Remove empty/null parts
+  
+  const fullName = nameParts.join(' ');
+  
   return {
     ...client, // Keep all original fields
     // Add mapped fields for authorization forms
     firstName: client.clientFirstName,
     lastName: client.clientLastName,
-    fullName: `${client.clientFirstName || ''} ${client.clientLastName || ''}`.trim(),
+    middleName: client.clientMiddleName,
+    fullName: fullName,
     dateOfBirth: client.clientDOB,
     admitDate: client.clientAdmitDate,
-    // Add computed status if needed
     status: client.status || 'active'
   };
 };
@@ -78,11 +87,30 @@ const validateClientData = (clientData, isUpdate = false) => {
     }
   }
   
+  // In clients.js, update validateClientData function:
+
   // Validate SSN format if provided
-  if (clientData.clientSSN && clientData.clientSSN.length > 0) {
-    const ssnPattern = /^\d{3}-?\d{2}-?\d{4}$/;
-    if (!ssnPattern.test(clientData.clientSSN)) {
-      errors.clientSSN = 'Invalid SSN format (expected: XXX-XX-XXXX)';
+   if (clientData.clientSSN && clientData.clientSSN.trim().length > 0) {
+    const trimmedSSN = clientData.clientSSN.trim();
+    
+    // Valid formats:
+    // 1. XXX-XX-XXXX (dashes in correct positions)
+    // 2. XXXXXXXXX (9 digits, no dashes)
+    // 3. XXX XX XXXX (spaces in correct positions)
+    const validFormats = [
+      /^\d{3}-\d{2}-\d{4}$/,  // 123-45-6789 ✅
+      /^\d{9}$/,              // 123456789 ✅
+      /^\d{3}\s\d{2}\s\d{4}$/ // 123 45 6789 ✅
+    ];
+    
+    const isValidFormat = validFormats.some(pattern => pattern.test(trimmedSSN));
+    
+    if (!isValidFormat) {
+      errors.clientSSN = 'Invalid SSN format. Must be XXX-XX-XXXX or XXXXXXXXX (9 digits)';
+    } else {
+      // Normalize to dashed format for storage (XXX-XX-XXXX)
+      const cleanSSN = trimmedSSN.replace(/[-\s]/g, '');
+      clientData.clientSSN = `${cleanSSN.slice(0,3)}-${cleanSSN.slice(3,5)}-${cleanSSN.slice(5)}`;
     }
   }
   
@@ -171,6 +199,7 @@ router.post('/', async (req, res) => {
     res.status(201).json({ 
       clientID: mappedClient.clientID,
       firstName: mappedClient.firstName,
+      middleName: mappedClient.middleName,
       lastName: mappedClient.lastName,
       fullName: mappedClient.fullName,
       message: 'Client created successfully',

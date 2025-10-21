@@ -56,7 +56,7 @@ function validateArrayField(fieldName, value, minLength = 1) {
 }
 
 /**
- * FIX #3 & #9: Strict date validation (YYYY-MM-DD format) - TIMEZONE FIX
+ * FIX #3 & #9: Strict date validation (YYYY-MM-DD format)
  */
 function validateDateFormat(dateString, fieldName) {
   if (!dateString) return {};
@@ -67,21 +67,17 @@ function validateDateFormat(dateString, fieldName) {
     return { [fieldName]: `Invalid date format for ${fieldName}. Expected YYYY-MM-DD` };
   }
   
-  // Parse the date components
-  const [year, month, day] = dateString.split('-').map(Number);
-  
-  // ✅ CRITICAL FIX: Use UTC to avoid timezone issues
-  const date = new Date(Date.UTC(year, month - 1, day));
-  
   // Check if it's a valid date
+  const date = new Date(dateString);
   if (isNaN(date.getTime())) {
     return { [fieldName]: `Invalid date for ${fieldName}` };
   }
   
-  // ✅ CRITICAL FIX: Verify using UTC methods
-  if (date.getUTCFullYear() !== year || 
-      date.getUTCMonth() !== month - 1 || 
-      date.getUTCDate() !== day) {
+  // Verify the date string matches the parsed date
+  const [year, month, day] = dateString.split('-').map(Number);
+  if (date.getFullYear() !== year || 
+      date.getMonth() + 1 !== month || 
+      date.getDate() !== day) {
     return { [fieldName]: `Invalid date for ${fieldName}` };
   }
   
@@ -251,17 +247,18 @@ router.post('/:clientID/form/:formType', async (req, res) => {
     }
     
     if (formType === 'consentPhoto') {
-      // consentPhoto uses consentPhotoSign1 instead of signature field
-      // Don't validate signature field for this form type
+      // Signature is optional for consentPhoto (uses consentPhotoSign1 instead)
+      if (req.body.signature) {
+        Object.assign(errors, validateSignature(req.body.signature));
+      }
       Object.assign(errors, validateConsentPhoto(req.body));
     }
     
-    // Validate completion percentage for all forms
+    // FIX #1: Validate completion percentage
     Object.assign(errors, validateCompletionPercentage(req.body.completionPercentage));
     
     // Return validation errors if any
     if (Object.keys(errors).length > 0) {
-      console.log('🔴 Validation errors for', formType, ':', JSON.stringify(errors, null, 2));
       return res.status(422).json({ 
         message: 'Validation failed',
         errors 

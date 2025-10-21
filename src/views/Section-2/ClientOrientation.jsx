@@ -63,10 +63,10 @@ const ClientOrientation = ({ clientID: propClientID }) => {
   // Get client ID from props or Redux
   const clientID = propClientID || selectedClient?.clientID;
   
-  // Calculate completion percentage
-  const totalItems = ppcList.length + 2; // +2 for the additional checkboxes
-  const completedItems = Object.values(checkboxes).filter(Boolean).length + (patientRightsSig ? 1 : 0);
-  const completionPercentage = Math.round((completedItems / (totalItems + 1)) * 100);
+  // Calculate completion percentage - FIXED
+  const totalItems = ppcList.length + 2 + 1; // +2 for additional checkboxes, +1 for signature
+  const completedItems = Object.values(checkboxes).filter(Boolean).length + (patientRightsSig.trim() ? 1 : 0);
+  const completionPercentage = Math.round((completedItems / totalItems) * 100);
 
   // Load form data when component mounts
   useEffect(() => {
@@ -83,7 +83,7 @@ const ClientOrientation = ({ clientID: propClientID }) => {
     }
   }, [orientationForm]);
 
-  // Handle checkbox changes
+  // Handle checkbox changes - FIXED
   const handleCheckboxChange = useCallback((e) => {
     const { name, checked } = e.target;
     const newCheckboxes = { ...checkboxes, [name]: checked };
@@ -97,12 +97,12 @@ const ClientOrientation = ({ clientID: propClientID }) => {
       formData: {
         checkboxes: newCheckboxes,
         signature: patientRightsSig,
-        completionPercentage: Math.round(((Object.values(newCheckboxes).filter(Boolean).length + (patientRightsSig ? 1 : 0)) / (totalItems + 1)) * 100)
+        completionPercentage: Math.round(((Object.values(newCheckboxes).filter(Boolean).length + (patientRightsSig.trim() ? 1 : 0)) / totalItems) * 100)
       }
     }));
   }, [dispatch, checkboxes, patientRightsSig, totalItems]);
 
-  // Handle signature changes
+  // Handle signature changes - FIXED
   const handleSigChange = useCallback((e) => {
     const signature = e.target.value;
     setPatientRightsSig(signature);
@@ -114,7 +114,7 @@ const ClientOrientation = ({ clientID: propClientID }) => {
       formData: {
         checkboxes,
         signature,
-        completionPercentage: Math.round(((Object.values(checkboxes).filter(Boolean).length + (signature ? 1 : 0)) / (totalItems + 1)) * 100)
+        completionPercentage: Math.round(((Object.values(checkboxes).filter(Boolean).length + (signature.trim() ? 1 : 0)) / totalItems) * 100)
       }
     }));
   }, [dispatch, checkboxes, totalItems]);
@@ -229,7 +229,7 @@ const ClientOrientation = ({ clientID: propClientID }) => {
             </Box>
           )}
 
-          {/* Progress Indicator */}
+          {/* Progress Indicator - FIXED: Added aria attributes */}
           <Box sx={{ mt: 2 }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
               <Typography variant="body2" color="text.secondary">
@@ -243,7 +243,10 @@ const ClientOrientation = ({ clientID: propClientID }) => {
             </Box>
             <LinearProgress 
               variant="determinate" 
-              value={completionPercentage} 
+              value={completionPercentage}
+              aria-valuenow={completionPercentage}
+              aria-valuemin={0}
+              aria-valuemax={100}
               sx={{ height: 8, borderRadius: 4 }}
               color={completionPercentage === 100 ? 'success' : 'primary'}
             />
@@ -436,7 +439,7 @@ const ClientOrientation = ({ clientID: propClientID }) => {
           severity="success" 
           sx={{ width: '100%' }}
         >
-          ✅ Orientation acknowledgment saved successfully!
+          Orientation acknowledgment saved successfully!
         </Alert>
       </Snackbar>
     </Box>

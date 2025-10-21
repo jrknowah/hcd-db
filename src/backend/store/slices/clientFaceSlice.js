@@ -16,10 +16,8 @@ const MOCK_CLIENT_FACE_DATA = {
   clientMedInsType: 'Medicare',
   clientMedCarrier: 'Blue Cross Blue Shield',
   clientMedInsNum: 'MED123456789',
-  clientAllergyComments: 'Mild reaction to peanuts, severe reaction to shellfish'
+  clientAllergyComments: 'See Medical Face Sheet for allergy details'
 };
-
-const MOCK_ALLERGIES = ['Peanuts', 'Shellfish', 'Latex'];
 
 // ✅ Async thunks
 export const fetchClientFaceData = createAsyncThunk(
@@ -32,22 +30,15 @@ export const fetchClientFaceData = createAsyncThunk(
       if (shouldUseMockData) {
         await new Promise(resolve => setTimeout(resolve, 500));
         return {
-          formData: MOCK_CLIENT_FACE_DATA,
-          allergies: MOCK_ALLERGIES
+          formData: MOCK_CLIENT_FACE_DATA
         };
       }
 
-      const [faceResponse, allergiesResponse] = await Promise.allSettled([
-        axios.get(`${HCD_API}/api/getClientFace/${clientID}`),
-        axios.get(`${HCD_API}/api/getClientAllergies/${clientID}`)
-      ]);
-
-      const formData = faceResponse.status === 'fulfilled' ? faceResponse.value.data : {};
-      const allergies = allergiesResponse.status === 'fulfilled' ? allergiesResponse.value.data : [];
+      // ✅ Only fetch ClientFace data (allergies now in medical_face_sheet)
+      const response = await axios.get(`${HCD_API}/api/getClientFace/${clientID}`);
 
       return {
-        formData,
-        allergies: Array.isArray(allergies) ? allergies : []
+        formData: response.data || {}
       };
     } catch (error) {
       return rejectWithValue(error.response?.data?.message || 'Failed to fetch client face data');
@@ -57,7 +48,7 @@ export const fetchClientFaceData = createAsyncThunk(
 
 export const saveClientFaceData = createAsyncThunk(
   'clientFace/saveData',
-  async ({ clientID, formData, allergies }, { rejectWithValue }) => {
+  async ({ clientID, formData }, { rejectWithValue }) => {
     try {
       const isDevelopment = import.meta.env.MODE === 'development';
       const shouldUseMockData = isDevelopment && !import.meta.env.VITE_USE_REAL_DATA;
@@ -66,26 +57,18 @@ export const saveClientFaceData = createAsyncThunk(
         await new Promise(resolve => setTimeout(resolve, 1000));
         return {
           formData,
-          allergies,
           message: 'Client face data saved successfully (Mock)'
         };
       }
 
+      // ✅ Save only ClientFace data (allergies saved separately in Section 5)
       await axios.post(`${HCD_API}/api/saveClientFace`, {
         ...formData,
         clientID
       });
 
-      if (allergies && allergies.length > 0) {
-        await axios.post(`${HCD_API}/api/saveClientAllergies`, {
-          clientID,
-          allergies
-        });
-      }
-
       return {
         formData,
-        allergies,
         message: 'Client face data saved successfully'
       };
     } catch (error) {
@@ -94,12 +77,11 @@ export const saveClientFaceData = createAsyncThunk(
   }
 );
 
-// ✅ Redux slice with correct action names
+// ✅ Redux slice without allergy management
 const clientFaceSlice = createSlice({
   name: 'clientFace',
   initialState: {
     formData: {},
-    allergies: [],
     loading: false,
     saving: false,
     error: null,
@@ -109,7 +91,6 @@ const clientFaceSlice = createSlice({
     dataLoaded: false
   },
   reducers: {
-    // ✅ Make sure action names match exactly
     updateFormField: (state, action) => {
       const { field, value } = action.payload;
       state.formData[field] = value;
@@ -122,15 +103,10 @@ const clientFaceSlice = createSlice({
       state.formData = { ...state.formData, ...action.payload };
     },
     
-    updateAllergies: (state, action) => {
-      state.allergies = action.payload;
-    },
-    
     setValidationErrors: (state, action) => {
       state.validationErrors = action.payload;
     },
     
-    // ✅ This is the action that was missing - make sure it's here
     clearErrors: (state) => {
       state.error = null;
       state.validationErrors = [];
@@ -144,7 +120,6 @@ const clientFaceSlice = createSlice({
       if (action.payload !== state.currentClientID) {
         state.currentClientID = action.payload;
         state.formData = {};
-        state.allergies = [];
         state.dataLoaded = false;
         state.error = null;
         state.validationErrors = [];
@@ -153,7 +128,6 @@ const clientFaceSlice = createSlice({
     
     resetForm: (state) => {
       state.formData = {};
-      state.allergies = [];
       state.validationErrors = [];
       state.error = null;
       state.dataLoaded = false;
@@ -168,7 +142,6 @@ const clientFaceSlice = createSlice({
       .addCase(fetchClientFaceData.fulfilled, (state, action) => {
         state.loading = false;
         state.formData = action.payload.formData || {};
-        state.allergies = action.payload.allergies || [];
         state.dataLoaded = true;
       })
       .addCase(fetchClientFaceData.rejected, (state, action) => {
@@ -185,7 +158,6 @@ const clientFaceSlice = createSlice({
         state.saving = false;
         state.saveSuccess = true;
         state.formData = action.payload.formData;
-        state.allergies = action.payload.allergies;
         state.validationErrors = [];
       })
       .addCase(saveClientFaceData.rejected, (state, action) => {
@@ -196,13 +168,12 @@ const clientFaceSlice = createSlice({
   }
 });
 
-// ✅ Export actions - make sure clearErrors is included
+// ✅ Export actions
 export const {
   updateFormField,
   updateFormData,
-  updateAllergies,
   setValidationErrors,
-  clearErrors,      // ← This must be exported
+  clearErrors,
   clearSuccess, 
   setCurrentClient,
   resetForm
@@ -210,7 +181,6 @@ export const {
 
 // ✅ Export selectors
 export const selectFormData = (state) => state.clientFace.formData;
-export const selectAllergies = (state) => state.clientFace.allergies;
 export const selectLoading = (state) => state.clientFace.loading;
 export const selectSaving = (state) => state.clientFace.saving;
 export const selectError = (state) => state.clientFace.error;

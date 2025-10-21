@@ -13,28 +13,13 @@ import {
   Visibility as ViewIcon,
   Close as CloseIcon
 } from '@mui/icons-material';
-import { useSelector, useDispatch } from 'react-redux';
-import axios from 'axios';
 import html2pdf from 'html2pdf.js';
 import { azureBlobService } from '../../backend/services/azureBlobService';
-import { useSearchParams } from 'react-router-dom';
-import { fetchClientById, setSelectedClient } from '../../backend/store/slices/clientSlice';
+import { useClientPersistence } from '../../hooks/useClientPersistence';
 import logUserAction from '../../backend/config/logAction';
 import ClientFace from './ClientFace';
 import Referrals from './Referrals';
 import Discharge from './Discharge';
-
-// Static data outside component
-const MOCK_CLIENT = {
-  clientID: 'mock-123',
-  clientFirstName: 'John',
-  clientLastName: 'Doe',
-};
-
-const MOCK_USER = {
-  id: 'mock-user-123',
-  name: 'Test User',
-};
 
 const DOC_TYPES = [
   "Identification Card", "Driver's License", "Social Security Card", "Permanent Resident Alien Card",
@@ -60,8 +45,9 @@ const MOCK_FILES = [
 
 const Identification = () => {
   const API_URL = import.meta.env.VITE_APP_API_URL;
-  const [searchParams] = useSearchParams();
-  const dispatch = useDispatch();
+  
+  // ✅ USE THE HOOK - Replaces all client management logic
+  const { clientID, client, hasClient, user, shouldUseMockData, isDevelopment } = useClientPersistence();
   
   // State management
   const [forceMockData, setForceMockData] = useState(false);
@@ -83,27 +69,19 @@ const Identification = () => {
   const [filePreview, setFilePreview] = useState(null);
   const [previewOpen, setPreviewOpen] = useState(false);
 
-  // Redux selectors
-  const reduxSelectedClient = useSelector((state) => state?.clients?.selectedClient);
-  const reduxUser = useSelector((state) => state?.auth?.user);
-
-  // Computed values
-  const isDevelopment = import.meta.env.MODE === 'development';
-  const shouldUseMockData = forceMockData || (isDevelopment && !import.meta.env.VITE_USE_REAL_DATA);
-  
-  const currentClient = shouldUseMockData && !reduxSelectedClient ? MOCK_CLIENT : reduxSelectedClient;
-  const currentUser = shouldUseMockData && !reduxUser ? MOCK_USER : reduxUser;
+  // ✅ Allow local override of mock data for testing
+  const effectiveMockData = forceMockData || shouldUseMockData;
 
   const exportRef = useRef();
 
   // Load files when client changes
   useEffect(() => {
-    if (!currentClient?.clientID) return;
+    if (!client?.clientID) return;
 
     setLoading(true);
     setError(null);
     
-    if (shouldUseMockData) {
+    if (effectiveMockData) {
       // Mock data
       const timer = setTimeout(() => {
         setFiles(MOCK_FILES);
@@ -112,9 +90,9 @@ const Identification = () => {
       return () => clearTimeout(timer);
     } else {
       // Load files from Azure Blob Storage
-      azureBlobService.listClientFiles(currentClient.clientID)
+      azureBlobService.listClientFiles(client.clientID)
         .then((filesData) => {
-          console.log('📁 Azure files loaded:', filesData);
+          console.log('📂 Azure files loaded:', filesData);
           setFiles(Array.isArray(filesData) ? filesData : []);
           setLoading(false);
         })
@@ -125,7 +103,7 @@ const Identification = () => {
           setLoading(false);
         });
     }
-  }, [currentClient?.clientID, shouldUseMockData]);
+  }, [client?.clientID, effectiveMockData]);
 
   // Clear success message after 5 seconds
   useEffect(() => {
@@ -134,31 +112,6 @@ const Identification = () => {
       return () => clearTimeout(timer);
     }
   }, [successMessage]);
-
-  // Handle client restoration from URL
-  useEffect(() => {
-    const clientID = searchParams.get('clientID');
-    
-    if (clientID && !reduxSelectedClient) {
-      console.log('🔄 Section1: Restoring client from URL:', clientID);
-      
-      // Check sessionStorage first for quick restoration
-      const cached = sessionStorage.getItem(`client_${clientID}`);
-      if (cached) {
-        try {
-          const clientData = JSON.parse(cached);
-          dispatch(setSelectedClient(clientData));
-          console.log('✅ Restored from cache');
-        } catch {
-          console.log('📡 Cache invalid, fetching from server');
-          dispatch(fetchClientById(clientID));
-        }
-      } else {
-        console.log('📡 No cache, fetching from server');
-        dispatch(fetchClientById(clientID));
-      }
-    }
-  }, [searchParams, reduxSelectedClient, dispatch]);
 
   const handleTabChange = (event, newValue) => setTabIndex(newValue);
 
@@ -194,7 +147,7 @@ const Identification = () => {
 
   const handleFileUpload = async (docType) => {
     const fileToUpload = filesToUpload[docType];
-    if (!fileToUpload || !currentClient) {
+    if (!fileToUpload || !client) {
       setError("Please select a file and ensure a client is selected.");
       return;
     }
@@ -203,7 +156,7 @@ const Identification = () => {
     setError(null);
 
     try {
-      if (shouldUseMockData) {
+      if (effectiveMockData) {
         // Mock upload with progress simulation
         for (let i = 0; i <= 100; i += 10) {
           setUploadProgress((prev) => ({ ...prev, [docType]: i }));
@@ -226,7 +179,7 @@ const Identification = () => {
         
         const uploadResult = await azureBlobService.uploadFile(
           fileToUpload, 
-          currentClient.clientID, 
+          client.clientID, 
           docType
         );
         
@@ -246,9 +199,9 @@ const Identification = () => {
         setSuccessMessage(`✅ ${uploadResult.fileName} uploaded successfully to Azure`);
 
         // Log user action
-        if (currentUser && currentUser.id !== 'mock-user-123') {
-          await logUserAction(currentUser, "UPLOAD_DOCUMENT", {
-            clientID: currentClient.clientID,
+        if (user && user.id !== 'mock-user-123') {
+          await logUserAction(user, "UPLOAD_DOCUMENT", {
+            clientID: client.clientID,
             docType,
             fileName: uploadResult.fileName,
             blobName: uploadResult.blobName
@@ -263,10 +216,10 @@ const Identification = () => {
       console.error(`❌ Upload Error for ${docType}:`, err);
       setError(`Failed to upload ${fileToUpload.name}: ${err.message}`);
     } finally {
-      // FIX: Properly clear the upload progress
+      // Properly clear the upload progress
       setUploadProgress((prev) => {
         const newProgress = { ...prev };
-        delete newProgress[docType];  // Remove the key entirely
+        delete newProgress[docType];
         return newProgress;
       });
     }
@@ -276,7 +229,7 @@ const Identification = () => {
     if (!fileToDelete) return;
 
     try {
-      if (shouldUseMockData) {
+      if (effectiveMockData) {
         // Mock delete
         setFiles((prev) => prev.filter(f => f.fileName !== fileToDelete.fileName));
         setSuccessMessage(`🗑️ ${fileToDelete.fileName} deleted successfully (Mock)`);
@@ -287,9 +240,9 @@ const Identification = () => {
         setSuccessMessage(`🗑️ ${fileToDelete.fileName} deleted successfully`);
 
         // Log user action
-        if (currentUser && currentUser.id !== 'mock-user-123') {
-          await logUserAction(currentUser, "DELETE_DOCUMENT", {
-            clientID: currentClient.clientID,
+        if (user && user.id !== 'mock-user-123') {
+          await logUserAction(user, "DELETE_DOCUMENT", {
+            clientID: client.clientID,
             fileName: fileToDelete.fileName,
             blobName: fileToDelete.blobName
           });
@@ -311,7 +264,7 @@ const Identification = () => {
 
   const handleDownloadFile = async (file) => {
     try {
-      if (shouldUseMockData) {
+      if (effectiveMockData) {
         // Mock download
         window.open(file.blobUrl, '_blank');
         return;
@@ -335,7 +288,7 @@ const Identification = () => {
   };
 
   const handleExport = async () => {
-    if (!currentClient) {
+    if (!client) {
       setError("Please select a client first.");
       return;
     }
@@ -347,7 +300,7 @@ const Identification = () => {
       // Configure PDF options
       const opt = {
         margin: [0.5, 0.5, 0.5, 0.5],
-        filename: `${currentClient.clientLastName}_${currentClient.clientFirstName}_Complete_Chart.pdf`,
+        filename: `${client.clientLastName}_${client.clientFirstName}_Complete_Chart.pdf`,
         image: { type: 'jpeg', quality: 0.95 },
         html2canvas: { 
           scale: 2,
@@ -383,9 +336,9 @@ const Identification = () => {
       setSuccessMessage('📄 PDF exported successfully!');
 
       // Log user action
-      if (currentUser && currentUser.id !== 'mock-user-123') {
-        await logUserAction(currentUser, "EXPORT_CLIENT_CHART", {
-          clientID: currentClient.clientID,
+      if (user && user.id !== 'mock-user-123') {
+        await logUserAction(user, "EXPORT_CLIENT_CHART", {
+          clientID: client.clientID,
           exportType: 'PDF',
           filename: opt.filename
         });
@@ -419,7 +372,7 @@ const Identification = () => {
   };
 
   // No client selected
-  if (!currentClient) {
+  if (!hasClient && !effectiveMockData) {
     return (
       <Card sx={{ padding: 2 }}>
         <Typography variant="h6" color="text.secondary" gutterBottom>
@@ -428,7 +381,7 @@ const Identification = () => {
         {isDevelopment && (
           <Box>
             <Typography variant="body2" sx={{ mb: 1 }}>
-              Mock data status: {shouldUseMockData ? "Enabled ✅" : "Disabled ❌"}
+              Mock data status: {effectiveMockData ? "Enabled ✅" : "Disabled ❌"}
             </Typography>
             <Button 
               variant="outlined" 
@@ -447,9 +400,9 @@ const Identification = () => {
   return (
     <Card sx={{ padding: 2 }}>
       {/* Development indicator */}
-      {shouldUseMockData && (
+      {effectiveMockData && (
         <Alert severity="info" sx={{ mb: 2 }}>
-          🔧 Development Mode: Using mock data for {currentClient.clientFirstName} {currentClient.clientLastName}
+          🔧 Development Mode: Using mock data for {client.clientFirstName} {client.clientLastName}
         </Alert>
       )}
 
@@ -485,7 +438,7 @@ const Identification = () => {
         <Tab label="Referrals" />
         <Tab label="Discharge" />
         <Tab label="Export Chart" />
-        <Tab label={`${currentClient.clientFirstName} ${currentClient.clientLastName}`} disabled />
+        <Tab label={`${client.clientFirstName} ${client.clientLastName}`} disabled />
       </Tabs>
 
       {tabIndex === 0 && <Box p={3}><ClientFace /></Box>}
@@ -666,7 +619,7 @@ const Identification = () => {
           <div ref={exportRef} style={{ display: "none" }}>
             <div style={{ padding: '20px', fontFamily: 'Arial, sans-serif' }}>
               <div style={{ textAlign: 'center', marginBottom: '30px', borderBottom: '2px solid #333', paddingBottom: '20px' }}>
-                <h1>Client Chart - {currentClient.clientFirstName} {currentClient.clientLastName}</h1>
+                <h1>Client Chart - {client.clientFirstName} {client.clientLastName}</h1>
                 <p>Generated on: {new Date().toLocaleDateString()}</p>
               </div>
               

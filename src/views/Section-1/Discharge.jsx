@@ -184,18 +184,20 @@ const Discharge = ({ exportMode }) => {
             disabled={loading || saving}
           />
         </Grid>
-        <Grid item xs={12} md={9}>
-          <TextField
-            fullWidth
-            multiline
-            label="Primary Diagnosis"
-            name="clientDischargeDiag"
-            value={dischargeData.clientDischargeDiag || ""}
-            onChange={handleChange}
-            disabled={loading || saving}
-          />
-        </Grid>
       </Grid>
+
+      <Box sx={{ mt: 2 }}>
+        <TextField
+          fullWidth
+          multiline
+          rows={4}
+          label="Primary Diagnosis"
+          name="clientDischargeDiag"
+          value={dischargeData.clientDischargeDiag || ""}
+          onChange={handleChange}
+          disabled={loading || saving}
+        />
+      </Box>
 
       <Divider sx={{ my: 4 }} />
 

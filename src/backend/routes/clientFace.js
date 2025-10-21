@@ -1,10 +1,26 @@
 const express = require('express');
 const router = express.Router();
-const { getPool } = require('../store/azureSql'); // Adjust path as needed
+const { getPool } = require('../store/azureSql');
 const sql = require('mssql');
+
+// ✅ VALIDATION HELPERS
+const validatePhone = (phone) => {
+  if (!phone || phone.trim() === '') return true;
+  const digitsOnly = phone.replace(/\D/g, '');
+  return digitsOnly.length === 10;
+};
+
+const validateEmail = (email) => {
+  if (!email || email.trim() === '') return true;
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return emailRegex.test(email);
+};
 
 // Get client face data
 router.get('/getClientFace/:clientID', async (req, res) => {
+  const timestamp = new Date().toISOString();
+  console.log(`${timestamp} - GET /api/getClientFace/${req.params.clientID}`);
+  
   try {
     const pool = await getPool();
     const result = await pool.request()
@@ -24,16 +40,62 @@ router.get('/getClientFace/:clientID', async (req, res) => {
 
 // Save or update client face data
 router.post('/saveClientFace', async (req, res) => {
+  const timestamp = new Date().toISOString();
+  console.log(`${timestamp} - POST /api/saveClientFace`);
+  console.log('📤 Request body:', req.body);
+
+  const { clientID } = req.body;
+
+  // ✅ VALIDATION: Require clientID
+  if (!clientID || clientID.trim() === '') {
+    console.error('❌ ClientID is required');
+    return res.status(400).json({ 
+      error: 'ClientID is required',
+      field: 'clientID'
+    });
+  }
+
+  // ✅ VALIDATION: Phone numbers
+  const phoneFields = [
+    { field: 'clientContactNum', value: req.body.clientContactNum },
+    { field: 'clientContactAltNum', value: req.body.clientContactAltNum },
+    { field: 'clientEmgContactNum', value: req.body.clientEmgContactNum },
+    { field: 'clientMedPrimaryPhyPhone', value: req.body.clientMedPrimaryPhyPhone }
+  ];
+
+  for (const { field, value } of phoneFields) {
+    if (value && !validatePhone(value)) {
+      console.error(`❌ Invalid phone format: ${field} = ${value}`);
+      return res.status(400).json({ 
+        error: 'Invalid phone number format. Must be 10 digits.',
+        field: field,
+        value: value
+      });
+    }
+  }
+
+  // ✅ VALIDATION: Email
+  if (req.body.clientEmail && !validateEmail(req.body.clientEmail)) {
+    console.error(`❌ Invalid email format: ${req.body.clientEmail}`);
+    return res.status(400).json({ 
+      error: 'Invalid email format',
+      field: 'clientEmail',
+      value: req.body.clientEmail
+    });
+  }
+
   try {
     const pool = await getPool();
-    const data = req.body;
+    
+    // ✅ Extract fields (NOTE: clientAllergies REMOVED - now in medical_face_sheet)
     const {
-      clientID, clientContactNum, clientEmail, clientMedInsType, clientAllergyComments,
+      clientContactNum, clientEmail, clientMedInsType, clientAllergyComments,
       clientContactAltNum, clientEmgContactName, clientEmgContactNum, clientEmgContactRel, 
       clientEmgContactAddress, clientMedCarrier, clientMedInsNum, clientMedPrimaryPhy,
       clientMedPrimaryPhyFacility, clientMedPrimaryPhyPhone
-    } = data;
+    } = req.body;
 
+    // ✅ Build MERGE query WITHOUT clientAllergies
     await pool.request()
       .input('clientID', sql.NVarChar, clientID)
       .input('clientContactNum', sql.NVarChar, clientContactNum || null)
@@ -55,21 +117,21 @@ router.post('/saveClientFace', async (req, res) => {
         USING (SELECT @clientID AS clientID) AS source
         ON target.clientID = source.clientID
         WHEN MATCHED THEN UPDATE SET
-          clientContactNum=@clientContactNum,
-          clientContactAltNum=@clientContactAltNum,
-          clientEmail=@clientEmail,
-          clientEmgContactName=@clientEmgContactName,
-          clientEmgContactNum=@clientEmgContactNum,
-          clientEmgContactRel=@clientEmgContactRel,
-          clientEmgContactAddress=@clientEmgContactAddress,
-          clientMedInsType=@clientMedInsType,
-          clientMedCarrier=@clientMedCarrier,
-          clientMedInsNum=@clientMedInsNum,
-          clientMedPrimaryPhy=@clientMedPrimaryPhy,
-          clientMedPrimaryPhyFacility=@clientMedPrimaryPhyFacility,
-          clientMedPrimaryPhyPhone=@clientMedPrimaryPhyPhone,
-          clientAllergyComments=@clientAllergyComments,
-          updatedAt=GETDATE()
+          clientContactNum = COALESCE(@clientContactNum, target.clientContactNum),
+          clientContactAltNum = COALESCE(@clientContactAltNum, target.clientContactAltNum),
+          clientEmail = COALESCE(@clientEmail, target.clientEmail),
+          clientEmgContactName = COALESCE(@clientEmgContactName, target.clientEmgContactName),
+          clientEmgContactNum = COALESCE(@clientEmgContactNum, target.clientEmgContactNum),
+          clientEmgContactRel = COALESCE(@clientEmgContactRel, target.clientEmgContactRel),
+          clientEmgContactAddress = COALESCE(@clientEmgContactAddress, target.clientEmgContactAddress),
+          clientMedInsType = COALESCE(@clientMedInsType, target.clientMedInsType),
+          clientMedCarrier = COALESCE(@clientMedCarrier, target.clientMedCarrier),
+          clientMedInsNum = COALESCE(@clientMedInsNum, target.clientMedInsNum),
+          clientMedPrimaryPhy = COALESCE(@clientMedPrimaryPhy, target.clientMedPrimaryPhy),
+          clientMedPrimaryPhyFacility = COALESCE(@clientMedPrimaryPhyFacility, target.clientMedPrimaryPhyFacility),
+          clientMedPrimaryPhyPhone = COALESCE(@clientMedPrimaryPhyPhone, target.clientMedPrimaryPhyPhone),
+          clientAllergyComments = COALESCE(@clientAllergyComments, target.clientAllergyComments),
+          updatedAt = GETDATE()
         WHEN NOT MATCHED THEN INSERT (
           clientID, clientContactNum, clientContactAltNum, clientEmail,
           clientEmgContactName, clientEmgContactNum, clientEmgContactRel,
@@ -96,61 +158,7 @@ router.post('/saveClientFace', async (req, res) => {
   }
 });
 
-// Get client allergies
-router.get('/getClientAllergies/:clientID', async (req, res) => {
-  try {
-    const pool = await getPool();
-    const result = await pool.request()
-      .input('clientID', sql.NVarChar, req.params.clientID)
-      .query('SELECT allergyName FROM ClientAllergies WHERE clientID = @clientID');
-    
-    const allergies = result.recordset.map(row => row.allergyName);
-    console.log(`🔍 Fetched ${allergies.length} allergies for: ${req.params.clientID}`);
-    res.json(allergies);
-  } catch (err) {
-    console.error('❌ Error fetching allergies:', err);
-    res.status(500).json({ 
-      error: 'Failed to fetch allergies',
-      message: err.message 
-    });
-  }
-});
-
-// Save client allergies
-router.post('/saveClientAllergies', async (req, res) => {
-  try {
-    const pool = await getPool();
-    const { clientID, allergies } = req.body;
-
-    console.log(`💊 Saving ${allergies?.length || 0} allergies for client: ${clientID}`);
-
-    // First, delete existing allergies
-    await pool.request()
-      .input('clientID', sql.NVarChar, clientID)
-      .query('DELETE FROM ClientAllergies WHERE clientID = @clientID');
-
-    // Then insert new allergies
-    if (allergies && allergies.length > 0) {
-      for (const allergy of allergies) {
-        await pool.request()
-          .input('clientID', sql.NVarChar, clientID)
-          .input('allergyName', sql.NVarChar, allergy)
-          .query(`
-            INSERT INTO ClientAllergies (clientID, allergyName, createdAt)
-            VALUES (@clientID, @allergyName, GETDATE())
-          `);
-      }
-    }
-
-    console.log(`✅ Allergies saved for client: ${clientID}`);
-    res.json({ message: 'Allergies saved successfully' });
-  } catch (err) {
-    console.error('❌ Error saving allergies:', err);
-    res.status(500).json({ 
-      error: 'Failed to save allergies',
-      message: err.message 
-    });
-  }
-});
+// ❌ REMOVED: getClientAllergies endpoint - now use /api/medical/info/:clientID
+// ❌ REMOVED: saveClientAllergies endpoint - now use /api/medical/info/:clientID
 
 module.exports = router;
