@@ -164,7 +164,7 @@ router.get("/appointments/:clientID", async (req, res) => {
           createdAt,
           updatedBy,
           updatedAt
-        FROM MedicalAppointments 
+        FROM medical_appointments 
         WHERE clientID = @clientID 
         ORDER BY medApptDate DESC, createdAt DESC
       `);
@@ -207,7 +207,7 @@ router.post("/appointments/:clientID", async (req, res) => {
       .input("createdBy", sql.NVarChar, createdBy || 'system')
       .input("createdAt", sql.DateTime, new Date())
       .query(`
-        INSERT INTO MedicalAppointments (
+        INSERT INTO medical_appointments (
           clientID, medApptDate, medApptLoc, medApptType, 
           medApptProv, medApptTranport, createdBy, createdAt
         ) 
@@ -256,7 +256,7 @@ router.put("/appointments/:appointmentID", async (req, res) => {
       .input("updatedBy", sql.NVarChar, updatedBy || 'system')
       .input("updatedAt", sql.DateTime, new Date())
       .query(`
-        UPDATE MedicalAppointments 
+        UPDATE medical_appointments 
         SET 
           medApptDate = @medApptDate,
           medApptLoc = @medApptLoc,
@@ -295,7 +295,7 @@ router.delete("/appointments/:appointmentID", async (req, res) => {
     const result = await pool
       .request()
       .input("appointmentID", sql.Int, appointmentID)
-      .query(`DELETE FROM MedicalAppointments WHERE appointmentID = @appointmentID`);
+      .query(`DELETE FROM medical_appointments WHERE appointmentID = @appointmentID`);
 
     if (result.rowsAffected[0] === 0) {
       return res.status(404).json({ error: "Appointment not found" });
@@ -432,11 +432,11 @@ router.get("/stats/:clientID", async (req, res) => {
       .input("clientID", sql.NVarChar, clientID)
       .query(`
         SELECT 
-          (SELECT COUNT(*) FROM MedicalAppointments WHERE clientID = @clientID) as totalAppointments,
-          (SELECT COUNT(*) FROM MedicalAppointments WHERE clientID = @clientID AND medApptDate >= GETDATE()) as upcomingAppointments,
-          (SELECT COUNT(*) FROM MedicalAppointments WHERE clientID = @clientID AND medApptDate < GETDATE()) as pastAppointments,
-          (SELECT COUNT(*) FROM MedicalAppointments WHERE clientID = @clientID AND medApptTranport = 'Yes') as appointmentsNeedingTransport,
-          (SELECT TOP 1 medApptDate FROM MedicalAppointments WHERE clientID = @clientID AND medApptDate >= GETDATE() ORDER BY medApptDate ASC) as nextAppointmentDate,
+          (SELECT COUNT(*) FROM medical_appointments WHERE clientID = @clientID) as totalAppointments,
+          (SELECT COUNT(*) FROM medical_appointments WHERE clientID = @clientID AND medApptDate >= GETDATE()) as upcomingAppointments,
+          (SELECT COUNT(*) FROM medical_appointments WHERE clientID = @clientID AND medApptDate < GETDATE()) as pastAppointments,
+          (SELECT COUNT(*) FROM medical_appointments WHERE clientID = @clientID AND medApptTranport = 'Yes') as appointmentsNeedingTransport,
+          (SELECT TOP 1 medApptDate FROM medical_appointments WHERE clientID = @clientID AND medApptDate >= GETDATE() ORDER BY medApptDate ASC) as nextAppointmentDate,
           (SELECT COUNT(*) FROM MedicalInfo WHERE clientID = @clientID AND clientAllergies != '[]' AND clientAllergies IS NOT NULL) as hasAllergies
       `);
     
