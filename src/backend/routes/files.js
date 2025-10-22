@@ -40,18 +40,14 @@ if (!STORAGE_ACCOUNT) {
 // ========================================
 // ADD THIS AT THE TOP (after imports)
 // ========================================
-console.log('=== Azure Blob Storage Configuration ===');
-console.log('Connection String exists:', !!process.env.AZURE_STORAGE_CONNECTION_STRING);
+console.log('=== Azure Blob Storage Configuration (Managed Identity) ===');
+console.log('Storage Account:', STORAGE_ACCOUNT);
 console.log('Container Name:', CONTAINER_NAME);
+console.log('Authentication Method: DefaultAzureCredential (Managed Identity)');
+console.log('Local Fallback Enabled:', ENABLE_LOCAL_FALLBACK);
+console.log('=========================================================');
 
-// Verify blobServiceClient is initialized
-if (!blobServiceClient) {
-  console.error('❌ blobServiceClient is not initialized!');
-} else {
-  console.log('✅ blobServiceClient initialized');
-}
-console.log('=======================================');
-
+// Initialize credential for Managed Identity authentication
 const credential = new DefaultAzureCredential({
   loggingOptions: {
     allowLoggingAccountIdentifiers: true,
@@ -65,40 +61,66 @@ const blobServiceClient = new BlobServiceClient(
   credential
 );
 
+console.log('✅ BlobServiceClient initialized with Managed Identity');
+
 let _containerClient = null;
 
+/**
+ * Get or create container client using Managed Identity
+ * No connection string needed!
+ */
 async function getContainerClient() {
   if (_containerClient) return _containerClient;
   
   try {
-    if (!process.env.AZURE_STORAGE_CONNECTION_STRING) {
-      throw new Error('AZURE_STORAGE_CONNECTION_STRING environment variable is not set');
-    }
+    console.log(`🔍 Attempting to access container: ${CONTAINER_NAME}`);
     
     const client = blobServiceClient.getContainerClient(CONTAINER_NAME);
-    console.log(`🔍 Checking container: ${CONTAINER_NAME}`);
     
-    const createResponse = await client.createIfNotExists({ access: 'private' });
-    
-    if (createResponse.succeeded) {
-      console.log(`✅ Container '${CONTAINER_NAME}' created successfully`);
-    } else {
-      console.log(`✅ Container '${CONTAINER_NAME}' already exists`);
+    // Try to create container if it doesn't exist (requires proper RBAC permissions)
+    try {
+      const createResponse = await client.createIfNotExists({ access: 'private' });
+      
+      if (createResponse.succeeded) {
+        console.log(`✅ Container '${CONTAINER_NAME}' created successfully`);
+      } else {
+        console.log(`✅ Container '${CONTAINER_NAME}' already exists`);
+      }
+    } catch (createError) {
+      // If we can't create, check if it exists
+      console.warn(`⚠️  Could not create container (might already exist or lack permissions):`, createError.message);
     }
     
+    // Verify we can access the container
     const exists = await client.exists();
     if (!exists) {
-      throw new Error(`Container '${CONTAINER_NAME}' does not exist and could not be created`);
+      throw new Error(`Container '${CONTAINER_NAME}' does not exist and could not be created. Check RBAC permissions.`);
     }
     
+    console.log(`✅ Successfully connected to container '${CONTAINER_NAME}'`);
     _containerClient = client;
     return _containerClient;
     
   } catch (error) {
-    console.error('❌ Failed to get/create container:', error);
+    console.error('❌ Failed to get/create container:', error.message);
     console.error('   Container name:', CONTAINER_NAME);
-    console.error('   Connection string exists:', !!process.env.AZURE_STORAGE_CONNECTION_STRING);
+    console.error('   Storage Account:', STORAGE_ACCOUNT);
+    console.error('   Error details:', error);
     
+    // Provide helpful troubleshooting info
+    if (error.code === 'AuthorizationPermissionMismatch' || error.statusCode === 403) {
+      console.error('');
+      console.error('🔧 TROUBLESHOOTING - Permission Denied:');
+      console.error('   1. Go to Azure Portal → Your Storage Account');
+      console.error('   2. Click "Access Control (IAM)" in left menu');
+      console.error('   3. Click "+ Add" → "Add role assignment"');
+      console.error('   4. Select role: "Storage Blob Data Contributor"');
+      console.error('   5. Assign access to: Your App Service (Managed Identity)');
+      console.error('   6. Wait 5-10 minutes for permissions to propagate');
+      console.error('');
+    }
+    
+    // Don't cache failed client - allow retry
     _containerClient = null;
     throw new Error(`Azure Blob Storage connection failed: ${error.message}`);
   }
@@ -147,8 +169,8 @@ function buildBlobName({ clientID, docType, originalName }) {
   return `${safeClient}/${safeDoc}/${timestamp()}-${safeBase}${ext}`;
 }
 
-
 /* --------------------------------- Routes --------------------------------- */
+
 
 /**
  * POST /upload
@@ -159,23 +181,35 @@ router.post('/upload', upload.single('file'), async (req, res) => {
     const file = req.file;
     const { clientID, docType } = req.body;
 
-    if (!file) return res.status(400).json({ success: false, message: 'No file uploaded' });
+    console.log(`📤 Upload request - Client: ${clientID}, DocType: ${docType}, File: ${file?.originalname}`);
+
+    if (!file) {
+      console.warn('❌ No file in upload request');
+      return res.status(400).json({ success: false, message: 'No file uploaded' });
+    }
+    
     if (!clientID || !docType) {
+      console.warn('❌ Missing clientID or docType');
       return res.status(400).json({ success: false, message: 'clientID and docType are required' });
     }
 
     const blobName = buildBlobName({ clientID, docType, originalName: file.originalname });
+    console.log(`   Blob name: ${blobName}`);
 
     try {
       const containerClient = await getContainerClient();
       const blockBlobClient = containerClient.getBlockBlobClient(blobName);
 
+      console.log(`   Uploading ${file.size} bytes to Azure...`);
+      
       await blockBlobClient.uploadData(file.buffer, {
         blobHTTPHeaders: {
           blobContentType: file.mimetype || 'application/octet-stream',
           blobCacheControl: 'no-cache'
         }
       });
+
+      console.log(`   ✅ Upload successful: ${blockBlobClient.url}`);
 
       return res.json({
         success: true,
@@ -187,10 +221,24 @@ router.post('/upload', upload.single('file'), async (req, res) => {
         size: file.size,
         mimeType: file.mimetype
       });
+      
     } catch (azureErr) {
-      console.error('Azure upload failed:', azureErr);
+      console.error('❌ Azure upload failed:', azureErr.message);
+      console.error('   Error code:', azureErr.code);
+      console.error('   Status code:', azureErr.statusCode);
+
+      // Provide helpful error messages
+      if (azureErr.code === 'AuthorizationPermissionMismatch' || azureErr.statusCode === 403) {
+        return res.status(403).json({
+          success: false,
+          message: 'Permission denied: Managed Identity lacks Storage Blob Data Contributor role',
+          detail: azureErr.message,
+          hint: 'Go to Storage Account → Access Control (IAM) → Add role assignment → Storage Blob Data Contributor'
+        });
+      }
 
       if (ENABLE_LOCAL_FALLBACK) {
+        console.warn('   ⚠️  Falling back to local storage (dev mode)');
         const localName = `${Date.now()}-${sanitizeSegment(file.originalname)}`;
         return res.json({
           success: true,
@@ -206,12 +254,17 @@ router.post('/upload', upload.single('file'), async (req, res) => {
 
       return res.status(502).json({
         success: false,
-        message: `Azure upload failed: ${azureErr.message}`
+        message: `Azure upload failed: ${azureErr.message}`,
+        detail: azureErr.code || 'Unknown error'
       });
     }
   } catch (err) {
-    console.error('File upload error:', err);
-    return res.status(500).json({ success: false, message: 'File upload failed', detail: err.message });
+    console.error('❌ File upload error:', err);
+    return res.status(500).json({ 
+      success: false, 
+      message: 'File upload failed', 
+      detail: err.message 
+    });
   }
 });
 
@@ -223,15 +276,23 @@ router.post('/upload', upload.single('file'), async (req, res) => {
 router.get('/file/:fileName', async (req, res) => {
   try {
     const blobName = req.query.blobName || req.params.fileName;
-    if (!blobName) return res.status(400).json({ message: 'blobName required (query or param)' });
+    if (!blobName) {
+      return res.status(400).json({ message: 'blobName required (query or param)' });
+    }
+
+    console.log(`📥 Retrieving file info: ${blobName}`);
 
     const containerClient = await getContainerClient();
     const blobClient = containerClient.getBlobClient(blobName);
 
     const exists = await blobClient.exists();
-    if (!exists) return res.status(404).json({ message: 'File not found' });
+    if (!exists) {
+      console.warn(`   ❌ File not found: ${blobName}`);
+      return res.status(404).json({ message: 'File not found' });
+    }
 
     const props = await blobClient.getProperties();
+    console.log(`   ✅ File found, size: ${props.contentLength} bytes`);
 
     return res.json({
       blobName,
@@ -243,8 +304,11 @@ router.get('/file/:fileName', async (req, res) => {
       storage: 'azure'
     });
   } catch (err) {
-    console.error('File retrieval failed:', err);
-    return res.status(500).json({ message: 'File retrieval failed', detail: err.message });
+    console.error('❌ File retrieval failed:', err);
+    return res.status(500).json({ 
+      message: 'File retrieval failed', 
+      detail: err.message 
+    });
   }
 });
 
@@ -254,6 +318,8 @@ router.get('/file/:fileName', async (req, res) => {
  */
 router.get('/list', async (_req, res) => {
   try {
+    console.log('📋 Listing all files in container...');
+    
     const containerClient = await getContainerClient();
     const files = [];
 
@@ -269,10 +335,17 @@ router.get('/list', async (_req, res) => {
       });
     }
 
+    console.log(`   ✅ Found ${files.length} files`);
     return res.json({ files, total: files.length, storage: 'azure' });
+    
   } catch (err) {
-    console.error('Azure listing failed:', err);
-    return res.status(500).json({ message: 'Azure listing failed', detail: err.message, files: [], total: 0 });
+    console.error('❌ Azure listing failed:', err);
+    return res.status(500).json({ 
+      message: 'Azure listing failed', 
+      detail: err.message, 
+      files: [], 
+      total: 0 
+    });
   }
 });
 
@@ -290,13 +363,13 @@ router.get('/files/:clientID', async (req, res) => {
     let containerClient;
     try {
       containerClient = await getContainerClient();
-      console.log('✅ Container client obtained for listing');
+      console.log('   ✅ Container client obtained');
     } catch (containerError) {
-      console.error('❌ Failed to get container client:', containerError);
+      console.error('   ❌ Failed to get container client:', containerError.message);
       return res.status(500).json({ 
         message: 'Azure Storage connection failed', 
         detail: containerError.message,
-        hint: 'Check AZURE_STORAGE_CONNECTION_STRING and container configuration'
+        hint: 'Check AZURE_STORAGE_ACCOUNT and Managed Identity RBAC permissions'
       });
     }
 
@@ -318,9 +391,9 @@ router.get('/files/:clientID', async (req, res) => {
         });
       }
       
-      console.log(`✅ Found ${blobCount} blobs for client ${clientID}`);
+      console.log(`   ✅ Found ${blobCount} files for client ${clientID}`);
     } catch (listError) {
-      console.error('❌ Failed to list blobs:', listError);
+      console.error('   ❌ Failed to list blobs:', listError.message);
       return res.status(500).json({ 
         message: 'Failed to list blobs', 
         detail: listError.message 
@@ -341,20 +414,28 @@ router.get('/files/:clientID', async (req, res) => {
 /**
  * DELETE /file/:fileName
  *   - Back-compat: deletes by simple name at root
- *   - Prefer: DELETE /fileblobName=<clientID/docType/ts-name.ext>
+ *   - Prefer: DELETE /file?blobName=<clientID/docType/ts-name.ext>
  */
 router.delete('/file/:fileName', async (req, res) => {
   try {
     const blobName = req.query.blobName || req.params.fileName;
-    if (!blobName) return res.status(400).json({ message: 'blobName required (query or param)' });
+    if (!blobName) {
+      return res.status(400).json({ message: 'blobName required (query or param)' });
+    }
+
+    console.log(`🗑️  Deleting file: ${blobName}`);
 
     const containerClient = await getContainerClient();
     const blockBlobClient = containerClient.getBlockBlobClient(blobName);
 
     const exists = await blockBlobClient.exists();
-    if (!exists) return res.status(404).json({ message: 'File not found' });
+    if (!exists) {
+      console.warn(`   ❌ File not found: ${blobName}`);
+      return res.status(404).json({ message: 'File not found' });
+    }
 
     await blockBlobClient.delete();
+    console.log(`   ✅ File deleted successfully`);
 
     return res.json({
       success: true,
@@ -363,25 +444,32 @@ router.delete('/file/:fileName', async (req, res) => {
       storage: 'azure'
     });
   } catch (err) {
-    console.error('Azure file deletion failed:', err);
-    return res.status(500).json({ message: 'Azure file deletion failed', detail: err.message });
+    console.error('❌ Azure file deletion failed:', err);
+    return res.status(500).json({ 
+      message: 'Azure file deletion failed', 
+      detail: err.message 
+    });
   }
 });
 
 /**
- * (Optional) GET /file/download-url?blobName=...
+ * GET /file/download-url?blobName=...
  * Returns a time-limited SAS URL for private download (1 hour).
- * Requires MI permission to request a User Delegation Key.
+ * Requires Managed Identity permission to request a User Delegation Key.
  */
 router.get('/file/download-url', async (req, res) => {
   try {
     const blobName = req.query.blobName;
-    if (!blobName) return res.status(400).json({ message: 'blobName required' });
+    if (!blobName) {
+      return res.status(400).json({ message: 'blobName required' });
+    }
+
+    console.log(`🔗 Generating download URL for: ${blobName}`);
 
     const now = new Date();
     const expires = new Date(now.getTime() + 60 * 60 * 1000); // +1h
 
-    // user delegation SAS (works with AAD/MI)
+    // User delegation SAS (works with AAD/Managed Identity)
     const userDelegationKey = await blobServiceClient.getUserDelegationKey(now, expires);
 
     const sas = generateBlobSASQueryParameters(
@@ -399,10 +487,29 @@ router.get('/file/download-url', async (req, res) => {
 
     const blobClient = (await getContainerClient()).getBlobClient(blobName);
     const url = `${blobClient.url}?${sas}`;
-    return res.json({ url, expiresOn: expires.toISOString() });
+    
+    console.log(`   ✅ SAS URL generated (expires in 1 hour)`);
+    
+    return res.json({ 
+      url, 
+      expiresOn: expires.toISOString(),
+      expiresIn: 3600 // seconds
+    });
   } catch (err) {
-    console.error('SAS generation failed:', err);
-    return res.status(500).json({ message: 'Failed to generate download URL', detail: err.message });
+    console.error('❌ SAS generation failed:', err);
+    
+    if (err.code === 'AuthorizationPermissionMismatch' || err.statusCode === 403) {
+      return res.status(403).json({ 
+        message: 'Permission denied: Managed Identity needs additional permission to generate SAS tokens',
+        detail: err.message,
+        hint: 'Ensure the Managed Identity has "Storage Blob Data Contributor" and can request user delegation keys'
+      });
+    }
+    
+    return res.status(500).json({ 
+      message: 'Failed to generate download URL', 
+      detail: err.message 
+    });
   }
 });
 

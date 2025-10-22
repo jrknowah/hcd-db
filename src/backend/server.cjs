@@ -3,6 +3,7 @@ const cors = require('cors');
 const path = require('path');
 const app = express();
 require('dotenv').config({ path: '../.env' });
+const { BlobServiceClient } = require('@azure/storage-blob'); 
 // ✅ FIXED: Better database connection handling
 let dbConnected = false;
 let dbModule = null;
@@ -177,13 +178,18 @@ try {
 
 
 // ✅ NEW: Try to load files router for Azure Blob Storage
+// ✅ UPDATED CODE - Show the real error
 try {
   const filesRouter = require('./routes/files.js');
   app.use('/api', filesRouter);
   console.log('✅ Files router loaded from ./routes/files.js');
   filesRouterLoaded = true;
 } catch (err) {
-  console.log('⚠️  Could not load ./routes/files.js:', err.message);
+  console.error('❌ CRITICAL ERROR loading files router:');
+  console.error('   Message:', err.message);
+  console.error('   Stack:', err.stack);
+  // Don't load fallback - let it fail so we see the error
+  throw err; // Re-throw to see what's wrong
 }
   // ============================================================================
 // Section 2: Authorization & Signatures Routes
