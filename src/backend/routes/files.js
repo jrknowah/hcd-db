@@ -86,8 +86,9 @@ async function getContainerClient() {
     const client = blobServiceClient.getContainerClient(CONTAINER_NAME);
     
     // Try to create container if it doesn't exist
+    // FIX: Don't pass 'access' parameter - defaults to private
     try {
-      const createResponse = await client.createIfNotExists({ access: null });
+      const createResponse = await client.createIfNotExists();
       
       if (createResponse.succeeded) {
         console.log(`✅ Container '${CONTAINER_NAME}' created successfully`);
@@ -95,7 +96,8 @@ async function getContainerClient() {
         console.log(`✅ Container '${CONTAINER_NAME}' already exists`);
       }
     } catch (createError) {
-      console.warn(`⚠️  Could not create container:`, createError.message);
+      // Container might already exist, which is fine
+      console.warn(`⚠️  Could not create container (might already exist):`, createError.message);
     }
     
     // Verify we can access the container
@@ -110,15 +112,18 @@ async function getContainerClient() {
     
   } catch (error) {
     console.error('❌ Failed to get/create container:', error.message);
+    console.error('   Error code:', error.code);
+    console.error('   Status code:', error.statusCode);
+    console.error('   Full error:', error);
     
     // Provide helpful troubleshooting
     if (error.code === 'AuthorizationPermissionMismatch' || error.statusCode === 403) {
       console.error('');
-      console.error('🔧 RBAC Permission Issue:');
-      console.error('   1. Go to Azure Portal → Storage Account → Access Control (IAM)');
-      console.error('   2. Add role assignment: "Storage Blob Data Contributor"');
-      console.error('   3. Assign to: Your App Service Managed Identity');
-      console.error('   4. Wait 5-10 minutes for permissions to propagate');
+      console.error('🔧 Permission Issue:');
+      console.error('   1. Verify Managed Identity is enabled on App Service');
+      console.error('   2. Verify Storage Blob Data Contributor role is assigned');
+      console.error('   3. Wait 5-10 minutes after assigning role');
+      console.error('   4. Restart the App Service');
       console.error('');
     }
     
