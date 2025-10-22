@@ -81,29 +81,14 @@ async function getContainerClient() {
   }
   
   try {
-    console.log(`🔍 Attempting to access container: ${CONTAINER_NAME}`);
+    console.log(`🔍 Accessing container: ${CONTAINER_NAME}`);
     
     const client = blobServiceClient.getContainerClient(CONTAINER_NAME);
     
-    // Try to create container if it doesn't exist
-    // FIX: Don't pass 'access' parameter - defaults to private
-    try {
-      const createResponse = await client.createIfNotExists();
-      
-      if (createResponse.succeeded) {
-        console.log(`✅ Container '${CONTAINER_NAME}' created successfully`);
-      } else {
-        console.log(`✅ Container '${CONTAINER_NAME}' already exists`);
-      }
-    } catch (createError) {
-      // Container might already exist, which is fine
-      console.warn(`⚠️  Could not create container (might already exist):`, createError.message);
-    }
-    
-    // Verify we can access the container
+    // Don't try to create - just verify it exists
     const exists = await client.exists();
     if (!exists) {
-      throw new Error(`Container '${CONTAINER_NAME}' does not exist and could not be created.`);
+      throw new Error(`Container '${CONTAINER_NAME}' does not exist. Create it in Azure Portal first.`);
     }
     
     console.log(`✅ Successfully connected to container '${CONTAINER_NAME}'`);
@@ -111,21 +96,8 @@ async function getContainerClient() {
     return _containerClient;
     
   } catch (error) {
-    console.error('❌ Failed to get/create container:', error.message);
-    console.error('   Error code:', error.code);
-    console.error('   Status code:', error.statusCode);
-    console.error('   Full error:', error);
-    
-    // Provide helpful troubleshooting
-    if (error.code === 'AuthorizationPermissionMismatch' || error.statusCode === 403) {
-      console.error('');
-      console.error('🔧 Permission Issue:');
-      console.error('   1. Verify Managed Identity is enabled on App Service');
-      console.error('   2. Verify Storage Blob Data Contributor role is assigned');
-      console.error('   3. Wait 5-10 minutes after assigning role');
-      console.error('   4. Restart the App Service');
-      console.error('');
-    }
+    console.error('❌ Failed to access container:', error.message);
+    console.error('   Error details:', error.code, error.statusCode);
     
     _containerClient = null;
     throw error;
