@@ -22,23 +22,23 @@ const generateMentalHealthID = (clientID) => {
 };
 
 // Validation helper
-const validateMentalHealthData = (data, isUpdate = false) => {
-  const errors = {};
+// const validateMentalHealthData = (data, isUpdate = false) => {
+//   const errors = {};
   
-  if (!isUpdate && !data.clientID) {
-    errors.clientID = 'Client ID is required';
-  }
+//   if (!isUpdate && !data.clientID) {
+//     errors.clientID = 'Client ID is required';
+//   }
   
-  if (data.columbiaSRComp && !['Yes', 'No'].includes(data.columbiaSRComp)) {
-    errors.columbiaSRComp = 'Columbia SR Comp must be Yes or No';
-  }
+//   if (data.columbiaSRComp && !['Yes', 'No'].includes(data.columbiaSRComp)) {
+//     errors.columbiaSRComp = 'Columbia SR Comp must be Yes or No';
+//   }
   
-  if (data.riskLevel && !['Minimal', 'Low', 'Medium', 'High'].includes(data.riskLevel)) {
-    errors.riskLevel = 'Invalid risk level value';
-  }
+//   if (data.riskLevel && !['Minimal', 'Low', 'Medium', 'High'].includes(data.riskLevel)) {
+//     errors.riskLevel = 'Invalid risk level value';
+//   }
   
-  return Object.keys(errors).length > 0 ? errors : null;
-};
+//   return Object.keys(errors).length > 0 ? errors : null;
+// };
 
 // Helper function to parse JSON fields safely
 const parseJsonField = (field) => {
@@ -192,13 +192,13 @@ router.post('/mental-health/:clientID', async (req, res) => {
     const formData = req.body;
     
     // Validation
-    const validationErrors = validateMentalHealthData(formData);
-    if (validationErrors) {
-      return res.status(400).json({
-        error: 'Validation failed',
-        errors: validationErrors
-      });
-    }
+    // const validationErrors = validateMentalHealthData(formData);
+    // if (validationErrors) {
+    //   return res.status(400).json({
+    //     error: 'Validation failed',
+    //     errors: validationErrors
+    //   });
+    // }
     
     transaction = new sql.Transaction(pool);
     await transaction.begin();
