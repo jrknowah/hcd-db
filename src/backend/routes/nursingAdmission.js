@@ -29,15 +29,15 @@ const handleDatabaseError = (error, res, operation) => {
 
 // Utility function to validate nursing admission data
 const validateNursingAdmission = (admissionData) => {
-//   const required = ['loc', 'orientedToList'];
-//   const missing = required.filter(field => !admissionData[field] || admissionData[field].length === 0);
+  // const required = ['loc', 'orientedToList'];
+  // const missing = required.filter(field => !admissionData[field] || admissionData[field].length === 0);
   
-//   if (missing.length > 0) {
-//     return { valid: false, message: `Missing required fields: ${missing.join(', ')}` };
-//   }
+  // if (missing.length > 0) {
+  //   return { valid: false, message: `Missing required fields: ${missing.join(', ')}` };
+  // }
   
-//   return { valid: true };
-// };
+  // return { valid: true };
+};
 
 // Utility function to safely stringify JSON
 const safeStringify = (obj) => {
@@ -134,10 +134,10 @@ router.post('/nursing-admission/:clientID', async (req, res) => {
     }
     
     // Validate required fields
-    const validation = validateNursingAdmission(admissionData);
-    if (!validation.valid) {
-      return res.status(400).json({ error: validation.message });
-    }
+    // const validation = validateNursingAdmission(admissionData);
+    // if (!validation.valid) {
+    //   return res.status(400).json({ error: validation.message });
+    // }
     
     const pool = await sql.connect(dbConfig);
     
