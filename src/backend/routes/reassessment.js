@@ -48,7 +48,7 @@ router.get('/reassessment/:clientID',
 );
 
 // ✅ GET /api/reassessment/assessment/:assessmentID - Fetch by assessment ID
-router.get('/reassessment/assessment/:assessmentID',
+router.get('/reassessment/:assessmentID',
     authMiddleware,
     async (req, res) => {
         try {

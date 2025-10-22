@@ -555,7 +555,7 @@ try {
 // ✅ Section 4 Routes - Assessment Care Plans
 try {
   const assessmentCarePlansRouter = require('./routes/accessCarePlan.js');
-  app.use('/api/assessment-care-plans', assessmentCarePlansRouter);
+  app.use('/api', assessmentCarePlansRouter);
   console.log('✅ Assessment Care Plans router loaded from ./routes/accessCarePlan.js');
   // Add a flag if you're tracking loaded routes
 } catch (err) {
@@ -563,7 +563,7 @@ try {
 }
 try {
   const carePlansRouter = require('./routes/carePlan.js');
-  app.use('/api/care-plans', carePlansRouter);
+  app.use('/api', carePlansRouter);
   console.log('✅ CarePlans router loaded from ./routes/carePlans.js');
   carePlansRouterLoaded = true;
 } catch (err) {
@@ -573,7 +573,7 @@ try {
 // ✅ NEW: Section 4 Routes - EncounterNotes
 try {
   const encounterNotesRouter = require('./routes/encounterNote.js');
-  app.use('/api/encounter-notes', encounterNotesRouter);
+  app.use('/api', encounterNotesRouter);
   console.log('✅ EncounterNotes router loaded from ./routes/encounterNotes.js');
   encounterNotesRouterLoaded = true;
 } catch (err) {
@@ -583,7 +583,7 @@ try {
 // Note Archive Route
 try {
   const noteArchiveRouter = require('./routes/noteArchive.js');
-  app.use('/api/note-archive', noteArchiveRouter);
+  app.use('/api', noteArchiveRouter);
   console.log('✅ Note Archive router loaded');
 } catch (err) {
   console.log('⚠️  Could not load noteArchive.js:', err.message);

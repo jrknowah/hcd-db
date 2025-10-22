@@ -22,7 +22,8 @@ import {
   Timeline as TimelineIcon,
   Notes as NotesIcon,
   Assignment as CarePlanIcon,
-  Archive as ArchiveIcon
+  Archive as ArchiveIcon,
+  Info as InfoIcon
 } from '@mui/icons-material';
 import { useDispatch, useSelector } from "react-redux";
 import { section4List } from "../../data/arrayList";
@@ -38,58 +39,96 @@ const ClientProgress = () => {
   const dispatch = useDispatch();
   const { clientID, selectedClient, hasClient } = useClientManager();
   const [activeTab, setActiveTab] = useState(0);
+  const [isLoading, setIsLoading] = useState(false);
 
-  // ✅ Environment detection for mock data
-  const isDevelopment = import.meta.env.MODE === 'development';
-  const shouldUseMockData = isDevelopment && !import.meta.env.VITE_USE_REAL_DATA;
-  
-  // Mock client for development
-  const MOCK_CLIENT = {
-    clientID: 'mock-123',
-    clientFirstName: 'John',
-    clientLastName: 'Doe',
-  };
-  
-  const currentClient = shouldUseMockData && !selectedClient ? MOCK_CLIENT : selectedClient;
-  const effectiveClientID = clientID || currentClient?.clientID;
+  // ✅ Get Redux state - safely handle undefined/null
+  const carePlanState = useSelector(state => state.carePlan || {});
+  const encounterNoteState = useSelector(state => state.encounterNote || {});
+  const assessmentState = useSelector(state => state.assessCarePlans || {});
 
-  // ✅ ADD THIS: Load data when client changes
+  // ✅ Extract data safely
+  const carePlans = Array.isArray(carePlanState.carePlans) ? carePlanState.carePlans : [];
+  const encounterNotes = Array.isArray(encounterNoteState.encounterNotes) ? encounterNoteState.encounterNotes : [];
+  const assessmentData = assessmentState.assessmentData || null;
+  
+  // ✅ Check for actual errors (not just empty data)
+  const carePlanError = carePlanState.error;
+  const encounterNoteError = encounterNoteState.error;
+  const assessmentError = assessmentState.error;
+
+  const effectiveClientID = clientID || selectedClient?.clientID;
+
+  // ✅ Load data when client changes
   useEffect(() => {
     if (effectiveClientID) {
-      console.log('Loading data for client:', effectiveClientID);
+      console.log('Loading Section 4 data for client:', effectiveClientID);
       
-      // Dispatch actions to load data
-      dispatch(fetchCarePlans(effectiveClientID));
-      dispatch(fetchEncounterNotes(effectiveClientID));
-      dispatch(fetchAssessmentData(effectiveClientID));
-      dispatch(fetchAssessmentMilestones(effectiveClientID));
+      setIsLoading(true);
+      
+      // Dispatch all actions - use Promise.allSettled to handle failures gracefully
+      Promise.allSettled([
+        dispatch(fetchCarePlans(effectiveClientID)),
+        dispatch(fetchEncounterNotes(effectiveClientID)),
+        dispatch(fetchAssessmentData(effectiveClientID)),
+        dispatch(fetchAssessmentMilestones(effectiveClientID))
+      ]).then(results => {
+        console.log('Section 4 data loading complete:', {
+          carePlans: results[0].status,
+          encounterNotes: results[1].status,
+          assessmentData: results[2].status,
+          milestones: results[3].status
+        });
+        
+        setIsLoading(false);
+      }).catch(error => {
+        console.error('Unexpected error loading Section 4 data:', error);
+        setIsLoading(false);
+      });
     }
   }, [effectiveClientID, dispatch]);
-
-  // ✅ ADD THIS: Debug logging for persistence
-  useEffect(() => {
-    console.log('Client Persistence Check:');
-    console.log('- URL clientID:', clientID);
-    console.log('- Redux selectedClient:', selectedClient);
-    console.log('- Has client:', hasClient);
-    console.log('- Effective clientID:', effectiveClientID);
-    console.log('- SessionStorage:', sessionStorage.getItem('redux_cache'));
-  }, [clientID, selectedClient, hasClient, effectiveClientID]);
 
   const handleTabChange = (event, newValue) => {
     setActiveTab(newValue);
   };
 
-  // Mock section4List if not available
-  const timelineItems = section4List || [
-    { section4Title: 'Initial Assessment', section4Date: '2024-03-01' },
-    { section4Title: 'Housing Application', section4Date: '2024-03-10' },
-    { section4Title: 'Mental Health Evaluation', section4Date: '' },
-    { section4Title: 'Employment Screening', section4Date: '' },
-  ];
+  // ✅ Helper function to safely render errors - NEVER renders objects
+  const renderError = (error) => {
+    if (!error) return null;
+    
+    // Handle string errors
+    if (typeof error === 'string') {
+      return error;
+    }
+    
+    // Handle error objects with message
+    if (error?.message) {
+      return error.message;
+    }
+    
+    // Handle backend routing errors
+    if (error?.error) {
+      return `${error.error}${error.path ? ` (${error.method || 'GET'} ${error.path})` : ''}`;
+    }
+    
+    // If error is an object, try to stringify it safely
+    try {
+      return JSON.stringify(error);
+    } catch {
+      return 'An error occurred';
+    }
+  };
 
-  // ✅ ADD THIS: Show message if no client selected
-  if (!hasClient && !shouldUseMockData) {
+  // ✅ Check if we have any real errors (not just empty data)
+  const hasRealErrors = Boolean(carePlanError || encounterNoteError || assessmentError);
+
+  // ✅ Check if data is truly empty (not loading and no data)
+  const hasNoData = !isLoading && 
+                    carePlans.length === 0 && 
+                    encounterNotes.length === 0 && 
+                    !assessmentData;
+
+  // ✅ Show message if no client selected
+  if (!hasClient) {
     return (
       <Box sx={{ p: 3 }}>
         <Alert severity="warning">
@@ -101,10 +140,43 @@ const ClientProgress = () => {
 
   return (
     <Box sx={{ width: '100%' }}>
-      {/* ✅ Development indicator */}
-      {shouldUseMockData && currentClient && (
+      {/* ✅ Loading indicator */}
+      {isLoading && (
         <Alert severity="info" sx={{ mb: 2 }}>
-          🔧 Development Mode: Using mock data for {currentClient.clientFirstName} {currentClient.clientLastName}
+          <InfoIcon sx={{ mr: 1 }} />
+          Loading Section 4 data...
+        </Alert>
+      )}
+
+      {/* ✅ Error display - ONLY for actual errors, never render objects */}
+      {hasRealErrors && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          <Typography variant="subtitle2" gutterBottom>
+            Error Loading Section 4 Data:
+          </Typography>
+          {carePlanError && (
+            <Typography variant="body2">
+              • Care Plans: {renderError(carePlanError)}
+            </Typography>
+          )}
+          {encounterNoteError && (
+            <Typography variant="body2">
+              • Encounter Notes: {renderError(encounterNoteError)}
+            </Typography>
+          )}
+          {assessmentError && (
+            <Typography variant="body2">
+              • Assessments: {renderError(assessmentError)}
+            </Typography>
+          )}
+        </Alert>
+      )}
+
+      {/* ✅ Empty data notice - ONLY if no errors and data loaded */}
+      {!hasRealErrors && !isLoading && hasNoData && (
+        <Alert severity="info" sx={{ mb: 2 }}>
+          <InfoIcon sx={{ mr: 1 }} />
+          No Section 4 data found for this client. Start by creating an encounter note or care plan.
         </Alert>
       )}
 
@@ -121,12 +193,12 @@ const ClientProgress = () => {
             <Chip
               icon={<PersonIcon />}
               label={
-                currentClient
-                  ? `${currentClient.clientFirstName} ${currentClient.clientLastName} (${currentClient.clientID})`
+                selectedClient
+                  ? `${selectedClient.clientFirstName} ${selectedClient.clientLastName} (${selectedClient.clientID})`
                   : "No Client Selected"
               }
-              color={currentClient ? "primary" : "default"}
-              variant={currentClient ? "filled" : "outlined"}
+              color={selectedClient ? "primary" : "default"}
+              variant={selectedClient ? "filled" : "outlined"}
               size="medium"
             />
           </Box>
@@ -176,76 +248,84 @@ const ClientProgress = () => {
                     Client Progress Timeline
                   </Typography>
                   
-                  <Paper sx={{ p: 3, mt: 2 }}>
-                    <List>
-                      {timelineItems.map((item, index) => (
-                        <ListItem key={index} sx={{ mb: 2 }}>
-                          <ListItemIcon>
-                            {item.section4Date ? (
-                              <CheckCircleIcon color="success" fontSize="large" />
-                            ) : (
-                              <UncheckedIcon color="disabled" fontSize="large" />
-                            )}
-                          </ListItemIcon>
-                          <ListItemText
-                            primary={
-                              <Typography 
-                                variant="subtitle1" 
-                                sx={{ 
-                                  fontWeight: 'medium',
-                                  color: item.section4Date ? 'success.main' : 'text.secondary' 
-                                }}
-                              >
-                                {item.section4Title}
-                              </Typography>
-                            }
-                            secondary={
-                              item.section4Date ? (
-                                <Chip
-                                  label={`Completed: ${new Date(item.section4Date).toLocaleDateString()}`}
-                                  color="success"
-                                  size="small"
-                                  sx={{ mt: 0.5 }}
-                                />
-                              ) : (
-                                <Chip
-                                  label="Pending"
-                                  color="default"
-                                  variant="outlined"
-                                  size="small"
-                                  sx={{ mt: 0.5 }}
-                                />
-                              )
-                            }
-                          />
-                        </ListItem>
-                      ))}
-                    </List>
-                  </Paper>
-                  
-                  {/* Progress Summary */}
-                  <Grid container spacing={2} sx={{ mt: 3 }}>
-                    <Grid item xs={12} sm={6}>
-                      <Paper sx={{ p: 2, textAlign: 'center', bgcolor: 'success.light' }}>
-                        <Typography variant="h4" color="success.contrastText">
-                          {timelineItems.filter(item => item.section4Date).length}
-                        </Typography>
-                        <Typography variant="body2" color="success.contrastText">
-                          Completed Tasks
-                        </Typography>
+                  {section4List && section4List.length > 0 ? (
+                    <>
+                      <Paper sx={{ p: 3, mt: 2 }}>
+                        <List>
+                          {section4List.map((item, index) => (
+                            <ListItem key={index} sx={{ mb: 2 }}>
+                              <ListItemIcon>
+                                {item.section4Date ? (
+                                  <CheckCircleIcon color="success" fontSize="large" />
+                                ) : (
+                                  <UncheckedIcon color="disabled" fontSize="large" />
+                                )}
+                              </ListItemIcon>
+                              <ListItemText
+                                primary={
+                                  <Typography 
+                                    variant="subtitle1" 
+                                    sx={{ 
+                                      fontWeight: 'medium',
+                                      color: item.section4Date ? 'success.main' : 'text.secondary' 
+                                    }}
+                                  >
+                                    {item.section4Title}
+                                  </Typography>
+                                }
+                                secondary={
+                                  item.section4Date ? (
+                                    <Chip
+                                      label={`Completed: ${new Date(item.section4Date).toLocaleDateString()}`}
+                                      color="success"
+                                      size="small"
+                                      sx={{ mt: 0.5 }}
+                                    />
+                                  ) : (
+                                    <Chip
+                                      label="Pending"
+                                      color="default"
+                                      variant="outlined"
+                                      size="small"
+                                      sx={{ mt: 0.5 }}
+                                    />
+                                  )
+                                }
+                              />
+                            </ListItem>
+                          ))}
+                        </List>
                       </Paper>
-                    </Grid>
-                    <Grid item xs={12} sm={6}>
-                      <Paper sx={{ p: 2, textAlign: 'center', bgcolor: 'warning.light' }}>
-                        <Typography variant="h4" color="warning.contrastText">
-                          {timelineItems.filter(item => !item.section4Date).length}
-                        </Typography>
-                        <Typography variant="body2" color="warning.contrastText">
-                          Pending Tasks
-                        </Typography>
-                      </Paper>
-                    </Grid>
-                  </Grid>
+                      
+                      {/* Progress Summary */}
+                      <Grid container spacing={2} sx={{ mt: 3 }}>
+                        <Grid item xs={12} sm={6}>
+                          <Paper sx={{ p: 2, textAlign: 'center', bgcolor: 'success.light' }}>
+                            <Typography variant="h4" color="success.contrastText">
+                              {section4List.filter(item => item.section4Date).length}
+                            </Typography>
+                            <Typography variant="body2" color="success.contrastText">
+                              Completed Tasks
+                            </Typography>
+                          </Paper>
+                        </Grid>
+                        <Grid item xs={12} sm={6}>
+                          <Paper sx={{ p: 2, textAlign: 'center', bgcolor: 'warning.light' }}>
+                            <Typography variant="h4" color="warning.contrastText">
+                              {section4List.filter(item => !item.section4Date).length}
+                            </Typography>
+                            <Typography variant="body2" color="warning.contrastText">
+                              Pending Tasks
+                            </Typography>
+                          </Paper>
+                        </Grid>
+                      </Grid>
+                    </>
+                  ) : (
+                    <Alert severity="info" sx={{ mt: 2 }}>
+                      No timeline data available for this client.
+                    </Alert>
+                  )}
                 </Box>
               )}
             </Box>
