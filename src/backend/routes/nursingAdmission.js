@@ -59,7 +59,7 @@ const safeParse = (str) => {
   }
 };
 
-// GET /api/nursing-admission/:clientID - Get nursing admission for a client
+// GET /api/nursing-admission/:clientID - Fetch nursing admission data
 router.get('/nursing-admission/:clientID', async (req, res) => {
   try {
     const { clientID } = req.params;
@@ -71,44 +71,7 @@ router.get('/nursing-admission/:clientID', async (req, res) => {
     const pool = await sql.connect(dbConfig);
     
     const query = `
-      SELECT 
-        admissionID,
-        clientID,
-        
-        -- Basic Assessment
-        loc,
-        orientedToList,
-        orientedToRoomList,
-        
-        -- Cardio-Pulmonary
-        cpT, cpP, cpR, cpBP,
-        tList, pList, rList,
-        historyOf, edema, edemaLocation,
-        
-        -- Pain Assessment
-        clientPain, painHistory, lungSounds,
-        
-        -- Bowel & Bladder
-        bowelBladder, cathType, cathSize, cathDiag,
-        elimMethUsed, lastBowelDate, lastVoidDate, abdomen,
-        
-        -- Physical & Functional Status
-        physicalFuncStat, clientPhysicalFuncNotes,
-        weightBearing, transfers, ambulation, mobDevices,
-        
-        -- Nutrition & Communication
-        nutrHyd, enteral, oral, hearing, vision, communication,
-        
-        -- ADL Levels
-        bathing, eating, toileting, bedMobility,
-        
-        -- Body Inspection
-        frontBodyInspection,
-        rearBodyInspection,
-        
-        -- Audit fields
-        createdBy, createdAt, updatedBy, updatedAt
-      FROM NursingAdmission 
+      SELECT * FROM NursingAdmission 
       WHERE clientID = @clientID
       ORDER BY createdAt DESC
     `;
@@ -121,48 +84,42 @@ router.get('/nursing-admission/:clientID', async (req, res) => {
       const admission = result.recordset[0];
       
       // Parse JSON fields
-      const parsedAdmission = {
-        ...admission,
-        loc: safeParse(admission.loc),
-        orientedToList: safeParse(admission.orientedToList),
-        orientedToRoomList: safeParse(admission.orientedToRoomList),
-        tList: safeParse(admission.tList),
-        pList: safeParse(admission.pList),
-        rList: safeParse(admission.rList),
-        historyOf: safeParse(admission.historyOf),
-        edema: safeParse(admission.edema),
-        clientPain: safeParse(admission.clientPain),
-        painHistory: safeParse(admission.painHistory),
-        lungSounds: safeParse(admission.lungSounds),
-        bowelBladder: safeParse(admission.bowelBladder),
-        elimMethUsed: safeParse(admission.elimMethUsed),
-        abdomen: safeParse(admission.abdomen),
-        physicalFuncStat: safeParse(admission.physicalFuncStat),
-        weightBearing: safeParse(admission.weightBearing),
-        transfers: safeParse(admission.transfers),
-        ambulation: safeParse(admission.ambulation),
-        mobDevices: safeParse(admission.mobDevices),
-        nutrHyd: safeParse(admission.nutrHyd),
-        enteral: safeParse(admission.enteral),
-        oral: safeParse(admission.oral),
-        hearing: safeParse(admission.hearing),
-        vision: safeParse(admission.vision),
-        communication: safeParse(admission.communication),
-        bathing: safeParse(admission.bathing),
-        eating: safeParse(admission.eating),
-        toileting: safeParse(admission.toileting),
-        bedMobility: safeParse(admission.bedMobility),
-        frontBodyInspection: safeParse(admission.frontBodyInspection),
-        rearBodyInspection: safeParse(admission.rearBodyInspection)
-      };
+      const jsonFields = [
+        'loc', 'orientedToList', 'orientedToRoomList',
+        'tList', 'pList', 'rList', 'historyOf', 'edema',
+        'clientPain', 'painHistory', 'lungSounds',
+        'bowelBladder', 'elimMethUsed', 'abdomen',
+        'physicalFuncStat', 'weightBearing', 'transfers', 
+        'ambulation', 'mobDevices', 'nutrHyd', 'enteral', 
+        'oral', 'hearing', 'vision', 'communication',
+        'bathing', 'eating', 'toileting', 'bedMobility',
+        'frontBodyInspection', 'rearBodyInspection'
+      ];
       
-      res.json(parsedAdmission);
+      jsonFields.forEach(field => {
+        if (admission[field]) {
+          try {
+            admission[field] = JSON.parse(admission[field]);
+          } catch (e) {
+            console.warn(`Failed to parse ${field}`);
+            admission[field] = [];
+          }
+        } else {
+          admission[field] = [];
+        }
+      });
+      
+      res.json([admission]); // Return as array
     } else {
-      res.status(404).json({ error: 'No nursing admission found for this client' });
+      res.json([]); // Return empty array if no data
     }
     
   } catch (error) {
-    handleDatabaseError(error, res, 'fetching nursing admission');
+    console.error('Error fetching nursing admission:', error);
+    res.status(500).json({ 
+      error: 'Failed to fetch nursing admission',
+      message: error.message 
+    });
   }
 });
 

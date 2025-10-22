@@ -140,47 +140,37 @@ const Medical = () => {
                 <Paper sx={{ p: 3, mt: 2 }}>
                   <List>
                     {timelineItems.map((item, index) => (
-                      <ListItem key={index} sx={{ mb: 2 }}>
-                        <ListItemIcon>
-                          {item.section5Date ? (
-                            <CheckCircleIcon color="success" fontSize="large" />
-                          ) : (
-                            <UncheckedIcon color="disabled" fontSize="large" />
-                          )}
-                        </ListItemIcon>
-                        <ListItemText
-                          primary={
-                            <Typography 
-                              variant="subtitle1" 
-                              sx={{ 
-                                fontWeight: 'medium',
-                                color: item.section5Date ? 'success.main' : 'text.secondary' 
-                              }}
-                            >
-                              {item.section5Title}
-                            </Typography>
-                          }
-                          secondary={
-                            // ✅ FIXED: Move Chip outside of secondary, render as separate element
-                            <Box sx={{ mt: 0.5 }}>
-                              {item.section5Date ? (
-                                <Chip
-                                  label={`Completed: ${new Date(item.section5Date).toLocaleDateString()}`}
-                                  color="success"
-                                  size="small"
-                                />
-                              ) : (
-                                <Chip
-                                  label="Pending"
-                                  color="default"
-                                  variant="outlined"
-                                  size="small"
-                                />
-                              )}
-                            </Box>
-                          }
-                        />
-                      </ListItem>
+                      <ListItemText
+                        primary={
+                          <Typography 
+                            variant="subtitle1" 
+                            sx={{ 
+                              fontWeight: 'medium',
+                              color: item.section5Date ? 'success.main' : 'text.secondary' 
+                            }}
+                          >
+                            {item.section5Title}
+                          </Typography>
+                        }
+                        secondary={
+                          <span style={{ display: 'inline-block', marginTop: '4px' }}>
+                            {item.section5Date ? (
+                              <Chip
+                                label={`Completed: ${new Date(item.section5Date).toLocaleDateString()}`}
+                                color="success"
+                                size="small"
+                              />
+                            ) : (
+                              <Chip
+                                label="Pending"
+                                color="default"
+                                variant="outlined"
+                                size="small"
+                              />
+                            )}
+                          </span>
+                        }
+                      />
                     ))}
                   </List>
                 </Paper>
