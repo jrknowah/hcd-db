@@ -29,7 +29,7 @@ export const useClientPersistence = () => {
   const reduxUser = useSelector((state) => state?.auth?.user);
 
   // Environment detection
-  const isDevelopment = import.meta.env.MODE === 'development';
+  const isDevelopment = import.meta.env.VITE_USE_MOCK_DATA === 'true';
   const shouldUseMockData = isDevelopment && !import.meta.env.VITE_USE_REAL_DATA;
 
   // Mock data for development

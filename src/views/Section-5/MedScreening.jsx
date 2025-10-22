@@ -85,7 +85,8 @@ const MedScreening = ({ clientID }) => {
   } = medScreeningState;
 
   // ✅ Environment detection for mock data
-  const isDevelopment = import.meta.env.MODE === 'development';
+  const isDevelopment = import.meta.env.VITE_USE_MOCK_DATA === 'true';
+  
   const shouldUseMockData = isDevelopment && !import.meta.env.VITE_USE_REAL_DATA;
 
   // ✅ State for Modal Toggle

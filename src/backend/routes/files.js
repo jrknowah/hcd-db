@@ -32,6 +32,17 @@ const ENABLE_LOCAL_FALLBACK = String(process.env.ENABLE_LOCAL_FALLBACK || 'false
 if (!STORAGE_ACCOUNT) {
   throw new Error('AZURE_STORAGE_ACCOUNT is not set. Set it in App Service → Configuration.');
 }
+console.log('=== Azure Blob Storage Configuration ===');
+console.log('Connection String exists:', !!process.env.AZURE_STORAGE_CONNECTION_STRING);
+console.log('Container Name:', CONTAINER_NAME);
+
+// Verify blobServiceClient is initialized
+if (!blobServiceClient) {
+  console.error('❌ blobServiceClient is not initialized!');
+} else {
+  console.log('✅ blobServiceClient initialized');
+}
+console.log('=======================================');
 
 /* --------------------------- Azure Blob Clients --------------------------- */
 
@@ -50,16 +61,50 @@ const blobServiceClient = new BlobServiceClient(
 
 // lazy-created container client
 let _containerClient = null;
+
 async function getContainerClient() {
   if (_containerClient) return _containerClient;
-  const client = blobServiceClient.getContainerClient(CONTAINER_NAME);
-
-  // PRIVATE container; do not expose blobs publicly
-  await client.createIfNotExists({ access: 'private' }).catch(() => {});
-  _containerClient = client;
-  return _containerClient;
+  
+  try {
+    // Verify environment variables
+    if (!process.env.AZURE_STORAGE_CONNECTION_STRING) {
+      throw new Error('AZURE_STORAGE_CONNECTION_STRING environment variable is not set');
+    }
+    
+    const client = blobServiceClient.getContainerClient(CONTAINER_NAME);
+    
+    console.log(`🔍 Checking container: ${CONTAINER_NAME}`);
+    
+    // Try to create container if it doesn't exist
+    // PRIVATE container; do not expose blobs publicly
+    const createResponse = await client.createIfNotExists({ access: 'private' });
+    
+    if (createResponse.succeeded) {
+      console.log(`✅ Container '${CONTAINER_NAME}' created successfully`);
+    } else {
+      console.log(`✅ Container '${CONTAINER_NAME}' already exists`);
+    }
+    
+    // Verify we can actually access the container
+    const exists = await client.exists();
+    if (!exists) {
+      throw new Error(`Container '${CONTAINER_NAME}' does not exist and could not be created`);
+    }
+    
+    _containerClient = client;
+    return _containerClient;
+    
+  } catch (error) {
+    console.error('❌ Failed to get/create container:', error);
+    console.error('   Container name:', CONTAINER_NAME);
+    console.error('   Connection string exists:', !!process.env.AZURE_STORAGE_CONNECTION_STRING);
+    
+    // Don't cache a failed attempt
+    _containerClient = null;
+    
+    throw new Error(`Azure Blob Storage connection failed: ${error.message}`);
+  }
 }
-
 /* ------------------------------- Utilities -------------------------------- */
 
 const upload = multer({
@@ -103,6 +148,7 @@ function buildBlobName({ clientID, docType, originalName }) {
 
   return `${safeClient}/${safeDoc}/${timestamp()}-${safeBase}${ext}`;
 }
+
 
 /* --------------------------------- Routes --------------------------------- */
 

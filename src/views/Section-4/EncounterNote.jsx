@@ -26,6 +26,7 @@ import {
   Edit as EditIcon,
   Notes as NotesIcon,
   DateRange as DateIcon
+,  Save as SaveIcon
 } from "@mui/icons-material";
 import PropTypes from "prop-types";
 import { useDispatch, useSelector } from "react-redux";
@@ -492,16 +493,31 @@ const EncounterNote = ({ clientID, exportMode }) => {
         </Table>
 
         {/* Add Note Modal */}
-        <Dialog open={modalOpen} onClose={closeAddModal} maxWidth="lg" fullWidth>
+         <Dialog 
+          open={modalOpen} 
+          onClose={closeAddModal} 
+          maxWidth="md"  // ✅ Changed from "lg" to "md" for better proportions
+          fullWidth
+          // ✅ CRITICAL: Allow dropdown to overflow dialog boundaries
+          sx={{
+            '& .MuiDialog-paper': {
+              overflow: 'visible'
+            },
+            '& .MuiDialogContent-root': {
+              overflow: 'visible'
+            }
+          }}
+        >
           <DialogTitle>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
               <AddIcon />
               New Encounter Note
             </Box>
           </DialogTitle>
-          <DialogContent>
-            <Grid container spacing={2} sx={{ mt: 1 }}>
-              <Grid item xs={12} sm={6}>
+          <DialogContent sx={{ overflow: 'visible' }}>
+            {/* ✅ Date field - Full width */}
+            <Grid container spacing={3} sx={{ mt: 1 }}>
+              <Grid item xs={12}>
                 <TextField
                   fullWidth
                   type="date"
@@ -514,7 +530,9 @@ const EncounterNote = ({ clientID, exportMode }) => {
                 />
               </Grid>
             </Grid>
-            <Grid container spacing={2} sx={{ mt: 2 }}>
+            
+            {/* ✅ Note Type and Site - Side by side */}
+            <Grid container spacing={3} sx={{ mt: 1 }}>
               <Grid item xs={12} sm={6}>
                 <Typography variant="body1" sx={{ mb: 1 }}>Note Type *</Typography>
                 <Select
@@ -523,6 +541,8 @@ const EncounterNote = ({ clientID, exportMode }) => {
                   onChange={(option) => handleSelectChange('careNoteType', option)}
                   placeholder="Select note type..."
                   styles={customSelectStyles}
+                  menuPosition="fixed"  // ✅ CRITICAL: Prevents clipping
+                  menuPlacement="auto"  // ✅ Auto-adjusts menu position
                 />
               </Grid>
               <Grid item xs={12} sm={6}>
@@ -533,28 +553,37 @@ const EncounterNote = ({ clientID, exportMode }) => {
                   onChange={(option) => handleSelectChange('careNoteSite', option)}
                   placeholder="Select site..."
                   styles={customSelectStyles}
+                  menuPosition="fixed"  // ✅ CRITICAL: Prevents clipping
+                  menuPlacement="auto"  // ✅ Auto-adjusts menu position
                   isClearable
                 />
               </Grid>
             </Grid>
-            <Grid container spacing={2} sx={{ mt: 2 }}>
+            
+            {/* ✅ Note Content - MUCH WIDER with more rows */}
+            <Grid container spacing={3} sx={{ mt: 1 }}>
               <Grid item xs={12}>
                 <TextField
                   fullWidth
                   multiline
-                  rows={4}
+                  rows={10}  // ✅ Increased from 4 to 10 rows
                   label="Note Content"
                   name="careNote"
                   value={formData.careNote}
                   onChange={handleInputChange}
                   placeholder="Enter detailed encounter note..."
                   required
+                  sx={{
+                    '& .MuiInputBase-root': {
+                      fontSize: '1rem',  // ✅ Slightly larger text
+                    }
+                  }}
                 />
               </Grid>
             </Grid>
           </DialogContent>
           <DialogActions>
-            <Button onClick={handleSaveCareNote} variant="contained" color="primary">
+            <Button onClick={handleSaveCareNote} variant="contained" color="primary" startIcon={<SaveIcon />}>
               Save Note
             </Button>
             <Button onClick={closeAddModal} color="secondary">
@@ -564,16 +593,31 @@ const EncounterNote = ({ clientID, exportMode }) => {
         </Dialog>
 
         {/* Edit Note Modal */}
-        <Dialog open={editModalOpen} onClose={closeEditModal} maxWidth="md" fullWidth>
+        <Dialog 
+          open={editModalOpen} 
+          onClose={closeEditModal} 
+          maxWidth="md"  // ✅ Changed from "lg" to "md" for better proportions
+          fullWidth
+          // ✅ CRITICAL: Allow dropdown to overflow dialog boundaries
+          sx={{
+            '& .MuiDialog-paper': {
+              overflow: 'visible'
+            },
+            '& .MuiDialogContent-root': {
+              overflow: 'visible'
+            }
+          }}
+        >
           <DialogTitle>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
               <EditIcon />
               Edit Encounter Note
             </Box>
           </DialogTitle>
-          <DialogContent>
-            <Grid container spacing={2} sx={{ mt: 1 }}>
-              <Grid item xs={12} sm={6}>
+          <DialogContent sx={{ overflow: 'visible' }}>
+            {/* ✅ Date field - Full width */}
+            <Grid container spacing={3} sx={{ mt: 1 }}>
+              <Grid item xs={12}>
                 <TextField
                   fullWidth
                   type="date"
@@ -585,6 +629,10 @@ const EncounterNote = ({ clientID, exportMode }) => {
                   required
                 />
               </Grid>
+            </Grid>
+            
+            {/* ✅ Note Type and Site - Side by side */}
+            <Grid container spacing={3} sx={{ mt: 1 }}>
               <Grid item xs={12} sm={6}>
                 <Typography variant="body1" sx={{ mb: 1 }}>Note Type *</Typography>
                 <Select
@@ -593,6 +641,8 @@ const EncounterNote = ({ clientID, exportMode }) => {
                   onChange={(option) => handleSelectChange('careNoteType', option)}
                   placeholder="Select note type..."
                   styles={customSelectStyles}
+                  menuPosition="fixed"  // ✅ CRITICAL: Prevents clipping
+                  menuPlacement="auto"  // ✅ Auto-adjusts menu position
                 />
               </Grid>
               <Grid item xs={12} sm={6}>
@@ -603,26 +653,37 @@ const EncounterNote = ({ clientID, exportMode }) => {
                   onChange={(option) => handleSelectChange('careNoteSite', option)}
                   placeholder="Select site..."
                   styles={customSelectStyles}
+                  menuPosition="fixed"  // ✅ CRITICAL: Prevents clipping
+                  menuPlacement="auto"  // ✅ Auto-adjusts menu position
                   isClearable
                 />
               </Grid>
+            </Grid>
+            
+            {/* ✅ Note Content - MUCH WIDER with more rows */}
+            <Grid container spacing={3} sx={{ mt: 1 }}>
               <Grid item xs={12}>
                 <TextField
                   fullWidth
                   multiline
-                  rows={4}
+                  rows={10}  // ✅ Increased from 4 to 10 rows
                   label="Note Content"
                   name="careNote"
                   value={formData.careNote}
                   onChange={handleInputChange}
                   placeholder="Enter detailed encounter note..."
                   required
+                  sx={{
+                    '& .MuiInputBase-root': {
+                      fontSize: '1rem',  // ✅ Slightly larger text
+                    }
+                  }}
                 />
               </Grid>
             </Grid>
           </DialogContent>
           <DialogActions>
-            <Button onClick={handleUpdateCareNote} variant="contained" color="primary">
+            <Button onClick={handleUpdateCareNote} variant="contained" color="primary" startIcon={<SaveIcon />}>
               Update Note
             </Button>
             <Button onClick={closeEditModal} color="secondary">

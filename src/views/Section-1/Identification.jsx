@@ -98,12 +98,25 @@ const Identification = () => {
         })
         .catch((err) => {
           console.error("❌ Error fetching files from Azure:", err);
-          setError("Failed to load client files from Azure storage");
+          
+          // More detailed error message
+          const errorMsg = err.response?.data?.message 
+            || err.message 
+            || "Failed to load client files from Azure storage";
+          
+          setError(`Error loading files: ${errorMsg}. Please try again or contact support.`);
           setFiles([]);
           setLoading(false);
+          
+          // Optional: Fall back to mock data in development
+          if (isDevelopment) {
+            console.warn("⚠️ Falling back to mock data due to API error");
+            setFiles(MOCK_FILES);
+            setForceMockData(true);
+          }
         });
     }
-  }, [client?.clientID, effectiveMockData]);
+  }, [client?.clientID, effectiveMockData, isDevelopment]);
 
   // Clear success message after 5 seconds
   useEffect(() => {

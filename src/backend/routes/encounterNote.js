@@ -22,35 +22,35 @@ const generateEncounterNoteID = (clientID) => {
 };
 
 // Validation helper
-const validateEncounterNoteData = (data, isUpdate = false) => {
-  const errors = {};
+// const validateEncounterNoteData = (data, isUpdate = false) => {
+//   const errors = {};
   
-  if (!isUpdate || data.careNoteDate !== undefined) {
-    if (!data.careNoteDate) {
-      errors.careNoteDate = 'Note date is required';
-    } else if (isNaN(new Date(data.careNoteDate).getTime())) {
-      errors.careNoteDate = 'Invalid date format';
-    }
-  }
+//   if (!isUpdate || data.careNoteDate !== undefined) {
+//     if (!data.careNoteDate) {
+//       errors.careNoteDate = 'Note date is required';
+//     } else if (isNaN(new Date(data.careNoteDate).getTime())) {
+//       errors.careNoteDate = 'Invalid date format';
+//     }
+//   }
   
-  if (!isUpdate || data.careNoteType !== undefined) {
-    if (!data.careNoteType || data.careNoteType.trim() === '') {
-      errors.careNoteType = 'Note type is required';
-    } else if (!['Individual', 'Crisis', 'Group', 'Summary', 'Intake'].includes(data.careNoteType)) {
-      errors.careNoteType = 'Invalid note type';
-    }
-  }
+//   if (!isUpdate || data.careNoteType !== undefined) {
+//     if (!data.careNoteType || data.careNoteType.trim() === '') {
+//       errors.careNoteType = 'Note type is required';
+//     } else if (!['Individual', 'Crisis', 'Group', 'Summary', 'Intake'].includes(data.careNoteType)) {
+//       errors.careNoteType = 'Invalid note type';
+//     }
+//   }
   
-  if (!isUpdate || data.careNote !== undefined) {
-    if (!data.careNote || data.careNote.trim() === '') {
-      errors.careNote = 'Note content is required';
-    } else if (data.careNote.length < 10) {
-      errors.careNote = 'Note content must be at least 10 characters';
-    }
-  }
+//   if (!isUpdate || data.careNote !== undefined) {
+//     if (!data.careNote || data.careNote.trim() === '') {
+//       errors.careNote = 'Note content is required';
+//     } else if (data.careNote.length < 10) {
+//       errors.careNote = 'Note content must be at least 10 characters';
+//     }
+//   }
   
-  return Object.keys(errors).length > 0 ? errors : null;
-};
+//   return Object.keys(errors).length > 0 ? errors : null;
+// };
 
 // GET /api/encounter-notes/:clientID - Fetch encounter notes for client
 router.get('/encounter-notes/:clientID', async (req, res) => {
@@ -112,13 +112,13 @@ router.post('/encounter-notes/:clientID', async (req, res) => {
     const noteData = req.body;
     
     // Validation
-    const validationErrors = validateEncounterNoteData(noteData);
-    if (validationErrors) {
-      return res.status(400).json({
-        error: 'Validation failed',
-        errors: validationErrors
-      });
-    }
+    // const validationErrors = validateEncounterNoteData(noteData);
+    // if (validationErrors) {
+    //   return res.status(400).json({
+    //     error: 'Validation failed',
+    //     errors: validationErrors
+    //   });
+    // }
     
     console.log(`📝 Creating encounter note for client: ${clientID}`);
     
@@ -183,13 +183,13 @@ router.put('/encounter-notes/:noteId', async (req, res) => {
     const updateData = req.body;
     
     // Validation
-    const validationErrors = validateEncounterNoteData(updateData, true);
-    if (validationErrors) {
-      return res.status(400).json({
-        error: 'Validation failed',
-        errors: validationErrors
-      });
-    }
+    // const validationErrors = validateEncounterNoteData(updateData, true);
+    // if (validationErrors) {
+    //   return res.status(400).json({
+    //     error: 'Validation failed',
+    //     errors: validationErrors
+    //   });
+    // }
     
     console.log(`📝 Updating encounter note: ${noteId}`);
     
