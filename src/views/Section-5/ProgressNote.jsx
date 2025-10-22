@@ -140,7 +140,7 @@ const ProgressNote = ({ clientID }) => {
   useEffect(() => {
     if (clientID) {
       // Use mock data in development, real API in production
-      if (process.env.NODE_ENV === 'development') {
+      if (import.meta.env.VITE_USE_MOCK_DATA === 'true') {
         // Simulate API delay
         setTimeout(() => {
           dispatch({ type: 'progressNote/setMockData', payload: mockNotes });
@@ -190,7 +190,7 @@ const ProgressNote = ({ clientID }) => {
     };
 
     try {
-      if (process.env.NODE_ENV === 'development') {
+      if (import.meta.env.VITE_USE_MOCK_DATA === 'true') {
         // Mock save in development
         const newNote = { ...noteData, _id: `mock-${Date.now()}` };
         dispatch({ type: 'progressNote/addMockNote', payload: newNote });
@@ -228,7 +228,7 @@ const ProgressNote = ({ clientID }) => {
         updatedAt: new Date().toISOString(),
       };
 
-      if (process.env.NODE_ENV === 'development') {
+      if (import.meta.env.VITE_USE_MOCK_DATA === 'true') {
         // Mock update in development
         dispatch({ type: 'progressNote/updateMockNote', payload: { id: editNoteId, data: updatedData } });
         await logUserAction(user, "EDIT_PROGRESS_NOTE", { noteId: editNoteId, ...updatedData });
@@ -251,7 +251,7 @@ const ProgressNote = ({ clientID }) => {
     if (!deleteNoteId) return;
 
     try {
-      if (process.env.NODE_ENV === 'development') {
+      if (import.meta.env.VITE_USE_MOCK_DATA === 'true') {
         // Mock delete in development
         dispatch({ type: 'progressNote/deleteMockNote', payload: deleteNoteId });
         await logUserAction(user, "DELETE_PROGRESS_NOTE", { noteId: deleteNoteId });
@@ -547,7 +547,7 @@ const ProgressNote = ({ clientID }) => {
                 </Grid>
               </Grid>
               <Grid container spacing={2} sx={{ mt: 1 }}>
-                <Grid item xs={12} md={6}>
+                <Grid item xs={12} md={9}> 
                   <Typography variant="subtitle1" gutterBottom>Site</Typography>
                   <FormControl fullWidth required>
                     <Select
@@ -561,6 +561,7 @@ const ProgressNote = ({ clientID }) => {
                     </Select>
                   </FormControl>
                 </Grid>
+
                 <Grid item xs={12} md={6}>
                   <Typography variant="subtitle1" gutterBottom>Category</Typography>
                   <FormControl fullWidth>
@@ -596,11 +597,17 @@ const ProgressNote = ({ clientID }) => {
                   <TextField
                     fullWidth
                     multiline
-                    rows={4}
+                    rows={12}
                     label=""
                     value={formData.nurseNote}
                     onChange={(e) => handleInputChange('nurseNote', e.target.value)}
                     required
+                    sx={{
+                      '& .MuiInputBase-root': {
+                        fontSize: '16px',
+                        minHeight: '300px'  // ✅ Add this - forces minimum height
+                      }
+                    }}
                     placeholder="Enter detailed progress note..."
                   />
                 </Grid>

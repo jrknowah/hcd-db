@@ -152,7 +152,7 @@ const BioSocial = () => {
         setSaveStatus({ type: 'info', message: `Mock client "${mockClient.clientName}" loaded successfully!` });
     };
 
-    // ✅ Fetch client's bio-social data when a client is selected
+   // ✅ Fetch client's bio-social data when a client is selected
     useEffect(() => {
         if (currentClient?.clientID) {
             setLoading(true);
@@ -172,7 +172,13 @@ const BioSocial = () => {
                     setLoading(false);
                 })
                 .catch((err) => {
-                    console.error("❌ Error fetching client bio-social data:", err);
+                    // ✅ ADD THIS: Handle 404 as expected (no data yet)
+                    if (err.response?.status === 404) {
+                        console.log("ℹ️ No bio-social data exists yet for this client - form ready to fill out");
+                        // Keep empty form - user can fill it out and save
+                    } else {
+                        console.error("❌ Error fetching client bio-social data:", err);
+                    }
                     setLoading(false);
                 });
         }
