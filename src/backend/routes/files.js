@@ -87,7 +87,7 @@ async function getContainerClient() {
     
     // Try to create container if it doesn't exist
     try {
-      const createResponse = await client.createIfNotExists({ access: 'private' });
+      const createResponse = await client.createIfNotExists({ access: null });
       
       if (createResponse.succeeded) {
         console.log(`✅ Container '${CONTAINER_NAME}' created successfully`);
