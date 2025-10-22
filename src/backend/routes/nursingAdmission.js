@@ -142,7 +142,7 @@ router.post('/nursing-admission/:clientID', async (req, res) => {
     const pool = await sql.connect(dbConfig);
     
     // Check if admission already exists
-    const checkQuery = `SELECT admissionID FROM nursing_admission WHERE clientID = @clientID`;
+    const checkQuery = `SELECT id FROM nursing_admission WHERE clientID = @clientID`;
     const checkResult = await pool.request()
       .input('clientID', sql.NVarChar, clientID)
       .query(checkQuery);
@@ -312,13 +312,13 @@ router.post('/nursing-admission/:clientID', async (req, res) => {
   }
 });
 
-// PUT /api/nursing-admission/:admissionID - Update specific admission record
-router.put('/nursing-admission/:admissionID', async (req, res) => {
+// PUT /api/nursing-admission/:id - Update specific admission record
+router.put('/nursing-admission/:id', async (req, res) => {
   try {
-    const { admissionID } = req.params;
+    const { id } = req.params;
     const updateData = req.body;
     
-    if (!admissionID) {
+    if (!id) {
       return res.status(400).json({ error: 'Admission ID is required' });
     }
     
@@ -326,8 +326,8 @@ router.put('/nursing-admission/:admissionID', async (req, res) => {
     
     // Check if admission exists
     const checkResult = await pool.request()
-      .input('admissionID', sql.Int, admissionID)
-      .query('SELECT admissionID FROM nursing_admission WHERE admissionID = @admissionID');
+      .input('id', sql.Int, id)
+      .query('SELECT id FROM nursing_admission WHERE id = @id');
     
     if (checkResult.recordset.length === 0) {
       return res.status(404).json({ error: 'Nursing admission not found' });
@@ -336,13 +336,13 @@ router.put('/nursing-admission/:admissionID', async (req, res) => {
     // Build dynamic update query (similar to POST but for specific fields)
     const updateFields = [];
     const request = pool.request();
-    request.input('admissionID', sql.Int, admissionID);
+    request.input('id', sql.Int, id);
     request.input('updatedBy', sql.NVarChar, updateData.updatedBy);
     request.input('updatedAt', sql.DateTime2, new Date());
     
     // Add fields that are being updated
     Object.keys(updateData).forEach(key => {
-      if (key !== 'updatedBy' && key !== 'updatedAt' && key !== 'admissionID') {
+      if (key !== 'updatedBy' && key !== 'updatedAt' && key !== 'id') {
         updateFields.push(`${key} = @${key}`);
         
         // Handle different data types
@@ -364,7 +364,7 @@ router.put('/nursing-admission/:admissionID', async (req, res) => {
       UPDATE nursing_admission 
       SET ${updateFields.join(', ')}, updatedBy = @updatedBy, updatedAt = @updatedAt
       OUTPUT INSERTED.*
-      WHERE admissionID = @admissionID
+      WHERE id = @id
     `;
     
     const result = await request.query(updateQuery);
@@ -380,12 +380,12 @@ router.put('/nursing-admission/:admissionID', async (req, res) => {
   }
 });
 
-// DELETE /api/nursing-admission/:admissionID - Delete admission record
-router.delete('/nursing-admission/:admissionID', async (req, res) => {
+// DELETE /api/nursing-admission/:id - Delete admission record
+router.delete('/nursing-admission/:id', async (req, res) => {
   try {
-    const { admissionID } = req.params;
+    const { id } = req.params;
     
-    if (!admissionID) {
+    if (!id) {
       return res.status(400).json({ error: 'Admission ID is required' });
     }
     
@@ -393,22 +393,22 @@ router.delete('/nursing-admission/:admissionID', async (req, res) => {
     
     // Check if admission exists
     const checkResult = await pool.request()
-      .input('admissionID', sql.Int, admissionID)
-      .query('SELECT admissionID, clientID FROM nursing_admission WHERE admissionID = @admissionID');
+      .input('id', sql.Int, id)
+      .query('SELECT id, clientID FROM nursing_admission WHERE id = @id');
     
     if (checkResult.recordset.length === 0) {
       return res.status(404).json({ error: 'Nursing admission not found' });
     }
     
     // Hard delete (you might want to implement soft delete instead)
-    const deleteQuery = 'DELETE FROM nursing_admission WHERE admissionID = @admissionID';
+    const deleteQuery = 'DELETE FROM nursing_admission WHERE id = @id';
     
     const result = await pool.request()
-      .input('admissionID', sql.Int, admissionID)
+      .input('id', sql.Int, id)
       .query(deleteQuery);
     
     if (result.rowsAffected[0] > 0) {
-      res.json({ message: 'Nursing admission deleted successfully', admissionID });
+      res.json({ message: 'Nursing admission deleted successfully', id });
     } else {
       res.status(500).json({ error: 'Failed to delete nursing admission' });
     }
