@@ -6,10 +6,10 @@ class AzureBlobService {
     // Use backend API for all Azure operations since we're in browser
     this.apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
     this.isConfigured = true;
-    
+    // const isDevelopment = import.meta.env.VITE_USE_MOCK_DATA === 'true'
     // Check if we should use mock mode
     this.useMockMode = import.meta.env.VITE_USE_REAL_DATA === 'false' || 
-                       import.meta.env.MODE === 'development';
+                       import.meta.env.VITE_USE_MOCK_DATA === 'true';
     
     console.log('Azure Blob Service initialized');
     console.log('API URL:', this.apiUrl);
