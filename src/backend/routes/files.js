@@ -1,83 +1,91 @@
-/**
- * files.js — Azure Blob (Managed Identity) upload/list/get/delete
- *
- * Env required:
- *   AZURE_STORAGE_ACCOUNT   = yourstorageacct (no protocol/domain)
- *   AZURE_BLOB_CONTAINER    = client-docs           (optional, default)
- *   ENABLE_LOCAL_FALLBACK   = false                 (optional; true only for dev)
- *
- * Notes:
- * - Uses System-assigned Managed Identity on your App Service
- * - Assign RBAC on the Storage Account: "Storage Blob Data Contributor"
- * - Container is created if missing, with PRIVATE access
- */
-
 const express = require('express');
 const multer = require('multer');
 const path = require('path');
-
-const { DefaultAzureCredential } = require('@azure/identity');
-const { BlobServiceClient, BlobSASPermissions, generateBlobSASQueryParameters } = require('@azure/storage-blob');
+const fs = require('fs');
 
 const router = express.Router();
-
-
 
 /* ----------------------------- Configuration ----------------------------- */
 
 const STORAGE_ACCOUNT = process.env.AZURE_STORAGE_ACCOUNT;
+const CONNECTION_STRING = process.env.AZURE_STORAGE_CONNECTION_STRING;
 const CONTAINER_NAME = process.env.AZURE_BLOB_CONTAINER || 'client-docs';
+const ENABLE_LOCAL_FALLBACK = String(process.env.ENABLE_LOCAL_FALLBACK || 'true').toLowerCase() === 'true';
 
-// Safer default: no local fallback in production. Turn on only for local dev testing.
-const ENABLE_LOCAL_FALLBACK = String(process.env.ENABLE_LOCAL_FALLBACK || 'false').toLowerCase() === 'true';
+// Determine if we're running locally or in Azure
+const IS_LOCAL = !STORAGE_ACCOUNT && !CONNECTION_STRING;
 
-if (!STORAGE_ACCOUNT) {
-  throw new Error('AZURE_STORAGE_ACCOUNT is not set. Set it in App Service → Configuration.');
-}
+console.log('=== Azure Blob Storage Configuration ===');
+console.log('Environment:', IS_LOCAL ? '🏠 Local Development' : '☁️  Azure Production');
+console.log('Storage Account:', STORAGE_ACCOUNT || 'Not set (using local storage)');
+console.log('Container Name:', CONTAINER_NAME);
+console.log('Local Fallback Enabled:', ENABLE_LOCAL_FALLBACK);
 
 /* --------------------------- Azure Blob Clients --------------------------- */
 
-// ========================================
-// ADD THIS AT THE TOP (after imports)
-// ========================================
-console.log('=== Azure Blob Storage Configuration (Managed Identity) ===');
-console.log('Storage Account:', STORAGE_ACCOUNT);
-console.log('Container Name:', CONTAINER_NAME);
-console.log('Authentication Method: DefaultAzureCredential (Managed Identity)');
-console.log('Local Fallback Enabled:', ENABLE_LOCAL_FALLBACK);
-console.log('=========================================================');
-
-// Initialize credential for Managed Identity authentication
-const credential = new DefaultAzureCredential({
-  loggingOptions: {
-    allowLoggingAccountIdentifiers: true,
-    logLevel: 'info'
-  }
-});
-
-console.log('🔐 Attempting to authenticate with DefaultAzureCredential...');
-const blobServiceClient = new BlobServiceClient(
-  `https://${STORAGE_ACCOUNT}.blob.core.windows.net`,
-  credential
-);
-
-console.log('✅ BlobServiceClient initialized with Managed Identity');
-
+let blobServiceClient = null;
 let _containerClient = null;
 
+// Only initialize Azure SDK if we have credentials
+if (!IS_LOCAL) {
+  try {
+    // Try loading Azure SDK modules
+    const { BlobServiceClient, BlobSASPermissions, generateBlobSASQueryParameters } = require('@azure/storage-blob');
+    
+    // Method 1: Connection String (simpler, less secure)
+    if (CONNECTION_STRING) {
+      console.log('🔑 Using Connection String authentication');
+      blobServiceClient = BlobServiceClient.fromConnectionString(CONNECTION_STRING);
+      console.log('✅ BlobServiceClient initialized with Connection String');
+    }
+    // Method 2: Managed Identity (more secure, production recommended)
+    else if (STORAGE_ACCOUNT) {
+      const { DefaultAzureCredential } = require('@azure/identity');
+      console.log('🔐 Using Managed Identity authentication');
+      
+      const credential = new DefaultAzureCredential({
+        loggingOptions: {
+          allowLoggingAccountIdentifiers: true,
+          logLevel: 'info'
+        }
+      });
+      
+      blobServiceClient = new BlobServiceClient(
+        `https://${STORAGE_ACCOUNT}.blob.core.windows.net`,
+        credential
+      );
+      console.log('✅ BlobServiceClient initialized with Managed Identity');
+    }
+  } catch (error) {
+    console.error('⚠️  Azure SDK initialization failed:', error.message);
+    console.log('   Falling back to local storage mode');
+    blobServiceClient = null;
+  }
+} else {
+  console.log('🏠 Running in LOCAL mode - Azure storage disabled');
+  console.log('   Files will be stored in ./uploads directory');
+  console.log('   Set AZURE_STORAGE_ACCOUNT or AZURE_STORAGE_CONNECTION_STRING for Azure storage');
+}
+
+console.log('=========================================');
+
 /**
- * Get or create container client using Managed Identity
- * No connection string needed!
+ * Get or create container client
+ * Falls back to local storage if Azure is unavailable
  */
 async function getContainerClient() {
   if (_containerClient) return _containerClient;
+  
+  if (!blobServiceClient) {
+    throw new Error('Azure Blob Storage not configured. Using local storage.');
+  }
   
   try {
     console.log(`🔍 Attempting to access container: ${CONTAINER_NAME}`);
     
     const client = blobServiceClient.getContainerClient(CONTAINER_NAME);
     
-    // Try to create container if it doesn't exist (requires proper RBAC permissions)
+    // Try to create container if it doesn't exist
     try {
       const createResponse = await client.createIfNotExists({ access: 'private' });
       
@@ -87,14 +95,13 @@ async function getContainerClient() {
         console.log(`✅ Container '${CONTAINER_NAME}' already exists`);
       }
     } catch (createError) {
-      // If we can't create, check if it exists
-      console.warn(`⚠️  Could not create container (might already exist or lack permissions):`, createError.message);
+      console.warn(`⚠️  Could not create container:`, createError.message);
     }
     
     // Verify we can access the container
     const exists = await client.exists();
     if (!exists) {
-      throw new Error(`Container '${CONTAINER_NAME}' does not exist and could not be created. Check RBAC permissions.`);
+      throw new Error(`Container '${CONTAINER_NAME}' does not exist and could not be created.`);
     }
     
     console.log(`✅ Successfully connected to container '${CONTAINER_NAME}'`);
@@ -103,28 +110,23 @@ async function getContainerClient() {
     
   } catch (error) {
     console.error('❌ Failed to get/create container:', error.message);
-    console.error('   Container name:', CONTAINER_NAME);
-    console.error('   Storage Account:', STORAGE_ACCOUNT);
-    console.error('   Error details:', error);
     
-    // Provide helpful troubleshooting info
+    // Provide helpful troubleshooting
     if (error.code === 'AuthorizationPermissionMismatch' || error.statusCode === 403) {
       console.error('');
-      console.error('🔧 TROUBLESHOOTING - Permission Denied:');
-      console.error('   1. Go to Azure Portal → Your Storage Account');
-      console.error('   2. Click "Access Control (IAM)" in left menu');
-      console.error('   3. Click "+ Add" → "Add role assignment"');
-      console.error('   4. Select role: "Storage Blob Data Contributor"');
-      console.error('   5. Assign access to: Your App Service (Managed Identity)');
-      console.error('   6. Wait 5-10 minutes for permissions to propagate');
+      console.error('🔧 RBAC Permission Issue:');
+      console.error('   1. Go to Azure Portal → Storage Account → Access Control (IAM)');
+      console.error('   2. Add role assignment: "Storage Blob Data Contributor"');
+      console.error('   3. Assign to: Your App Service Managed Identity');
+      console.error('   4. Wait 5-10 minutes for permissions to propagate');
       console.error('');
     }
     
-    // Don't cache failed client - allow retry
     _containerClient = null;
-    throw new Error(`Azure Blob Storage connection failed: ${error.message}`);
+    throw error;
   }
 }
+
 /* ------------------------------- Utilities -------------------------------- */
 
 const upload = multer({
@@ -145,19 +147,15 @@ const upload = multer({
 
 function sanitizeSegment(s) {
   return String(s || '')
-    .replace(/[^\w\- ]+/g, '_')  // keep letters, digits, underscore, hyphen, space
+    .replace(/[^\w\- ]+/g, '_')
     .trim()
-    .replace(/\s+/g, '_');       // collapse spaces to underscore
+    .replace(/\s+/g, '_');
 }
 
 function timestamp() {
   return new Date().toISOString().replace(/[:.]/g, '-');
 }
 
-/**
- * Build a structured blob name:
- *   <clientID>/<docType>/<timestamp>-<sanitizedOriginalName><ext>
- */
 function buildBlobName({ clientID, docType, originalName }) {
   const ext = path.extname(originalName || '');
   const base = path.basename(originalName || 'file', ext);
@@ -169,8 +167,20 @@ function buildBlobName({ clientID, docType, originalName }) {
   return `${safeClient}/${safeDoc}/${timestamp()}-${safeBase}${ext}`;
 }
 
-/* --------------------------------- Routes --------------------------------- */
+// Ensure local uploads directory exists
+const LOCAL_UPLOAD_DIR = path.join(__dirname, '..', 'uploads');
+if (IS_LOCAL || ENABLE_LOCAL_FALLBACK) {
+  try {
+    if (!fs.existsSync(LOCAL_UPLOAD_DIR)) {
+      fs.mkdirSync(LOCAL_UPLOAD_DIR, { recursive: true });
+      console.log(`📁 Created local uploads directory: ${LOCAL_UPLOAD_DIR}`);
+    }
+  } catch (err) {
+    console.warn('⚠️  Could not create uploads directory:', err.message);
+  }
+}
 
+/* --------------------------------- Routes --------------------------------- */
 
 /**
  * POST /upload
@@ -194,70 +204,88 @@ router.post('/upload', upload.single('file'), async (req, res) => {
     }
 
     const blobName = buildBlobName({ clientID, docType, originalName: file.originalname });
-    console.log(`   Blob name: ${blobName}`);
 
-    try {
-      const containerClient = await getContainerClient();
-      const blockBlobClient = containerClient.getBlockBlobClient(blobName);
+    // Try Azure first
+    if (blobServiceClient) {
+      try {
+        const containerClient = await getContainerClient();
+        const blockBlobClient = containerClient.getBlockBlobClient(blobName);
 
-      console.log(`   Uploading ${file.size} bytes to Azure...`);
-      
-      await blockBlobClient.uploadData(file.buffer, {
-        blobHTTPHeaders: {
-          blobContentType: file.mimetype || 'application/octet-stream',
-          blobCacheControl: 'no-cache'
-        }
-      });
-
-      console.log(`   ✅ Upload successful: ${blockBlobClient.url}`);
-
-      return res.json({
-        success: true,
-        storage: 'azure',
-        fileName: path.basename(blobName),
-        blobName,                 // full path inside container
-        originalName: file.originalname,
-        url: blockBlobClient.url, // private URL (no SAS)
-        size: file.size,
-        mimeType: file.mimetype
-      });
-      
-    } catch (azureErr) {
-      console.error('❌ Azure upload failed:', azureErr.message);
-      console.error('   Error code:', azureErr.code);
-      console.error('   Status code:', azureErr.statusCode);
-
-      // Provide helpful error messages
-      if (azureErr.code === 'AuthorizationPermissionMismatch' || azureErr.statusCode === 403) {
-        return res.status(403).json({
-          success: false,
-          message: 'Permission denied: Managed Identity lacks Storage Blob Data Contributor role',
-          detail: azureErr.message,
-          hint: 'Go to Storage Account → Access Control (IAM) → Add role assignment → Storage Blob Data Contributor'
+        console.log(`   Uploading ${file.size} bytes to Azure...`);
+        
+        await blockBlobClient.uploadData(file.buffer, {
+          blobHTTPHeaders: {
+            blobContentType: file.mimetype || 'application/octet-stream',
+            blobCacheControl: 'no-cache'
+          }
         });
-      }
 
-      if (ENABLE_LOCAL_FALLBACK) {
-        console.warn('   ⚠️  Falling back to local storage (dev mode)');
-        const localName = `${Date.now()}-${sanitizeSegment(file.originalname)}`;
+        console.log(`   ✅ Upload successful to Azure: ${blockBlobClient.url}`);
+
+        return res.json({
+          success: true,
+          storage: 'azure',
+          fileName: path.basename(blobName),
+          blobName,
+          originalName: file.originalname,
+          url: blockBlobClient.url,
+          size: file.size,
+          mimeType: file.mimetype
+        });
+        
+      } catch (azureErr) {
+        console.error('❌ Azure upload failed:', azureErr.message);
+        
+        // If Azure fails and local fallback is disabled, return error
+        if (!ENABLE_LOCAL_FALLBACK) {
+          return res.status(502).json({
+            success: false,
+            message: `Azure upload failed: ${azureErr.message}`,
+            detail: azureErr.code || 'Unknown error'
+          });
+        }
+        
+        console.log('   ⚠️  Falling back to local storage...');
+      }
+    }
+
+    // Local storage fallback
+    if (ENABLE_LOCAL_FALLBACK || IS_LOCAL) {
+      try {
+        const localFileName = `${Date.now()}-${sanitizeSegment(file.originalname)}`;
+        const localPath = path.join(LOCAL_UPLOAD_DIR, localFileName);
+        
+        fs.writeFileSync(localPath, file.buffer);
+        console.log(`   ✅ Saved to local storage: ${localPath}`);
+
         return res.json({
           success: true,
           storage: 'local',
-          fileName: localName,
+          fileName: localFileName,
           originalName: file.originalname,
-          url: `/uploads/${localName}`,
+          url: `/uploads/${localFileName}`,
+          localPath: localPath,
           size: file.size,
           mimeType: file.mimetype,
-          note: 'Azure upload failed, using local storage (dev only)'
+          note: IS_LOCAL ? 'Running in local development mode' : 'Azure failed, used local fallback'
+        });
+      } catch (localErr) {
+        console.error('❌ Local storage also failed:', localErr.message);
+        return res.status(500).json({
+          success: false,
+          message: 'Both Azure and local storage failed',
+          azureError: 'Azure not configured',
+          localError: localErr.message
         });
       }
-
-      return res.status(502).json({
-        success: false,
-        message: `Azure upload failed: ${azureErr.message}`,
-        detail: azureErr.code || 'Unknown error'
-      });
     }
+
+    return res.status(503).json({
+      success: false,
+      message: 'Azure Blob Storage not configured and local fallback is disabled',
+      hint: 'Set ENABLE_LOCAL_FALLBACK=true for local development'
+    });
+    
   } catch (err) {
     console.error('❌ File upload error:', err);
     return res.status(500).json({ 
@@ -270,82 +298,153 @@ router.post('/upload', upload.single('file'), async (req, res) => {
 
 /**
  * GET /file/:fileName
- *   - Back-compat: uses path parameter as a simple file at container root
- *   - Prefer: GET /file?blobName=<clientID/docType/ts-name.ext>
  */
 router.get('/file/:fileName', async (req, res) => {
   try {
     const blobName = req.query.blobName || req.params.fileName;
     if (!blobName) {
-      return res.status(400).json({ message: 'blobName required (query or param)' });
+      return res.status(400).json({ message: 'blobName required' });
     }
 
     console.log(`📥 Retrieving file info: ${blobName}`);
 
-    const containerClient = await getContainerClient();
-    const blobClient = containerClient.getBlobClient(blobName);
+    // Try Azure first
+    if (blobServiceClient) {
+      try {
+        const containerClient = await getContainerClient();
+        const blobClient = containerClient.getBlobClient(blobName);
 
-    const exists = await blobClient.exists();
-    if (!exists) {
-      console.warn(`   ❌ File not found: ${blobName}`);
-      return res.status(404).json({ message: 'File not found' });
+        const exists = await blobClient.exists();
+        if (!exists) {
+          console.warn(`   ⚠️  File not found in Azure: ${blobName}`);
+          if (!ENABLE_LOCAL_FALLBACK) {
+            return res.status(404).json({ message: 'File not found' });
+          }
+        } else {
+          const props = await blobClient.getProperties();
+          console.log(`   ✅ File found in Azure, size: ${props.contentLength} bytes`);
+
+          return res.json({
+            blobName,
+            fileName: path.basename(blobName),
+            url: blobClient.url,
+            size: props.contentLength,
+            mimeType: props.contentType,
+            lastModified: props.lastModified,
+            storage: 'azure'
+          });
+        }
+      } catch (azureErr) {
+        console.error('❌ Azure retrieval failed:', azureErr.message);
+        if (!ENABLE_LOCAL_FALLBACK) {
+          return res.status(500).json({ message: 'File retrieval failed', detail: azureErr.message });
+        }
+      }
     }
 
-    const props = await blobClient.getProperties();
-    console.log(`   ✅ File found, size: ${props.contentLength} bytes`);
+    // Local storage fallback
+    if (ENABLE_LOCAL_FALLBACK || IS_LOCAL) {
+      const localPath = path.join(LOCAL_UPLOAD_DIR, path.basename(blobName));
+      
+      if (fs.existsSync(localPath)) {
+        const stats = fs.statSync(localPath);
+        console.log(`   ✅ File found locally: ${localPath}`);
+        
+        return res.json({
+          fileName: path.basename(blobName),
+          url: `/uploads/${path.basename(blobName)}`,
+          size: stats.size,
+          lastModified: stats.mtime,
+          storage: 'local'
+        });
+      }
+    }
 
-    return res.json({
-      blobName,
-      fileName: path.basename(blobName),
-      url: blobClient.url, // private URL
-      size: props.contentLength,
-      mimeType: props.contentType,
-      lastModified: props.lastModified,
-      storage: 'azure'
-    });
+    return res.status(404).json({ message: 'File not found in any storage' });
+    
   } catch (err) {
     console.error('❌ File retrieval failed:', err);
-    return res.status(500).json({ 
-      message: 'File retrieval failed', 
-      detail: err.message 
-    });
+    return res.status(500).json({ message: 'File retrieval failed', detail: err.message });
   }
 });
 
 /**
  * GET /list
- * Lists all blobs in the container (useful for admin/debug)
+ * Lists all blobs (Azure) or files (local)
  */
 router.get('/list', async (_req, res) => {
   try {
-    console.log('📋 Listing all files in container...');
+    console.log('📋 Listing files...');
     
-    const containerClient = await getContainerClient();
-    const files = [];
+    // Try Azure first
+    if (blobServiceClient) {
+      try {
+        const containerClient = await getContainerClient();
+        const files = [];
 
-    for await (const blob of containerClient.listBlobsFlat()) {
-      files.push({
-        blobName: blob.name,
-        fileName: path.basename(blob.name),
-        url: `${containerClient.url}/${blob.name}`,
-        size: blob.properties.contentLength,
-        lastModified: blob.properties.lastModified,
-        mimeType: blob.properties.contentType,
-        storage: 'azure'
-      });
+        for await (const blob of containerClient.listBlobsFlat()) {
+          files.push({
+            blobName: blob.name,
+            fileName: path.basename(blob.name),
+            url: `${containerClient.url}/${blob.name}`,
+            size: blob.properties.contentLength,
+            lastModified: blob.properties.lastModified,
+            mimeType: blob.properties.contentType,
+            storage: 'azure'
+          });
+        }
+
+        console.log(`   ✅ Found ${files.length} files in Azure`);
+        return res.json({ files, total: files.length, storage: 'azure' });
+      } catch (azureErr) {
+        console.error('❌ Azure listing failed:', azureErr.message);
+        if (!ENABLE_LOCAL_FALLBACK) {
+          return res.status(500).json({ 
+            message: 'Azure listing failed', 
+            detail: azureErr.message 
+          });
+        }
+      }
     }
 
-    console.log(`   ✅ Found ${files.length} files`);
-    return res.json({ files, total: files.length, storage: 'azure' });
+    // Local storage fallback
+    if (ENABLE_LOCAL_FALLBACK || IS_LOCAL) {
+      try {
+        const files = [];
+        
+        if (fs.existsSync(LOCAL_UPLOAD_DIR)) {
+          const localFiles = fs.readdirSync(LOCAL_UPLOAD_DIR);
+          
+          for (const file of localFiles) {
+            const filePath = path.join(LOCAL_UPLOAD_DIR, file);
+            const stats = fs.statSync(filePath);
+            
+            files.push({
+              fileName: file,
+              url: `/uploads/${file}`,
+              size: stats.size,
+              lastModified: stats.mtime,
+              storage: 'local'
+            });
+          }
+        }
+
+        console.log(`   ✅ Found ${files.length} files locally`);
+        return res.json({ files, total: files.length, storage: 'local' });
+      } catch (localErr) {
+        console.error('❌ Local listing failed:', localErr.message);
+        return res.status(500).json({ 
+          message: 'Local listing failed', 
+          detail: localErr.message 
+        });
+      }
+    }
+
+    return res.json({ files: [], total: 0, storage: 'none' });
     
   } catch (err) {
-    console.error('❌ Azure listing failed:', err);
-    return res.status(500).json({ 
-      message: 'Azure listing failed', 
-      detail: err.message, 
-      files: [], 
-      total: 0 
-    });
+    console.error('❌ Listing failed:', err);
+    return res.status(500).json({ message: 'Listing failed', detail: err.message });
   }
 });
 
@@ -360,160 +459,119 @@ router.get('/files/:clientID', async (req, res) => {
     
     const prefix = `${clientID}/`;
 
-    let containerClient;
-    try {
-      containerClient = await getContainerClient();
-      console.log('   ✅ Container client obtained');
-    } catch (containerError) {
-      console.error('   ❌ Failed to get container client:', containerError.message);
-      return res.status(500).json({ 
-        message: 'Azure Storage connection failed', 
-        detail: containerError.message,
-        hint: 'Check AZURE_STORAGE_ACCOUNT and Managed Identity RBAC permissions'
-      });
-    }
+    // Try Azure first
+    if (blobServiceClient) {
+      try {
+        const containerClient = await getContainerClient();
+        const files = [];
 
-    const files = [];
-    let blobCount = 0;
-
-    try {
-      for await (const blob of containerClient.listBlobsFlat({ prefix })) {
-        blobCount++;
-        files.push({
-          id: blob.name,
-          blobName: blob.name,
-          fileName: blob.name.split('/').pop(),
-          blobUrl: `${containerClient.url}/${blob.name}`,
-          docType: blob.name.split('/')[1] || 'Unknown',
-          uploadDate: blob.properties.lastModified,
-          fileSize: blob.properties.contentLength,
-          contentType: blob.properties.contentType
-        });
+        for await (const blob of containerClient.listBlobsFlat({ prefix })) {
+          files.push({
+            id: blob.name,
+            blobName: blob.name,
+            fileName: blob.name.split('/').pop(),
+            blobUrl: `${containerClient.url}/${blob.name}`,
+            docType: blob.name.split('/')[1] || 'Unknown',
+            uploadDate: blob.properties.lastModified,
+            fileSize: blob.properties.contentLength,
+            contentType: blob.properties.contentType
+          });
+        }
+        
+        console.log(`   ✅ Found ${files.length} files in Azure for client ${clientID}`);
+        return res.json(files);
+      } catch (azureErr) {
+        console.error('❌ Azure listing failed:', azureErr.message);
+        if (!ENABLE_LOCAL_FALLBACK) {
+          return res.status(500).json({ 
+            message: 'Azure listing failed', 
+            detail: azureErr.message 
+          });
+        }
       }
-      
-      console.log(`   ✅ Found ${blobCount} files for client ${clientID}`);
-    } catch (listError) {
-      console.error('   ❌ Failed to list blobs:', listError.message);
-      return res.status(500).json({ 
-        message: 'Failed to list blobs', 
-        detail: listError.message 
-      });
     }
 
-    return res.json(files);
+    // Local storage fallback (simplified - no client prefix)
+    if (ENABLE_LOCAL_FALLBACK || IS_LOCAL) {
+      console.log(`   ⚠️  Local storage doesn't support client filtering`);
+      return res.json([]);
+    }
+
+    return res.json([]);
     
   } catch (err) {
     console.error('❌ Client file listing failed:', err);
-    return res.status(500).json({ 
-      message: 'Failed to list client files', 
-      detail: err.message
-    });
+    return res.status(500).json({ message: 'Failed to list client files', detail: err.message });
   }
 });
 
 /**
  * DELETE /file/:fileName
- *   - Back-compat: deletes by simple name at root
- *   - Prefer: DELETE /file?blobName=<clientID/docType/ts-name.ext>
  */
 router.delete('/file/:fileName', async (req, res) => {
   try {
     const blobName = req.query.blobName || req.params.fileName;
     if (!blobName) {
-      return res.status(400).json({ message: 'blobName required (query or param)' });
+      return res.status(400).json({ message: 'blobName required' });
     }
 
     console.log(`🗑️  Deleting file: ${blobName}`);
 
-    const containerClient = await getContainerClient();
-    const blockBlobClient = containerClient.getBlockBlobClient(blobName);
+    // Try Azure first
+    if (blobServiceClient) {
+      try {
+        const containerClient = await getContainerClient();
+        const blockBlobClient = containerClient.getBlockBlobClient(blobName);
 
-    const exists = await blockBlobClient.exists();
-    if (!exists) {
-      console.warn(`   ❌ File not found: ${blobName}`);
-      return res.status(404).json({ message: 'File not found' });
+        const exists = await blockBlobClient.exists();
+        if (!exists) {
+          console.warn(`   ⚠️  File not found in Azure: ${blobName}`);
+          if (!ENABLE_LOCAL_FALLBACK) {
+            return res.status(404).json({ message: 'File not found' });
+          }
+        } else {
+          await blockBlobClient.delete();
+          console.log(`   ✅ File deleted from Azure`);
+
+          return res.json({
+            success: true,
+            message: 'File deleted successfully',
+            blobName,
+            storage: 'azure'
+          });
+        }
+      } catch (azureErr) {
+        console.error('❌ Azure deletion failed:', azureErr.message);
+        if (!ENABLE_LOCAL_FALLBACK) {
+          return res.status(500).json({ message: 'Deletion failed', detail: azureErr.message });
+        }
+      }
     }
 
-    await blockBlobClient.delete();
-    console.log(`   ✅ File deleted successfully`);
+    // Local storage fallback
+    if (ENABLE_LOCAL_FALLBACK || IS_LOCAL) {
+      const localPath = path.join(LOCAL_UPLOAD_DIR, path.basename(blobName));
+      
+      if (fs.existsSync(localPath)) {
+        fs.unlinkSync(localPath);
+        console.log(`   ✅ File deleted from local storage`);
+        
+        return res.json({
+          success: true,
+          message: 'File deleted successfully',
+          fileName: path.basename(blobName),
+          storage: 'local'
+        });
+      }
+    }
 
-    return res.json({
-      success: true,
-      message: 'File deleted successfully',
-      blobName,
-      storage: 'azure'
-    });
+    return res.status(404).json({ message: 'File not found in any storage' });
+    
   } catch (err) {
-    console.error('❌ Azure file deletion failed:', err);
-    return res.status(500).json({ 
-      message: 'Azure file deletion failed', 
-      detail: err.message 
-    });
+    console.error('❌ File deletion failed:', err);
+    return res.status(500).json({ message: 'Deletion failed', detail: err.message });
   }
 });
-
-/**
- * GET /file/download-url?blobName=...
- * Returns a time-limited SAS URL for private download (1 hour).
- * Requires Managed Identity permission to request a User Delegation Key.
- */
-router.get('/file/download-url', async (req, res) => {
-  try {
-    const blobName = req.query.blobName;
-    if (!blobName) {
-      return res.status(400).json({ message: 'blobName required' });
-    }
-
-    console.log(`🔗 Generating download URL for: ${blobName}`);
-
-    const now = new Date();
-    const expires = new Date(now.getTime() + 60 * 60 * 1000); // +1h
-
-    // User delegation SAS (works with AAD/Managed Identity)
-    const userDelegationKey = await blobServiceClient.getUserDelegationKey(now, expires);
-
-    const sas = generateBlobSASQueryParameters(
-      {
-        containerName: CONTAINER_NAME,
-        blobName,
-        permissions: BlobSASPermissions.parse('r'),
-        startsOn: now,
-        expiresOn: expires,
-        protocol: 'https'
-      },
-      userDelegationKey,
-      STORAGE_ACCOUNT
-    ).toString();
-
-    const blobClient = (await getContainerClient()).getBlobClient(blobName);
-    const url = `${blobClient.url}?${sas}`;
-    
-    console.log(`   ✅ SAS URL generated (expires in 1 hour)`);
-    
-    return res.json({ 
-      url, 
-      expiresOn: expires.toISOString(),
-      expiresIn: 3600 // seconds
-    });
-  } catch (err) {
-    console.error('❌ SAS generation failed:', err);
-    
-    if (err.code === 'AuthorizationPermissionMismatch' || err.statusCode === 403) {
-      return res.status(403).json({ 
-        message: 'Permission denied: Managed Identity needs additional permission to generate SAS tokens',
-        detail: err.message,
-        hint: 'Ensure the Managed Identity has "Storage Blob Data Contributor" and can request user delegation keys'
-      });
-    }
-    
-    return res.status(500).json({ 
-      message: 'Failed to generate download URL', 
-      detail: err.message 
-    });
-  }
-});
-
-// Add these to files.js (before module.exports = router;)
 
 // POST /api/mental-archive-metadata - Save metadata after blob upload
 router.post('/mental-archive-metadata', async (req, res) => {
