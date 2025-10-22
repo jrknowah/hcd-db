@@ -21,6 +21,8 @@ const { BlobServiceClient, BlobSASPermissions, generateBlobSASQueryParameters } 
 
 const router = express.Router();
 
+
+
 /* ----------------------------- Configuration ----------------------------- */
 
 const STORAGE_ACCOUNT = process.env.AZURE_STORAGE_ACCOUNT;
@@ -32,6 +34,12 @@ const ENABLE_LOCAL_FALLBACK = String(process.env.ENABLE_LOCAL_FALLBACK || 'false
 if (!STORAGE_ACCOUNT) {
   throw new Error('AZURE_STORAGE_ACCOUNT is not set. Set it in App Service → Configuration.');
 }
+
+/* --------------------------- Azure Blob Clients --------------------------- */
+
+// ========================================
+// ADD THIS AT THE TOP (after imports)
+// ========================================
 console.log('=== Azure Blob Storage Configuration ===');
 console.log('Connection String exists:', !!process.env.AZURE_STORAGE_CONNECTION_STRING);
 console.log('Container Name:', CONTAINER_NAME);
@@ -43,8 +51,6 @@ if (!blobServiceClient) {
   console.log('✅ blobServiceClient initialized');
 }
 console.log('=======================================');
-
-/* --------------------------- Azure Blob Clients --------------------------- */
 
 const credential = new DefaultAzureCredential({
   loggingOptions: {
@@ -59,24 +65,19 @@ const blobServiceClient = new BlobServiceClient(
   credential
 );
 
-// lazy-created container client
 let _containerClient = null;
 
 async function getContainerClient() {
   if (_containerClient) return _containerClient;
   
   try {
-    // Verify environment variables
     if (!process.env.AZURE_STORAGE_CONNECTION_STRING) {
       throw new Error('AZURE_STORAGE_CONNECTION_STRING environment variable is not set');
     }
     
     const client = blobServiceClient.getContainerClient(CONTAINER_NAME);
-    
     console.log(`🔍 Checking container: ${CONTAINER_NAME}`);
     
-    // Try to create container if it doesn't exist
-    // PRIVATE container; do not expose blobs publicly
     const createResponse = await client.createIfNotExists({ access: 'private' });
     
     if (createResponse.succeeded) {
@@ -85,7 +86,6 @@ async function getContainerClient() {
       console.log(`✅ Container '${CONTAINER_NAME}' already exists`);
     }
     
-    // Verify we can actually access the container
     const exists = await client.exists();
     if (!exists) {
       throw new Error(`Container '${CONTAINER_NAME}' does not exist and could not be created`);
@@ -99,9 +99,7 @@ async function getContainerClient() {
     console.error('   Container name:', CONTAINER_NAME);
     console.error('   Connection string exists:', !!process.env.AZURE_STORAGE_CONNECTION_STRING);
     
-    // Don't cache a failed attempt
     _containerClient = null;
-    
     throw new Error(`Azure Blob Storage connection failed: ${error.message}`);
   }
 }
@@ -285,28 +283,58 @@ router.get('/list', async (_req, res) => {
 router.get('/files/:clientID', async (req, res) => {
   try {
     const clientID = sanitizeSegment(req.params.clientID);
-    const prefix = `${clientID}/`; // list everything for this client
+    console.log(`📂 Listing files for client: ${clientID}`);
+    
+    const prefix = `${clientID}/`;
 
-    const containerClient = await getContainerClient();
+    let containerClient;
+    try {
+      containerClient = await getContainerClient();
+      console.log('✅ Container client obtained for listing');
+    } catch (containerError) {
+      console.error('❌ Failed to get container client:', containerError);
+      return res.status(500).json({ 
+        message: 'Azure Storage connection failed', 
+        detail: containerError.message,
+        hint: 'Check AZURE_STORAGE_CONNECTION_STRING and container configuration'
+      });
+    }
+
     const files = [];
+    let blobCount = 0;
 
-    for await (const blob of containerClient.listBlobsFlat({ prefix })) {
-      files.push({
-        id: blob.name,
-        blobName: blob.name,
-        fileName: blob.name.split('/').pop(),
-        blobUrl: `${containerClient.url}/${blob.name}`,
-        docType: blob.name.split('/')[1] || 'Unknown', // infer from path: clientID/docType/...
-        uploadDate: blob.properties.lastModified,
-        fileSize: blob.properties.contentLength,
-        contentType: blob.properties.contentType
+    try {
+      for await (const blob of containerClient.listBlobsFlat({ prefix })) {
+        blobCount++;
+        files.push({
+          id: blob.name,
+          blobName: blob.name,
+          fileName: blob.name.split('/').pop(),
+          blobUrl: `${containerClient.url}/${blob.name}`,
+          docType: blob.name.split('/')[1] || 'Unknown',
+          uploadDate: blob.properties.lastModified,
+          fileSize: blob.properties.contentLength,
+          contentType: blob.properties.contentType
+        });
+      }
+      
+      console.log(`✅ Found ${blobCount} blobs for client ${clientID}`);
+    } catch (listError) {
+      console.error('❌ Failed to list blobs:', listError);
+      return res.status(500).json({ 
+        message: 'Failed to list blobs', 
+        detail: listError.message 
       });
     }
 
     return res.json(files);
+    
   } catch (err) {
-    console.error('Client file listing failed:', err);
-    return res.status(500).json({ message: 'Failed to list client files', detail: err.message });
+    console.error('❌ Client file listing failed:', err);
+    return res.status(500).json({ 
+      message: 'Failed to list client files', 
+      detail: err.message
+    });
   }
 });
 
