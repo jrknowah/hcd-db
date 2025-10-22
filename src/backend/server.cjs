@@ -175,8 +175,6 @@ try {
 } catch (err) {
   console.log('⚠️  Could not load ./routes/referrals.js:', err.message);
 }
-
-
 // ✅ NEW: Try to load files router for Azure Blob Storage
 // ✅ UPDATED CODE - Show the real error
 try {
