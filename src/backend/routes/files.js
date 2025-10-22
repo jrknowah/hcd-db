@@ -7,9 +7,9 @@ const router = express.Router();
 
 /* ----------------------------- Configuration ----------------------------- */
 
-const STORAGE_ACCOUNT = process.env.VITE_AZURE_STORAGE_ACCOUNT_NAME;
-const CONNECTION_STRING = process.env.VITE_AZURE_STORAGE_CONNECTION_STRING;
-const CONTAINER_NAME = process.env.AZURE_CONTAINER_NAME || 'client-docs';
+const STORAGE_ACCOUNT = process.env.AZURE_STORAGE_ACCOUNT;
+const CONNECTION_STRING = process.env.AZURE_STORAGE_CONNECTION_STRING;
+const CONTAINER_NAME = process.env.AZURE_BLOB_CONTAINER || 'client-docs';
 const ENABLE_LOCAL_FALLBACK = String(process.env.ENABLE_LOCAL_FALLBACK || 'true').toLowerCase() === 'true';
 
 // Determine if we're running locally or in Azure
