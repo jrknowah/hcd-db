@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   Card,
   CardContent,
@@ -142,22 +142,61 @@ const MedScreening = ({ clientID }) => {
     clientMedications: [],
     clientSurgeries: [],
   });
+  const isSaving = useRef(false);
+  // 1. ADD STATE to track if we just saved
+  const [justSaved, setJustSaved] = useState(false);
 
+  // 2. MODIFY useEffect - Don't reset form if we just saved
   useEffect(() => {
+    if (isSaving.current) {
+      console.log('⏭️ Blocked - currently saving');
+      return;
+    }
+    // ✅ Don't reset form right after saving
+    if (justSaved) {
+      console.log('⏭️ Skipping form reset - just saved data');
+      setJustSaved(false);
+      return;
+    }
+
     if (!savedMedData || savedMedData.length === 0) return;
 
     if (savedMedData.length > 0) {
       const data = savedMedData[0];
+      
+      // ✅ FIXED: Helper function to safely parse JSON
+      const safeJsonParse = (value, fallback = []) => {
+        if (!value || value === '' || value === 'null' || value === 'undefined') {
+          return fallback;
+        }
+        
+        if (Array.isArray(value)) {
+          return value;
+        }
+        
+        try {
+          const parsed = JSON.parse(value);
+          return Array.isArray(parsed) ? parsed : fallback;
+        } catch (e) {
+          console.warn('⚠️ Failed to parse JSON field:', value, e);
+          return fallback;
+        }
+      };
+      
+      console.log('📥 Loading saved data into form');
       setFormData({
         ...data,
         id: data.id || "",
-        clientMedConditions: JSON.parse(data.clientMedConditions || "[]"),
-        clientHepAB: JSON.parse(data.clientHepAB || "[]"),
-        clientRiskFactors: JSON.parse(data.clientRiskFactors || "[]"),
-        clientSTDStatus: JSON.parse(data.clientSTDStatus || "[]"),
-        clientMedications: JSON.parse(data.clientMedications || "[]"),
-        clientSurgeries: JSON.parse(data.clientSurgeries || "[]"),
-        // ... other fields with fallbacks
+        
+        // ✅ FIXED: Safe JSON parsing for all array fields
+        clientMedConditions: safeJsonParse(data.clientMedConditions, []),
+        clientHepAB: safeJsonParse(data.clientHepAB, []),
+        clientRiskFactors: safeJsonParse(data.clientRiskFactors, []),
+        clientSTDStatus: safeJsonParse(data.clientSTDStatus, []),
+        clientMedications: safeJsonParse(data.clientMedications, []),
+        clientSurgeries: safeJsonParse(data.clientSurgeries, []),
+        
+        // String fields with fallbacks
         clientAlcoholRisk: data.clientAlcoholRisk || "",
         clientAlcoholRiskMed: data.clientAlcoholRiskMed || "",
         clientLastTBTest: data.clientLastTBTest || "",
@@ -184,8 +223,7 @@ const MedScreening = ({ clientID }) => {
         clientSTDDate: data.clientSTDDate || "",
       });
     }
-  }, [savedMedData]);
-
+  }, [savedMedData, justSaved]); // ✅ Add justSaved to dependencies
   if (loading) {
     return (
       <Box sx={{ p: 3 }}>
@@ -209,18 +247,51 @@ const MedScreening = ({ clientID }) => {
   };
 
   // ✅ Handle Form Submission
+  // 3. MODIFY handleSubmit - Set flag to prevent form reset
   const handleSubmit = (e) => {
     e.preventDefault();
     
+    // ✅ Set blocking flag BEFORE any async operations
+    isSaving.current = true;
+    
+    console.log('💾 Saving medical screening data...');
+    
+    if (!clientID) {
+      console.error('❌ No clientID provided');
+      isSaving.current = false; // Reset flag on error
+      return;
+    }
+    
     if (shouldUseMockData) {
+      console.log('🔧 Mock mode - data saved locally');
       setSaveSuccess(true);
-      setTimeout(() => setSaveSuccess(false), 3000);
+      setTimeout(() => {
+        setSaveSuccess(false);
+        // ✅ Reset flag after UI feedback completes
+        isSaving.current = false;
+      }, 3000);
       return;
     }
 
-    dispatch(saveMedScreening({ ...formData, clientID }));
-    setSaveSuccess(true);
-    setTimeout(() => setSaveSuccess(false), 3000);
+    console.log('📤 Dispatching save to backend...');
+    
+    // ✅ Use .unwrap() to handle promise properly
+    dispatch(saveMedScreening({ ...formData, clientID }))
+      .unwrap()
+      .then(() => {
+        console.log('✅ Save completed successfully');
+        setSaveSuccess(true);
+        setTimeout(() => {
+          setSaveSuccess(false);
+          // ✅ Reset flag after UI feedback completes
+          isSaving.current = false;
+        }, 3000);
+      })
+      .catch((error) => {
+        console.error('❌ Save failed:', error);
+        // ✅ Reset flag even on error
+        isSaving.current = false;
+      });
   };
 
   const handleSaveMeds = () => {

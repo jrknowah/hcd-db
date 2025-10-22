@@ -912,7 +912,7 @@ try {
 // NURSING ADMISSION
 try {
   const nursingAdmissionRouter = require('./routes/nursingAdmission.js');
-  app.use('/api/nursing-admission', nursingAdmissionRouter);
+  app.use('/api', nursingAdmissionRouter);
   console.log('✅ Nursing Admission router loaded');
   nursingAdmissionRouterLoaded = true;
 } catch (err) {
@@ -922,7 +922,7 @@ try {
 // PROGRESS NOTES
 try {
   const progressNoteRouter = require('./routes/progressNote.js');
-  app.use('/api/progress-notes', progressNoteRouter);
+  app.use('/api', progressNoteRouter);
   console.log('✅ Progress Notes router loaded');
   progressNoteRouterLoaded = true;
 } catch (err) {
@@ -932,7 +932,7 @@ try {
 // IDT PROVIDER
 try {
   const idtProviderRouter = require('./routes/idtProvider.js');
-  app.use('/api/idt-provider', idtProviderRouter);
+  app.use('/api', idtProviderRouter);
   console.log('✅ IDT Provider router loaded');
   idtProviderRouterLoaded = true;
 } catch (err) {
@@ -942,7 +942,7 @@ try {
 // IDT NURSING
 try {
   const idtNursingRouter = require('./routes/idtNursing.js');
-  app.use('/api/idt-nursing', idtNursingRouter);
+  app.use('/api', idtNursingRouter);
   console.log('✅ IDT Nursing router loaded');
   idtNursingRouterLoaded = true;
 } catch (err) {
@@ -952,7 +952,7 @@ try {
 // NURSING ARCHIVE
 try {
   const nursingArchiveRouter = require('./routes/nursingArchive.js');
-  app.use('/api/nursing-archive', nursingArchiveRouter);
+  app.use('/api', nursingArchiveRouter);
   console.log('✅ Nursing Archive router loaded');
   nursingArchiveRouterLoaded = true;
 } catch (err) {

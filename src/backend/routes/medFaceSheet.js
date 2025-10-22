@@ -1,419 +1,372 @@
-// routes/medFaceSheet.js - Medical Face Sheet Router for Section 5
-const express = require('express');
+// routes/medical.js - Backend routes for medical face sheet
+const express = require("express");
 const router = express.Router();
-const sql = require('mssql');
+const sql = require("mssql");
+const { connectToAzureSQL } = require("../store/azureSql");
 
-// Use the same Azure SQL connection pattern as clients.js
-let getPool;
-try {
-  const azureSql = require('../store/azureSql');
-  getPool = azureSql.getPool;
-  console.log('✅ medFaceSheet router: azureSql loaded');
-} catch (err) {
-  console.error('❌ medFaceSheet router: Could not load azureSql module:', err.message);
-  throw new Error('azureSql module not found');
-}
+// Middleware for logging
+router.use((req, res, next) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.originalUrl}`);
+  next();
+});
 
-// Validation helper
-const validateMedicalData = (data) => {
-  const errors = {};
+// ===================================================================
+// MEDICAL INFORMATION ROUTES
+// ===================================================================
+
+// GET /api/medical/info/:clientID
+router.get("/info/:clientID", async (req, res) => {
+  const { clientID } = req.params;
   
-  if (data.clientMedConditions && typeof data.clientMedConditions !== 'string') {
-    try {
-      JSON.stringify(data.clientMedConditions);
-    } catch (e) {
-      errors.clientMedConditions = 'Invalid medical conditions format';
-    }
-  }
-  
-  if (data.clientAllergies && typeof data.clientAllergies !== 'string') {
-    try {
-      JSON.stringify(data.clientAllergies);
-    } catch (e) {
-      errors.clientAllergies = 'Invalid allergies format';
-    }
-  }
-  
-  return Object.keys(errors).length > 0 ? errors : null;
-};
-
-// ============================================================================
-// MEDICAL FACE SHEET ENDPOINTS - FIXED ROUTES (removed /medical prefix)
-// ============================================================================
-
-// 🔧 FIXED: GET /api/medical/info/:clientID
-router.get('/info/:clientID', async (req, res) => {
   try {
-    const pool = await getPool();
-    const { clientID } = req.params;
-    
-    console.log(`📄 Getting medical face sheet for client: ${clientID}`);
-    
-    // Verify client exists
-    const clientCheck = await pool.request()
-      .input('clientID', sql.NVarChar(50), clientID)
-      .query('SELECT clientID FROM Clients WHERE clientID = @clientID');
-    
-    if (clientCheck.recordset.length === 0) {
-      return res.status(404).json({ error: 'Client not found' });
-    }
-    
-    // Get medical face sheet data
-    const result = await pool.request()
-      .input('clientID', sql.NVarChar(50), clientID)
+    const pool = await connectToAzureSQL();
+    const result = await pool
+      .request()
+      .input("clientID", sql.NVarChar, clientID)
       .query(`
-        SELECT TOP 1 * FROM medical_face_sheet 
-        WHERE clientID = @clientID 
-        ORDER BY createdAt DESC
+        SELECT 
+          clientID,
+          clientMedConditions,
+          clientAddMedHistory,
+          clientMedPertinent,
+          clientPreviousLab,
+          clientAllergies,
+          createdBy,
+          createdAt,
+          updatedBy,
+          updatedAt
+        FROM medical_face_sheet 
+        WHERE clientID = @clientID
       `);
     
-    if (result.recordset.length === 0) {
-      res.json({
+    let medicalInfo = {};
+    if (result.recordset.length > 0) {
+      const record = result.recordset[0];
+      medicalInfo = {
+        ...record,
+        clientMedConditions: record.clientMedConditions ? JSON.parse(record.clientMedConditions) : [],
+        clientAllergies: record.clientAllergies ? JSON.parse(record.clientAllergies) : []
+      };
+    } else {
+      // Return empty structure if no data
+      medicalInfo = {
         clientID,
         clientMedConditions: [],
         clientAddMedHistory: '',
         clientMedPertinent: '',
         clientPreviousLab: '',
         clientAllergies: []
-      });
-    } else {
-      const data = result.recordset[0];
-      
-      try {
-        data.clientMedConditions = data.clientMedConditions ? JSON.parse(data.clientMedConditions) : [];
-      } catch (e) {
-        data.clientMedConditions = [];
-      }
-      
-      try {
-        data.clientAllergies = data.clientAllergies ? JSON.parse(data.clientAllergies) : [];
-      } catch (e) {
-        data.clientAllergies = [];
-      }
-      
-      console.log(`✅ Medical face sheet retrieved for client: ${clientID}`);
-      res.json(data);
+      };
     }
+    
+    console.log(`✅ Retrieved medical info for client ${clientID}`);
+    res.json(medicalInfo);
+    
   } catch (err) {
-    console.error('❌ Error fetching medical face sheet:', err);
+    console.error("❌ Error fetching medical info:", err);
     res.status(500).json({ 
-      error: 'Failed to fetch medical face sheet',
-      message: err.message 
+      error: "Error fetching medical information",
+      details: err.message 
     });
   }
 });
 
-// 🔧 FIXED: POST /api/medical/info/:clientID
-router.post('/info/:clientID', async (req, res) => {
+// POST /api/medical/info/:clientID
+router.post("/info/:clientID", async (req, res) => {
+  const { clientID } = req.params;
+  const {
+    clientMedConditions,
+    clientAddMedHistory,
+    clientMedPertinent,
+    clientPreviousLab,
+    clientAllergies,
+    createdBy,
+    updatedBy
+  } = req.body;
+
   try {
-    const pool = await getPool();
-    const { clientID } = req.params;
-    const medicalData = req.body;
+    const pool = await connectToAzureSQL();
     
-    console.log(`💾 Saving medical face sheet for client: ${clientID}`);
-    
-    const validationErrors = validateMedicalData(medicalData);
-    if (validationErrors) {
-      return res.status(400).json({
-        error: 'Validation failed',
-        errors: validationErrors
-      });
-    }
-    
-    const clientCheck = await pool.request()
-      .input('clientID', sql.NVarChar(50), clientID)
-      .query('SELECT clientID FROM Clients WHERE clientID = @clientID');
-    
-    if (clientCheck.recordset.length === 0) {
-      return res.status(404).json({ error: 'Client not found' });
-    }
-    
-    const existingRecord = await pool.request()
-      .input('clientID', sql.NVarChar(50), clientID)
-      .query('SELECT id FROM medical_face_sheet WHERE clientID = @clientID');
-    
-    const request = pool.request();
-    request.input('clientID', sql.NVarChar(50), clientID);
-    request.input('clientMedConditions', sql.NVarChar(sql.MAX), JSON.stringify(medicalData.clientMedConditions || []));
-    request.input('clientAddMedHistory', sql.NVarChar(sql.MAX), medicalData.clientAddMedHistory || '');
-    request.input('clientMedPertinent', sql.NVarChar(sql.MAX), medicalData.clientMedPertinent || '');
-    request.input('clientPreviousLab', sql.NVarChar(10), medicalData.clientPreviousLab || '');
-    request.input('clientAllergies', sql.NVarChar(sql.MAX), JSON.stringify(medicalData.clientAllergies || []));
-    request.input('createdBy', sql.NVarChar(255), medicalData.createdBy || 'system');
-    
-    let query;
-    if (existingRecord.recordset.length > 0) {
-      request.input('updatedBy', sql.NVarChar(255), medicalData.updatedBy || medicalData.createdBy || 'system');
-      query = `
-        UPDATE medical_face_sheet 
-        SET 
+    const result = await pool
+      .request()
+      .input("clientID", sql.NVarChar, clientID)
+      .input("clientMedConditions", sql.NVarChar(sql.MAX), JSON.stringify(clientMedConditions || []))
+      .input("clientAddMedHistory", sql.NVarChar(sql.MAX), clientAddMedHistory || '')
+      .input("clientMedPertinent", sql.NVarChar(sql.MAX), clientMedPertinent || '')
+      .input("clientPreviousLab", sql.NVarChar, clientPreviousLab || '')
+      .input("clientAllergies", sql.NVarChar(sql.MAX), JSON.stringify(clientAllergies || []))
+      .input("createdBy", sql.NVarChar, createdBy || updatedBy || 'system')
+      .input("updatedBy", sql.NVarChar, updatedBy || 'system')
+      .input("createdAt", sql.DateTime, new Date())
+      .input("updatedAt", sql.DateTime, new Date())
+      .query(`
+        MERGE medical_face_sheet AS target
+        USING (SELECT @clientID AS clientID) AS source
+        ON target.clientID = source.clientID
+        WHEN MATCHED THEN UPDATE SET
           clientMedConditions = @clientMedConditions,
           clientAddMedHistory = @clientAddMedHistory,
           clientMedPertinent = @clientMedPertinent,
           clientPreviousLab = @clientPreviousLab,
           clientAllergies = @clientAllergies,
           updatedBy = @updatedBy,
-          updatedAt = GETDATE()
-        WHERE clientID = @clientID;
-        
-        SELECT TOP 1 * FROM medical_face_sheet WHERE clientID = @clientID ORDER BY updatedAt DESC;
-      `;
-    } else {
-      query = `
-        INSERT INTO medical_face_sheet (
-          clientID, clientMedConditions, clientAddMedHistory, 
-          clientMedPertinent, clientPreviousLab, clientAllergies,
-          createdBy, createdAt, updatedAt
-        )
-        VALUES (
-          @clientID, @clientMedConditions, @clientAddMedHistory,
-          @clientMedPertinent, @clientPreviousLab, @clientAllergies,
-          @createdBy, GETDATE(), GETDATE()
-        );
-        
-        SELECT TOP 1 * FROM medical_face_sheet WHERE clientID = @clientID ORDER BY createdAt DESC;
-      `;
-    }
-    
-    const result = await request.query(query);
-    const savedData = result.recordset[0];
-    
-    try {
-      savedData.clientMedConditions = JSON.parse(savedData.clientMedConditions || '[]');
-    } catch (e) {
-      savedData.clientMedConditions = [];
-    }
-    
-    try {
-      savedData.clientAllergies = JSON.parse(savedData.clientAllergies || '[]');
-    } catch (e) {
-      savedData.clientAllergies = [];
-    }
-    
-    console.log(`✅ Medical face sheet saved for client: ${clientID}`);
-    res.json(savedData);
+          updatedAt = @updatedAt
+        WHEN NOT MATCHED THEN
+          INSERT (clientID, clientMedConditions, clientAddMedHistory, clientMedPertinent, 
+                  clientPreviousLab, clientAllergies, createdBy, createdAt, updatedBy, updatedAt)
+          VALUES (@clientID, @clientMedConditions, @clientAddMedHistory, @clientMedPertinent,
+                  @clientPreviousLab, @clientAllergies, @createdBy, @createdAt, @updatedBy, @updatedAt)
+        OUTPUT INSERTED.*;
+      `);
+
+    const savedRecord = result.recordset[0];
+    const response = {
+      ...savedRecord,
+      clientMedConditions: JSON.parse(savedRecord.clientMedConditions || '[]'),
+      clientAllergies: JSON.parse(savedRecord.clientAllergies || '[]')
+    };
+
+    console.log(`✅ Saved medical info for client ${clientID}`);
+    res.json(response);
     
   } catch (err) {
-    console.error('❌ Error saving medical face sheet:', err);
+    console.error("❌ Error saving medical info:", err);
     res.status(500).json({ 
-      error: 'Failed to save medical face sheet',
-      message: err.message 
+      error: "Error saving medical information",
+      details: err.message 
     });
   }
 });
 
-// ============================================================================
-// MEDICAL APPOINTMENTS ENDPOINTS
-// ============================================================================
+// ===================================================================
+// APPOINTMENTS ROUTES
+// ===================================================================
 
-// 🔧 FIXED: GET /api/medical/appointments/:clientID
-router.get('/appointments/:clientID', async (req, res) => {
+// GET /api/medical/appointments/:clientID
+router.get("/appointments/:clientID", async (req, res) => {
+  const { clientID } = req.params;
+  
   try {
-    const pool = await getPool();
-    const { clientID } = req.params;
-    
-    console.log(`📅 Getting medical appointments for client: ${clientID}`);
-    
-    const clientCheck = await pool.request()
-      .input('clientID', sql.NVarChar(50), clientID)
-      .query('SELECT clientID FROM Clients WHERE clientID = @clientID');
-    
-    if (clientCheck.recordset.length === 0) {
-      return res.status(404).json({ error: 'Client not found' });
-    }
-    
-    const result = await pool.request()
-      .input('clientID', sql.NVarChar(50), clientID)
+    const pool = await connectToAzureSQL();
+    const result = await pool
+      .request()
+      .input("clientID", sql.NVarChar, clientID)
       .query(`
-        SELECT * FROM medical_appointments 
+        SELECT 
+          appointmentID,
+          clientID,
+          medApptDate,
+          medApptLoc,
+          medApptType,
+          medApptProv,
+          medApptTranport,
+          createdBy,
+          createdAt,
+          updatedBy,
+          updatedAt
+        FROM medical_appointments 
         WHERE clientID = @clientID 
         ORDER BY medApptDate DESC, createdAt DESC
       `);
     
-    console.log(`✅ Found ${result.recordset.length} appointments for client: ${clientID}`);
+    console.log(`✅ Found ${result.recordset.length} appointments for client ${clientID}`);
     res.json(result.recordset);
     
   } catch (err) {
-    console.error('❌ Error fetching medical appointments:', err);
+    console.error("❌ Error fetching appointments:", err);
     res.status(500).json({ 
-      error: 'Failed to fetch medical appointments',
-      message: err.message 
+      error: "Error fetching appointments",
+      details: err.message 
     });
   }
 });
 
-// 🔧 FIXED: POST /api/medical/appointments/:clientID
-router.post('/appointments/:clientID', async (req, res) => {
+// POST /api/medical/appointments/:clientID
+router.post("/appointments/:clientID", async (req, res) => {
+  const { clientID } = req.params;
+  const {
+    medApptDate,
+    medApptLoc,
+    medApptType,
+    medApptProv,
+    medApptTranport,
+    createdBy
+  } = req.body;
+
   try {
-    const pool = await getPool();
-    const { clientID } = req.params;
-    const appointmentData = req.body;
+    const pool = await connectToAzureSQL();
     
-    console.log(`📅 Creating medical appointment for client: ${clientID}`);
-    
-    const clientCheck = await pool.request()
-      .input('clientID', sql.NVarChar(50), clientID)
-      .query('SELECT clientID FROM Clients WHERE clientID = @clientID');
-    
-    if (clientCheck.recordset.length === 0) {
-      return res.status(404).json({ error: 'Client not found' });
-    }
-    
-    if (appointmentData.medApptDate) {
-      const apptDate = new Date(appointmentData.medApptDate);
-      if (isNaN(apptDate.getTime())) {
-        return res.status(400).json({ error: 'Invalid appointment date format' });
-      }
-    }
-    
-    const result = await pool.request()
-      .input('clientID', sql.NVarChar(50), clientID)
-      .input('medApptDate', sql.Date, appointmentData.medApptDate || null)
-      .input('medApptLoc', sql.NVarChar(255), appointmentData.medApptLoc || '')
-      .input('medApptType', sql.NVarChar(255), appointmentData.medApptType || '')
-      .input('medApptProv', sql.NVarChar(255), appointmentData.medApptProv || '')
-      .input('medApptTranport', sql.NVarChar(10), appointmentData.medApptTranport || '')
-      .input('createdBy', sql.NVarChar(255), appointmentData.createdBy || 'system')
+    const result = await pool
+      .request()
+      .input("clientID", sql.NVarChar, clientID)
+      .input("medApptDate", sql.Date, medApptDate || null)
+      .input("medApptLoc", sql.NVarChar, medApptLoc || '')
+      .input("medApptType", sql.NVarChar, medApptType || '')
+      .input("medApptProv", sql.NVarChar, medApptProv || '')
+      .input("medApptTranport", sql.NVarChar, medApptTranport || '')
+      .input("createdBy", sql.NVarChar, createdBy || 'system')
+      .input("createdAt", sql.DateTime, new Date())
       .query(`
         INSERT INTO medical_appointments (
           clientID, medApptDate, medApptLoc, medApptType, 
-          medApptProv, medApptTranport, createdBy, createdAt, updatedAt
-        )
+          medApptProv, medApptTranport, createdBy, createdAt
+        ) 
+        OUTPUT INSERTED.*
         VALUES (
-          @clientID, @medApptDate, @medApptLoc, @medApptType,
-          @medApptProv, @medApptTranport, @createdBy, GETDATE(), GETDATE()
-        );
-        
-        SELECT TOP 1 * FROM medical_appointments 
-        WHERE clientID = @clientID 
-        ORDER BY appointmentID DESC;
+          @clientID, @medApptDate, @medApptLoc, @medApptType, 
+          @medApptProv, @medApptTranport, @createdBy, @createdAt
+        )
+      `);
+
+    console.log(`✅ Created appointment for client ${clientID}`);
+    res.status(201).json(result.recordset[0]);
+    
+  } catch (err) {
+    console.error("❌ Error adding appointment:", err);
+    res.status(500).json({ 
+      error: "Error adding appointment",
+      details: err.message 
+    });
+  }
+});
+
+// PUT /api/medical/appointments/:appointmentID
+router.put("/appointments/:appointmentID", async (req, res) => {
+  const { appointmentID } = req.params;
+  const {
+    medApptDate,
+    medApptLoc,
+    medApptType,
+    medApptProv,
+    medApptTranport,
+    updatedBy
+  } = req.body;
+
+  try {
+    const pool = await connectToAzureSQL();
+    
+    const result = await pool
+      .request()
+      .input("appointmentID", sql.Int, appointmentID)
+      .input("medApptDate", sql.Date, medApptDate)
+      .input("medApptLoc", sql.NVarChar, medApptLoc || '')
+      .input("medApptType", sql.NVarChar, medApptType || '')
+      .input("medApptProv", sql.NVarChar, medApptProv || '')
+      .input("medApptTranport", sql.NVarChar, medApptTranport || '')
+      .input("updatedBy", sql.NVarChar, updatedBy || 'system')
+      .input("updatedAt", sql.DateTime, new Date())
+      .query(`
+        UPDATE medical_appointments 
+        SET 
+          medApptDate = @medApptDate,
+          medApptLoc = @medApptLoc,
+          medApptType = @medApptType,
+          medApptProv = @medApptProv,
+          medApptTranport = @medApptTranport,
+          updatedBy = @updatedBy,
+          updatedAt = @updatedAt
+        OUTPUT INSERTED.*
+        WHERE appointmentID = @appointmentID
+      `);
+
+    if (result.recordset.length === 0) {
+      return res.status(404).json({ error: "Appointment not found" });
+    }
+
+    console.log(`✅ Updated appointment ${appointmentID}`);
+    res.json(result.recordset[0]);
+    
+  } catch (err) {
+    console.error("❌ Error updating appointment:", err);
+    res.status(500).json({ 
+      error: "Error updating appointment",
+      details: err.message 
+    });
+  }
+});
+
+// DELETE /api/medical/appointments/:appointmentID
+router.delete("/appointments/:appointmentID", async (req, res) => {
+  const { appointmentID } = req.params;
+
+  try {
+    const pool = await connectToAzureSQL();
+    
+    const result = await pool
+      .request()
+      .input("appointmentID", sql.Int, appointmentID)
+      .query(`DELETE FROM medical_appointments WHERE appointmentID = @appointmentID`);
+
+    if (result.rowsAffected[0] === 0) {
+      return res.status(404).json({ error: "Appointment not found" });
+    }
+
+    console.log(`✅ Deleted appointment ${appointmentID}`);
+    res.status(200).json({ 
+      message: "Appointment deleted successfully",
+      appointmentID: appointmentID 
+    });
+    
+  } catch (err) {
+    console.error("❌ Error deleting appointment:", err);
+    res.status(500).json({ 
+      error: "Error deleting appointment",
+      details: err.message 
+    });
+  }
+});
+
+// ===================================================================
+// CLIENT ALLERGIES ROUTES
+// ===================================================================
+
+// GET /api/medical/allergies/:clientID
+router.get("/allergies/:clientID", async (req, res) => {
+  const { clientID } = req.params;
+  
+  try {
+    const pool = await connectToAzureSQL();
+    
+    // Try to get from allergy_options table first
+    const result = await pool
+      .request()
+      .query(`
+        SELECT DISTINCT
+          allergyCode as value,
+          allergyName as label,
+          allergyDescription
+        FROM allergy_options 
+        WHERE isActive = 1
+        ORDER BY allergyName
       `);
     
-    const newAppointment = result.recordset[0];
+    // If table doesn't exist or is empty, return static options
+    if (result.recordset.length === 0) {
+      const defaultAllergies = [
+        { value: 'penicillin', label: 'Penicillin' },
+        { value: 'shellfish', label: 'Shellfish' },
+        { value: 'nuts', label: 'Tree Nuts' },
+        { value: 'peanuts', label: 'Peanuts' },
+        { value: 'dairy', label: 'Dairy Products' },
+        { value: 'eggs', label: 'Eggs' },
+        { value: 'latex', label: 'Latex' },
+        { value: 'sulfa', label: 'Sulfa Drugs' },
+        { value: 'iodine', label: 'Iodine' },
+        { value: 'aspirin', label: 'Aspirin' },
+        { value: 'codeine', label: 'Codeine' },
+        { value: 'morphine', label: 'Morphine' }
+      ];
+      console.log(`✅ Returning default allergy options for client ${clientID}`);
+      return res.json(defaultAllergies);
+    }
     
-    console.log(`✅ Medical appointment created for client: ${clientID}, ID: ${newAppointment.appointmentID}`);
-    res.status(201).json(newAppointment);
+    console.log(`✅ Retrieved ${result.recordset.length} allergy options for client ${clientID}`);
+    res.json(result.recordset);
     
   } catch (err) {
-    console.error('❌ Error creating medical appointment:', err);
-    res.status(500).json({ 
-      error: 'Failed to create medical appointment',
-      message: err.message 
-    });
-  }
-});
-
-// 🔧 FIXED: PUT /api/medical/appointments/:appointmentID
-router.put('/appointments/:appointmentID', async (req, res) => {
-  try {
-    const pool = await getPool();
-    const { appointmentID } = req.params;
-    const updates = req.body;
-    
-    console.log(`📄 Updating medical appointment: ${appointmentID}`);
-    
-    const checkResult = await pool.request()
-      .input('appointmentID', sql.BigInt, appointmentID)
-      .query('SELECT * FROM medical_appointments WHERE appointmentID = @appointmentID');
-    
-    if (checkResult.recordset.length === 0) {
-      return res.status(404).json({ error: 'Appointment not found' });
-    }
-    
-    const request = pool.request();
-    request.input('appointmentID', sql.BigInt, appointmentID);
-    
-    let updateFields = [];
-    if (updates.medApptDate !== undefined) {
-      request.input('medApptDate', sql.Date, updates.medApptDate);
-      updateFields.push('medApptDate = @medApptDate');
-    }
-    if (updates.medApptLoc !== undefined) {
-      request.input('medApptLoc', sql.NVarChar(255), updates.medApptLoc);
-      updateFields.push('medApptLoc = @medApptLoc');
-    }
-    if (updates.medApptType !== undefined) {
-      request.input('medApptType', sql.NVarChar(255), updates.medApptType);
-      updateFields.push('medApptType = @medApptType');
-    }
-    if (updates.medApptProv !== undefined) {
-      request.input('medApptProv', sql.NVarChar(255), updates.medApptProv);
-      updateFields.push('medApptProv = @medApptProv');
-    }
-    if (updates.medApptTranport !== undefined) {
-      request.input('medApptTranport', sql.NVarChar(10), updates.medApptTranport);
-      updateFields.push('medApptTranport = @medApptTranport');
-    }
-    
-    if (updateFields.length === 0) {
-      return res.status(400).json({ error: 'No valid fields to update' });
-    }
-    
-    request.input('updatedBy', sql.NVarChar(255), updates.updatedBy || 'system');
-    
-    const updateQuery = `
-      UPDATE medical_appointments 
-      SET ${updateFields.join(', ')}, updatedBy = @updatedBy, updatedAt = GETDATE()
-      WHERE appointmentID = @appointmentID;
-      
-      SELECT * FROM medical_appointments WHERE appointmentID = @appointmentID;
-    `;
-    
-    const result = await request.query(updateQuery);
-    const updatedAppointment = result.recordset[0];
-    
-    console.log(`✅ Medical appointment updated: ${appointmentID}`);
-    res.json(updatedAppointment);
-    
-  } catch (err) {
-    console.error('❌ Error updating medical appointment:', err);
-    res.status(500).json({ 
-      error: 'Failed to update medical appointment',
-      message: err.message 
-    });
-  }
-});
-
-// 🔧 FIXED: DELETE /api/medical/appointments/:appointmentID
-router.delete('/appointments/:appointmentID', async (req, res) => {
-  try {
-    const pool = await getPool();
-    const { appointmentID } = req.params;
-    
-    console.log(`🗑️ Deleting medical appointment: ${appointmentID}`);
-    
-    const checkResult = await pool.request()
-      .input('appointmentID', sql.BigInt, appointmentID)
-      .query('SELECT * FROM medical_appointments WHERE appointmentID = @appointmentID');
-    
-    if (checkResult.recordset.length === 0) {
-      return res.status(404).json({ error: 'Appointment not found' });
-    }
-    
-    await pool.request()
-      .input('appointmentID', sql.BigInt, appointmentID)
-      .query('DELETE FROM medical_appointments WHERE appointmentID = @appointmentID');
-    
-    console.log(`✅ Medical appointment deleted: ${appointmentID}`);
-    res.json({ message: 'Medical appointment deleted successfully' });
-    
-  } catch (err) {
-    console.error('❌ Error deleting medical appointment:', err);
-    res.status(500).json({ 
-      error: 'Failed to delete medical appointment',
-      message: err.message 
-    });
-  }
-});
-
-// ============================================================================
-// MEDICAL ALLERGIES ENDPOINTS
-// ============================================================================
-
-// 🔧 FIXED: GET /api/medical/allergies/:clientID
-router.get('/allergies/:clientID', async (req, res) => {
-  try {
-    const allergyOptions = [
+    // If table doesn't exist, return static options
+    console.log("⚠️ allergy_options table not found, returning static options");
+    const defaultAllergies = [
       { value: 'penicillin', label: 'Penicillin' },
       { value: 'shellfish', label: 'Shellfish' },
       { value: 'nuts', label: 'Tree Nuts' },
@@ -421,23 +374,98 @@ router.get('/allergies/:clientID', async (req, res) => {
       { value: 'dairy', label: 'Dairy Products' },
       { value: 'eggs', label: 'Eggs' },
       { value: 'latex', label: 'Latex' },
-      { value: 'sulfa', label: 'Sulfa Drugs' },
-      { value: 'iodine', label: 'Iodine' },
-      { value: 'aspirin', label: 'Aspirin' },
-      { value: 'codeine', label: 'Codeine' },
-      { value: 'morphine', label: 'Morphine' }
+      { value: 'sulfa', label: 'Sulfa Drugs' }
     ];
+    res.json(defaultAllergies);
+  }
+});
+
+// POST /api/medical/allergies/:clientID
+router.post("/allergies/:clientID", async (req, res) => {
+  const { clientID } = req.params;
+  const { allergies } = req.body;
+
+  try {
+    const pool = await connectToAzureSQL();
     
-    console.log(`📋 Returning allergy options for client: ${req.params.clientID}`);
-    res.json(allergyOptions);
+    const result = await pool
+      .request()
+      .input("clientID", sql.NVarChar, clientID)
+      .input("allergies", sql.NVarChar(sql.MAX), JSON.stringify(allergies || []))
+      .input("updatedAt", sql.DateTime, new Date())
+      .query(`
+        UPDATE medical_face_sheet 
+        SET clientAllergies = @allergies,
+            updatedAt = @updatedAt
+        WHERE clientID = @clientID
+      `);
+
+    console.log(`✅ Saved allergies for client ${clientID}`);
+    res.json({ 
+      success: true,
+      clientID,
+      allergies,
+      updatedAt: new Date().toISOString()
+    });
     
   } catch (err) {
-    console.error('❌ Error fetching allergy options:', err);
+    console.error("❌ Error saving allergies:", err);
     res.status(500).json({ 
-      error: 'Failed to fetch allergy options',
-      message: err.message 
+      error: "Error saving allergies",
+      details: err.message 
     });
   }
+});
+
+// ===================================================================
+// STATISTICS AND REPORTING ROUTES
+// ===================================================================
+
+// GET /api/medical/stats/:clientID
+router.get("/stats/:clientID", async (req, res) => {
+  const { clientID } = req.params;
+  
+  try {
+    const pool = await connectToAzureSQL();
+    const result = await pool
+      .request()
+      .input("clientID", sql.NVarChar, clientID)
+      .query(`
+        SELECT 
+          (SELECT COUNT(*) FROM medical_appointments WHERE clientID = @clientID) as totalAppointments,
+          (SELECT COUNT(*) FROM medical_appointments WHERE clientID = @clientID AND medApptDate >= GETDATE()) as upcomingAppointments,
+          (SELECT COUNT(*) FROM medical_appointments WHERE clientID = @clientID AND medApptDate < GETDATE()) as pastAppointments,
+          (SELECT COUNT(*) FROM medical_appointments WHERE clientID = @clientID AND medApptTranport = 'Yes') as appointmentsNeedingTransport,
+          (SELECT TOP 1 medApptDate FROM medical_appointments WHERE clientID = @clientID AND medApptDate >= GETDATE() ORDER BY medApptDate ASC) as nextAppointmentDate,
+          (SELECT COUNT(*) FROM medical_face_sheet WHERE clientID = @clientID AND clientAllergies != '[]' AND clientAllergies IS NOT NULL) as hasAllergies
+      `);
+    
+    console.log(`✅ Retrieved medical stats for client ${clientID}`);
+    res.json(result.recordset[0] || {
+      totalAppointments: 0,
+      upcomingAppointments: 0,
+      pastAppointments: 0,
+      appointmentsNeedingTransport: 0,
+      nextAppointmentDate: null,
+      hasAllergies: 0
+    });
+    
+  } catch (err) {
+    console.error("❌ Error fetching medical stats:", err);
+    res.status(500).json({ 
+      error: "Error fetching medical statistics",
+      details: err.message 
+    });
+  }
+});
+
+// Error handling middleware
+router.use((error, req, res, next) => {
+  console.error("❌ Medical Routes Error:", error);
+  res.status(500).json({
+    error: "Internal server error in medical routes",
+    details: error.message
+  });
 });
 
 module.exports = router;

@@ -129,6 +129,7 @@ const Medical = () => {
           {/* Tab Content */}
           <Box sx={{ p: 3 }}>
             {/* Main/Timeline Tab */}
+            {/* Main/Timeline Tab */}
             {activeTab === 0 && (
               <Box>
                 <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -160,22 +161,23 @@ const Medical = () => {
                             </Typography>
                           }
                           secondary={
-                            item.section5Date ? (
-                              <Chip
-                                label={`Completed: ${new Date(item.section5Date).toLocaleDateString()}`}
-                                color="success"
-                                size="small"
-                                sx={{ mt: 0.5 }}
-                              />
-                            ) : (
-                              <Chip
-                                label="Pending"
-                                color="default"
-                                variant="outlined"
-                                size="small"
-                                sx={{ mt: 0.5 }}
-                              />
-                            )
+                            // ✅ FIXED: Move Chip outside of secondary, render as separate element
+                            <Box sx={{ mt: 0.5 }}>
+                              {item.section5Date ? (
+                                <Chip
+                                  label={`Completed: ${new Date(item.section5Date).toLocaleDateString()}`}
+                                  color="success"
+                                  size="small"
+                                />
+                              ) : (
+                                <Chip
+                                  label="Pending"
+                                  color="default"
+                                  variant="outlined"
+                                  size="small"
+                                />
+                              )}
+                            </Box>
                           }
                         />
                       </ListItem>
@@ -227,7 +229,7 @@ const Medical = () => {
                   <ScreeningIcon color="primary" />
                   Nursing Screening
                 </Typography>
-                <MedScreening />
+                <MedScreening clientID={clientID}  />
               </Box>
             )}
 
@@ -238,7 +240,7 @@ const Medical = () => {
                   <AssessmentIcon color="primary" />
                   Nursing Assessment
                 </Typography>
-                <NursingAdmission />
+                <NursingAdmission clientID={clientID}  />
               </Box>
             )}
 
@@ -260,7 +262,7 @@ const Medical = () => {
                   <IDTIcon color="primary" />
                   Nursing IDT Notes
                 </Typography>
-                <IDTNoteNursing />
+                <IDTNoteNursing clientID={clientID}  />
               </Box>
             )}
 
@@ -271,7 +273,7 @@ const Medical = () => {
                   <IDTIcon color="primary" />
                   Provider IDT Notes
                 </Typography>
-                <IDTNoteProvider /> 
+                <IDTNoteProvider clientID={clientID}  /> 
               </Box>
             )}
 
@@ -282,7 +284,7 @@ const Medical = () => {
                   <ArchiveIcon color="primary" />
                   Nursing Archive
                 </Typography>
-                <NursingArchive />
+                <NursingArchive clientID={clientID}  />
               </Box>
             )}
           </Box>

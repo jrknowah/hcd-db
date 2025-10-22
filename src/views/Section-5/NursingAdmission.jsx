@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   Card,
   CardContent,
@@ -74,6 +74,7 @@ import rearBodyImage from '../../data/rear.png';
 const NursingAdmission = ({ clientID }) => {
   const dispatch = useDispatch();
   const user = useSelector((state) => state.auth.user);
+  const isSaving = useRef(false);
 
   // Redux state
   const nursingAdmissionState = useSelector((state) => state.nursingAdmission) || {};
@@ -237,13 +238,13 @@ const NursingAdmission = ({ clientID }) => {
     if (!clientID) return;
     
     // Check if Redux slice is configured
-    if (!nursingAdmissionState && process.env.NODE_ENV === 'development') {
+    if (!nursingAdmissionState && import.meta.env.VITE_USE_MOCK_DATA === 'true') {
       console.warn('⚠️ nursingAdmission slice not found in Redux store. Please add it to your store configuration.');
       return;
     }
     
     // Use mock data in development, real API in production
-    if (process.env.NODE_ENV === 'development') {
+    if (import.meta.env.VITE_USE_MOCK_DATA === 'true') {
       // Simulate API delay
       setTimeout(() => {
         if (dispatch && typeof dispatch === 'function') {
@@ -262,7 +263,14 @@ const NursingAdmission = ({ clientID }) => {
 
   // Update form when saved data changes
   useEffect(() => {
+    // ✅ Block form reset during save
+    if (isSaving.current) {
+      console.log('⏭️ Blocked - currently saving');
+      return;
+    }
+    
     if (Object.keys(savedData).length > 0) {
+      console.log('📥 Loading saved data into form');
       setFormData(savedData);
     }
   }, [savedData]);
@@ -295,8 +303,11 @@ const NursingAdmission = ({ clientID }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
+    isSaving.current = true; // ✅ ADD THIS - Set flag before save
+    
     if (!clientID) {
       alert("⚠️ Please select a client before saving.");
+      isSaving.current = false; // ✅ ADD THIS - Reset on error
       return;
     }
 
@@ -307,22 +318,28 @@ const NursingAdmission = ({ clientID }) => {
     };
 
     try {
-      if (process.env.NODE_ENV === 'development') {
-        // Mock save in development
-        setTimeout(() => {
-          alert("✅ Nursing Admission data saved successfully! (Mock mode)");
-        }, 1000);
+      if (import.meta.env.VITE_USE_MOCK_DATA === 'true') {
         await logUserAction(user, "SAVE_NURSING_ADMISSION", { clientID, ...admissionData });
+        alert("✅ Nursing Admission data saved successfully! (Mock mode)");
+        
+        setTimeout(() => {
+          isSaving.current = false; // ✅ ADD THIS - Reset after delay
+        }, 3000);
       } else {
         if (dispatch && typeof dispatch === 'function') {
           await dispatch(saveNursingAdmission({ clientID, formData: admissionData })).unwrap();
         }
         await logUserAction(user, "SAVE_NURSING_ADMISSION", { clientID, ...admissionData });
         alert("✅ Nursing Admission data saved successfully!");
+        
+        setTimeout(() => {
+          isSaving.current = false; // ✅ ADD THIS - Reset after delay
+        }, 3000);
       }
     } catch (err) {
       console.error("❌ Error saving nursing admission:", err);
       alert(`⚠️ Failed to save nursing admission: ${err.message || err}`);
+      isSaving.current = false; // ✅ ADD THIS - Reset on error
     }
   };
 
@@ -343,7 +360,7 @@ const NursingAdmission = ({ clientID }) => {
   };
 
   // Check if Redux slice is configured
-  if (!nursingAdmissionState && process.env.NODE_ENV === 'development') {
+  if (!nursingAdmissionState && import.meta.env.VITE_USE_MOCK_DATA === 'true') {
     return (
       <Card>
         <CardContent>
@@ -380,99 +397,119 @@ export const store = configureStore({
       <CardContent>
         {/* Header */}
         <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-          <Typography variant="h4" component="h1">
-            🏥 Nursing Admission Intake
-          </Typography>
-          {process.env.NODE_ENV === 'development' && (
-            <Chip label="Development Mode" color="info" size="small" />
-          )}
-        </Box>
-
-        {/* Error Alert */}
-        {error && (
-          <Alert severity="error" sx={{ mb: 2 }}>
-            {error}
-          </Alert>
+        <Typography variant="h4" component="h1">
+          🏥 Nursing Admission Intake
+        </Typography>
+        {import.meta.env.VITE_USE_MOCK_DATA === 'true' && (
+          <Chip label="Development Mode" color="info" size="small" />
         )}
+      </Box>
 
-        <form onSubmit={handleSubmit}>
-          {/* 1. LOC & Orientation Assessment */}
-          <Accordion defaultExpanded>
-            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-              <PsychologyIcon sx={{ mr: 2 }} />
-              <Typography variant="h6">LOC & Orientation Assessment</Typography>
-            </AccordionSummary>
-            <AccordionDetails>
-              <Grid container spacing={3}>
-                <Grid item xs={12} md={4}>
-                  <Typography variant="subtitle1" gutterBottom>Level of Consciousness (LOC)</Typography>
-                  <Autocomplete
-                    multiple
-                    options={convertToOptions(locList)}
-                    value={getSelectedValues('loc', locList)}
-                    onChange={(event, newValue) => handleMultiSelectChange('loc', newValue)}
-                    renderInput={(params) => (
-                      <TextField {...params} label="" fullWidth />
-                    )}
-                    renderTags={(value, getTagProps) =>
-                      value.map((option, index) => (
+      {/* Error Alert - ✅ FIXED */}
+      {error && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {typeof error === 'object' 
+            ? (error.error || error.message || JSON.stringify(error))
+            : error
+          }
+        </Alert>
+      )}
+
+      <form onSubmit={handleSubmit}>
+        {/* 1. LOC & Orientation Assessment */}
+        <Accordion defaultExpanded>
+          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+            <PsychologyIcon sx={{ mr: 2 }} />
+            <Typography variant="h6">LOC & Orientation Assessment</Typography>
+          </AccordionSummary>
+          <AccordionDetails>
+            <Grid container spacing={3}>
+              <Grid item xs={12} md={4}>
+                <Typography variant="subtitle1" gutterBottom>
+                  Level of Consciousness (LOC)
+                </Typography>
+                <Autocomplete
+                  multiple
+                  options={convertToOptions(locList)}
+                  value={getSelectedValues('loc', locList)}
+                  onChange={(event, newValue) => handleMultiSelectChange('loc', newValue)}
+                  renderInput={(params) => (
+                    <TextField {...params} label="" fullWidth />
+                  )}
+                  renderTags={(value, getTagProps) =>
+                    value.map((option, index) => {
+                      const { key, ...tagProps } = getTagProps({ index });
+                      return (
                         <Chip 
-                          key={index}
+                          key={key}
                           label={option.label} 
-                          {...getTagProps({ index })} 
+                          {...tagProps} 
                           size="small" 
                         />
-                      ))
-                    }
-                  />
-                </Grid>
-                <Grid item xs={12} md={4}>
-                  <Typography variant="subtitle1" gutterBottom>Oriented To</Typography>
-                  <Autocomplete
-                    multiple
-                    options={convertToOptions(orientedToList)}
-                    value={getSelectedValues('orientedToList', orientedToList)}
-                    onChange={(event, newValue) => handleMultiSelectChange('orientedToList', newValue)}
-                    renderInput={(params) => (
-                      <TextField {...params} label="" fullWidth />
-                    )}
-                    renderTags={(value, getTagProps) =>
-                      value.map((option, index) => (
-                        <Chip 
-                          key={index}
-                          label={option.label} 
-                          {...getTagProps({ index })} 
-                          size="small" 
-                        />
-                      ))
-                    }
-                  />
-                </Grid>
-                <Grid item xs={12} md={4}>
-                  <Typography variant="subtitle1" gutterBottom>Oriented To Room/Routine</Typography>
-                  <Autocomplete
-                    multiple
-                    options={convertToOptions(orientedToRoomList)}
-                    value={getSelectedValues('orientedToRoomList', orientedToRoomList)}
-                    onChange={(event, newValue) => handleMultiSelectChange('orientedToRoomList', newValue)}
-                    renderInput={(params) => (
-                      <TextField {...params} label="" fullWidth />
-                    )}
-                    renderTags={(value, getTagProps) =>
-                      value.map((option, index) => (
-                        <Chip 
-                          key={index}
-                          label={option.label} 
-                          {...getTagProps({ index })} 
-                          size="small" 
-                        />
-                      ))
-                    }
-                  />
-                </Grid>
+                      );
+                    })
+                  }
+                />
               </Grid>
-            </AccordionDetails>
-          </Accordion>
+              
+              <Grid item xs={12} md={4}>
+                <Typography variant="subtitle1" gutterBottom>
+                  Oriented To
+                </Typography>
+                <Autocomplete
+                  multiple
+                  options={convertToOptions(orientedToList)}
+                  value={getSelectedValues('orientedToList', orientedToList)}
+                  onChange={(event, newValue) => handleMultiSelectChange('orientedToList', newValue)}
+                  renderInput={(params) => (
+                    <TextField {...params} label="" fullWidth />
+                  )}
+                  renderTags={(value, getTagProps) =>
+                    value.map((option, index) => {
+                      const { key, ...tagProps } = getTagProps({ index });
+                      return (
+                        <Chip 
+                          key={key}
+                          label={option.label} 
+                          {...tagProps} 
+                          size="small" 
+                        />
+                      );
+                    })
+                  }
+                />
+              </Grid>
+              
+              <Grid item xs={12} md={4}>
+                <Typography variant="subtitle1" gutterBottom>
+                  Oriented To Room/Routine
+                </Typography>
+                <Autocomplete
+                  multiple
+                  options={convertToOptions(orientedToRoomList)}
+                  value={getSelectedValues('orientedToRoomList', orientedToRoomList)}
+                  onChange={(event, newValue) => handleMultiSelectChange('orientedToRoomList', newValue)}
+                  renderInput={(params) => (
+                    <TextField {...params} label="" fullWidth />
+                  )}
+                  renderTags={(value, getTagProps) =>
+                    value.map((option, index) => {
+                      const { key, ...tagProps } = getTagProps({ index });
+                      return (
+                        <Chip 
+                          key={key}
+                          label={option.label} 
+                          {...tagProps} 
+                          size="small" 
+                        />
+                      );
+                    })
+                  }
+                />
+              </Grid>
+            </Grid>
+          </AccordionDetails>
+        </Accordion>
 
           {/* 2. Cardio-Pulmonary Assessment */}
           <Accordion>
@@ -1140,11 +1177,19 @@ export const store = configureStore({
               </Grid>
             </AccordionDetails>
           </Accordion>
+          {nursingAdmissionState.saveError && (
+              <Alert severity="error" sx={{ mt: 2 }}>
+                {nursingAdmissionState.saveError.error || 'Save failed'}
+              </Alert>
+            )}
+            {nursingAdmissionState.saveSuccess && (
+              <Alert severity="success" sx={{ mt: 2 }}>Saved successfully!</Alert>
+            )}
 
           {/* Submit Button */}
           <Box mt={4} display="flex" justifyContent="space-between" alignItems="center">
             <Box>
-              {process.env.NODE_ENV === 'development' && (
+              {import.meta.env.VITE_USE_MOCK_DATA === 'true' && (
                 <Typography variant="body2" color="text.secondary">
                   🔧 Development Mode: Data will be saved locally (mock mode)
                 </Typography>
