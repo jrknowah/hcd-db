@@ -71,7 +71,7 @@ router.get('/nursing-admission/:clientID', async (req, res) => {
     const pool = await sql.connect(dbConfig);
     
     const query = `
-      SELECT * FROM NursingAdmission 
+      SELECT * FROM nursing_admission 
       WHERE clientID = @clientID
       ORDER BY createdAt DESC
     `;
@@ -142,7 +142,7 @@ router.post('/nursing-admission/:clientID', async (req, res) => {
     const pool = await sql.connect(dbConfig);
     
     // Check if admission already exists
-    const checkQuery = `SELECT admissionID FROM NursingAdmission WHERE clientID = @clientID`;
+    const checkQuery = `SELECT admissionID FROM nursing_admission WHERE clientID = @clientID`;
     const checkResult = await pool.request()
       .input('clientID', sql.NVarChar, clientID)
       .query(checkQuery);
@@ -153,7 +153,7 @@ router.post('/nursing-admission/:clientID', async (req, res) => {
     if (checkResult.recordset.length > 0) {
       // Update existing admission
       query = `
-        UPDATE NursingAdmission 
+        UPDATE nursing_admission 
         SET 
           -- Basic Assessment
           loc = @loc,
@@ -198,7 +198,7 @@ router.post('/nursing-admission/:clientID', async (req, res) => {
     } else {
       // Insert new admission
       query = `
-        INSERT INTO NursingAdmission (
+        INSERT INTO nursing_admission (
           clientID,
           -- Basic Assessment
           loc, orientedToList, orientedToRoomList,
@@ -327,7 +327,7 @@ router.put('/nursing-admission/:admissionID', async (req, res) => {
     // Check if admission exists
     const checkResult = await pool.request()
       .input('admissionID', sql.Int, admissionID)
-      .query('SELECT admissionID FROM NursingAdmission WHERE admissionID = @admissionID');
+      .query('SELECT admissionID FROM nursing_admission WHERE admissionID = @admissionID');
     
     if (checkResult.recordset.length === 0) {
       return res.status(404).json({ error: 'Nursing admission not found' });
@@ -361,7 +361,7 @@ router.put('/nursing-admission/:admissionID', async (req, res) => {
     }
     
     const updateQuery = `
-      UPDATE NursingAdmission 
+      UPDATE nursing_admission 
       SET ${updateFields.join(', ')}, updatedBy = @updatedBy, updatedAt = @updatedAt
       OUTPUT INSERTED.*
       WHERE admissionID = @admissionID
@@ -394,14 +394,14 @@ router.delete('/nursing-admission/:admissionID', async (req, res) => {
     // Check if admission exists
     const checkResult = await pool.request()
       .input('admissionID', sql.Int, admissionID)
-      .query('SELECT admissionID, clientID FROM NursingAdmission WHERE admissionID = @admissionID');
+      .query('SELECT admissionID, clientID FROM nursing_admission WHERE admissionID = @admissionID');
     
     if (checkResult.recordset.length === 0) {
       return res.status(404).json({ error: 'Nursing admission not found' });
     }
     
     // Hard delete (you might want to implement soft delete instead)
-    const deleteQuery = 'DELETE FROM NursingAdmission WHERE admissionID = @admissionID';
+    const deleteQuery = 'DELETE FROM nursing_admission WHERE admissionID = @admissionID';
     
     const result = await pool.request()
       .input('admissionID', sql.Int, admissionID)
@@ -442,7 +442,7 @@ router.get('/nursing-admission/:clientID/summary', async (req, res) => {
         -- Count risk factors from history
         (
           SELECT COUNT(*)
-          FROM NursingAdmission n
+          FROM nursing_admission n
           WHERE n.clientID = @clientID 
             AND (
               JSON_VALUE(n.historyOf, '$[0]') IS NOT NULL OR
@@ -457,7 +457,7 @@ router.get('/nursing-admission/:clientID/summary', async (req, res) => {
         -- Check for follow-up requirements
         CASE 
           WHEN EXISTS(
-            SELECT 1 FROM NursingAdmission 
+            SELECT 1 FROM nursing_admission 
             WHERE clientID = @clientID 
               AND (
                 JSON_VALUE(clientPain, '$[0]') LIKE '%High%' OR
@@ -468,7 +468,7 @@ router.get('/nursing-admission/:clientID/summary', async (req, res) => {
           ELSE 0
         END as followUpRequired
         
-      FROM NursingAdmission 
+      FROM nursing_admission 
       WHERE clientID = @clientID
     `;
     
@@ -518,7 +518,7 @@ router.get('/nursing-admission/:clientID/body-inspection', async (req, res) => {
         frontBodyInspection,
         rearBodyInspection,
         updatedAt
-      FROM NursingAdmission 
+      FROM nursing_admission 
       WHERE clientID = @clientID
       ORDER BY updatedAt DESC
     `;
@@ -563,7 +563,7 @@ router.get('/nursing-admission/:clientID/vitals', async (req, res) => {
         cpR as respiration,
         cpBP as bloodPressure,
         createdAt
-      FROM NursingAdmission 
+      FROM nursing_admission 
       WHERE clientID = @clientID 
         AND (cpT IS NOT NULL OR cpP IS NOT NULL OR cpR IS NOT NULL OR cpBP IS NOT NULL)
       ORDER BY createdAt DESC
