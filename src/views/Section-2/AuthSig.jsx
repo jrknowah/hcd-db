@@ -72,9 +72,10 @@ const MockComponent = ({ title }) => (
 );
 
 // Form configuration data - this replaces all the repetitive state management
+// Form configuration data - ✅ FIXED IDs to match backend
 const FORM_CONFIGS = [
   {
-    id: 'ClientOrientation',
+    id: 'orientation', // ✅ Changed from 'ClientOrientation'
     title: 'Patient Orientation Information Sheet',
     description: 'Essential orientation information for new patients',
     icon: AssignmentIcon,
@@ -85,7 +86,7 @@ const FORM_CONFIGS = [
     estimatedTime: '5 min'
   },
   {
-    id: 'ClientRights', 
+    id: 'clientRights', // ✅ Changed from 'ClientRights'
     title: 'Client Rights',
     description: 'Understanding your rights as a client',
     icon: VerifiedIcon,
@@ -96,7 +97,7 @@ const FORM_CONFIGS = [
     estimatedTime: '3 min'
   },
   {
-    id: 'ConsentForTreatment',
+    id: 'consentTreatment', // ✅ Changed from 'ConsentForTreatment'
     title: 'Consent for Treatment and Services',
     description: 'Authorization for medical treatment',
     icon: MedicalIcon,
@@ -118,7 +119,7 @@ const FORM_CONFIGS = [
     estimatedTime: '10 min'
   },
   {
-    id: 'PrivacyPractice',
+    id: 'privacyPractice', // ✅ Changed from 'PrivacyPractice'
     title: 'LA County Notice Of Private Practices',
     description: 'Privacy practices and procedures notice',
     icon: SecurityIcon,
@@ -129,7 +130,7 @@ const FORM_CONFIGS = [
     estimatedTime: '4 min'
   },
   {
-    id: 'LAHMIS',
+    id: 'lahmis', // ✅ Changed from 'LAHMIS'
     title: 'LA HMIS Consent',
     description: 'Homeless Management Information System consent',
     icon: BusinessIcon,
@@ -140,7 +141,7 @@ const FORM_CONFIGS = [
     estimatedTime: '6 min'
   },
   {
-    id: 'ReleasePHI',
+    id: 'phiRelease', // ✅ Changed from 'ReleasePHI'
     title: 'Client PHI Release',
     description: 'Protected Health Information release form',
     icon: SecurityIcon,
@@ -151,7 +152,7 @@ const FORM_CONFIGS = [
     estimatedTime: '5 min'
   },
   {
-    id: 'ResidencePolicy',
+    id: 'residencePolicy', // ✅ Changed from 'ResidencePolicy'
     title: 'Rules of Residence & Security Policy',
     description: 'Facility rules and security procedures',
     icon: PolicyIcon,
@@ -162,7 +163,7 @@ const FORM_CONFIGS = [
     estimatedTime: '8 min'
   },
   {
-    id: 'AuthForDisclosure',
+    id: 'authDisclosure', // ✅ Changed from 'AuthForDisclosure'
     title: 'Authorization To Share Information',
     description: 'Permission to share information with third parties',
     icon: SecurityIcon,
@@ -173,7 +174,7 @@ const FORM_CONFIGS = [
     estimatedTime: '4 min'
   },
   {
-    id: 'InterimHousingAgreement',
+    id: 'termination', // ✅ Changed from 'InterimHousingAgreement'
     title: 'Termination Policy & Procedure',
     description: 'Understanding termination policies',
     icon: PolicyIcon,
@@ -184,7 +185,7 @@ const FORM_CONFIGS = [
     estimatedTime: '6 min'
   },
   {
-    id: 'AdvCareAck',
+    id: 'advDirective', // ✅ Changed from 'AdvCareAck'
     title: 'Advance Healthcare Directive Form',
     description: 'Advanced healthcare decisions and directives',
     icon: MedicalIcon,
@@ -195,7 +196,7 @@ const FORM_CONFIGS = [
     estimatedTime: '12 min'
   },
   {
-    id: 'ClientGrievances',
+    id: 'grievances', // ✅ Changed from 'ClientGrievances'
     title: 'Client Grievances',
     description: 'Process for filing complaints and grievances',
     icon: AssignmentIcon,
@@ -206,7 +207,7 @@ const FORM_CONFIGS = [
     estimatedTime: '3 min'
   },
   {
-    id: 'AuthUseDiscHMHInfo',
+    id: 'healthDisclosure', // ✅ Changed from 'AuthUseDiscHMHInfo'
     title: 'Authorization For Use and/or Disclosure of Health/Mental Health Information',
     description: 'Mental health information sharing authorization',
     icon: MedicalIcon,
@@ -217,7 +218,7 @@ const FORM_CONFIGS = [
     estimatedTime: '8 min'
   },
   {
-    id: 'ConsentPhoto',
+    id: 'consentPhoto', // ✅ Changed from 'ConsentPhoto'
     title: 'Consent to Taking / Sharing Photograph',
     description: 'Photography and media sharing consent',
     icon: CameraIcon,
@@ -228,7 +229,7 @@ const FORM_CONFIGS = [
     estimatedTime: '2 min'
   },
   {
-    id: 'HousingAgree',
+    id: 'housingAgreement', // ✅ Changed from 'HousingAgree'
     title: 'Interim Housing (Shelter) Agreement',
     description: 'Temporary housing terms and agreement',
     icon: HomeIcon,
@@ -735,9 +736,9 @@ const CategoryFilter = ({ categories, activeCategory, onChange }) => {
 // Priority Section Header Component
 const PrioritySection = ({ priority, count, children }) => {
   const priorityIcons = {
-    high: 'ðŸ”´',
-    medium: 'ðŸŸ¡',
-    low: 'ðŸŸ¢'
+    high: '',
+    medium: '',
+    low: ''
   };
 
   return (
