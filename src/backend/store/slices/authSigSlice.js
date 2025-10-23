@@ -1,10 +1,7 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 
 // ✅ API Base URL - Update this to match your backend
-const API_BASE_URL = process.env.NODE_ENV === 'development' 
-    ? 'http://localhost:3001' 
-    : '';
-
+const API_BASE_URL = `${import.meta.env.VITE_API_URL}`;
 // ✅ Async Thunks for API Calls
 
 // Fetch all authorization forms status for a client

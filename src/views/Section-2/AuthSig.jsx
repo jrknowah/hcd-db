@@ -1,463 +1,951 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
-  Container,
-  Paper,
   Box,
-  Typography,
   Grid,
-  Chip,
   Card,
   CardContent,
   CardActions,
+  Typography,
   Button,
   Dialog,
-  DialogTitle,
   DialogContent,
   DialogActions,
+  DialogTitle,
   IconButton,
+  Chip,
+  Paper,
+  useTheme,
+  useMediaQuery,
+  alpha,
   Divider,
+  Container,
+  CircularProgress 
 } from '@mui/material';
 import {
-  FilterList as FilterListIcon,
   Close as CloseIcon,
-  AccessTime as AccessTimeIcon,
+  Description as DocumentIcon,
+  Security as SecurityIcon,
+  LocalHospital as MedicalIcon,
+  Home as HomeIcon,
+  Camera as CameraIcon,
+  Policy as PolicyIcon,
+  Assignment as AssignmentIcon,
+  VerifiedUser as VerifiedIcon,
+  BusinessCenter as BusinessIcon,
+  FilterList as FilterIcon,
+  Save as SaveIcon,
+  CheckCircle as CheckCircleIcon,
 } from '@mui/icons-material';
+import ClientOrientation from './ClientOrientation';
+import ClientRights from './ClientRights';
+import ConsentForTreatment from './ConsentForTreatment';
 
-// Complete form configurations for all 15 authorization forms
-const formConfigurations = [
-  // HIGH PRIORITY FORMS
+import PrivacyPractice from './PrivacyPractice';
+import LAHMIS from './LAHMIS';
+import ReleasePHI from './ReleasePHI';
+import ResidencePolicy from './ResidencePolicy';
+import ClientGrievances from './ClientGrievances';
+import AuthForDisclosure from './AuthForDisclosure';
+import InterimHousingAgreement from './InterimHousingAgreement';
+import AdvCareAck from './AdvCareAck';
+import HousingAgree from './HousingAgree';
+import ConsentPhoto from './ConsentPhoto';
+import AuthUseDiscHMHInfo from './AuthUseDiscHMHInfo';
+
+// Mock components - replace with your actual component imports
+const MockComponent = ({ title }) => (
+  <Box sx={{ p: 4, textAlign: 'center' }}>
+    <DocumentIcon sx={{ fontSize: 80, color: 'primary.main', mb: 2 }} />
+    <Typography variant="h5" gutterBottom color="primary">
+      {title}
+    </Typography>
+    <Typography variant="body1" color="text.secondary">
+      This is where the actual form content would be displayed. Replace this MockComponent 
+      with your real form components (ClientOrientation, ClientRights, etc.)
+    </Typography>
+    <Box sx={{ mt: 3, p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
+      <Typography variant="body2" color="text.secondary">
+        Form fields, signature areas, and other interactive elements would appear here.
+      </Typography>
+    </Box>
+  </Box>
+);
+
+// Form configuration data - this replaces all the repetitive state management
+const FORM_CONFIGS = [
   {
-    id: 'orientation',
+    id: 'ClientOrientation',
     title: 'Patient Orientation Information Sheet',
-    displayTitle: 'Client Orientation',
-    description: 'Initial client orientation and program overview',
+    description: 'Essential orientation information for new patients',
+    icon: AssignmentIcon,
+    component: ClientOrientation,
+    hasLogo: false,
     category: 'intake',
     priority: 'high',
-    estimatedTime: 5,
-    lahsaRequired: true,
+    estimatedTime: '5 min'
   },
   {
-    id: 'clientRights',
+    id: 'ClientRights', 
     title: 'Client Rights',
     description: 'Understanding your rights as a client',
+    icon: VerifiedIcon,
+    component: ClientRights,
+    hasLogo: true,
     category: 'legal',
     priority: 'high',
-    estimatedTime: 3,
-    lahsaRequired: true,
+    estimatedTime: '3 min'
   },
   {
-    id: 'consentTreatment',
+    id: 'ConsentForTreatment',
     title: 'Consent for Treatment and Services',
-    displayTitle: 'Consent for Treatment',
-    description: 'Authorization for treatment and services',
-    category: 'legal',
+    description: 'Authorization for medical treatment',
+    icon: MedicalIcon,
+    component: ConsentForTreatment,
+    hasLogo: false,
+    category: 'medical',
     priority: 'high',
-    estimatedTime: 5,
-    lahsaRequired: true,
+    estimatedTime: '7 min'
   },
   {
-    id: 'releasePHI',
-    title: 'Client PHI Release',
-    displayTitle: 'Release of Protected Health Information',
-    description: 'Authorization to release protected health information',
-    category: 'legal',
-    priority: 'high',
-    estimatedTime: 7,
-    lahsaRequired: true,
-  },
-  {
-    id: 'residencePolicy',
-    title: 'Rules of Residence & Security Policy',
-    displayTitle: 'Rules of Residence',
-    description: 'Facility rules and security policies',
-    category: 'housing',
-    priority: 'high',
-    estimatedTime: 10,
-    lahsaRequired: false,
-  },
-  {
-    id: 'authDisclosure',
-    title: 'Authorization For Use and/or Disclosure of Health/Mental Health Information',
-    displayTitle: 'Authorization for Disclosure',
-    description: 'Authorization for sharing health and mental health information',
-    category: 'legal',
-    priority: 'high',
-    estimatedTime: 8,
-    lahsaRequired: false,
-  },
-  {
-    id: 'interimHousing',
-    title: 'Interim Housing (Shelter) Agreement',
-    displayTitle: 'Interim Housing Agreement',
-    description: 'Temporary housing agreement and terms',
-    category: 'housing',
-    priority: 'high',
-    estimatedTime: 10,
-    lahsaRequired: false,
-  },
-
-  // MEDIUM PRIORITY FORMS
-  {
-    id: 'housingPrescreen',
-    title: 'Housing Pre-Screen Form',
-    displayTitle: 'Housing Agreement',
-    description: 'Housing eligibility and preferences assessment',
+    id: 'preScreen',
+    title: 'Housing Pre-Screen Form', 
+    description: 'Initial housing assessment questionnaire',
+    icon: HomeIcon,
+    component: MockComponent,
+    hasLogo: false,
     category: 'housing',
     priority: 'medium',
-    estimatedTime: 15,
-    lahsaRequired: false,
+    estimatedTime: '10 min'
   },
   {
-    id: 'privacyPractice',
+    id: 'PrivacyPractice',
     title: 'LA County Notice Of Private Practices',
-    displayTitle: 'Notice of Privacy Practices',
-    description: 'Notice of privacy practices and HIPAA compliance',
+    description: 'Privacy practices and procedures notice',
+    icon: SecurityIcon,
+    component: PrivacyPractice,
+    hasLogo: false,
     category: 'legal',
     priority: 'medium',
-    estimatedTime: 5,
-    lahsaRequired: false,
+    estimatedTime: '4 min'
   },
   {
-    id: 'lahmis',
+    id: 'LAHMIS',
     title: 'LA HMIS Consent',
-    displayTitle: 'LAHSA HMIS Consent',
-    description: 'Consent for LAHSA Homeless Management Information System',
+    description: 'Homeless Management Information System consent',
+    icon: BusinessIcon,
+    component: LAHMIS,
+    hasLogo: false,
     category: 'data',
     priority: 'medium',
-    estimatedTime: 5,
-    lahsaRequired: true,
+    estimatedTime: '6 min'
   },
   {
-    id: 'authShareInfo',
+    id: 'ReleasePHI',
+    title: 'Client PHI Release',
+    description: 'Protected Health Information release form',
+    icon: SecurityIcon,
+    component: ReleasePHI,
+    hasLogo: true,
+    category: 'medical',
+    priority: 'high',
+    estimatedTime: '5 min'
+  },
+  {
+    id: 'ResidencePolicy',
+    title: 'Rules of Residence & Security Policy',
+    description: 'Facility rules and security procedures',
+    icon: PolicyIcon,
+    component: ResidencePolicy,
+    hasLogo: true,
+    category: 'housing',
+    priority: 'high',
+    estimatedTime: '8 min'
+  },
+  {
+    id: 'AuthForDisclosure',
     title: 'Authorization To Share Information',
-    description: 'Authorization to share information with specified parties',
+    description: 'Permission to share information with third parties',
+    icon: SecurityIcon,
+    component: AuthForDisclosure,
+    hasLogo: false,
     category: 'legal',
     priority: 'medium',
-    estimatedTime: 5,
-    lahsaRequired: false,
+    estimatedTime: '4 min'
   },
   {
-    id: 'advCareAck',
+    id: 'InterimHousingAgreement',
+    title: 'Termination Policy & Procedure',
+    description: 'Understanding termination policies',
+    icon: PolicyIcon,
+    component: InterimHousingAgreement,
+    hasLogo: true,
+    category: 'legal',
+    priority: 'low',
+    estimatedTime: '6 min'
+  },
+  {
+    id: 'AdvCareAck',
     title: 'Advance Healthcare Directive Form',
-    displayTitle: 'Advance Care Acknowledgment',
-    description: 'Acknowledgment of advance healthcare directive information',
+    description: 'Advanced healthcare decisions and directives',
+    icon: MedicalIcon,
+    component: AdvCareAck,
+    hasLogo: true,
     category: 'medical',
     priority: 'medium',
-    estimatedTime: 5,
-    lahsaRequired: false,
-  },
-
-  // LOW PRIORITY FORMS
-  {
-    id: 'terminationPolicy',
-    title: 'Termination Policy & Procedure',
-    displayTitle: 'Acknowledgment',
-    description: 'Understanding of termination policies and procedures',
-    category: 'support',
-    priority: 'low',
-    estimatedTime: 5,
-    lahsaRequired: false,
+    estimatedTime: '12 min'
   },
   {
-    id: 'clientGrievances',
+    id: 'ClientGrievances',
     title: 'Client Grievances',
-    description: 'Client grievance process and procedures',
+    description: 'Process for filing complaints and grievances',
+    icon: AssignmentIcon,
+    component: ClientGrievances,
+    hasLogo: true,
     category: 'support',
     priority: 'low',
-    estimatedTime: 3,
-    lahsaRequired: false,
+    estimatedTime: '3 min'
   },
   {
-    id: 'consentPhoto',
+    id: 'AuthUseDiscHMHInfo',
+    title: 'Authorization For Use and/or Disclosure of Health/Mental Health Information',
+    description: 'Mental health information sharing authorization',
+    icon: MedicalIcon,
+    component: AuthUseDiscHMHInfo,
+    hasLogo: true,
+    category: 'medical',
+    priority: 'high',
+    estimatedTime: '8 min'
+  },
+  {
+    id: 'ConsentPhoto',
     title: 'Consent to Taking / Sharing Photograph',
-    displayTitle: 'Consent for Photography',
-    description: 'Consent for taking and sharing photographs',
+    description: 'Photography and media sharing consent',
+    icon: CameraIcon,
+    component: ConsentPhoto,
+    hasLogo: true,
     category: 'media',
     priority: 'low',
-    estimatedTime: 3,
-    lahsaRequired: false,
+    estimatedTime: '2 min'
   },
+  {
+    id: 'HousingAgree',
+    title: 'Interim Housing (Shelter) Agreement',
+    description: 'Temporary housing terms and agreement',
+    icon: HomeIcon,
+    component: HousingAgree,
+    hasLogo: true,
+    category: 'housing',
+    priority: 'high',
+    estimatedTime: '15 min'
+  }
 ];
 
-const AuthSig = () => {
-  const [selectedCategory, setSelectedCategory] = useState('all');
-  const [openModal, setOpenModal] = useState(false);
-  const [selectedForm, setSelectedForm] = useState(null);
+// Category and priority color configurations
+const CATEGORY_COLORS = {
+  intake: 'primary',
+  legal: 'secondary', 
+  medical: 'error',
+  housing: 'warning',
+  data: 'info',
+  support: 'success',
+  media: 'default'
+};
 
-  // Filter forms by category
-  const filteredForms = selectedCategory === 'all' 
-    ? formConfigurations 
-    : formConfigurations.filter(form => form.category === selectedCategory);
+const PRIORITY_COLORS = {
+  high: 'error',
+  medium: 'warning', 
+  low: 'success'
+};
 
-  // Calculate total time
-  const totalMinutes = formConfigurations.reduce((sum, form) => sum + form.estimatedTime, 0);
+// Reusable Form Card Component
+const FormCard = ({ form, onOpen }) => {
+  const theme = useTheme();
+  const IconComponent = form.icon;
+  
+  return (
+    <Card 
+      elevation={2}
+      sx={{
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        position: 'relative',
+        cursor: 'pointer',
+        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+        '&:hover': {
+          elevation: 8,
+          transform: 'translateY(-4px)',
+          '& .card-content': {
+            backgroundColor: alpha(theme.palette.primary.main, 0.02)
+          },
+          '& .card-icon': {
+            transform: 'scale(1.1)',
+            color: theme.palette.primary.main
+          }
+        }
+      }}
+      onClick={() => onOpen(form)}
+    >
+      {/* LAHSA Logo indicator for applicable forms */}
+      {form.hasLogo && (
+        <Box
+          sx={{
+            position: 'absolute',
+            top: 12,
+            right: 12,
+            width: 40,
+            height: 40,
+            borderRadius: '50%',
+            background: `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.1)} 0%, ${alpha(theme.palette.primary.main, 0.2)} 100%)`,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            border: `2px solid ${alpha(theme.palette.primary.main, 0.3)}`,
+            zIndex: 1
+          }}
+        >
+          <Typography variant="caption" fontWeight="bold" color="primary" fontSize="10px">
+            LAHSA
+          </Typography>
+        </Box>
+      )}
+      
+      <CardContent 
+        className="card-content"
+        sx={{ 
+          flexGrow: 1, 
+          display: 'flex', 
+          flexDirection: 'column',
+          p: 3,
+          transition: 'background-color 0.3s ease'
+        }}
+      >
+        <Box sx={{ display: 'flex', alignItems: 'flex-start', mb: 2 }}>
+          <IconComponent 
+            className="card-icon"
+            sx={{ 
+              fontSize: 36, 
+              color: 'text.secondary', 
+              mr: 2,
+              mt: 0.5,
+              flexShrink: 0,
+              transition: 'all 0.3s ease'
+            }} 
+          />
+          <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+            <Typography 
+              variant="h6" 
+              component="h3"
+              sx={{ 
+                fontSize: '1.1rem',
+                fontWeight: 600,
+                lineHeight: 1.3,
+                mb: 1,
+                display: '-webkit-box',
+                WebkitLineClamp: 2,
+                WebkitBoxOrient: 'vertical',
+                overflow: 'hidden'
+              }}
+            >
+              {form.title}
+            </Typography>
+            <Typography 
+              variant="body2" 
+              color="text.secondary"
+              sx={{ 
+                mb: 2,
+                display: '-webkit-box',
+                WebkitLineClamp: 2,
+                WebkitBoxOrient: 'vertical',
+                overflow: 'hidden'
+              }}
+            >
+              {form.description}
+            </Typography>
+          </Box>
+        </Box>
 
-  // Handle form card click
-  const handleFormClick = (form) => {
-    setSelectedForm(form);
-    setOpenModal(true);
+        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mt: 'auto', mb: 2 }}>
+          <Chip 
+            label={form.category}
+            size="small"
+            color={CATEGORY_COLORS[form.category] || 'default'}
+            variant="outlined"
+            sx={{ textTransform: 'capitalize' }}
+          />
+          <Chip 
+            label={`${form.priority} priority`}
+            size="small" 
+            color={PRIORITY_COLORS[form.priority]}
+            variant="filled"
+            sx={{ textTransform: 'capitalize' }}
+          />
+          <Chip 
+            label={form.estimatedTime}
+            size="small"
+            variant="outlined"
+            color="default"
+          />
+        </Box>
+      </CardContent>
+
+      <CardActions sx={{ p: 2, pt: 0 }}>
+        <Button 
+          fullWidth
+          variant="contained"
+          startIcon={<DocumentIcon />}
+          onClick={(e) => {
+            e.stopPropagation();
+            onOpen(form);
+          }}
+          sx={{
+            py: 1.5,
+            fontWeight: 600,
+            textTransform: 'none'
+          }}
+        >
+          Open Form
+        </Button>
+      </CardActions>
+    </Card>
+  );
+};
+
+// Reusable Modal Component with MUI Dialog
+// âœ… Enhanced Modal with proper button functionality
+// Update your FormModal component in AuthSig.jsx
+
+// âœ… Fixed FormModal Component
+const FormModal = ({ form, open, onClose }) => {
+  const theme = useTheme();
+  const fullScreen = useMediaQuery(theme.breakpoints.down('md'));
+  const [saving, setSaving] = useState(false);
+  const [saveType, setSaveType] = useState(null);
+  const [showFormContent, setShowFormContent] = useState(false); // âœ… Added state to control view
+  
+  if (!form) return null;
+  
+  const FormComponent = form.component;
+  const IconComponent = form.icon;
+  
+  // Reset showFormContent when modal closes
+  const handleClose = () => {
+    setShowFormContent(false);
+    setSaving(false);
+    setSaveType(null);
+    onClose();
   };
-
-  // Handle modal close
-  const handleCloseModal = () => {
-    setOpenModal(false);
-    setSelectedForm(null);
-  };
-
-  // Handle Escape key to close modal
-  React.useEffect(() => {
-    const handleKeyDown = (event) => {
-      if (event.key === 'Escape' && openModal) {
-        handleCloseModal();
-      }
-    };
-
-    document.addEventListener('keydown', handleKeyDown);
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [openModal]);
-
-  // Handle keyboard events on cards
-  const handleCardKeyDown = (event, form) => {
-    if (event.key === 'Enter' || event.key === ' ') {
-      event.preventDefault();
-      handleFormClick(form);
+  
+  // Handle save progress (draft)
+  const handleSaveProgress = async () => {
+    setSaving(true);
+    setSaveType('progress');
+    
+    try {
+      console.log('Saving progress for form:', form.id);
+      
+      // Simulate API call
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      setSaving(false);
+      setSaveType(null);
+      
+    } catch (error) {
+      console.error('Failed to save progress:', error);
+      setSaving(false);
+      setSaveType(null);
     }
   };
-
-  // Categorize forms by priority
-  const highPriorityForms = filteredForms.filter(f => f.priority === 'high');
-  const mediumPriorityForms = filteredForms.filter(f => f.priority === 'medium');
-  const lowPriorityForms = filteredForms.filter(f => f.priority === 'low');
-
-  // Get unique categories
-  const categories = [
-    { id: 'all', label: 'All Forms' },
-    { id: 'intake', label: 'Intake Forms' },
-    { id: 'legal', label: 'Legal Forms' },
-    { id: 'medical', label: 'Medical Forms' },
-    { id: 'housing', label: 'Housing Forms' },
-    { id: 'data', label: 'Data Forms' },
-    { id: 'support', label: 'Support Forms' },
-    { id: 'media', label: 'Media Forms' },
-  ];
-
-  // Render a form card
-  const renderFormCard = (form) => (
-    <Grid item xs={12} sm={6} lg={4} key={form.id}>
-      <Card 
-        sx={{ 
-          height: '100%', 
-          cursor: 'pointer',
-          '&:hover': {
-            boxShadow: 6,
-            transform: 'translateY(-2px)',
-            transition: 'all 0.3s ease-in-out',
-          },
-        }}
-        onClick={() => handleFormClick(form)}
-        onKeyDown={(e) => handleCardKeyDown(e, form)}
-        tabIndex={0}
-        role="button"
-        aria-label={`Open ${form.displayTitle || form.title} form`}
-      >
-        <CardContent>
-          <Typography variant="h6" component="h3" gutterBottom>
-            {form.displayTitle || form.title}
-          </Typography>
-          <Typography variant="body2" color="text.secondary" paragraph>
-            {form.description}
-          </Typography>
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-            <Chip label={form.category} size="small" />
-            <Chip label={`${form.estimatedTime} min`} size="small" />
-            {form.priority === 'high' && (
-              <Chip label="High Priority" size="small" color="error" />
-            )}
-            {form.priority === 'medium' && (
-              <Chip label="Required" size="small" color="warning" />
-            )}
-            {form.lahsaRequired && (
-              <Chip label="LAHSA Required" size="small" color="warning" />
-            )}
-          </Box>
-        </CardContent>
-        <CardActions>
-          <Button 
-            fullWidth 
-            variant="contained" 
-            color="primary"
-            aria-label="Open Form"
-          >
-            Open Form
-          </Button>
-        </CardActions>
-      </Card>
-    </Grid>
-  );
-
+  
+  // Handle form submission (complete)
+  const handleSubmitForm = async () => {
+    setSaving(true);
+    setSaveType('submit');
+    
+    try {
+      console.log('Submitting form:', form.id);
+      
+      // Simulate API call
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      setSaving(false);
+      setSaveType(null);
+      
+      // Optionally close modal after successful submission
+      // handleClose();
+      
+    } catch (error) {
+      console.error('Failed to submit form:', error);
+      setSaving(false);
+      setSaveType(null);
+    }
+  };
+  
+  // âœ… Handle View Form button click
+  const handleViewForm = () => {
+    setShowFormContent(true);
+  };
+  
   return (
-    <Container maxWidth="xl">
-      {/* Header Section */}
-      <Paper elevation={4} sx={{ p: 4, mb: 3 }}>
-        <Box>
-          <Typography variant="h2" component="h1" gutterBottom>
-            Authorization & Signature Forms
-          </Typography>
-          <Typography variant="h5" component="h2">
-            Complete all required documentation for your intake process
-          </Typography>
-          <Box sx={{ display: 'flex', gap: 2, mt: 2, flexWrap: 'wrap' }}>
-            <Chip label={`${formConfigurations.length} Total Forms`} />
-            <Chip label={`${filteredForms.length} Currently Shown`} />
-            <Chip label={`~${totalMinutes} minutes total`} />
+    <Dialog
+      open={open}
+      onClose={handleClose}
+      maxWidth="lg"
+      fullWidth
+      fullScreen={fullScreen}
+      PaperProps={{
+        sx: {
+          minHeight: fullScreen ? '100vh' : '70vh',
+          borderRadius: fullScreen ? 0 : 2
+        }
+      }}
+    >
+      <DialogTitle sx={{ 
+        display: 'flex', 
+        alignItems: 'center', 
+        justifyContent: 'space-between',
+        pb: 2,
+        background: `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.05)} 0%, ${alpha(theme.palette.primary.main, 0.02)} 100%)`,
+        borderBottom: `1px solid ${theme.palette.divider}`
+      }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+          <IconComponent color="primary" />
+          <Box>
+            <Typography variant="h6" component="h2" sx={{ fontWeight: 600 }}>
+              {form.title}
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              Estimated time: {form.estimatedTime}
+            </Typography>
           </Box>
         </Box>
-      </Paper>
-
-      {/* Filter Section */}
-      <Paper elevation={1} sx={{ p: 2, mb: 3 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-          <FilterListIcon />
-          <Typography variant="h6">Filter by Category</Typography>
-        </Box>
-        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-          {categories.map((category) => (
-            <Chip
-              key={category.id}
-              label={category.label}
-              onClick={() => setSelectedCategory(category.id)}
-              color={selectedCategory === category.id ? 'primary' : 'default'}
-              variant={selectedCategory === category.id ? 'filled' : 'outlined'}
-              clickable
-            />
-          ))}
-        </Box>
-      </Paper>
-
-      {/* High Priority Forms */}
-      {highPriorityForms.length > 0 && (
-        <>
-          <Typography variant="h4" component="h2" gutterBottom>
-            🔴 High Priority Forms
-          </Typography>
-          <Grid container spacing={3} sx={{ mb: 4 }}>
-            {highPriorityForms.map(renderFormCard)}
-          </Grid>
-          <Divider sx={{ my: 3 }} />
-        </>
-      )}
-
-      {/* Medium Priority Forms */}
-      {mediumPriorityForms.length > 0 && (
-        <>
-          <Typography variant="h4" component="h2" gutterBottom>
-            🟡 Medium Priority Forms
-          </Typography>
-          <Grid container spacing={3} sx={{ mb: 4 }}>
-            {mediumPriorityForms.map(renderFormCard)}
-          </Grid>
-          <Divider sx={{ my: 3 }} />
-        </>
-      )}
-
-      {/* Low Priority Forms */}
-      {lowPriorityForms.length > 0 && (
-        <>
-          <Typography variant="h4" component="h2" gutterBottom>
-            🟢 Low Priority Forms
-          </Typography>
-          <Grid container spacing={3}>
-            {lowPriorityForms.map(renderFormCard)}
-          </Grid>
-        </>
-      )}
-
-      {/* Modal Dialog */}
-      <Dialog
-        open={openModal}
-        onClose={handleCloseModal}
-        maxWidth="md"
-        fullWidth
-        role="dialog"
-        aria-labelledby="form-dialog-title"
-        aria-describedby="form-dialog-description"
-      >
-        {selectedForm && (
-          <>
-            <DialogTitle id="form-dialog-title">
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <Box sx={{ flex: 1, pr: 2 }}>
-                  <Typography variant="h6" component="h3">
-                    {selectedForm.displayTitle || selectedForm.title}
-                  </Typography>
-                  <Box sx={{ display: 'flex', gap: 1, mt: 1, flexWrap: 'wrap' }}>
-                    <Chip 
-                      icon={<AccessTimeIcon />} 
-                      label={`${selectedForm.estimatedTime} min`} 
-                      size="small" 
-                    />
-                    <Chip 
-                      label={selectedForm.category} 
-                      size="small" 
-                      color="primary"
-                      variant="outlined"
-                    />
-                    {selectedForm.lahsaRequired && (
-                      <Chip label="LAHSA Required" size="small" color="warning" />
-                    )}
-                  </Box>
-                </Box>
-                <IconButton
-                  aria-label="close"
-                  onClick={handleCloseModal}
-                  sx={{ 
-                    color: (theme) => theme.palette.grey[500],
-                  }}
-                >
-                  <CloseIcon />
-                </IconButton>
+        <IconButton onClick={handleClose} size="small" aria-label="Close dialog">
+          <CloseIcon />
+        </IconButton>
+      </DialogTitle>
+      
+      <DialogContent sx={{ p: 0 }}>
+        {!showFormContent ? (
+          // âœ… Show form preview/description
+          <Box sx={{ p: 4 }}>
+            <Box sx={{ display: 'flex', alignItems: 'flex-start', mb: 3 }}>
+              <IconComponent sx={{ fontSize: 60, color: 'primary.main', mr: 2 }} />
+              <Box>
+                <Typography variant="h5" gutterBottom sx={{ fontWeight: 600 }}>
+                  {form.title}
+                </Typography>
+                <Typography variant="body1" color="text.secondary" paragraph>
+                  {form.description}
+                </Typography>
               </Box>
-            </DialogTitle>
-            <DialogContent dividers id="form-dialog-description">
-              <Typography variant="body1" paragraph>
-                {selectedForm.description}
-              </Typography>
-              <Typography variant="body2" color="text.secondary" paragraph>
-                This form is part of the <strong>{selectedForm.category}</strong> category 
-                and should take approximately <strong>{selectedForm.estimatedTime} minutes</strong> to complete.
-              </Typography>
-              {selectedForm.lahsaRequired && (
-                <Typography variant="body2" color="warning.main" sx={{ mt: 2 }}>
-                  ⚠️ This form is required by LAHSA and must be completed.
-                </Typography>
-              )}
-              {selectedForm.priority === 'high' && (
-                <Typography variant="body2" color="error.main" sx={{ mt: 2 }}>
-                  🔴 This is a high priority form and should be completed as soon as possible.
-                </Typography>
-              )}
-            </DialogContent>
-            <DialogActions sx={{ p: 2 }}>
-              <Button onClick={handleCloseModal} size="large">
-                Close
-              </Button>
-              <Button 
-                variant="contained" 
-                color="primary"
-                size="large"
-                onClick={() => {
-                  // TODO: Navigate to actual form
-                  console.log('Opening form:', selectedForm.id);
+            </Box>
+
+            <Divider sx={{ my: 3 }} />
+
+            <Grid container spacing={2} sx={{ mb: 3 }}>
+              <Grid item xs={12} sm={6}>
+                <Paper variant="outlined" sx={{ p: 2 }}>
+                  <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
+                    Category
+                  </Typography>
+                  <Chip 
+                    label={form.category}
+                    size="small"
+                    color={CATEGORY_COLORS[form.category] || 'default'}
+                    sx={{ textTransform: 'capitalize' }}
+                  />
+                </Paper>
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <Paper variant="outlined" sx={{ p: 2 }}>
+                  <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
+                    Priority Level
+                  </Typography>
+                  <Chip 
+                    label={`${form.priority} priority`}
+                    size="small"
+                    color={PRIORITY_COLORS[form.priority]}
+                    sx={{ textTransform: 'capitalize' }}
+                  />
+                </Paper>
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <Paper variant="outlined" sx={{ p: 2 }}>
+                  <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
+                    Estimated Time
+                  </Typography>
+                  <Typography variant="body1" fontWeight={600}>
+                    {form.estimatedTime}
+                  </Typography>
+                </Paper>
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <Paper variant="outlined" sx={{ p: 2 }}>
+                  <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
+                    LAHSA Required
+                  </Typography>
+                  <Typography variant="body1" fontWeight={600}>
+                    {form.hasLogo ? 'Yes' : 'No'}
+                  </Typography>
+                </Paper>
+              </Grid>
+            </Grid>
+
+            {form.priority === 'high' && (
+              <Paper 
+                sx={{ 
+                  p: 2, 
+                  bgcolor: alpha(theme.palette.error.main, 0.1),
+                  border: `1px solid ${alpha(theme.palette.error.main, 0.3)}`
                 }}
               >
-                View Form
-              </Button>
-            </DialogActions>
+                <Typography variant="body2" color="error.main" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <span>🔴</span>
+                  <strong>High Priority:</strong> This form should be completed as soon as possible.
+                </Typography>
+              </Paper>
+            )}
+          </Box>
+        ) : (
+          // âœ… Show actual form component
+          <FormComponent 
+            title={form.title}
+            onSaveProgress={handleSaveProgress}
+            onSubmitForm={handleSubmitForm}
+            saving={saving}
+            saveType={saveType}
+          />
+        )}
+      </DialogContent>
+      
+      <DialogActions sx={{ 
+        p: 3, 
+        gap: 1,
+        borderTop: `1px solid ${theme.palette.divider}`,
+        background: alpha(theme.palette.grey[50], 0.5)
+      }}>
+        {!showFormContent ? (
+          // âœ… Buttons for preview mode
+          <>
+            <Button 
+              onClick={handleClose} 
+              variant="outlined" 
+              color="inherit"
+            >
+              Close
+            </Button>
+            
+            <Button 
+              variant="contained" 
+              color="primary"
+              onClick={handleViewForm}
+              startIcon={<DocumentIcon />}
+              sx={{ fontWeight: 600 }}
+            >
+              View Form
+            </Button>
+          </>
+        ) : (
+          // âœ… Buttons for form editing mode
+          <>
+            <Button 
+              onClick={() => setShowFormContent(false)} 
+              variant="outlined" 
+              color="inherit"
+              disabled={saving}
+            >
+              Back to Preview
+            </Button>
+            
+            <Button 
+              variant="outlined" 
+              color="primary"
+              onClick={handleSaveProgress}
+              disabled={saving}
+              startIcon={
+                saving && saveType === 'progress' ? (
+                  <CircularProgress size={16} />
+                ) : (
+                  <SaveIcon />
+                )
+              }
+            >
+              {saving && saveType === 'progress' ? 'Saving...' : 'Save Progress'}
+            </Button>
+            
+            <Button 
+              variant="contained" 
+              color="success" 
+              onClick={handleSubmitForm}
+              disabled={saving}
+              startIcon={
+                saving && saveType === 'submit' ? (
+                  <CircularProgress size={16} />
+                ) : (
+                  <CheckCircleIcon />
+                )
+              }
+              sx={{ fontWeight: 600 }}
+            >
+              {saving && saveType === 'submit' ? 'Submitting...' : 'Submit Form'}
+            </Button>
           </>
         )}
-      </Dialog>
+      </DialogActions>
+    </Dialog>
+  );
+};
+
+// Category Filter Component with MUI styling
+const CategoryFilter = ({ categories, activeCategory, onChange }) => {
+  return (
+    <Paper elevation={1} sx={{ p: 3, mb: 4 }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+        <FilterIcon sx={{ mr: 1, color: 'text.secondary' }} />
+        <Typography variant="h6" sx={{ fontWeight: 600 }}>
+          Filter by Category
+        </Typography>
+      </Box>
+      <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+        <Chip
+          label="All Forms"
+          color={activeCategory === 'all' ? 'primary' : 'default'}
+          onClick={() => onChange('all')}
+          variant={activeCategory === 'all' ? 'filled' : 'outlined'}
+          sx={{ fontWeight: activeCategory === 'all' ? 600 : 400 }}
+        />
+        {categories.map(category => (
+          <Chip
+            key={category}
+            label={`${category.charAt(0).toUpperCase() + category.slice(1)} Forms`}
+            color={activeCategory === category ? CATEGORY_COLORS[category] : 'default'}
+            onClick={() => onChange(category)}
+            variant={activeCategory === category ? 'filled' : 'outlined'}
+            sx={{ 
+              fontWeight: activeCategory === category ? 600 : 400,
+              textTransform: 'capitalize'
+            }}
+          />
+        ))}
+      </Box>
+    </Paper>
+  );
+};
+
+// Priority Section Header Component
+const PrioritySection = ({ priority, count, children }) => {
+  const priorityIcons = {
+    high: 'ðŸ”´',
+    medium: 'ðŸŸ¡',
+    low: 'ðŸŸ¢'
+  };
+
+  return (
+    <Box sx={{ mb: 5 }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
+        <Typography 
+          variant="h4" 
+          sx={{ 
+            fontWeight: 700,
+            textTransform: 'capitalize',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 1
+          }}
+        >
+          <span>{priorityIcons[priority]}</span>
+          {priority} Priority Forms
+        </Typography>
+        <Chip 
+          label={`${count} form${count !== 1 ? 's' : ''}`}
+          color={PRIORITY_COLORS[priority]}
+          variant="filled"
+          sx={{ fontWeight: 600 }}
+        />
+      </Box>
+      <Divider sx={{ mb: 3 }} />
+      {children}
+    </Box>
+  );
+};
+
+// Main Component - Clean and maintainable with MUI!
+const AuthSig = () => {
+  const theme = useTheme();
+  const [activeModal, setActiveModal] = useState(null);
+  const [categoryFilter, setCategoryFilter] = useState('all');
+  
+  // Get unique categories from the configuration
+  const categories = [...new Set(FORM_CONFIGS.map(form => form.category))];
+  
+  // Filter forms based on category
+  const filteredForms = categoryFilter === 'all' 
+    ? FORM_CONFIGS 
+    : FORM_CONFIGS.filter(form => form.category === categoryFilter);
+  
+  // Group forms by priority for better organization
+  const formsByPriority = filteredForms.reduce((acc, form) => {
+    if (!acc[form.priority]) acc[form.priority] = [];
+    acc[form.priority].push(form);
+    return acc;
+  }, {});
+  
+  // Calculate total estimated time
+  const totalTime = filteredForms.reduce((acc, form) => {
+    const minutes = parseInt(form.estimatedTime);
+    return acc + minutes;
+  }, 0);
+  
+  // Clean event handlers using useCallback for performance
+  const handleOpenModal = useCallback((form) => {
+    setActiveModal(form);
+  }, []);
+  
+  const handleCloseModal = useCallback(() => {
+    setActiveModal(null);
+  }, []);
+  
+  const handleCategoryChange = useCallback((category) => {
+    setCategoryFilter(category);
+  }, []);
+
+  return (
+    <Container maxWidth="xl" sx={{ py: 4 }}>
+      {/* Hero Header with gradient background */}
+      <Paper 
+        elevation={4}
+        sx={{ 
+          p: 4,
+          mb: 4,
+          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+          color: 'white',
+          position: 'relative',
+          overflow: 'hidden',
+          '&::before': {
+            content: '""',
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'url("data:image/svg+xml,%3Csvg width="60" height="60" viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg"%3E%3Cg fill="none" fill-rule="evenodd"%3E%3Cg fill="%23ffffff" fill-opacity="0.05"%3E%3Cpath d="M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z"/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")',
+            opacity: 0.1
+          }
+        }}
+      >
+        <Box sx={{ position: 'relative', zIndex: 1 }}>
+          <Typography 
+            variant="h2" 
+            component="h1" 
+            gutterBottom
+            sx={{ 
+              fontWeight: 700,
+              mb: 2,
+              fontSize: { xs: '2rem', md: '3rem' }
+            }}
+          >
+            Authorization & Signature Forms
+          </Typography>
+          <Typography 
+            variant="h5" 
+            sx={{ 
+              mb: 3,
+              opacity: 0.95,
+              fontWeight: 400
+            }}
+          >
+            Complete all required documentation for your intake process
+          </Typography>
+          <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+            <Chip 
+              label={`${FORM_CONFIGS.length} Total Forms`}
+              sx={{ 
+                backgroundColor: 'rgba(255,255,255,0.2)', 
+                color: 'white',
+                fontWeight: 600,
+                fontSize: '0.9rem'
+              }}
+            />
+            <Chip 
+              label={`${filteredForms.length} Currently Shown`}
+              sx={{ 
+                backgroundColor: 'rgba(255,255,255,0.2)', 
+                color: 'white',
+                fontWeight: 600,
+                fontSize: '0.9rem'
+              }}
+            />
+            <Chip 
+              label={`~${totalTime} minutes total`}
+              sx={{ 
+                backgroundColor: 'rgba(255,255,255,0.2)', 
+                color: 'white',
+                fontWeight: 600,
+                fontSize: '0.9rem'
+              }}
+            />
+          </Box>
+        </Box>
+      </Paper>
+
+      {/* Category Filter */}
+      <CategoryFilter 
+        categories={categories}
+        activeCategory={categoryFilter}
+        onChange={handleCategoryChange}
+      />
+
+      {/* Forms Grid organized by priority with better visual hierarchy */}
+      {['high', 'medium', 'low'].map(priority => {
+        const priorityForms = formsByPriority[priority];
+        if (!priorityForms || priorityForms.length === 0) return null;
+        
+        return (
+          <PrioritySection 
+            key={priority} 
+            priority={priority} 
+            count={priorityForms.length}
+          >
+            <Grid container spacing={3}>
+              {priorityForms.map((form) => (
+                <Grid item xs={12} sm={6} lg={4} key={form.id}>
+                  <FormCard 
+                    form={form}
+                    onOpen={handleOpenModal}
+                  />
+                </Grid>
+              ))}
+            </Grid>
+          </PrioritySection>
+        );
+      })}
+
+      {/* No forms message */}
+      {filteredForms.length === 0 && (
+        <Paper sx={{ p: 6, textAlign: 'center' }}>
+          <DocumentIcon sx={{ fontSize: 80, color: 'text.secondary', mb: 2 }} />
+          <Typography variant="h5" gutterBottom color="text.secondary">
+            No forms found
+          </Typography>
+          <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+            Try selecting a different category to see available forms.
+          </Typography>
+          <Button 
+            variant="contained" 
+            onClick={() => setCategoryFilter('all')}
+            startIcon={<FilterIcon />}
+          >
+            Show All Forms
+          </Button>
+        </Paper>
+      )}
+
+      {/* Enhanced Modal with better UX */}
+      <FormModal 
+        form={activeModal}
+        open={Boolean(activeModal)}
+        onClose={handleCloseModal}
+      />
     </Container>
   );
 };
