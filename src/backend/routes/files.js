@@ -5,19 +5,21 @@ const fs = require('fs');
 
 const router = express.Router();
 
-/* ----------------------------- Configuration ----------------------------- */
 
 const STORAGE_ACCOUNT = process.env.AZURE_STORAGE_ACCOUNT;
 const CONNECTION_STRING = process.env.AZURE_STORAGE_CONNECTION_STRING;
 const CONTAINER_NAME = process.env.AZURE_BLOB_CONTAINER || 'client-docs';
 const ENABLE_LOCAL_FALLBACK = String(process.env.ENABLE_LOCAL_FALLBACK || 'true').toLowerCase() === 'true';
 
-// Determine if we're running locally or in Azure
-const IS_LOCAL = !STORAGE_ACCOUNT && !CONNECTION_STRING;
+// Determine authentication method
+const HAS_CONNECTION_STRING = !!CONNECTION_STRING;
+const HAS_MANAGED_IDENTITY = !!STORAGE_ACCOUNT && !CONNECTION_STRING;
+const IS_LOCAL = !CONNECTION_STRING && !STORAGE_ACCOUNT;
 
 console.log('=== Azure Blob Storage Configuration ===');
 console.log('Environment:', IS_LOCAL ? '🏠 Local Development' : '☁️  Azure Production');
-console.log('Storage Account:', STORAGE_ACCOUNT || 'Not set (using local storage)');
+console.log('Auth Method:', HAS_CONNECTION_STRING ? '🔑 Connection String' : HAS_MANAGED_IDENTITY ? '🔐 Managed Identity' : '💾 Local Storage');
+console.log('Storage Account:', STORAGE_ACCOUNT || CONNECTION_STRING?.match(/AccountName=([^;]+)/)?.[1] || 'Not set');
 console.log('Container Name:', CONTAINER_NAME);
 console.log('Local Fallback Enabled:', ENABLE_LOCAL_FALLBACK);
 
@@ -26,39 +28,37 @@ console.log('Local Fallback Enabled:', ENABLE_LOCAL_FALLBACK);
 let blobServiceClient = null;
 let _containerClient = null;
 
-// Only initialize Azure SDK if we have credentials
-if (!IS_LOCAL) {
+// Initialize Azure SDK based on available credentials
+if (HAS_CONNECTION_STRING) {
   try {
-    // Try loading Azure SDK modules
-    const { BlobServiceClient, BlobSASPermissions, generateBlobSASQueryParameters } = require('@azure/storage-blob');
-    
-    // Method 1: Connection String (simpler, less secure)
-    if (CONNECTION_STRING) {
-      console.log('🔑 Using Connection String authentication');
-      blobServiceClient = BlobServiceClient.fromConnectionString(CONNECTION_STRING);
-      console.log('✅ BlobServiceClient initialized with Connection String');
-    }
-    // Method 2: Managed Identity (more secure, production recommended)
-    else if (STORAGE_ACCOUNT) {
-      const { DefaultAzureCredential } = require('@azure/identity');
-      console.log('🔐 Using Managed Identity authentication');
-      
-      const credential = new DefaultAzureCredential({
-        loggingOptions: {
-          allowLoggingAccountIdentifiers: true,
-          logLevel: 'info'
-        }
-      });
-      
-      blobServiceClient = new BlobServiceClient(
-        `https://${STORAGE_ACCOUNT}.blob.core.windows.net`,
-        credential
-      );
-      console.log('✅ BlobServiceClient initialized with Managed Identity');
-    }
+    console.log('🔑 Initializing with Connection String...');
+    const { BlobServiceClient } = require('@azure/storage-blob');
+    blobServiceClient = BlobServiceClient.fromConnectionString(CONNECTION_STRING);
+    console.log('✅ BlobServiceClient initialized with Connection String');
   } catch (error) {
-    console.error('⚠️  Azure SDK initialization failed:', error.message);
-    console.log('   Falling back to local storage mode');
+    console.error('❌ Failed to initialize with Connection String:', error.message);
+    blobServiceClient = null;
+  }
+} else if (HAS_MANAGED_IDENTITY) {
+  try {
+    console.log('🔐 Initializing with Managed Identity...');
+    const { DefaultAzureCredential } = require('@azure/identity');
+    const { BlobServiceClient } = require('@azure/storage-blob');
+    
+    const credential = new DefaultAzureCredential({
+      loggingOptions: {
+        allowLoggingAccountIdentifiers: true,
+        logLevel: 'info'
+      }
+    });
+    
+    blobServiceClient = new BlobServiceClient(
+      `https://${STORAGE_ACCOUNT}.blob.core.windows.net`,
+      credential
+    );
+    console.log('✅ BlobServiceClient initialized with Managed Identity');
+  } catch (error) {
+    console.error('❌ Failed to initialize with Managed Identity:', error.message);
     blobServiceClient = null;
   }
 } else {
@@ -71,7 +71,7 @@ console.log('=========================================');
 
 /**
  * Get or create container client
- * Falls back to local storage if Azure is unavailable
+ * PRODUCTION FIX: Skip container creation, just access existing container
  */
 async function getContainerClient() {
   if (_containerClient) return _containerClient;
@@ -85,10 +85,11 @@ async function getContainerClient() {
     
     const client = blobServiceClient.getContainerClient(CONTAINER_NAME);
     
-    // Don't try to create - just verify it exists
+    // PRODUCTION FIX: Don't try to create - just verify it exists
+    // Container should already exist in Azure Portal
     const exists = await client.exists();
     if (!exists) {
-      throw new Error(`Container '${CONTAINER_NAME}' does not exist. Create it in Azure Portal first.`);
+      throw new Error(`Container '${CONTAINER_NAME}' does not exist. Please create it in Azure Portal first.`);
     }
     
     console.log(`✅ Successfully connected to container '${CONTAINER_NAME}'`);
@@ -97,7 +98,8 @@ async function getContainerClient() {
     
   } catch (error) {
     console.error('❌ Failed to access container:', error.message);
-    console.error('   Error details:', error.code, error.statusCode);
+    if (error.code) console.error('   Error code:', error.code);
+    if (error.statusCode) console.error('   Status code:', error.statusCode);
     
     _containerClient = null;
     throw error;
@@ -161,7 +163,6 @@ if (IS_LOCAL || ENABLE_LOCAL_FALLBACK) {
 
 /**
  * POST /upload
- * form-data: file (binary), clientID (text), docType (text)
  */
 router.post('/upload', upload.single('file'), async (req, res) => {
   try {
@@ -212,8 +213,9 @@ router.post('/upload', upload.single('file'), async (req, res) => {
         
       } catch (azureErr) {
         console.error('❌ Azure upload failed:', azureErr.message);
-        
-        // If Azure fails and local fallback is disabled, return error
+        console.error('   Error code:', azureErr.code);
+        console.error('   Status code:', azureErr.statusCode);
+
         if (!ENABLE_LOCAL_FALLBACK) {
           return res.status(502).json({
             success: false,
@@ -251,16 +253,14 @@ router.post('/upload', upload.single('file'), async (req, res) => {
         return res.status(500).json({
           success: false,
           message: 'Both Azure and local storage failed',
-          azureError: 'Azure not configured',
-          localError: localErr.message
+          detail: localErr.message
         });
       }
     }
 
     return res.status(503).json({
       success: false,
-      message: 'Azure Blob Storage not configured and local fallback is disabled',
-      hint: 'Set ENABLE_LOCAL_FALLBACK=true for local development'
+      message: 'Azure Blob Storage not configured and local fallback is disabled'
     });
     
   } catch (err) {
@@ -347,7 +347,6 @@ router.get('/file/:fileName', async (req, res) => {
 
 /**
  * GET /list
- * Lists all blobs (Azure) or files (local)
  */
 router.get('/list', async (_req, res) => {
   try {
@@ -427,7 +426,6 @@ router.get('/list', async (_req, res) => {
 
 /**
  * GET /files/:clientID
- * Lists blobs under a client prefix
  */
 router.get('/files/:clientID', async (req, res) => {
   try {
