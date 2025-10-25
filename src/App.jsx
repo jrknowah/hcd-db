@@ -8,7 +8,7 @@ import { MsalProvider } from '@azure/msal-react';
 import { msalInstance, initializeMsal } from './backend/config/authConfig';
 import AuthGuard from './components/Auth/AuthGuard';
 import AssessCarePlans from './views/Section-3/AssessCarePlans';
-import  store  from './backend/store/store'; // Add this import
+import  store  from './backend/store/store';
 
 // At the very top of App.jsx, before any other code:
 if (typeof window !== 'undefined') {
@@ -207,6 +207,19 @@ const AppRoutes = () => {
                 </ComponentErrorBoundary>
               } />
               
+              {/* ========================================
+                  ✅ SECTION 1: IDENTIFICATION
+                  Added :clientID parameter for URL persistence
+                  ======================================== */}
+              <Route path="Section1/:clientID" element={
+                <ComponentErrorBoundary name="Identification">
+                  <Suspense fallback={<LoadingFallback name="Section 1" />}>
+                    <Identification />
+                  </Suspense>
+                </ComponentErrorBoundary>
+              } />
+              
+              {/* Fallback without clientID */}
               <Route path="Section1" element={
                 <ComponentErrorBoundary name="Identification">
                   <Suspense fallback={<LoadingFallback name="Section 1" />}>
@@ -215,6 +228,19 @@ const AppRoutes = () => {
                 </ComponentErrorBoundary>
               } />
               
+              {/* ========================================
+                  ✅ SECTION 2: AUTHORIZATION & SIGNATURES
+                  Added :clientID parameter for URL persistence
+                  ======================================== */}
+              <Route path="Section2/:clientID" element={
+                <ComponentErrorBoundary name="Section 2">
+                  <Suspense fallback={<LoadingFallback name="Section 2" />}>
+                    <AuthSig />
+                  </Suspense>
+                </ComponentErrorBoundary>
+              } />
+              
+              {/* Fallback without clientID */}
               <Route path="Section2" element={
                 <ComponentErrorBoundary name="Section 2">
                   <Suspense fallback={<LoadingFallback name="Section 2" />}>
@@ -223,6 +249,19 @@ const AppRoutes = () => {
                 </ComponentErrorBoundary>
               } />
               
+              {/* ========================================
+                  ✅ SECTION 3: BIO-SOCIAL
+                  Added :clientID parameter for URL persistence
+                  ======================================== */}
+              <Route path="Section3/:clientID" element={
+                <ComponentErrorBoundary name="Section 3">
+                  <Suspense fallback={<LoadingFallback name="Section 3" />}>
+                    <AssessCarePlans />
+                  </Suspense>
+                </ComponentErrorBoundary>
+              } />
+              
+              {/* Fallback without clientID */}
               <Route path="Section3" element={
                 <ComponentErrorBoundary name="Section 3">
                   <Suspense fallback={<LoadingFallback name="Section 3" />}>
@@ -231,6 +270,19 @@ const AppRoutes = () => {
                 </ComponentErrorBoundary>
               } />
 
+              {/* ========================================
+                  ✅ SECTION 4: CLIENT PROGRESS
+                  Added :clientID parameter for URL persistence
+                  ======================================== */}
+              <Route path="Section4/:clientID" element={
+                <ComponentErrorBoundary name="Section 4">
+                  <Suspense fallback={<LoadingFallback name="Section 4" />}>
+                    <ClientProgress />
+                  </Suspense>
+                </ComponentErrorBoundary>
+              } />
+              
+              {/* Fallback without clientID */}
               <Route path="Section4" element={
                 <ComponentErrorBoundary name="Section 4">
                   <Suspense fallback={<LoadingFallback name="Section 4" />}>
@@ -239,6 +291,19 @@ const AppRoutes = () => {
                 </ComponentErrorBoundary>
               } />
               
+              {/* ========================================
+                  ✅ SECTION 5: MEDICAL
+                  Added :clientID parameter for URL persistence
+                  ======================================== */}
+              <Route path="Section5/:clientID" element={
+                <ComponentErrorBoundary name="Section 5">
+                  <Suspense fallback={<LoadingFallback name="Section 5" />}>
+                    <Medical />
+                  </Suspense>
+                </ComponentErrorBoundary>
+              } />
+              
+              {/* Fallback without clientID */}
               <Route path="Section5" element={
                 <ComponentErrorBoundary name="Section 5">
                   <Suspense fallback={<LoadingFallback name="Section 5" />}>
@@ -247,6 +312,19 @@ const AppRoutes = () => {
                 </ComponentErrorBoundary>
               } />
               
+              {/* ========================================
+                  ✅ SECTION 6
+                  Added :clientID parameter for URL persistence
+                  ======================================== */}
+              <Route path="Section6/:clientID" element={
+                <ComponentErrorBoundary name="Section 6">
+                  <Suspense fallback={<LoadingFallback name="Section 6" />}>
+                    <Section6 />
+                  </Suspense>
+                </ComponentErrorBoundary>
+              } />
+              
+              {/* Fallback without clientID */}
               <Route path="Section6" element={
                 <ComponentErrorBoundary name="Section 6">
                   <Suspense fallback={<LoadingFallback name="Section 6" />}>
@@ -279,32 +357,32 @@ function App() {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-  const setupMsal = async () => {
-    try {
-      console.log('🚀 App starting MSAL setup...');
-      
-      // Wait for MSAL to fully initialize
-      await initializeMsal();
-      
-      // Make MSAL instance globally available for token refresh
-      window.msalInstance = msalInstance;
-      
-      // Also make Redux store available if you have it
-      window.__REDUX_STORE__ = store;
-      
-      console.log('✅ MSAL setup complete');
-      setMsalInitialized(true);
-      
-    } catch (error) {
-      console.error('❌ MSAL setup failed:', error);
-      setInitError(error.message);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    const setupMsal = async () => {
+      try {
+        console.log('🚀 App starting MSAL setup...');
+        
+        // Wait for MSAL to fully initialize
+        await initializeMsal();
+        
+        // Make MSAL instance globally available for token refresh
+        window.msalInstance = msalInstance;
+        
+        // Also make Redux store available if you have it
+        window.__REDUX_STORE__ = store;
+        
+        console.log('✅ MSAL setup complete');
+        setMsalInitialized(true);
+        
+      } catch (error) {
+        console.error('❌ MSAL setup failed:', error);
+        setInitError(error.message);
+      } finally {
+        setIsLoading(false);
+      }
+    };
 
-  setupMsal();
-}, []);
+    setupMsal();
+  }, []);
 
   // Retry function for failed initialization
   const retryInitialization = () => {
@@ -317,31 +395,6 @@ function App() {
       window.location.reload();
     }, 1000);
   };
-
-  useEffect(() => {
-  const setupMsal = async () => {
-    try {
-      console.log('🚀 App starting MSAL setup...');
-      
-      // Wait for MSAL to fully initialize
-      await initializeMsal();
-      
-      // ✅ Make store accessible for Azure Profile Service
-      window.__REDUX_STORE__ = store;
-      
-      console.log('✅ MSAL setup complete');
-      setMsalInitialized(true);
-      
-    } catch (error) {
-      console.error('❌ MSAL setup failed:', error);
-      setInitError(error.message);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  setupMsal();
-}, []);
 
   // Show loading state while MSAL initializes
   if (isLoading || !msalInitialized) {

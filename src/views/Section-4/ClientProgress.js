@@ -30,14 +30,14 @@ import { section4List } from "../../data/arrayList";
 import EncounterNote from "./EncounterNote";
 import CarePlan from "./CarePlan";
 import CmNoteArchive from "./CmNoteArchive";
-import { useClientManager } from '../../hooks/useClientManager';
+import { useClientPersistence } from '../../hooks/useClientPersistence';
 import { fetchCarePlans } from '../../backend/store/slices/carePlanSlice';
 import { fetchEncounterNotes } from '../../backend/store/slices/encounterNoteSlice';
 import { fetchAssessmentData, fetchAssessmentMilestones } from '../../backend/store/slices/assessCarePlansSlice';
 
 const ClientProgress = () => {
   const dispatch = useDispatch();
-  const { clientID, selectedClient, hasClient } = useClientManager();
+  const { clientID, client: selectedClient, hasClient } = useClientPersistence();
   const [activeTab, setActiveTab] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
 

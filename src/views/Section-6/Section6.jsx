@@ -37,6 +37,7 @@ import {
     Refresh as RefreshIcon
 } from '@mui/icons-material';
 import { useDispatch, useSelector } from "react-redux";
+import { useClientPersistence } from '../../hooks/useClientPersistence';
 
 // ✅ FIXED: Correct imports for Section 6
 import {
@@ -54,8 +55,9 @@ import IDTNoteCM from './IDTNoteCM';
 import PersonalInventory from './PersonalInventory';
 import MiscDoc from './MiscDoc';
 
-const Section6 = ({ clientID = "CLIENT-123" }) => {
+const Section6 = () => {
     const dispatch = useDispatch();
+    const { clientID, client, hasClient, loading } = useClientPersistence();
     const { 
         faceSheet, 
         faceSheetLoading, 
@@ -66,6 +68,36 @@ const Section6 = ({ clientID = "CLIENT-123" }) => {
         activeTab,
         useMockData 
     } = useSelector((state) => state.section6);
+    
+    
+    // ✅ Show loading state while client is loading
+    if (loading) {
+        return (
+        <Box display="flex" justifyContent="center" py={4}>
+            <CircularProgress />
+            <Typography sx={{ ml: 2 }}>Loading client data...</Typography>
+        </Box>
+        );
+    }
+
+    // ✅ Show message if no client selected
+    if (!hasClient || !clientID) {
+        return (
+        <Box sx={{ p: 3, textAlign: 'center' }}>
+            <Typography variant="h6" color="text.secondary">
+            Please select a client to view Section 6
+            </Typography>
+            <Button 
+            variant="contained" 
+            onClick={() => window.location.href = '/dashboard'}
+            sx={{ mt: 2 }}
+            >
+            Go to Dashboard
+            </Button>
+        </Box>
+        );
+    }
+
 
     // ✅ FIXED: Proper data fetching on component mount
     useEffect(() => {

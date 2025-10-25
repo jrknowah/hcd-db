@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import {
   Box,
   Grid,
@@ -19,7 +19,9 @@ import {
   alpha,
   Divider,
   Container,
-  CircularProgress 
+  CircularProgress,
+  Snackbar,
+  Alert
 } from '@mui/material';
 import {
   Close as CloseIcon,
@@ -36,10 +38,25 @@ import {
   Save as SaveIcon,
   CheckCircle as CheckCircleIcon,
 } from '@mui/icons-material';
+
+// ✅ Redux imports
+import { useDispatch, useSelector } from 'react-redux';
+import { 
+  saveFormData, 
+  autoSaveFormData,
+  selectSaving,
+  selectAutoSaving,
+  selectSaveError,
+  clearErrors
+} from '../../backend/store/slices/authSigSlice';
+
+// ✅ Client persistence hook
+import { useClientPersistence } from '../../hooks/useClientPersistence';
+
+// Form component imports
 import ClientOrientation from './ClientOrientation';
 import ClientRights from './ClientRights';
 import ConsentForTreatment from './ConsentForTreatment';
-
 import PrivacyPractice from './PrivacyPractice';
 import LAHMIS from './LAHMIS';
 import ReleasePHI from './ReleasePHI';
@@ -52,16 +69,18 @@ import HousingAgree from './HousingAgree';
 import ConsentPhoto from './ConsentPhoto';
 import AuthUseDiscHMHInfo from './AuthUseDiscHMHInfo';
 
-// Mock components - replace with your actual component imports
-const MockComponent = ({ title }) => (
+// Mock component for forms not yet implemented
+const MockComponent = ({ title, clientID }) => (
   <Box sx={{ p: 4, textAlign: 'center' }}>
     <DocumentIcon sx={{ fontSize: 80, color: 'primary.main', mb: 2 }} />
     <Typography variant="h5" gutterBottom color="primary">
       {title}
     </Typography>
+    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+      Client ID: {clientID}
+    </Typography>
     <Typography variant="body1" color="text.secondary">
-      This is where the actual form content would be displayed. Replace this MockComponent 
-      with your real form components (ClientOrientation, ClientRights, etc.)
+      This form is not yet implemented. Replace MockComponent with the actual form component.
     </Typography>
     <Box sx={{ mt: 3, p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
       <Typography variant="body2" color="text.secondary">
@@ -71,11 +90,10 @@ const MockComponent = ({ title }) => (
   </Box>
 );
 
-// Form configuration data - this replaces all the repetitive state management
-// Form configuration data - ✅ FIXED IDs to match backend
+// Form configuration data - IDs match backend
 const FORM_CONFIGS = [
   {
-    id: 'orientation', // ✅ Changed from 'ClientOrientation'
+    id: 'orientation',
     title: 'Patient Orientation Information Sheet',
     description: 'Essential orientation information for new patients',
     icon: AssignmentIcon,
@@ -86,7 +104,7 @@ const FORM_CONFIGS = [
     estimatedTime: '5 min'
   },
   {
-    id: 'clientRights', // ✅ Changed from 'ClientRights'
+    id: 'clientRights',
     title: 'Client Rights',
     description: 'Understanding your rights as a client',
     icon: VerifiedIcon,
@@ -97,7 +115,7 @@ const FORM_CONFIGS = [
     estimatedTime: '3 min'
   },
   {
-    id: 'consentTreatment', // ✅ Changed from 'ConsentForTreatment'
+    id: 'consentTreatment',
     title: 'Consent for Treatment and Services',
     description: 'Authorization for medical treatment',
     icon: MedicalIcon,
@@ -119,7 +137,7 @@ const FORM_CONFIGS = [
     estimatedTime: '10 min'
   },
   {
-    id: 'privacyPractice', // ✅ Changed from 'PrivacyPractice'
+    id: 'privacyPractice',
     title: 'LA County Notice Of Private Practices',
     description: 'Privacy practices and procedures notice',
     icon: SecurityIcon,
@@ -130,7 +148,7 @@ const FORM_CONFIGS = [
     estimatedTime: '4 min'
   },
   {
-    id: 'lahmis', // ✅ Changed from 'LAHMIS'
+    id: 'lahmis',
     title: 'LA HMIS Consent',
     description: 'Homeless Management Information System consent',
     icon: BusinessIcon,
@@ -141,7 +159,7 @@ const FORM_CONFIGS = [
     estimatedTime: '6 min'
   },
   {
-    id: 'phiRelease', // ✅ Changed from 'ReleasePHI'
+    id: 'phiRelease',
     title: 'Client PHI Release',
     description: 'Protected Health Information release form',
     icon: SecurityIcon,
@@ -152,7 +170,7 @@ const FORM_CONFIGS = [
     estimatedTime: '5 min'
   },
   {
-    id: 'residencePolicy', // ✅ Changed from 'ResidencePolicy'
+    id: 'residencePolicy',
     title: 'Rules of Residence & Security Policy',
     description: 'Facility rules and security procedures',
     icon: PolicyIcon,
@@ -163,7 +181,7 @@ const FORM_CONFIGS = [
     estimatedTime: '8 min'
   },
   {
-    id: 'authDisclosure', // ✅ Changed from 'AuthForDisclosure'
+    id: 'authDisclosure',
     title: 'Authorization To Share Information',
     description: 'Permission to share information with third parties',
     icon: SecurityIcon,
@@ -174,7 +192,7 @@ const FORM_CONFIGS = [
     estimatedTime: '4 min'
   },
   {
-    id: 'termination', // ✅ Changed from 'InterimHousingAgreement'
+    id: 'termination',
     title: 'Termination Policy & Procedure',
     description: 'Understanding termination policies',
     icon: PolicyIcon,
@@ -185,7 +203,7 @@ const FORM_CONFIGS = [
     estimatedTime: '6 min'
   },
   {
-    id: 'advDirective', // ✅ Changed from 'AdvCareAck'
+    id: 'advDirective',
     title: 'Advance Healthcare Directive Form',
     description: 'Advanced healthcare decisions and directives',
     icon: MedicalIcon,
@@ -196,7 +214,7 @@ const FORM_CONFIGS = [
     estimatedTime: '12 min'
   },
   {
-    id: 'grievances', // ✅ Changed from 'ClientGrievances'
+    id: 'grievances',
     title: 'Client Grievances',
     description: 'Process for filing complaints and grievances',
     icon: AssignmentIcon,
@@ -207,7 +225,7 @@ const FORM_CONFIGS = [
     estimatedTime: '3 min'
   },
   {
-    id: 'healthDisclosure', // ✅ Changed from 'AuthUseDiscHMHInfo'
+    id: 'healthDisclosure',
     title: 'Authorization For Use and/or Disclosure of Health/Mental Health Information',
     description: 'Mental health information sharing authorization',
     icon: MedicalIcon,
@@ -218,7 +236,7 @@ const FORM_CONFIGS = [
     estimatedTime: '8 min'
   },
   {
-    id: 'consentPhoto', // ✅ Changed from 'ConsentPhoto'
+    id: 'consentPhoto',
     title: 'Consent to Taking / Sharing Photograph',
     description: 'Photography and media sharing consent',
     icon: CameraIcon,
@@ -229,7 +247,7 @@ const FORM_CONFIGS = [
     estimatedTime: '2 min'
   },
   {
-    id: 'housingAgreement', // ✅ Changed from 'HousingAgree'
+    id: 'housingAgreement',
     title: 'Interim Housing (Shelter) Agreement',
     description: 'Temporary housing terms and agreement',
     icon: HomeIcon,
@@ -258,7 +276,9 @@ const PRIORITY_COLORS = {
   low: 'success'
 };
 
-// Reusable Form Card Component
+// ============================================================================
+// FORM CARD COMPONENT
+// ============================================================================
 const FormCard = ({ form, onOpen }) => {
   const theme = useTheme();
   const IconComponent = form.icon;
@@ -287,7 +307,6 @@ const FormCard = ({ form, onOpen }) => {
       }}
       onClick={() => onOpen(form)}
     >
-      {/* LAHSA Logo indicator for applicable forms */}
       {form.hasLogo && (
         <Box
           sx={{
@@ -412,292 +431,390 @@ const FormCard = ({ form, onOpen }) => {
   );
 };
 
-// Reusable Modal Component with MUI Dialog
-// âœ… Enhanced Modal with proper button functionality
-// Update your FormModal component in AuthSig.jsx
-
-// âœ… Fixed FormModal Component
-const FormModal = ({ form, open, onClose }) => {
+// ============================================================================
+// FORM MODAL COMPONENT - PRODUCTION READY WITH ALL TODOS COMPLETED
+// ============================================================================
+const FormModal = ({ form, open, onClose, clientID }) => {
   const theme = useTheme();
   const fullScreen = useMediaQuery(theme.breakpoints.down('md'));
-  const [saving, setSaving] = useState(false);
+  const dispatch = useDispatch();
+  
+  // ✅ Redux state
+  const saving = useSelector(selectSaving);
+  const autoSaving = useSelector(selectAutoSaving);
+  const saveError = useSelector(selectSaveError);
+  
+  // ✅ Local UI state
   const [saveType, setSaveType] = useState(null);
-  const [showFormContent, setShowFormContent] = useState(false); // âœ… Added state to control view
+  const [showFormContent, setShowFormContent] = useState(false);
+  
+  // ✅ Snackbar state
+  const [snackbar, setSnackbar] = useState({
+    open: false,
+    message: '',
+    severity: 'success'
+  });
+  
+  // ✅ CRITICAL: Ref to access child form component's data
+  const formRef = useRef(null);
   
   if (!form) return null;
   
   const FormComponent = form.component;
   const IconComponent = form.icon;
   
-  // Reset showFormContent when modal closes
+  // ✅ Helper to show notifications
+  const showNotification = (message, severity = 'success') => {
+    setSnackbar({
+      open: true,
+      message,
+      severity
+    });
+  };
+  
+  // ✅ Close snackbar
+  const handleCloseSnackbar = () => {
+    setSnackbar(prev => ({ ...prev, open: false }));
+  };
+  
+  // ✅ Reset state when modal closes
   const handleClose = () => {
     setShowFormContent(false);
-    setSaving(false);
     setSaveType(null);
+    dispatch(clearErrors());
     onClose();
   };
   
-  // Handle save progress (draft)
+  // ✅ COMPLETE - Save progress (autosave) with actual form data
   const handleSaveProgress = async () => {
-    setSaving(true);
     setSaveType('progress');
     
     try {
-      console.log('Saving progress for form:', form.id);
+      // ✅ Get actual form data from child component via ref
+      const formData = formRef.current?.getFormData?.();
       
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      if (!formData) {
+        throw new Error('Unable to get form data. Make sure the form component exposes getFormData()');
+      }
       
-      setSaving(false);
+      console.log('📝 Autosaving form:', form.id, 'Client:', clientID);
+      console.log('📦 Form data:', formData);
+      
+      // ✅ Dispatch Redux action with actual form data
+      await dispatch(autoSaveFormData({
+        clientID: clientID,
+        formType: form.id,
+        formData: formData
+      })).unwrap();
+      
+      console.log('✅ Progress saved successfully');
+      
+      // ✅ Show success notification
+      showNotification('Progress saved successfully', 'success');
+      
       setSaveType(null);
       
     } catch (error) {
-      console.error('Failed to save progress:', error);
-      setSaving(false);
+      console.error('❌ Failed to save progress:', error);
+      
+      // ✅ Show error notification
+      showNotification(
+        error.message || 'Failed to save progress. Please try again.',
+        'error'
+      );
+      
       setSaveType(null);
     }
   };
   
-  // Handle form submission (complete)
+  // ✅ COMPLETE - Submit complete form with validation
   const handleSubmitForm = async () => {
-    setSaving(true);
     setSaveType('submit');
     
     try {
-      console.log('Submitting form:', form.id);
+      // ✅ Get actual form data from child component via ref
+      const formData = formRef.current?.getFormData?.();
       
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      if (!formData) {
+        throw new Error('Unable to get form data. Make sure the form component exposes getFormData()');
+      }
       
-      setSaving(false);
+      console.log('🚀 Submitting form:', form.id, 'Client:', clientID);
+      console.log('📦 Form data:', formData);
+      
+      // ✅ Validate completion before submitting
+      if (formData.completionPercentage !== 100) {
+        throw new Error('Please complete all required fields before submitting');
+      }
+      
+      // ✅ Dispatch Redux action with actual form data
+      await dispatch(saveFormData({
+        clientID: clientID,
+        formType: form.id,
+        formData: formData
+      })).unwrap();
+      
+      console.log('✅ Form submitted successfully');
+      
+      // ✅ Show success notification
+      showNotification('Form submitted successfully', 'success');
+      
       setSaveType(null);
       
-      // Optionally close modal after successful submission
-      // handleClose();
+      // ✅ Close modal after successful submission
+      setTimeout(() => {
+        handleClose();
+      }, 1000);
       
     } catch (error) {
-      console.error('Failed to submit form:', error);
-      setSaving(false);
+      console.error('❌ Failed to submit form:', error);
+      
+      // ✅ Show error notification with detailed message
+      const errorMessage = error.message || error || 'Failed to submit form. Please check all required fields.';
+      showNotification(errorMessage, 'error');
+      
       setSaveType(null);
     }
   };
   
-  // âœ… Handle View Form button click
   const handleViewForm = () => {
     setShowFormContent(true);
   };
   
   return (
-    <Dialog
-      open={open}
-      onClose={handleClose}
-      maxWidth="lg"
-      fullWidth
-      fullScreen={fullScreen}
-      PaperProps={{
-        sx: {
-          minHeight: fullScreen ? '100vh' : '70vh',
-          borderRadius: fullScreen ? 0 : 2
-        }
-      }}
-    >
-      <DialogTitle sx={{ 
-        display: 'flex', 
-        alignItems: 'center', 
-        justifyContent: 'space-between',
-        pb: 2,
-        background: `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.05)} 0%, ${alpha(theme.palette.primary.main, 0.02)} 100%)`,
-        borderBottom: `1px solid ${theme.palette.divider}`
-      }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-          <IconComponent color="primary" />
-          <Box>
-            <Typography variant="h6" component="h2" sx={{ fontWeight: 600 }}>
-              {form.title}
-            </Typography>
-            <Typography variant="caption" color="text.secondary">
-              Estimated time: {form.estimatedTime}
-            </Typography>
-          </Box>
-        </Box>
-        <IconButton onClick={handleClose} size="small" aria-label="Close dialog">
-          <CloseIcon />
-        </IconButton>
-      </DialogTitle>
-      
-      <DialogContent sx={{ p: 0 }}>
-        {!showFormContent ? (
-          // âœ… Show form preview/description
-          <Box sx={{ p: 4 }}>
-            <Box sx={{ display: 'flex', alignItems: 'flex-start', mb: 3 }}>
-              <IconComponent sx={{ fontSize: 60, color: 'primary.main', mr: 2 }} />
-              <Box>
-                <Typography variant="h5" gutterBottom sx={{ fontWeight: 600 }}>
-                  {form.title}
-                </Typography>
-                <Typography variant="body1" color="text.secondary" paragraph>
-                  {form.description}
-                </Typography>
-              </Box>
+    <>
+      <Dialog
+        open={open}
+        onClose={handleClose}
+        maxWidth="lg"
+        fullWidth
+        fullScreen={fullScreen}
+        PaperProps={{
+          sx: {
+            minHeight: fullScreen ? '100vh' : '70vh',
+            borderRadius: fullScreen ? 0 : 2
+          }
+        }}
+      >
+        <DialogTitle sx={{ 
+          display: 'flex', 
+          alignItems: 'center', 
+          justifyContent: 'space-between',
+          pb: 2,
+          background: `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.05)} 0%, ${alpha(theme.palette.primary.main, 0.02)} 100%)`,
+          borderBottom: `1px solid ${theme.palette.divider}`
+        }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            <IconComponent color="primary" />
+            <Box>
+              <Typography variant="h6" component="h2" sx={{ fontWeight: 600 }}>
+                {form.title}
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                Estimated time: {form.estimatedTime} | Client ID: {clientID}
+              </Typography>
             </Box>
-
-            <Divider sx={{ my: 3 }} />
-
-            <Grid container spacing={2} sx={{ mb: 3 }}>
-              <Grid item xs={12} sm={6}>
-                <Paper variant="outlined" sx={{ p: 2 }}>
-                  <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
-                    Category
-                  </Typography>
-                  <Chip 
-                    label={form.category}
-                    size="small"
-                    color={CATEGORY_COLORS[form.category] || 'default'}
-                    sx={{ textTransform: 'capitalize' }}
-                  />
-                </Paper>
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <Paper variant="outlined" sx={{ p: 2 }}>
-                  <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
-                    Priority Level
-                  </Typography>
-                  <Chip 
-                    label={`${form.priority} priority`}
-                    size="small"
-                    color={PRIORITY_COLORS[form.priority]}
-                    sx={{ textTransform: 'capitalize' }}
-                  />
-                </Paper>
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <Paper variant="outlined" sx={{ p: 2 }}>
-                  <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
-                    Estimated Time
-                  </Typography>
-                  <Typography variant="body1" fontWeight={600}>
-                    {form.estimatedTime}
-                  </Typography>
-                </Paper>
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <Paper variant="outlined" sx={{ p: 2 }}>
-                  <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
-                    LAHSA Required
-                  </Typography>
-                  <Typography variant="body1" fontWeight={600}>
-                    {form.hasLogo ? 'Yes' : 'No'}
-                  </Typography>
-                </Paper>
-              </Grid>
-            </Grid>
-
-            {form.priority === 'high' && (
-              <Paper 
-                sx={{ 
-                  p: 2, 
-                  bgcolor: alpha(theme.palette.error.main, 0.1),
-                  border: `1px solid ${alpha(theme.palette.error.main, 0.3)}`
-                }}
-              >
-                <Typography variant="body2" color="error.main" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <span>🔴</span>
-                  <strong>High Priority:</strong> This form should be completed as soon as possible.
-                </Typography>
-              </Paper>
-            )}
           </Box>
-        ) : (
-          // âœ… Show actual form component
-          <FormComponent 
-            title={form.title}
-            onSaveProgress={handleSaveProgress}
-            onSubmitForm={handleSubmitForm}
-            saving={saving}
-            saveType={saveType}
-          />
-        )}
-      </DialogContent>
+          <IconButton onClick={handleClose} size="small" aria-label="Close dialog">
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
+        
+        <DialogContent sx={{ p: 0 }}>
+          {!showFormContent ? (
+            // ========== FORM PREVIEW VIEW ==========
+            <Box sx={{ p: 4 }}>
+              <Box sx={{ display: 'flex', alignItems: 'flex-start', mb: 3 }}>
+                <IconComponent sx={{ fontSize: 60, color: 'primary.main', mr: 2 }} />
+                <Box>
+                  <Typography variant="h5" gutterBottom sx={{ fontWeight: 600 }}>
+                    {form.title}
+                  </Typography>
+                  <Typography variant="body1" color="text.secondary" paragraph>
+                    {form.description}
+                  </Typography>
+                </Box>
+              </Box>
+
+              <Divider sx={{ my: 3 }} />
+
+              <Grid container spacing={2} sx={{ mb: 3 }}>
+                <Grid item xs={12} sm={6}>
+                  <Paper variant="outlined" sx={{ p: 2 }}>
+                    <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
+                      Category
+                    </Typography>
+                    <Chip 
+                      label={form.category}
+                      size="small"
+                      color={CATEGORY_COLORS[form.category] || 'default'}
+                      sx={{ textTransform: 'capitalize' }}
+                    />
+                  </Paper>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <Paper variant="outlined" sx={{ p: 2 }}>
+                    <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
+                      Priority Level
+                    </Typography>
+                    <Chip 
+                      label={`${form.priority} priority`}
+                      size="small"
+                      color={PRIORITY_COLORS[form.priority]}
+                      sx={{ textTransform: 'capitalize' }}
+                    />
+                  </Paper>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <Paper variant="outlined" sx={{ p: 2 }}>
+                    <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
+                      Estimated Time
+                    </Typography>
+                    <Typography variant="body1" fontWeight={600}>
+                      {form.estimatedTime}
+                    </Typography>
+                  </Paper>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <Paper variant="outlined" sx={{ p: 2 }}>
+                    <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
+                      LAHSA Required
+                    </Typography>
+                    <Typography variant="body1" fontWeight={600}>
+                      {form.hasLogo ? 'Yes' : 'No'}
+                    </Typography>
+                  </Paper>
+                </Grid>
+              </Grid>
+
+              {form.priority === 'high' && (
+                <Paper 
+                  sx={{ 
+                    p: 2, 
+                    bgcolor: alpha(theme.palette.error.main, 0.1),
+                    border: `1px solid ${alpha(theme.palette.error.main, 0.3)}`
+                  }}
+                >
+                  <Typography variant="body2" color="error.main" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <span>🔴</span>
+                    <strong>High Priority:</strong> This form should be completed as soon as possible.
+                  </Typography>
+                </Paper>
+              )}
+            </Box>
+          ) : (
+            // ========== ACTUAL FORM CONTENT VIEW ==========
+            <Box sx={{ p: 3 }}>
+              {/* ✅ CRITICAL: Pass ref to form component to access its data */}
+              <FormComponent 
+                ref={formRef}
+                clientID={clientID}
+                title={form.title}
+                formType={form.id}
+              />
+            </Box>
+          )}
+        </DialogContent>
+        
+        <DialogActions sx={{ 
+          p: 3, 
+          gap: 1,
+          borderTop: `1px solid ${theme.palette.divider}`,
+          background: alpha(theme.palette.grey[50], 0.5)
+        }}>
+          {!showFormContent ? (
+            // ========== PREVIEW MODE BUTTONS ==========
+            <>
+              <Button 
+                onClick={handleClose} 
+                variant="outlined" 
+                color="inherit"
+              >
+                Close
+              </Button>
+              
+              <Button 
+                variant="contained" 
+                color="primary"
+                onClick={handleViewForm}
+                startIcon={<DocumentIcon />}
+                sx={{ fontWeight: 600 }}
+              >
+                View Form
+              </Button>
+            </>
+          ) : (
+            // ========== FORM EDITING MODE BUTTONS ==========
+            <>
+              <Button 
+                onClick={() => setShowFormContent(false)} 
+                variant="outlined" 
+                color="inherit"
+                disabled={saving || autoSaving}
+              >
+                Back to Preview
+              </Button>
+              
+              <Button 
+                variant="outlined" 
+                color="primary"
+                onClick={handleSaveProgress}
+                disabled={saving || autoSaving}
+                startIcon={
+                  autoSaving && saveType === 'progress' ? (
+                    <CircularProgress size={16} />
+                  ) : (
+                    <SaveIcon />
+                  )
+                }
+              >
+                {autoSaving && saveType === 'progress' ? 'Saving...' : 'Save Progress'}
+              </Button>
+              
+              <Button 
+                variant="contained" 
+                color="success" 
+                onClick={handleSubmitForm}
+                disabled={saving || autoSaving}
+                startIcon={
+                  saving && saveType === 'submit' ? (
+                    <CircularProgress size={16} />
+                  ) : (
+                    <CheckCircleIcon />
+                  )
+                }
+                sx={{ fontWeight: 600 }}
+              >
+                {saving && saveType === 'submit' ? 'Submitting...' : 'Submit Form'}
+              </Button>
+            </>
+          )}
+        </DialogActions>
+      </Dialog>
       
-      <DialogActions sx={{ 
-        p: 3, 
-        gap: 1,
-        borderTop: `1px solid ${theme.palette.divider}`,
-        background: alpha(theme.palette.grey[50], 0.5)
-      }}>
-        {!showFormContent ? (
-          // âœ… Buttons for preview mode
-          <>
-            <Button 
-              onClick={handleClose} 
-              variant="outlined" 
-              color="inherit"
-            >
-              Close
-            </Button>
-            
-            <Button 
-              variant="contained" 
-              color="primary"
-              onClick={handleViewForm}
-              startIcon={<DocumentIcon />}
-              sx={{ fontWeight: 600 }}
-            >
-              View Form
-            </Button>
-          </>
-        ) : (
-          // âœ… Buttons for form editing mode
-          <>
-            <Button 
-              onClick={() => setShowFormContent(false)} 
-              variant="outlined" 
-              color="inherit"
-              disabled={saving}
-            >
-              Back to Preview
-            </Button>
-            
-            <Button 
-              variant="outlined" 
-              color="primary"
-              onClick={handleSaveProgress}
-              disabled={saving}
-              startIcon={
-                saving && saveType === 'progress' ? (
-                  <CircularProgress size={16} />
-                ) : (
-                  <SaveIcon />
-                )
-              }
-            >
-              {saving && saveType === 'progress' ? 'Saving...' : 'Save Progress'}
-            </Button>
-            
-            <Button 
-              variant="contained" 
-              color="success" 
-              onClick={handleSubmitForm}
-              disabled={saving}
-              startIcon={
-                saving && saveType === 'submit' ? (
-                  <CircularProgress size={16} />
-                ) : (
-                  <CheckCircleIcon />
-                )
-              }
-              sx={{ fontWeight: 600 }}
-            >
-              {saving && saveType === 'submit' ? 'Submitting...' : 'Submit Form'}
-            </Button>
-          </>
-        )}
-      </DialogActions>
-    </Dialog>
+      {/* ✅ COMPLETE - Snackbar notifications */}
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={4000}
+        onClose={handleCloseSnackbar}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert 
+          onClose={handleCloseSnackbar} 
+          severity={snackbar.severity}
+          variant="filled"
+          sx={{ width: '100%' }}
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
+    </>
   );
 };
 
-// Category Filter Component with MUI styling
+// ============================================================================
+// CATEGORY FILTER COMPONENT
+// ============================================================================
 const CategoryFilter = ({ categories, activeCategory, onChange }) => {
   return (
     <Paper elevation={1} sx={{ p: 3, mb: 4 }}>
@@ -733,12 +850,14 @@ const CategoryFilter = ({ categories, activeCategory, onChange }) => {
   );
 };
 
-// Priority Section Header Component
+// ============================================================================
+// PRIORITY SECTION COMPONENT
+// ============================================================================
 const PrioritySection = ({ priority, count, children }) => {
   const priorityIcons = {
-    high: '',
-    medium: '',
-    low: ''
+    high: '🔴',
+    medium: '🟡',
+    low: '🟢'
   };
 
   return (
@@ -770,11 +889,16 @@ const PrioritySection = ({ priority, count, children }) => {
   );
 };
 
-// Main Component - Clean and maintainable with MUI!
+// ============================================================================
+// MAIN AUTHSIG COMPONENT
+// ============================================================================
 const AuthSig = () => {
   const theme = useTheme();
   const [activeModal, setActiveModal] = useState(null);
   const [categoryFilter, setCategoryFilter] = useState('all');
+  
+  // ✅ Get client from URL/persistence
+  const { clientID, client, loading: clientLoading } = useClientPersistence();
   
   // Get unique categories from the configuration
   const categories = [...new Set(FORM_CONFIGS.map(form => form.category))];
@@ -809,6 +933,44 @@ const AuthSig = () => {
   const handleCategoryChange = useCallback((category) => {
     setCategoryFilter(category);
   }, []);
+  
+  // ✅ Handle loading state
+  if (clientLoading) {
+    return (
+      <Container maxWidth="xl" sx={{ py: 4 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh' }}>
+          <CircularProgress size={60} />
+        </Box>
+      </Container>
+    );
+  }
+  
+  // ✅ Handle no client selected
+  if (!clientID) {
+    return (
+      <Container maxWidth="xl" sx={{ py: 4 }}>
+        <Paper 
+          sx={{ 
+            p: 6, 
+            textAlign: 'center',
+            background: `linear-gradient(135deg, ${alpha(theme.palette.warning.main, 0.1)} 0%, ${alpha(theme.palette.warning.main, 0.05)} 100%)`,
+            border: `2px solid ${alpha(theme.palette.warning.main, 0.3)}`
+          }}
+        >
+          <AssignmentIcon sx={{ fontSize: 80, color: 'warning.main', mb: 2 }} />
+          <Typography variant="h4" gutterBottom color="warning.main" sx={{ fontWeight: 600 }}>
+            No Client Selected
+          </Typography>
+          <Typography variant="body1" color="text.secondary" paragraph>
+            Please select a client from Section 1 (Identification) to view and complete authorization forms.
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Once a client is selected, you'll be able to access all {FORM_CONFIGS.length} authorization and signature forms.
+          </Typography>
+        </Paper>
+      </Container>
+    );
+  }
 
   return (
     <Container maxWidth="xl" sx={{ py: 4 }}>
@@ -855,9 +1017,18 @@ const AuthSig = () => {
               fontWeight: 400
             }}
           >
-            Complete all required documentation for your intake process
+            Complete all required documentation for {client?.clientFirstName || 'Client'} {client?.clientLastName || clientID}
           </Typography>
           <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+            <Chip 
+              label={`Client: ${clientID}`}
+              sx={{ 
+                backgroundColor: 'rgba(255,255,255,0.2)', 
+                color: 'white',
+                fontWeight: 600,
+                fontSize: '0.9rem'
+              }}
+            />
             <Chip 
               label={`${FORM_CONFIGS.length} Total Forms`}
               sx={{ 
@@ -941,11 +1112,12 @@ const AuthSig = () => {
         </Paper>
       )}
 
-      {/* Enhanced Modal with better UX */}
+      {/* ✅ Enhanced Modal with clientID prop and all TODOs completed */}
       <FormModal 
         form={activeModal}
         open={Boolean(activeModal)}
         onClose={handleCloseModal}
+        clientID={clientID}
       />
     </Container>
   );

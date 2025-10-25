@@ -36,6 +36,7 @@ import {
     Refresh as RefreshIcon,
     Assignment as AssignmentIcon
 } from '@mui/icons-material';
+import { useClientPersistence } from '../../hooks/useClientPersistence';
 import { useDispatch, useSelector } from "react-redux";
 import {
     fetchAssessmentData,
@@ -50,8 +51,9 @@ import MentalHealth from './MentalHealth';
 import ReAssessment from './ReAssessment';
 import MentalArchive from './MentalArchive';
 
-const AssessCarePlans = ({ clientID = "CLIENT-123" }) => {
+const AssessCarePlans = () => {
     const dispatch = useDispatch();
+    const { clientID, client, hasClient, loading } = useClientPersistence();
     const { 
         assessmentData, 
         assessmentLoading, 
@@ -61,6 +63,34 @@ const AssessCarePlans = ({ clientID = "CLIENT-123" }) => {
     } = useSelector((state) => state.assessCarePlans || {});
 
     const [activeTab, setActiveTab] = useState(0);
+
+    // ✅ Add loading state
+    if (loading) {
+        return (
+        <Box display="flex" justifyContent="center" py={4}>
+            <CircularProgress />
+            <Typography sx={{ ml: 2 }}>Loading client data...</Typography>
+        </Box>
+        );
+    }
+
+    // ✅ Add no-client state
+    if (!hasClient || !clientID) {
+        return (
+        <Box sx={{ p: 3, textAlign: 'center' }}>
+            <Typography variant="h6" color="text.secondary">
+            Please select a client to view Section 3
+            </Typography>
+            <Button 
+            variant="contained" 
+            onClick={() => window.location.href = '/dashboard'}
+            sx={{ mt: 2 }}
+            >
+            Go to Dashboard
+            </Button>
+        </Box>
+        );
+    }
 
     // Mock data for development
     const mockAssessmentData = {

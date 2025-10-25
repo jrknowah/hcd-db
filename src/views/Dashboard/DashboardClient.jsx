@@ -247,27 +247,27 @@ const DashboardClient = () => {
 
   // Clean React Router navigation (no page reload)
   const handleGoToSection = useCallback((sectionName, clientID) => {
-    console.log('Navigating to section:', sectionName, 'with client:', clientID);
-    
-    if (clientID) {
-      // Find and set the client data in Redux store before navigation
-      const client = clients.find(c => c.clientID === clientID);
-      if (client) {
-        dispatch(setSelectedClient(client));
-        console.log('Client set in Redux:', client);
-        
-        // Simple React Router navigation
-        const routeName = sectionName.charAt(0).toUpperCase() + sectionName.slice(1);
-        const targetPath = `/${routeName}?clientID=${clientID}`;
-        
-        console.log('Using React Router navigate to:', targetPath);
-        navigate(targetPath);
-        
-      } else {
-        console.error('Client not found:', clientID);
-      }
+  console.log('Navigating to section:', sectionName, 'with client:', clientID);
+  
+  if (clientID) {
+    // Find and set the client data in Redux store before navigation
+    const client = clients.find(c => c.clientID === clientID);
+    if (client) {
+      dispatch(setSelectedClient(client));
+      console.log('Client set in Redux:', client);
+      
+      // ✅ FIXED: Use path parameters instead of query parameters
+      const routeName = sectionName.charAt(0).toUpperCase() + sectionName.slice(1);
+      const targetPath = `/${routeName}/${clientID}`;  // ✅ Changed from ?clientID= to /${clientID}
+      
+      console.log('Using React Router navigate to:', targetPath);
+      navigate(targetPath);
+      
+    } else {
+      console.error('Client not found:', clientID);
     }
-  }, [clients, dispatch, navigate]);
+  }
+}, [clients, dispatch, navigate]);
 
   const handleBackToDashboard = useCallback(() => {
     console.log('Navigating back to Dashboard');
@@ -301,11 +301,11 @@ const DashboardClient = () => {
     setSelectedClientID(clientID);
     
     // Update URL to include clientID
-    setSearchParams({ clientID });
+    // setSearchParams({ clientID });
     
     // Also store in localStorage as backup
     localStorage.setItem('selectedClientID', clientID);
-  }, [setSearchParams]);
+  }, []);
 
   // Edit handler - opens modal only
   const handleEditClient = useCallback((clientID) => {
