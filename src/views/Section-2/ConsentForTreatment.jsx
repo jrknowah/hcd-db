@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, forwardRef, useImperativeHandle } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import {
   Box,
@@ -42,7 +42,8 @@ import {
   selectSaveSuccess
 } from '../../backend/store/slices/authSigSlice';
 
-const ConsentForTreatment = ({ clientID: propClientID }) => {
+// ✅ UPDATED: Wrapped with forwardRef to work with FormModal
+const ConsentForTreatment = forwardRef(({ clientID: propClientID, title, formType = 'consentTreatment' }, ref) => {
   const dispatch = useDispatch();
   
   // Redux selectors
@@ -65,6 +66,21 @@ const ConsentForTreatment = ({ clientID: propClientID }) => {
   // Calculate completion percentage
   const completionPercentage = consentTreatSig.trim() && acknowledged ? 100 : 
                              consentTreatSig.trim() || acknowledged ? 50 : 0;
+
+  // ✅ ADDED: Expose getFormData method to parent FormModal
+  useImperativeHandle(ref, () => ({
+    getFormData: () => ({
+      signature: consentTreatSig,
+      acknowledged: acknowledged,
+      completionPercentage,
+      lastModified: new Date().toISOString(),
+      status: completionPercentage === 100 ? 'completed' : 'in_progress',
+      formData: {
+        consentedAt: new Date().toISOString(),
+        consentType: 'treatment_and_services'
+      }
+    })
+  }));
 
   // Load form data when component mounts
   useEffect(() => {
@@ -198,7 +214,7 @@ const ConsentForTreatment = ({ clientID: propClientID }) => {
             <MedicalIcon sx={{ mr: 2, color: 'primary.main', fontSize: 32 }} />
             <Box sx={{ flex: 1 }}>
               <Typography variant="h4" gutterBottom sx={{ fontWeight: 600 }}>
-                Consent for Treatment & Services
+                {title || 'Consent for Treatment & Services'}
               </Typography>
               <Typography variant="body1" color="text.secondary">
                 Please review and provide consent for medical and mental health services
@@ -597,6 +613,9 @@ const ConsentForTreatment = ({ clientID: propClientID }) => {
       </Snackbar>
     </Box>
   );
-};
+});
+
+// ✅ ADDED: Set display name for debugging
+ConsentForTreatment.displayName = 'ConsentForTreatment';
 
 export default ConsentForTreatment;

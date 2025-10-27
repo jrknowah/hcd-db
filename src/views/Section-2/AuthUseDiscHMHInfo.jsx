@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, forwardRef, useImperativeHandle } from "react";
 import { useSelector } from 'react-redux';
 import {
     Box,
@@ -54,11 +54,13 @@ const validationRules = createFormValidator({
     }
 });
 
-const AuthUseDiscHMHInfo = ({ clientID: propClientID }) => {
+// ✅ UPDATED: Wrapped with forwardRef to work with FormModal
+const AuthUseDiscHMHInfo = forwardRef(({ clientID: propClientID, title, formType = 'healthDisclosure' }, ref) => {
     const selectedClient = useSelector((state) => state.clients?.selectedClient);
     const clientID = propClientID || selectedClient?.clientID;
 
     // Use the custom form manager hook
+    // ✅ IMPORTANT: Use 'healthDisclosure' to match backend route
     const {
         formData,
         formLoading,
@@ -74,7 +76,7 @@ const AuthUseDiscHMHInfo = ({ clientID: propClientID }) => {
         clearFormErrors,
         clearSuccessState
     } = useFormManager(
-        'authUseDiscHMHInfo',
+        formType, // Use the formType prop (defaults to 'healthDisclosure')
         clientID,
         { version: '2.0' },
         validationRules
@@ -90,6 +92,23 @@ const AuthUseDiscHMHInfo = ({ clientID: propClientID }) => {
     ];
     
     const completionPercentage = calculateFormCompletion(formData, requiredFields);
+
+    // ✅ ADDED: Expose getFormData method to parent FormModal
+    useImperativeHandle(ref, () => ({
+        getFormData: () => ({
+            // All form fields
+            ...formData,
+            
+            // Metadata
+            completionPercentage,
+            lastModified: new Date().toISOString(),
+            status: completionPercentage === 100 ? 'completed' : 'in_progress',
+            
+            // Additional tracking
+            formVersion: '2.0',
+            submissionType: completionPercentage === 100 ? 'final' : 'draft'
+        })
+    }));
 
     // Field change handlers
     const handleFieldChange = useCallback((fieldName) => (event) => {
@@ -149,7 +168,7 @@ const AuthUseDiscHMHInfo = ({ clientID: propClientID }) => {
                         <SecurityIcon sx={{ mr: 2, color: 'primary.main', fontSize: 32 }} />
                         <Box sx={{ flex: 1 }}>
                             <Typography variant="h4" gutterBottom sx={{ fontWeight: 600 }}>
-                                Authorization For Use & Disclosure Of Health/Mental Information
+                                {title || 'Authorization For Use & Disclosure Of Health/Mental Information'}
                             </Typography>
                             <Typography variant="body2" color="text.secondary">
                                 Complete this form to authorize the use and/or disclosure of your individually 
@@ -220,8 +239,6 @@ const AuthUseDiscHMHInfo = ({ clientID: propClientID }) => {
 
             {/* Main Form */}
             <form onSubmit={handleSubmit}>
-                {/* Client Information Section */}
-
                 {/* Authorization Section */}
                 <Paper elevation={1} sx={{ p: 3, mb: 3 }}>
                     <Typography variant="h6" gutterBottom sx={{ fontWeight: 600, color: 'primary.main' }}>
@@ -511,7 +528,6 @@ const AuthUseDiscHMHInfo = ({ clientID: propClientID }) => {
 
                 {/* Action Buttons */}
                 <Box sx={{ display: 'flex', justifyContent: 'center', gap: 2, mt: 4 }}>
-                    
                     <Button
                         type="submit"
                         variant="contained"
@@ -537,6 +553,9 @@ const AuthUseDiscHMHInfo = ({ clientID: propClientID }) => {
             </Snackbar>
         </Box>
     );
-};
+});
+
+// ✅ ADDED: Set display name for debugging
+AuthUseDiscHMHInfo.displayName = 'AuthUseDiscHMHInfo';
 
 export default AuthUseDiscHMHInfo;

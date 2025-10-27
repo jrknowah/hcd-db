@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, forwardRef, useImperativeHandle } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import {
   Box,
@@ -43,7 +43,8 @@ import {
 // Import your actual crList data
 import { crList } from "../../data/arrayList";
 
-const ClientRights = ({ clientID: propClientID }) => {
+// ✅ UPDATED: Wrapped with forwardRef to work with FormModal
+const ClientRights = forwardRef(({ clientID: propClientID, title, formType = 'clientRights' }, ref) => {
   const dispatch = useDispatch();
   
   // Redux selectors
@@ -66,6 +67,21 @@ const ClientRights = ({ clientID: propClientID }) => {
   // Calculate completion percentage
   const completionPercentage = patientRightsSig.trim() && acknowledged ? 100 : 
                              patientRightsSig.trim() || acknowledged ? 50 : 0;
+
+  // ✅ ADDED: Expose getFormData method to parent FormModal
+  useImperativeHandle(ref, () => ({
+    getFormData: () => ({
+      signature: patientRightsSig,
+      acknowledged: acknowledged,
+      completionPercentage,
+      lastModified: new Date().toISOString(),
+      status: completionPercentage === 100 ? 'completed' : 'in_progress',
+      formData: {
+        acknowledgedAt: new Date().toISOString(),
+        rightsReviewed: crList.length
+      }
+    })
+  }));
 
   // Load form data when component mounts
   useEffect(() => {
@@ -199,7 +215,7 @@ const ClientRights = ({ clientID: propClientID }) => {
             <VerifiedIcon sx={{ mr: 2, color: 'primary.main', fontSize: 32 }} />
             <Box sx={{ flex: 1 }}>
               <Typography variant="h4" gutterBottom sx={{ fontWeight: 600 }}>
-                Client Rights and Responsibilities
+                {title || 'Client Rights and Responsibilities'}
               </Typography>
               <Typography variant="body1" color="text.secondary">
                 Please review your rights and responsibilities as a client of our facility
@@ -428,6 +444,9 @@ const ClientRights = ({ clientID: propClientID }) => {
       </Snackbar>
     </Box>
   );
-};
+});
+
+// ✅ ADDED: Set display name for debugging
+ClientRights.displayName = 'ClientRights';
 
 export default ClientRights;

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, forwardRef, useImperativeHandle } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import {
   Box,
@@ -44,7 +44,8 @@ import {
   selectSaveSuccess
 } from '../../backend/store/slices/authSigSlice';
 
-const ReleasePHI = ({ clientID: propClientID }) => {
+// ✅ UPDATED: Wrapped with forwardRef to work with FormModal
+const ReleasePHI = forwardRef(({ clientID: propClientID, title, formType = 'phiRelease' }, ref) => {
   const dispatch = useDispatch();
   
   // Redux selectors
@@ -68,6 +69,21 @@ const ReleasePHI = ({ clientID: propClientID }) => {
   // Calculate completion percentage
   const completionPercentage = patientRightsSig.trim() && acknowledged ? 100 : 
                              patientRightsSig.trim() || acknowledged ? 50 : 0;
+
+  // ✅ ADDED: Expose getFormData method to parent FormModal
+  useImperativeHandle(ref, () => ({
+    getFormData: () => ({
+      signature: patientRightsSig,
+      acknowledged: acknowledged,
+      completionPercentage,
+      lastModified: new Date().toISOString(),
+      status: completionPercentage === 100 ? 'completed' : 'in_progress',
+      formData: {
+        acknowledgedAt: new Date().toISOString(),
+        privacyNoticeVersion: '2024-v1'
+      }
+    })
+  }));
 
   // Load form data when component mounts
   useEffect(() => {
@@ -203,7 +219,7 @@ const ReleasePHI = ({ clientID: propClientID }) => {
             <SecurityIcon sx={{ mr: 2, color: 'primary.main', fontSize: 32 }} />
             <Box sx={{ flex: 1 }}>
               <Typography variant="h4" gutterBottom sx={{ fontWeight: 600 }}>
-                Protected Health Information (PHI) Release
+                {title || 'Protected Health Information (PHI) Release'}
               </Typography>
               <Typography variant="body1" color="text.secondary">
                 HIPAA Privacy Notice and Acknowledgment
@@ -564,6 +580,9 @@ const ReleasePHI = ({ clientID: propClientID }) => {
       </Snackbar>
     </Container>
   );
-};
+});
+
+// ✅ ADDED: Set display name for debugging
+ReleasePHI.displayName = 'ReleasePHI';
 
 export default ReleasePHI;

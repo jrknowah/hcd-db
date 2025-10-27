@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, forwardRef, useImperativeHandle } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import {
   Box,
@@ -43,7 +43,8 @@ import {
 // Import your actual ppcList data
 import { ppcList } from "../../data/arrayList";
 
-const ClientOrientation = ({ clientID: propClientID }) => {
+// ✅ UPDATED: Wrapped with forwardRef to work with FormModal
+const ClientOrientation = forwardRef(({ clientID: propClientID, title, formType = 'orientation' }, ref) => {
   const dispatch = useDispatch();
   
   // Redux selectors
@@ -63,10 +64,25 @@ const ClientOrientation = ({ clientID: propClientID }) => {
   // Get client ID from props or Redux
   const clientID = propClientID || selectedClient?.clientID;
   
-  // Calculate completion percentage - FIXED
+  // Calculate completion percentage
   const totalItems = ppcList.length + 2 + 1; // +2 for additional checkboxes, +1 for signature
   const completedItems = Object.values(checkboxes).filter(Boolean).length + (patientRightsSig.trim() ? 1 : 0);
   const completionPercentage = Math.round((completedItems / totalItems) * 100);
+
+  // ✅ ADDED: Expose getFormData method to parent FormModal
+  useImperativeHandle(ref, () => ({
+    getFormData: () => ({
+      checkboxes,
+      signature: patientRightsSig,
+      completionPercentage,
+      lastModified: new Date().toISOString(),
+      status: completionPercentage === 100 ? 'completed' : 'in_progress',
+      formData: {
+        submittedAt: new Date().toISOString(),
+        ipAddress: window.location.hostname
+      }
+    })
+  }));
 
   // Load form data when component mounts
   useEffect(() => {
@@ -83,7 +99,7 @@ const ClientOrientation = ({ clientID: propClientID }) => {
     }
   }, [orientationForm]);
 
-  // Handle checkbox changes - FIXED
+  // Handle checkbox changes
   const handleCheckboxChange = useCallback((e) => {
     const { name, checked } = e.target;
     const newCheckboxes = { ...checkboxes, [name]: checked };
@@ -102,7 +118,7 @@ const ClientOrientation = ({ clientID: propClientID }) => {
     }));
   }, [dispatch, checkboxes, patientRightsSig, totalItems]);
 
-  // Handle signature changes - FIXED
+  // Handle signature changes
   const handleSigChange = useCallback((e) => {
     const signature = e.target.value;
     setPatientRightsSig(signature);
@@ -162,7 +178,7 @@ const ClientOrientation = ({ clientID: propClientID }) => {
       status: 'completed',
       formData: {
         submittedAt: new Date().toISOString(),
-        ipAddress: window.location.hostname // Basic tracking
+        ipAddress: window.location.hostname
       }
     };
 
@@ -210,7 +226,7 @@ const ClientOrientation = ({ clientID: propClientID }) => {
             <AssignmentIcon sx={{ mr: 2, color: 'primary.main', fontSize: 32 }} />
             <Box sx={{ flex: 1 }}>
               <Typography variant="h4" gutterBottom sx={{ fontWeight: 600 }}>
-                Patient Orientation Acknowledgment
+                {title || 'Patient Orientation Acknowledgment'}
               </Typography>
               <Typography variant="body1" color="text.secondary">
                 Please review and acknowledge that you have received and understand the following documents
@@ -229,7 +245,7 @@ const ClientOrientation = ({ clientID: propClientID }) => {
             </Box>
           )}
 
-          {/* Progress Indicator - FIXED: Added aria attributes */}
+          {/* Progress Indicator */}
           <Box sx={{ mt: 2 }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
               <Typography variant="body2" color="text.secondary">
@@ -444,6 +460,9 @@ const ClientOrientation = ({ clientID: propClientID }) => {
       </Snackbar>
     </Box>
   );
-};
+});
+
+// ✅ ADDED: Set display name for debugging
+ClientOrientation.displayName = 'ClientOrientation';
 
 export default ClientOrientation;

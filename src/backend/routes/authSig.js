@@ -6,23 +6,23 @@ const { logUserAction } = require('../config/logAction');
 
 const router = express.Router();
 
-// Valid form types
+// Valid form types - UPDATED to match frontend FORM_CONFIGS
 const VALID_FORM_TYPES = [
   'orientation',
   'clientRights',
-  'consentPhoto',
-  'consentMeds',
   'consentTreatment',
-  'advanceDirective',
-  'releaseInfo',
-  'photographyConsent',
-  'transportationConsent',
-  'grievanceProcedure',
-  'noticeOfPrivacy',
-  'financialAgreement',
-  'drugScreening',
-  'backgroundCheck',
-  'emergencyContact'
+  'preScreen',
+  'privacyPractice',
+  'lahmis',
+  'phiRelease',          // ← Was missing, was 'releaseInfo' before
+  'residencePolicy',
+  'authDisclosure',
+  'termination',
+  'advDirective',        // ← Was 'advanceDirective' before
+  'grievances',          // ← Was 'grievanceProcedure' before
+  'healthDisclosure',    // ← Was missing
+  'consentPhoto',
+  'housingAgreement'     // ← Was missing
 ];
 
 // ============================================================================
