@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useMemo, forwardRef, useImperativeHandle } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import {
   Box,
@@ -29,7 +29,6 @@ import {
   Zoom,
   useTheme,
   alpha,
-  Grid,
   Divider
 } from '@mui/material';
 import {
@@ -42,9 +41,7 @@ import {
   CloudDone as CloudDoneIcon,
   Assignment as DirectiveIcon,
   Info as InfoIcon,
-  Description as DocumentIcon,
-  Group as ResponsibleIcon,
-  RecordVoiceOver as WitnessIcon
+  Description as DocumentIcon
 } from '@mui/icons-material';
 
 // Import Redux actions and selectors
@@ -64,40 +61,48 @@ import {
   selectUnsavedChanges
 } from '../../backend/store/slices/authSigSlice';
 
-const AdvCareAck = ({ clientID: propClientID, formConfig }) => {
+// ✅ MAIN COMPONENT WITH FORWARDREF
+const AdvCareAck = forwardRef(({ 
+  clientID, 
+  title = "Acknowledgment of Advance Care Planning Discussion", 
+  formType = "advCareAck" 
+}, ref) => {
   const theme = useTheme();
   const dispatch = useDispatch();
   
-  // Redux selectors
-  const selectedClient = useSelector((state) => state.clients?.selectedClient);
-  const advCareForm = useSelector(selectFormByType('advDirective'));
-  const formLoading = useSelector(selectFormLoading('advDirective'));
+  // Redux selectors - using the formType parameter
+  const existingData = useSelector((state) => selectFormByType(state, formType));
+  const loading = useSelector(selectFormLoading);
   const saving = useSelector(selectSaving);
   const autoSaving = useSelector(selectAutoSaving);
   const saveSuccess = useSelector(selectSaveSuccess);
   const unsavedChanges = useSelector(selectUnsavedChanges);
-  const formErrors = useSelector((state) => state.authSig.formErrors.advDirective);
+  
+  // ✅ FIX: Add local loading state to prevent infinite loops
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
   
   // Local state
   const [formData, setFormData] = useState({
     factSheetGiven: "",
     factSheetNotGivenReason: "",
     hasDirective: "",
-    clientSignature: "",
-    responsibleAdultSignature: "",
-    witnessSignature: "",
-    relationshipToClient: "",
+    clientSignature: ""
   });
   const [localErrors, setLocalErrors] = useState([]);
   const [showSuccessSnackbar, setShowSuccessSnackbar] = useState(false);
   
-  // Get client ID from props or Redux
-  const clientID = propClientID || selectedClient?.clientID;
+  // ✅ EXPOSE getFormData VIA REF
+  useImperativeHandle(ref, () => ({
+    getFormData: () => ({
+      ...formData,
+      clientID,
+      formType
+    })
+  }));
   
   // Calculate completion percentage
   const completionPercentage = useMemo(() => {
     const requiredFields = ['factSheetGiven', 'hasDirective', 'clientSignature'];
-    const optionalFields = ['responsibleAdultSignature', 'witnessSignature', 'relationshipToClient'];
     const conditionalFields = formData.factSheetGiven === 'No' ? ['factSheetNotGivenReason'] : [];
     
     const allRequiredFields = [...requiredFields, ...conditionalFields];
@@ -105,14 +110,7 @@ const AdvCareAck = ({ clientID: propClientID, formConfig }) => {
       formData[field] && formData[field].trim()
     ).length;
     
-    const completedOptional = optionalFields.filter(field => 
-      formData[field] && formData[field].trim()
-    ).length;
-    
-    const requiredPercentage = (completedRequired / allRequiredFields.length) * 80;
-    const optionalPercentage = (completedOptional / optionalFields.length) * 20;
-    
-    return Math.round(requiredPercentage + optionalPercentage);
+    return Math.round((completedRequired / allRequiredFields.length) * 100);
   }, [formData]);
   
   // Form validation
@@ -124,34 +122,36 @@ const AdvCareAck = ({ clientID: propClientID, formConfig }) => {
            (formData.factSheetGiven !== 'No' || formData.factSheetNotGivenReason.trim());
   }, [clientID, formData]);
   
-  // Auto-save form data
-  const autoSaveData = useMemo(() => ({
-    ...formData,
-    completionPercentage,
-    lastModified: new Date().toISOString()
-  }), [formData, completionPercentage]);
-  
-  // Load form data when component mounts
+  // ✅ FIX: Load form data with error handling
   useEffect(() => {
-    if (clientID) {
-      dispatch(fetchFormData({ clientID, formType: 'advDirective' }));
+    if (clientID && formType) {
+      dispatch(fetchFormData({ clientID, formType }))
+        .unwrap()
+        .then((data) => {
+          console.log('Form data loaded:', data);
+        })
+        .catch((error) => {
+          console.warn('Failed to load form data (form will work with empty data):', error);
+        })
+        .finally(() => {
+          setTimeout(() => setIsInitialLoad(false), 1000);
+        });
+    } else {
+      setIsInitialLoad(false);
     }
-  }, [dispatch, clientID]);
+  }, [dispatch, clientID, formType]);
   
   // Update local state when Redux form data changes
   useEffect(() => {
-    if (advCareForm && Object.keys(advCareForm).length > 0) {
+    if (existingData && Object.keys(existingData).length > 0) {
       setFormData({
-        factSheetGiven: advCareForm.factSheetGiven || "",
-        factSheetNotGivenReason: advCareForm.factSheetNotGivenReason || "",
-        hasDirective: advCareForm.hasDirective || "",
-        clientSignature: advCareForm.clientSignature || "",
-        responsibleAdultSignature: advCareForm.responsibleAdultSignature || "",
-        witnessSignature: advCareForm.witnessSignature || "",
-        relationshipToClient: advCareForm.relationshipToClient || "",
+        factSheetGiven: existingData.factSheetGiven || "",
+        factSheetNotGivenReason: existingData.factSheetNotGivenReason || "",
+        hasDirective: existingData.hasDirective || "",
+        clientSignature: existingData.clientSignature || ""
       });
     }
-  }, [advCareForm]);
+  }, [existingData]);
   
   // Update unsaved changes in Redux
   useEffect(() => {
@@ -174,10 +174,10 @@ const AdvCareAck = ({ clientID: propClientID, formConfig }) => {
     setLocalErrors([]);
     
     dispatch(updateFormLocal({
-      formType: 'advDirective',
+      formType,
       formData: newFormData
     }));
-  }, [dispatch, formData]);
+  }, [dispatch, formData, formType]);
 
   // Handle form submission
   const handleSubmit = useCallback(async () => {
@@ -212,18 +212,15 @@ const AdvCareAck = ({ clientID: propClientID, formConfig }) => {
       ...formData,
       completionPercentage: 100,
       status: 'completed',
-      formData: {
-        acknowledgedAt: new Date().toISOString(),
-        directiveVersion: formConfig?.version || '2024-v1',
-        ipAddress: window.location.hostname,
-        userAgent: navigator.userAgent
-      }
+      clientID,
+      formType,
+      acknowledgedAt: new Date().toISOString()
     };
 
     try {
       await dispatch(saveFormData({ 
         clientID, 
-        formType: 'advDirective', 
+        formType, 
         formData: submitData 
       })).unwrap();
       
@@ -232,180 +229,88 @@ const AdvCareAck = ({ clientID: propClientID, formConfig }) => {
     } catch (error) {
       setLocalErrors([error.message || 'Failed to save advance care acknowledgment']);
     }
-  }, [dispatch, clientID, formData, formConfig]);
+  }, [dispatch, clientID, formData, formType]);
 
-  // Clear success messages
+  // Handle close success snackbar
   const handleCloseSuccessSnackbar = useCallback(() => {
     setShowSuccessSnackbar(false);
     dispatch(clearSuccessFlags());
   }, [dispatch]);
 
-  // Clear errors
-  const handleClearErrors = useCallback(() => {
-    setLocalErrors([]);
-    dispatch(clearErrors());
-  }, [dispatch]);
-
-  if (formLoading) {
+  // ✅ FIX: Improved loading state
+  if (isInitialLoad && loading) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', p: 4, minHeight: 400 }}>
-        <Box sx={{ textAlign: 'center' }}>
-          <CircularProgress size={60} sx={{ mb: 2 }} />
-          <Typography variant="h6" color="text.secondary">
-            Loading advance care data...
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Please wait while we retrieve the directive information
+      <Container maxWidth="lg">
+        <Box sx={{ 
+          display: 'flex', 
+          flexDirection: 'column',
+          justifyContent: 'center', 
+          alignItems: 'center', 
+          minHeight: 400 
+        }}>
+          <CircularProgress size={60} />
+          <Typography variant="body2" sx={{ mt: 2, color: 'text.secondary' }}>
+            Loading form...
           </Typography>
         </Box>
-      </Box>
+      </Container>
     );
   }
 
   return (
-    <Container maxWidth="lg" sx={{ py: 3 }}>
-      {/* Header Section */}
-      <Card elevation={3} sx={{ mb: 4, overflow: 'hidden' }}>
-        <Box
-          sx={{
-            background: `linear-gradient(135deg, ${theme.palette.success.main} 0%, ${theme.palette.success.dark} 100%)`,
-            color: 'white',
-            p: 4
-          }}
-        >
-          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center' }}>
-              <HealthIcon sx={{ mr: 2, fontSize: 40 }} />
-              <Box>
-                <Typography variant="h4" gutterBottom sx={{ fontWeight: 700, mb: 1 }}>
-                  Advance Healthcare Directive Acknowledgment
-                </Typography>
-                <Typography variant="h6" sx={{ opacity: 0.9, fontWeight: 400 }}>
-                  California Probate Code 4600 Compliance
-                </Typography>
-              </Box>
-            </Box>
-            
-            {/* Auto-save indicator */}
-            {autoSaving && (
-              <Zoom in={autoSaving}>
-                <Chip 
-                  label="Auto-saving..." 
-                  icon={<AutoSaveIcon />}
-                  color="default"
-                  variant="filled"
-                  sx={{ 
-                    bgcolor: 'rgba(255,255,255,0.2)', 
-                    color: 'white',
-                    '& .MuiChip-icon': { color: 'white' }
-                  }}
-                />
-              </Zoom>
-            )}
-          </Box>
-
-          {/* Client Info */}
-          {selectedClient && (
-            <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
-              <PersonIcon sx={{ mr: 1, opacity: 0.9 }} />
-              <Typography variant="body1" sx={{ fontWeight: 500 }}>
-                Client: {selectedClient.firstName} {selectedClient.lastName}
-                {selectedClient.clientID && ` (ID: ${selectedClient.clientID})`}
-              </Typography>
-            </Box>
-          )}
-        </Box>
-
-        <CardContent sx={{ p: 0 }}>
-          {/* Progress Indicator */}
-          <Box sx={{ p: 4, pb: 2 }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-              <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                Form Completion Progress
-              </Typography>
-              <Chip 
-                label={`${completionPercentage}% Complete`}
-                color={completionPercentage === 100 ? 'success' : 'primary'}
-                variant="filled"
-                sx={{ fontWeight: 600 }}
-              />
-            </Box>
-            
-            <LinearProgress 
-              variant="determinate" 
-              value={completionPercentage} 
-              sx={{ 
-                height: 12, 
-                borderRadius: 6,
-                bgcolor: alpha(theme.palette.grey[300], 0.3),
-                '& .MuiLinearProgress-bar': {
-                  borderRadius: 6,
-                  background: completionPercentage === 100 
-                    ? `linear-gradient(45deg, ${theme.palette.success.main}, ${theme.palette.success.light})`
-                    : `linear-gradient(45deg, ${theme.palette.primary.main}, ${theme.palette.primary.light})`
-                }
-              }}
-            />
-            
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 1 }}>
-              <Typography variant="caption" color="text.secondary">
-                Required fields completed
-              </Typography>
-              <Typography variant="caption" color="text.secondary">
-                Ready for submission: {isValid ? 'Yes' : 'No'}
-              </Typography>
-            </Box>
-          </Box>
-        </CardContent>
-      </Card>
-
-      {/* Error Alerts */}
-      {(localErrors.length > 0 || formErrors) && (
-        <Fade in>
-          <Alert 
-            severity="error" 
-            sx={{ mb: 3 }}
-            onClose={handleClearErrors}
-            action={
-              <Button color="inherit" size="small" onClick={handleClearErrors}>
-                Dismiss
-              </Button>
-            }
-          >
-            {localErrors.length > 0 ? (
-              <Box>
-                <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
-                  Please correct the following issues:
-                </Typography>
-                {localErrors.map((error, index) => (
-                  <Typography key={index} variant="body2" sx={{ ml: 2 }}>
-                    • {error}
-                  </Typography>
-                ))}
-              </Box>
-            ) : (
-              formErrors
-            )}
-          </Alert>
-        </Fade>
-      )}
-
-      {/* Background Information */}
-      <Paper elevation={2} sx={{ p: 4, mb: 3 }}>
+    <Container maxWidth="lg" sx={{ py: 4 }}>
+      {/* Header */}
+      <Paper elevation={3} sx={{ p: 4, mb: 4, bgcolor: 'primary.main', color: 'primary.contrastText' }}>
         <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-          <InfoIcon sx={{ mr: 1, color: 'primary.main' }} />
-          <Typography variant="h6" sx={{ fontWeight: 600, color: 'primary.main' }}>
-            Background Information
+          <DirectiveIcon sx={{ fontSize: 48, mr: 2 }} />
+          <Typography variant="h4" component="h1" sx={{ fontWeight: 700 }}>
+            {title}
           </Typography>
         </Box>
-        <Typography variant="body1" paragraph>
-          In accordance with California Probate Code 4600 et seq. and Federal requirements under Title 42,
-          clients 18 years of age and older shall receive information about Advance Health Care Directives
-          and be informed of their right to make decisions about their medical treatment.
+        <Typography variant="subtitle1" sx={{ opacity: 0.9 }}>
+          Advance Health Care Directive Acknowledgment
         </Typography>
       </Paper>
 
-      {/* Staff Completion Section */}
+      {/* Progress Card */}
+      <Card sx={{ mb: 4 }}>
+        <CardContent>
+          <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+            <Typography variant="subtitle1" sx={{ flexGrow: 1, fontWeight: 600 }}>
+              Form Completion Progress
+            </Typography>
+            <Chip 
+              label={`${completionPercentage}% Complete`}
+              color={completionPercentage === 100 ? "success" : "default"}
+              size="small"
+            />
+          </Box>
+          <LinearProgress 
+            variant="determinate" 
+            value={completionPercentage} 
+            sx={{ height: 8, borderRadius: 4 }}
+          />
+        </CardContent>
+      </Card>
+
+      {/* Error Messages */}
+      {localErrors.length > 0 && (
+        <Alert severity="error" sx={{ mb: 3 }} onClose={() => setLocalErrors([])}>
+          {localErrors.map((error, index) => (
+            <Typography key={index} variant="body2">• {error}</Typography>
+          ))}
+        </Alert>
+      )}
+
+      {/* Information Alert */}
+      <Alert severity="info" sx={{ mb: 3 }}>
+        <Typography variant="body2">
+          This form documents that the client has been informed about advance health care directives 
+          and has been given or offered an Advance Health Care Directive Fact Sheet.
+        </Typography>
+      </Alert>
+
+      {/* Staff Assessment Section */}
       <Paper elevation={2} sx={{ p: 4, mb: 3 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
           <DocumentIcon sx={{ mr: 1, color: 'primary.main' }} />
@@ -419,19 +324,18 @@ const AdvCareAck = ({ clientID: propClientID, formConfig }) => {
             <TableHead>
               <TableRow sx={{ bgcolor: alpha(theme.palette.primary.main, 0.1) }}>
                 <TableCell sx={{ fontWeight: 600 }}>Question</TableCell>
-                <TableCell sx={{ fontWeight: 600, width: 200 }}>Response</TableCell>
+                <TableCell sx={{ fontWeight: 600 }}>Response</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               <TableRow>
                 <TableCell>
                   <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                    The client was given a copy of the Advance Health Care
-                    Directive Fact Sheet at the first face-to-face contact or clinic visit.
+                    Has the Advance Health Care Directive Fact Sheet been given to the Client?
                   </Typography>
                 </TableCell>
                 <TableCell>
-                  <FormControl fullWidth variant="outlined" size="small">
+                  <FormControl fullWidth size="small" required>
                     <InputLabel>Select</InputLabel>
                     <Select
                       name="factSheetGiven"
@@ -446,33 +350,39 @@ const AdvCareAck = ({ clientID: propClientID, formConfig }) => {
                   </FormControl>
                 </TableCell>
               </TableRow>
-              
+
               {formData.factSheetGiven === 'No' && (
                 <TableRow>
-                  <TableCell colSpan={2}>
+                  <TableCell>
+                    <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                      If No, explain:
+                    </Typography>
+                  </TableCell>
+                  <TableCell>
                     <TextField
                       fullWidth
-                      label="If 'No', please explain:"
-                      variant="outlined"
+                      multiline
+                      rows={3}
+                      placeholder="Explain why the fact sheet was not given"
                       name="factSheetNotGivenReason"
                       value={formData.factSheetNotGivenReason}
                       onChange={handleChange}
-                      multiline
-                      rows={2}
-                      placeholder="Please provide an explanation..."
+                      variant="outlined"
+                      size="small"
+                      required
                     />
                   </TableCell>
                 </TableRow>
               )}
-              
+
               <TableRow>
                 <TableCell>
                   <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                    Does the client have an Advance Health Care Directive currently in place?
+                    Does the client have an Advance Health Care Directive?
                   </Typography>
                 </TableCell>
                 <TableCell>
-                  <FormControl fullWidth variant="outlined" size="small">
+                  <FormControl fullWidth size="small" required>
                     <InputLabel>Select</InputLabel>
                     <Select
                       name="hasDirective"
@@ -492,12 +402,12 @@ const AdvCareAck = ({ clientID: propClientID, formConfig }) => {
         </TableContainer>
       </Paper>
 
-      {/* Client/Responsible Adult Completion Section */}
+      {/* Client Signature Section */}
       <Paper elevation={2} sx={{ p: 4, mb: 3 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
           <PersonIcon sx={{ mr: 1, color: 'primary.main' }} />
           <Typography variant="h6" sx={{ fontWeight: 600, color: 'primary.main' }}>
-            To Be Completed by the Client/Responsible Adult*
+            Client Acknowledgment & Signature
           </Typography>
         </Box>
 
@@ -508,131 +418,36 @@ const AdvCareAck = ({ clientID: propClientID, formConfig }) => {
           </Typography>
         </Alert>
 
-        <TableContainer component={Paper} elevation={1}>
-          <Table>
-            <TableHead>
-              <TableRow sx={{ bgcolor: alpha(theme.palette.primary.main, 0.1) }}>
-                <TableCell sx={{ fontWeight: 600 }}>Client Signature</TableCell>
-                <TableCell sx={{ fontWeight: 600 }}>Responsible Adult Signature</TableCell>
-                <TableCell sx={{ fontWeight: 600 }}>Witness/Interpreter Signature</TableCell>
-                <TableCell sx={{ fontWeight: 600 }}>Relationship to Client</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              <TableRow>
-                <TableCell>
-                  <TextField
-                    fullWidth
-                    placeholder="Client Signature"
-                    name="clientSignature"
-                    value={formData.clientSignature}
-                    onChange={handleChange}
-                    variant="outlined"
-                    size="small"
-                    required
-                    InputProps={{
-                      startAdornment: <PersonIcon sx={{ mr: 1, color: 'text.secondary' }} />
-                    }}
-                  />
-                </TableCell>
-                <TableCell>
-                  <TextField
-                    fullWidth
-                    placeholder="Responsible Adult Signature"
-                    name="responsibleAdultSignature"
-                    value={formData.responsibleAdultSignature}
-                    onChange={handleChange}
-                    variant="outlined"
-                    size="small"
-                    InputProps={{
-                      startAdornment: <ResponsibleIcon sx={{ mr: 1, color: 'text.secondary' }} />
-                    }}
-                  />
-                </TableCell>
-                <TableCell>
-                  <TextField
-                    fullWidth
-                    placeholder="Witness/Interpreter Signature"
-                    name="witnessSignature"
-                    value={formData.witnessSignature}
-                    onChange={handleChange}
-                    variant="outlined"
-                    size="small"
-                    InputProps={{
-                      startAdornment: <WitnessIcon sx={{ mr: 1, color: 'text.secondary' }} />
-                    }}
-                  />
-                </TableCell>
-                <TableCell>
-                  <TextField
-                    fullWidth
-                    placeholder="Relationship to Client"
-                    name="relationshipToClient"
-                    value={formData.relationshipToClient}
-                    onChange={handleChange}
-                    variant="outlined"
-                    size="small"
-                  />
-                </TableCell>
-              </TableRow>
-            </TableBody>
-          </Table>
-        </TableContainer>
+        <TextField
+          fullWidth
+          label="Client Signature"
+          placeholder="Enter your full legal name"
+          name="clientSignature"
+          value={formData.clientSignature}
+          onChange={handleChange}
+          variant="outlined"
+          required
+          sx={{ mb: 2 }}
+          helperText="Type your name to provide your electronic signature"
+          InputProps={{
+            startAdornment: <PersonIcon sx={{ mr: 1, color: 'text.secondary' }} />
+          }}
+        />
 
-        <Typography variant="caption" color="text.secondary" sx={{ mt: 2, display: 'block' }}>
-          * If the client is unable to sign, a responsible adult may sign on their behalf
-        </Typography>
+        {formData.clientSignature && (
+          <Zoom in={!!formData.clientSignature}>
+            <Alert 
+              severity="success" 
+              icon={<CheckCircleIcon />}
+              sx={{ mt: 2 }}
+            >
+              <Typography variant="body2">
+                Signature captured: <strong>{formData.clientSignature}</strong>
+              </Typography>
+            </Alert>
+          </Zoom>
+        )}
       </Paper>
-
-      {/* Signatures Summary */}
-      {(formData.clientSignature || formData.responsibleAdultSignature || formData.witnessSignature) && (
-        <Paper elevation={1} sx={{ p: 3, mb: 3, bgcolor: alpha(theme.palette.success.main, 0.05) }}>
-          <Typography variant="h6" gutterBottom sx={{ fontWeight: 600, color: 'success.main' }}>
-            Signature Summary
-          </Typography>
-          <Grid container spacing={2}>
-            {formData.clientSignature && (
-              <Grid item xs={12} sm={6} md={4}>
-                <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                  <CheckCircleIcon sx={{ color: 'success.main', mr: 1 }} />
-                  <Box>
-                    <Typography variant="caption" color="text.secondary">Client:</Typography>
-                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                      {formData.clientSignature}
-                    </Typography>
-                  </Box>
-                </Box>
-              </Grid>
-            )}
-            {formData.responsibleAdultSignature && (
-              <Grid item xs={12} sm={6} md={4}>
-                <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                  <CheckCircleIcon sx={{ color: 'success.main', mr: 1 }} />
-                  <Box>
-                    <Typography variant="caption" color="text.secondary">Responsible Adult:</Typography>
-                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                      {formData.responsibleAdultSignature}
-                    </Typography>
-                  </Box>
-                </Box>
-              </Grid>
-            )}
-            {formData.witnessSignature && (
-              <Grid item xs={12} sm={6} md={4}>
-                <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                  <CheckCircleIcon sx={{ color: 'success.main', mr: 1 }} />
-                  <Box>
-                    <Typography variant="caption" color="text.secondary">Witness:</Typography>
-                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                      {formData.witnessSignature}
-                    </Typography>
-                  </Box>
-                </Box>
-              </Grid>
-            )}
-          </Grid>
-        </Paper>
-      )}
 
       {/* Submit Button */}
       <Box sx={{ textAlign: 'center' }}>
@@ -705,6 +520,9 @@ const AdvCareAck = ({ clientID: propClientID, formConfig }) => {
       )}
     </Container>
   );
-};
+});
+
+// ✅ ADD DISPLAY NAME
+AdvCareAck.displayName = 'AdvCareAck';
 
 export default AdvCareAck;

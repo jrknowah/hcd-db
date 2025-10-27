@@ -3,7 +3,7 @@ import {
   Box, Tabs, Tab, Typography, Button, Grid, Card, InputLabel, OutlinedInput, 
   Modal, IconButton, Chip, LinearProgress, Alert, CardContent, CardActions,
   Dialog, DialogTitle, DialogContent, DialogActions, List, ListItem, ListItemText,
-  ListItemSecondaryAction, Tooltip
+  ListItemSecondaryAction, Tooltip, CircularProgress
 } from '@mui/material';
 import {
   CloudUpload as UploadIcon,
@@ -48,6 +48,21 @@ const Identification = () => {
   
   // ✅ USE THE HOOK - Replaces all client management logic
   const { clientID, client, hasClient, user, shouldUseMockData, isDevelopment } = useClientPersistence();
+  
+  // ✅ CRITICAL FIX: Add loading guard at component level
+  if (!hasClient || !client) {
+    return (
+      <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '400px', p: 4 }}>
+        <CircularProgress sx={{ mb: 2 }} />
+        <Typography variant="h6" color="text.secondary">
+          Loading client data...
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+          Please wait while we retrieve the client information
+        </Typography>
+      </Box>
+    );
+  }
   
   // State management
   const [forceMockData, setForceMockData] = useState(false);
@@ -222,19 +237,67 @@ const Identification = () => {
         }
       }
       
-      // Clear the file input
-      setFilesToUpload((prev) => ({ ...prev, [docType]: null }));
+      // Clear the uploaded file from state
+      setFilesToUpload((prev) => {
+        const updated = { ...prev };
+        delete updated[docType];
+        return updated;
+      });
+      
+      // Clear progress after a delay
+      setTimeout(() => {
+        setUploadProgress((prev) => {
+          const updated = { ...prev };
+          delete updated[docType];
+          return updated;
+        });
+      }, 2000);
       
     } catch (err) {
-      console.error(`❌ Upload Error for ${docType}:`, err);
-      setError(`Failed to upload ${fileToUpload.name}: ${err.message}`);
-    } finally {
-      // Properly clear the upload progress
+      console.error("❌ Error uploading file:", err);
+      
+      const errorMsg = err.response?.data?.message 
+        || err.message 
+        || "Failed to upload file";
+      
+      setError(`Upload failed: ${errorMsg}`);
+      
       setUploadProgress((prev) => {
-        const newProgress = { ...prev };
-        delete newProgress[docType];
-        return newProgress;
+        const updated = { ...prev };
+        delete updated[docType];
+        return updated;
       });
+    }
+  };
+
+  const handleDownloadFile = async (file) => {
+    try {
+      if (effectiveMockData) {
+        // Mock download
+        alert(`Mock download: ${file.fileName}`);
+        return;
+      }
+
+      const downloadUrl = await azureBlobService.getDownloadUrl(file.blobName || file.fileName, client.clientID);
+      
+      // Create a temporary link and click it to trigger download
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = file.fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      if (user && user.id !== 'mock-user-123') {
+        await logUserAction(user, "DOWNLOAD_DOCUMENT", {
+          clientID: client.clientID,
+          fileName: file.fileName,
+          blobName: file.blobName
+        });
+      }
+    } catch (err) {
+      console.error("❌ Error downloading file:", err);
+      setError(`Failed to download ${file.fileName}: ${err.message}`);
     }
   };
 
@@ -245,14 +308,12 @@ const Identification = () => {
       if (effectiveMockData) {
         // Mock delete
         setFiles((prev) => prev.filter(f => f.fileName !== fileToDelete.fileName));
-        setSuccessMessage(`🗑️ ${fileToDelete.fileName} deleted successfully (Mock)`);
+        setSuccessMessage(`✅ ${fileToDelete.fileName} deleted successfully (Mock)`);
       } else {
-        // Real Azure delete
-        await azureBlobService.deleteFile(fileToDelete.blobName);
-        setFiles((prev) => prev.filter(f => f.blobName !== fileToDelete.blobName));
-        setSuccessMessage(`🗑️ ${fileToDelete.fileName} deleted successfully`);
-
-        // Log user action
+        await azureBlobService.deleteFile(fileToDelete.blobName || fileToDelete.fileName, client.clientID);
+        setFiles((prev) => prev.filter(f => f.fileName !== fileToDelete.fileName));
+        setSuccessMessage(`✅ ${fileToDelete.fileName} deleted successfully`);
+        
         if (user && user.id !== 'mock-user-123') {
           await logUserAction(user, "DELETE_DOCUMENT", {
             clientID: client.clientID,
@@ -262,7 +323,7 @@ const Identification = () => {
         }
       }
     } catch (err) {
-      console.error("❌ Delete Error:", err);
+      console.error("❌ Error deleting file:", err);
       setError(`Failed to delete ${fileToDelete.fileName}: ${err.message}`);
     } finally {
       setDeleteConfirmOpen(false);
@@ -275,97 +336,11 @@ const Identification = () => {
     setPreviewOpen(true);
   };
 
-  const handleDownloadFile = async (file) => {
-    try {
-      if (effectiveMockData) {
-        // Mock download
-        window.open(file.blobUrl, '_blank');
-        return;
-      }
-
-      const downloadUrl = await azureBlobService.generateDownloadUrl(file.blobName);
-      
-      // Create download link
-      const link = document.createElement('a');
-      link.href = downloadUrl;
-      link.download = file.fileName;
-      link.target = '_blank';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      
-    } catch (err) {
-      console.error("❌ Download Error:", err);
-      setError(`Failed to download ${file.fileName}: ${err.message}`);
-    }
-  };
-
-  const handleExport = async () => {
-    if (!client) {
-      setError("Please select a client first.");
-      return;
-    }
-
-    setIsExporting(true);
-    setExportProgress(0);
-
-    try {
-      // Configure PDF options
-      const opt = {
-        margin: [0.5, 0.5, 0.5, 0.5],
-        filename: `${client.clientLastName}_${client.clientFirstName}_Complete_Chart.pdf`,
-        image: { type: 'jpeg', quality: 0.95 },
-        html2canvas: { 
-          scale: 2,
-          useCORS: true,
-          allowTaint: true,
-          logging: false
-        },
-        jsPDF: { 
-          unit: 'in', 
-          format: 'letter', 
-          orientation: 'portrait',
-          compress: true
-        },
-        pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
-      };
-
-      // Simulate progress
-      const progressInterval = setInterval(() => {
-        setExportProgress(prev => {
-          if (prev >= 90) {
-            clearInterval(progressInterval);
-            return 90;
-          }
-          return prev + 10;
-        });
-      }, 300);
-
-      // Generate PDF
-      await html2pdf().set(opt).from(exportRef.current).save();
-      
-      clearInterval(progressInterval);
-      setExportProgress(100);
-      setSuccessMessage('📄 PDF exported successfully!');
-
-      // Log user action
-      if (user && user.id !== 'mock-user-123') {
-        await logUserAction(user, "EXPORT_CLIENT_CHART", {
-          clientID: client.clientID,
-          exportType: 'PDF',
-          filename: opt.filename
-        });
-      }
-
-    } catch (err) {
-      console.error("❌ PDF Export Error:", err);
-      setError(`Failed to export PDF: ${err.message}`);
-    } finally {
-      setTimeout(() => {
-        setIsExporting(false);
-        setExportProgress(0);
-      }, 2000);
-    }
+  const getFileIcon = (file) => {
+    const fileName = file.fileName.toLowerCase();
+    if (fileName.endsWith('.pdf')) return <PdfIcon color="error" />;
+    if (fileName.match(/\.(jpg|jpeg|png|gif)$/)) return <ViewIcon color="primary" />;
+    return <UploadIcon />;
   };
 
   const formatFileSize = (bytes) => {
@@ -373,130 +348,137 @@ const Identification = () => {
     const k = 1024;
     const sizes = ['Bytes', 'KB', 'MB', 'GB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
   };
 
-  const getFileIcon = (file) => {
-    const ext = file.fileName.split('.').pop().toLowerCase();
-    if (['pdf'].includes(ext)) return '📄';
-    if (['jpg', 'jpeg', 'png', 'gif'].includes(ext)) return '🖼️';
-    if (['doc', 'docx'].includes(ext)) return '📝';
-    return '📎';
+  const handleExport = async () => {
+    if (!exportRef.current) return;
+    
+    setIsExporting(true);
+    setExportProgress(0);
+    
+    try {
+      const element = exportRef.current;
+      
+      // Simulate progress
+      const progressInterval = setInterval(() => {
+        setExportProgress(prev => Math.min(prev + 10, 90));
+      }, 200);
+      
+      const opt = {
+        margin: 10,
+        filename: `client-chart-${client.clientID}-${new Date().toISOString().split('T')[0]}.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2 },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+      };
+      
+      await html2pdf().set(opt).from(element).save();
+      
+      clearInterval(progressInterval);
+      setExportProgress(100);
+      setSuccessMessage('✅ Client chart exported successfully!');
+      
+      if (user && user.id !== 'mock-user-123') {
+        await logUserAction(user, "EXPORT_CHART", {
+          clientID: client.clientID
+        });
+      }
+    } catch (err) {
+      console.error("❌ Error exporting PDF:", err);
+      setError(`Failed to export chart: ${err.message}`);
+    } finally {
+      setTimeout(() => {
+        setIsExporting(false);
+        setExportProgress(0);
+      }, 1000);
+    }
   };
-
-  // No client selected
-  if (!hasClient && !effectiveMockData) {
-    return (
-      <Card sx={{ padding: 2 }}>
-        <Typography variant="h6" color="text.secondary" gutterBottom>
-          {isDevelopment ? "Development Mode: No Client Selected" : "Please select a client to view identification documents."}
-        </Typography>
-        {isDevelopment && (
-          <Box>
-            <Typography variant="body2" sx={{ mb: 1 }}>
-              Mock data status: {effectiveMockData ? "Enabled ✅" : "Disabled ❌"}
-            </Typography>
-            <Button 
-              variant="outlined" 
-              size="small"
-              onClick={() => setForceMockData(!forceMockData)}
-              sx={{ mt: 1 }}
-            >
-              {forceMockData ? "Disable" : "Enable"} Mock Data
-            </Button>
-          </Box>
-        )}
-      </Card>
-    );
-  }
 
   return (
-    <Card sx={{ padding: 2 }}>
-      {/* Development indicator */}
-      {effectiveMockData && (
-        <Alert severity="info" sx={{ mb: 2 }}>
-          🔧 Development Mode: Using mock data for {client.clientFirstName} {client.clientLastName}
-        </Alert>
-      )}
+    <Card sx={{ p: 3 }}>
+      <Typography variant="h4" gutterBottom>
+        Client Identification & Documents
+      </Typography>
+      <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+        {/* ✅ FIXED: Added safe null checks */}
+        Viewing documents for: <strong>{client?.clientFirstName || 'Unknown'} {client?.clientLastName || 'Client'}</strong>
+        {clientID && ` (ID: ${clientID})`}
+      </Typography>
 
-      {/* Error Alert */}
+      {/* Success/Error Messages */}
       {error && (
-        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
+        <Alert severity="error" onClose={() => setError(null)} sx={{ mb: 2 }}>
           {error}
         </Alert>
       )}
-
-      {/* Success Alert */}
       {successMessage && (
-        <Alert severity="success" sx={{ mb: 2 }} onClose={() => setSuccessMessage('')}>
+        <Alert severity="success" onClose={() => setSuccessMessage('')} sx={{ mb: 2 }}>
           {successMessage}
         </Alert>
       )}
 
-      {/* Export Progress */}
-      {isExporting && (
+      {/* Mock Data Toggle for Development */}
+      {isDevelopment && (
         <Alert severity="info" sx={{ mb: 2 }}>
-          <Box sx={{ width: '100%' }}>
-            <Typography variant="body2" sx={{ mb: 1 }}>
-              Exporting PDF... {exportProgress}%
-            </Typography>
-            <LinearProgress variant="determinate" value={exportProgress} />
-          </Box>
+          Development Mode: 
+          <Button 
+            size="small" 
+            onClick={() => setForceMockData(!forceMockData)}
+            sx={{ ml: 2 }}
+          >
+            {effectiveMockData ? "Switch to Real Data" : "Switch to Mock Data"}
+          </Button>
         </Alert>
       )}
 
-      <Tabs value={tabIndex} onChange={handleTabChange} variant="scrollable" scrollButtons="auto">
+      <Tabs value={tabIndex} onChange={handleTabChange} sx={{ mb: 3 }}>
         <Tab label="Client Face Sheet" />
-        <Tab label="Identification Documents" />
+        <Tab label="Documents & Uploads" />
         <Tab label="Referrals" />
         <Tab label="Discharge" />
-        <Tab label="Export Chart" />
-        <Tab label={`${client.clientFirstName} ${client.clientLastName}`} disabled />
+        <Tab label="Export Complete Chart" />
       </Tabs>
 
       {tabIndex === 0 && <Box p={3}><ClientFace /></Box>}
       
       {tabIndex === 1 && (
         <Box p={3}>
-          <Typography variant="h6" gutterBottom>
-            Document Upload & Management
+          <Typography variant="h5" gutterBottom>
+            Upload Client Documents
           </Typography>
-          
-          {/* Upload Section */}
-          <Grid container spacing={2} sx={{ mb: 4 }}>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+            Upload supporting documents for the client. Accepted formats: PDF, Word, Images (JPEG, PNG, GIF). Max file size: 10MB.
+          </Typography>
+
+          {/* Upload Cards */}
+          <Grid container spacing={3} sx={{ mb: 4 }}>
             {DOC_TYPES.map((docTitle) => (
               <Grid item xs={12} sm={6} md={4} key={docTitle}>
-                <Card variant="outlined" sx={{ height: '100%' }}>
+                <Card variant="outlined">
                   <CardContent>
                     <Typography variant="subtitle1" gutterBottom>
                       {docTitle}
                     </Typography>
-                    
+                    <InputLabel htmlFor={`file-${docTitle}`}>
+                      Choose File
+                    </InputLabel>
                     <OutlinedInput
+                      id={`file-${docTitle}`}
                       type="file"
-                      onChange={(e) => handleFileSelect(docTitle, e.target.files[0])}
                       fullWidth
-                      sx={{ mb: 1 }}
-                      inputProps={{
-                        accept: '.pdf,.doc,.docx,.jpg,.jpeg,.png,.gif'
-                      }}
+                      onChange={(e) => handleFileSelect(docTitle, e.target.files[0])}
+                      sx={{ mt: 1 }}
                     />
-                    
                     {filesToUpload[docTitle] && (
-                      <Box sx={{ mb: 1 }}>
-                        <Typography variant="caption" color="text.secondary">
-                          Selected: {filesToUpload[docTitle].name}
-                        </Typography>
-                        <Typography variant="caption" display="block" color="text.secondary">
-                          Size: {formatFileSize(filesToUpload[docTitle].size)}
-                        </Typography>
-                      </Box>
+                      <Typography variant="caption" display="block" sx={{ mt: 1 }}>
+                        Selected: {filesToUpload[docTitle].name}
+                      </Typography>
                     )}
-                    
                     {uploadProgress[docTitle] !== undefined && (
-                      <Box sx={{ mb: 1 }}>
+                      <Box sx={{ mt: 2 }}>
                         <LinearProgress variant="determinate" value={uploadProgress[docTitle]} />
-                        <Typography variant="caption" color="text.secondary">
+                        <Typography variant="caption" display="block" align="center" sx={{ mt: 1 }}>
                           Uploading... {uploadProgress[docTitle]}%
                         </Typography>
                       </Box>
@@ -632,7 +614,8 @@ const Identification = () => {
           <div ref={exportRef} style={{ display: "none" }}>
             <div style={{ padding: '20px', fontFamily: 'Arial, sans-serif' }}>
               <div style={{ textAlign: 'center', marginBottom: '30px', borderBottom: '2px solid #333', paddingBottom: '20px' }}>
-                <h1>Client Chart - {client.clientFirstName} {client.clientLastName}</h1>
+                {/* ✅ FIXED: Added safe null checks with optional chaining */}
+                <h1>Client Chart - {client?.clientFirstName || 'Unknown'} {client?.clientLastName || 'Client'}</h1>
                 <p>Generated on: {new Date().toLocaleDateString()}</p>
               </div>
               

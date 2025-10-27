@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useMemo, forwardRef, useImperativeHandle } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import {
   Box,
@@ -319,7 +319,7 @@ const RulesSection = ({ section, expanded, onChange, completed }) => {
         </Box>
       );
     }
-    
+
     if (section.id === 'medication' && content.schedule) {
       return (
         <Box>
@@ -558,7 +558,7 @@ const RulesSection = ({ section, expanded, onChange, completed }) => {
       </Box>
     );
   };
-  
+
   return (
     <Accordion 
       expanded={expanded} 
@@ -639,7 +639,8 @@ const PrintDialog = ({ open, onClose }) => {
   );
 };
 
-const ResidencePolicy = ({ clientID: propClientID, formConfig }) => {
+// ✅ UPDATED: Wrapped with forwardRef to work with FormModal
+const ResidencePolicy = forwardRef(({ clientID: propClientID, title, formType = 'residencePolicy', formConfig }, ref) => {
   const theme = useTheme();
   const dispatch = useDispatch();
   
@@ -693,6 +694,24 @@ const ResidencePolicy = ({ clientID: propClientID, formConfig }) => {
     completionPercentage,
     lastModified: new Date().toISOString()
   }), [resPolicySignature, visitedSections, readingProgress, completionPercentage]);
+
+  // ✅ ADDED: Expose getFormData method to parent FormModal
+  useImperativeHandle(ref, () => ({
+    getFormData: () => ({
+      resPolicySignature,
+      sectionsRead: Array.from(visitedSections),
+      readingProgress,
+      completionPercentage,
+      lastModified: new Date().toISOString(),
+      status: completionPercentage === 100 ? 'completed' : 'in_progress',
+      formData: {
+        acknowledgedAt: new Date().toISOString(),
+        rulesVersion: formConfig?.version || '2024-v1',
+        totalSections: RESIDENCE_RULES_SECTIONS.length,
+        sectionsVisited: visitedSections.size
+      }
+    })
+  }));
   
   // Load form data when component mounts
   useEffect(() => {
@@ -831,7 +850,7 @@ const ResidencePolicy = ({ clientID: propClientID, formConfig }) => {
               <HomeIcon sx={{ mr: 2, fontSize: 40 }} />
               <Box>
                 <Typography variant="h4" gutterBottom sx={{ fontWeight: 700, mb: 1 }}>
-                  Rules of Residence & Security Policy
+                  {title || 'Rules of Residence & Security Policy'}
                 </Typography>
                 <Typography variant="h6" sx={{ opacity: 0.9, fontWeight: 400 }}>
                   Holliday's Helping Hands - Facility Guidelines & Procedures
@@ -1101,6 +1120,9 @@ const ResidencePolicy = ({ clientID: propClientID, formConfig }) => {
       )}
     </Container>
   );
-};
+});
+
+// ✅ ADDED: Set display name for debugging
+ResidencePolicy.displayName = 'ResidencePolicy';
 
 export default ResidencePolicy;

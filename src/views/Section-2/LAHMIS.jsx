@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, forwardRef, useImperativeHandle } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import {
   Box,
@@ -48,7 +48,8 @@ import {
   selectSaveSuccess
 } from '../../backend/store/slices/authSigSlice';
 
-const LAHMIS = ({ clientID: propClientID }) => {
+// ✅ UPDATED: Wrapped with forwardRef to work with FormModal
+const LAHMIS = forwardRef(({ clientID: propClientID, title, formType = 'lahmis' }, ref) => {
   const dispatch = useDispatch();
   
   // Redux selectors
@@ -87,6 +88,19 @@ const LAHMIS = ({ clientID: propClientID }) => {
   const requiredFields = ['clientName', 'clientDOB', 'clientSSN', 'clientSignature', 'signatureDate'];
   const completedFields = requiredFields.filter(field => formData[field]?.trim()).length;
   const completionPercentage = Math.round(((completedFields + (formData.consentGiven ? 1 : 0)) / (requiredFields.length + 1)) * 100);
+
+  // ✅ ADDED: Expose getFormData method to parent FormModal
+  useImperativeHandle(ref, () => ({
+    getFormData: () => ({
+      formData,
+      children: children.filter(child => child.name.trim()),
+      signature: formData.clientSignature,
+      completionPercentage,
+      status: completionPercentage === 100 ? 'completed' : 'in_progress',
+      consentGiven: formData.consentGiven,
+      submittedAt: new Date().toISOString()
+    })
+  }));
 
   // Load form data when component mounts
   useEffect(() => {
@@ -236,83 +250,74 @@ const LAHMIS = ({ clientID: propClientID }) => {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', p: 4 }}>
         <CircularProgress />
-        <Typography sx={{ ml: 2 }}>Loading LAHMIS consent form...</Typography>
+        <Typography sx={{ ml: 2 }}>Loading HMIS consent data...</Typography>
       </Box>
+    );
+  }
+
+  if (!clientID) {
+    return (
+      <Alert severity="error" sx={{ m: 2 }}>
+        No client selected. Please select a client to view their HMIS consent form.
+      </Alert>
     );
   }
 
   return (
     <Box sx={{ maxWidth: 1000, mx: 'auto', p: 3 }}>
       {/* Header Section */}
-      <Card elevation={2} sx={{ mb: 3 }}>
+      <Card elevation={3} sx={{ mb: 3, bgcolor: 'primary.main', color: 'white' }}>
         <CardContent>
-          <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-            <HMISIcon sx={{ mr: 2, color: 'primary.main', fontSize: 32 }} />
-            <Box sx={{ flex: 1 }}>
-              <Typography variant="h4" gutterBottom sx={{ fontWeight: 600, textAlign: 'center' }}>
-                LA HMIS CONSENT TO SHARE PROTECTED PERSONAL INFORMATION
-              </Typography>
-              <Typography variant="h6" color="primary" sx={{ textAlign: 'center', fontWeight: 500 }}>
-                Greater Los Angeles Homeless Management Information System
-              </Typography>
-            </Box>
+          <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+            <HMISIcon sx={{ fontSize: 40, mr: 2 }} />
+            <Typography variant="h4" component="h1" sx={{ fontWeight: 600 }}>
+              LA HMIS Consent Form
+            </Typography>
           </Box>
-
-          {/* Client Info */}
-          {selectedClient && (
-            <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-              <PersonIcon sx={{ mr: 1, color: 'text.secondary' }} />
-              <Typography variant="body2" color="text.secondary">
-                Client: <strong>{selectedClient.firstName} {selectedClient.lastName}</strong> 
-                {selectedClient.clientID && ` (ID: ${selectedClient.clientID})`}
-              </Typography>
-            </Box>
-          )}
-
-          {/* Progress Indicator */}
-          <Box sx={{ mt: 2 }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-              <Typography variant="body2" color="text.secondary">
-                Form Completion Progress
-              </Typography>
-              <Chip 
-                label={`${completionPercentage}% Complete`}
-                color={completionPercentage === 100 ? 'success' : 'primary'}
-                size="small"
-              />
-            </Box>
-            <LinearProgress 
-              variant="determinate" 
-              value={completionPercentage} 
-              sx={{ height: 8, borderRadius: 4 }}
-              color={completionPercentage === 100 ? 'success' : 'primary'}
-            />
-          </Box>
+          <Typography variant="subtitle1">
+            Los Angeles Homeless Management Information System
+          </Typography>
+          <Typography variant="body2" sx={{ mt: 1, opacity: 0.9 }}>
+            Protected Personal Information Sharing Consent
+          </Typography>
         </CardContent>
       </Card>
 
-      {/* Error Alerts */}
+      {/* Progress Indicator */}
+      <Card elevation={2} sx={{ mb: 3 }}>
+        <CardContent>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+            <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+              Form Completion
+            </Typography>
+            <Chip 
+              label={`${completionPercentage}%`}
+              color={completionPercentage === 100 ? "success" : "warning"}
+              size="small"
+            />
+          </Box>
+          <LinearProgress 
+            variant="determinate" 
+            value={completionPercentage} 
+            sx={{ height: 8, borderRadius: 5 }}
+          />
+        </CardContent>
+      </Card>
+
+      {/* Error Display */}
       {(localErrors.length > 0 || formErrors) && (
-        <Alert 
-          severity="error" 
-          sx={{ mb: 3 }}
-          onClose={handleClearErrors}
-        >
-          {localErrors.length > 0 ? (
-            <Box>
-              {localErrors.map((error, index) => (
-                <Typography key={index} variant="body2">
-                  • {error}
-                </Typography>
-              ))}
-            </Box>
-          ) : (
-            formErrors
-          )}
+        <Alert severity="error" sx={{ mb: 3 }} onClose={handleClearErrors}>
+          <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+            Please correct the following errors:
+          </Typography>
+          {localErrors.map((error, index) => (
+            <Typography key={index} variant="body2">• {error}</Typography>
+          ))}
+          {formErrors && <Typography variant="body2">• {formErrors}</Typography>}
         </Alert>
       )}
 
-      {/* HMIS Information Accordion */}
+      {/* Information About HMIS Accordion */}
       <Accordion 
         expanded={expandedSection === 'information'} 
         onChange={handleAccordionChange('information')}
@@ -321,39 +326,22 @@ const LAHMIS = ({ clientID: propClientID }) => {
         <AccordionSummary expandIcon={<ExpandMoreIcon />}>
           <Box sx={{ display: 'flex', alignItems: 'center' }}>
             <DocumentIcon sx={{ mr: 2, color: 'primary.main' }} />
-            <Typography variant="h6">HMIS Information & Your Rights</Typography>
+            <Typography variant="h6">What is LA HMIS?</Typography>
           </Box>
         </AccordionSummary>
         <AccordionDetails>
-          <Box sx={{ maxHeight: 400, overflow: 'auto', pr: 1 }}>
-            <Typography variant="body2" paragraph>
-              The LA HMIS is a local electronic database that securely records information (data) about clients accessing housing and homeless services within the Greater Los Angeles County. This organization participates in the HMIS database and shares information with other organizations that use this database. This information is utilized to provide supportive services to you and your household members.
-            </Typography>
-
-            <Typography variant="h6" gutterBottom sx={{ mt: 3, color: 'primary.main' }}>
-              What information is shared in the HMIS database?
+          <Box>
+            <Typography variant="h6" gutterBottom sx={{ color: 'primary.main' }}>
+              What is the HMIS database?
             </Typography>
             <Typography variant="body2" paragraph>
-              We share both Protected Personal Information (PPI) and general information obtained during your intake and assessment, which may include but is not limited to:
+              The Homeless Management Information System (HMIS) database is a computerized data system that contains information about people receiving services from homeless service providers throughout Los Angeles County. It helps us coordinate the most effective services for you. The following information is called your "Protected Personal Information" (PPI) and may be collected from you directly as well as gathered from other organizations who are also HMIS participating agencies:
             </Typography>
-            
-            <Box component="ul" sx={{ pl: 3, mb: 3 }}>
+            <Box component="ul" sx={{ pl: 3, mb: 2 }}>
               {[
-                "Your name and your contact information",
-                "Your social security number",
-                "Your birthdate",
-                "Your basic demographic information such as gender and race/ethnicity",
-                "Your history of homelessness and housing",
-                "Your self-reported medical history, including any mental health and substance abuse issues",
-                "Your case notes and services",
-                "Your case manager's contact information",
-                "Your income sources and amounts; and non-cash benefits",
-                "Your veteran status",
-                "Your disability status",
-                "Your household composition",
-                "Your emergency contact information",
-                "Any history of domestic violence",
-                "Your photo (optional)"
+                "Name, date of birth, Social Security Number",
+                "Race/ethnicity, gender, veteran status, household income",
+                "Disabling conditions, residential history, and services received"
               ].map((item, index) => (
                 <Typography key={index} component="li" variant="body2" sx={{ mb: 0.5 }}>
                   {item}
@@ -455,6 +443,8 @@ const LAHMIS = ({ clientID: propClientID }) => {
               value={formData.clientSignature}
               onChange={(e) => handleFieldChange('clientSignature', e.target.value)}
               required
+              placeholder="Type your full legal name"
+              helperText="Electronic signature"
             />
           </Grid>
           <Grid item xs={12} >
@@ -463,6 +453,7 @@ const LAHMIS = ({ clientID: propClientID }) => {
               label="Head of Household"
               value={formData.headOfHousehold}
               onChange={(e) => handleFieldChange('headOfHousehold', e.target.value)}
+              helperText="If different from client"
             />
           </Grid>
         </Grid>
@@ -535,6 +526,7 @@ const LAHMIS = ({ clientID: propClientID }) => {
                   value={child.livingWithYou}
                   onChange={(e) => handleChildChange(index, 'livingWithYou', e.target.value)}
                   size="small"
+                  placeholder="Yes/No"
                 />
               </Grid>
             </Grid>
@@ -587,6 +579,9 @@ const LAHMIS = ({ clientID: propClientID }) => {
       </Snackbar>
     </Box>
   );
-};
+});
+
+// ✅ ADDED: Set display name for debugging
+LAHMIS.displayName = 'LAHMIS';
 
 export default LAHMIS;

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useMemo, forwardRef, useImperativeHandle } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import {
   Box,
@@ -22,7 +22,6 @@ import {
   Zoom,
   useTheme,
   alpha,
-  Grid,
   Divider
 } from '@mui/material';
 import {
@@ -56,28 +55,41 @@ import {
   selectUnsavedChanges
 } from '../../backend/store/slices/authSigSlice';
 
-const InterimHousingAgreement = ({ clientID: propClientID, formConfig }) => {
+// ✅ MAIN COMPONENT WITH FORWARDREF
+const InterimHousingAgreement = forwardRef(({ 
+  clientID, 
+  title = "Termination Policy & Procedure", 
+  formType = "termination" 
+}, ref) => {
   const theme = useTheme();
   const dispatch = useDispatch();
   
-  // Redux selectors
-  const selectedClient = useSelector((state) => state.clients?.selectedClient);
-  const terminationForm = useSelector(selectFormByType('termination'));
-  const formLoading = useSelector(selectFormLoading('termination'));
+  // Redux selectors - using the formType parameter
+  const existingData = useSelector((state) => selectFormByType(state, formType));
+  const loading = useSelector(selectFormLoading);
   const saving = useSelector(selectSaving);
   const autoSaving = useSelector(selectAutoSaving);
   const saveSuccess = useSelector(selectSaveSuccess);
   const unsavedChanges = useSelector(selectUnsavedChanges);
-  const formErrors = useSelector((state) => state.authSig.formErrors.termination);
+  
+  // ✅ FIX: Add local loading state to prevent infinite loops
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
   
   // Local state
   const [tppSign, setPatientSignature] = useState("");
+  const [hasReadPolicy, setHasReadPolicy] = useState(false);
   const [localErrors, setLocalErrors] = useState([]);
   const [showSuccessSnackbar, setShowSuccessSnackbar] = useState(false);
-  const [hasReadPolicy, setHasReadPolicy] = useState(false);
   
-  // Get client ID from props or Redux
-  const clientID = propClientID || selectedClient?.clientID;
+  // ✅ EXPOSE getFormData VIA REF
+  useImperativeHandle(ref, () => ({
+    getFormData: () => ({
+      tppSign,
+      hasReadPolicy,
+      clientID,
+      formType
+    })
+  }));
   
   // Calculate completion percentage
   const completionPercentage = useMemo(() => {
@@ -91,28 +103,32 @@ const InterimHousingAgreement = ({ clientID: propClientID, formConfig }) => {
     return clientID && tppSign.trim() && hasReadPolicy;
   }, [clientID, tppSign, hasReadPolicy]);
   
-  // Auto-save form data
-  const formData = useMemo(() => ({
-    tppSign,
-    hasReadPolicy,
-    completionPercentage,
-    lastModified: new Date().toISOString()
-  }), [tppSign, hasReadPolicy, completionPercentage]);
-  
-  // Load form data when component mounts
+  // ✅ FIX: Load form data with error handling
   useEffect(() => {
-    if (clientID) {
-      dispatch(fetchFormData({ clientID, formType: 'termination' }));
+    if (clientID && formType) {
+      dispatch(fetchFormData({ clientID, formType }))
+        .unwrap()
+        .then((data) => {
+          console.log('Form data loaded:', data);
+        })
+        .catch((error) => {
+          console.warn('Failed to load form data (form will work with empty data):', error);
+        })
+        .finally(() => {
+          setTimeout(() => setIsInitialLoad(false), 1000);
+        });
+    } else {
+      setIsInitialLoad(false);
     }
-  }, [dispatch, clientID]);
+  }, [dispatch, clientID, formType]);
   
   // Update local state when Redux form data changes
   useEffect(() => {
-    if (terminationForm && Object.keys(terminationForm).length > 0) {
-      setPatientSignature(terminationForm.tppSign || "");
-      setHasReadPolicy(terminationForm.hasReadPolicy || false);
+    if (existingData && Object.keys(existingData).length > 0) {
+      setPatientSignature(existingData.tppSign || "");
+      setHasReadPolicy(existingData.hasReadPolicy || false);
     }
-  }, [terminationForm]);
+  }, [existingData]);
   
   // Update unsaved changes in Redux
   useEffect(() => {
@@ -133,7 +149,7 @@ const InterimHousingAgreement = ({ clientID: propClientID, formConfig }) => {
     setLocalErrors([]);
     
     dispatch(updateFormLocal({
-      formType: 'termination',
+      formType,
       formData: {
         tppSign: signature,
         hasReadPolicy,
@@ -141,7 +157,7 @@ const InterimHousingAgreement = ({ clientID: propClientID, formConfig }) => {
                             (hasReadPolicy ? 50 : 0) + (signature.trim() ? 50 : 0)
       }
     }));
-  }, [dispatch, hasReadPolicy]);
+  }, [dispatch, hasReadPolicy, formType]);
 
   // Handle policy read acknowledgment
   const handlePolicyRead = useCallback(() => {
@@ -150,7 +166,7 @@ const InterimHousingAgreement = ({ clientID: propClientID, formConfig }) => {
     setLocalErrors([]);
     
     dispatch(updateFormLocal({
-      formType: 'termination',
+      formType,
       formData: {
         tppSign,
         hasReadPolicy: newReadStatus,
@@ -158,7 +174,7 @@ const InterimHousingAgreement = ({ clientID: propClientID, formConfig }) => {
                             (newReadStatus ? 50 : 0) + (tppSign.trim() ? 50 : 0)
       }
     }));
-  }, [dispatch, hasReadPolicy, tppSign]);
+  }, [dispatch, hasReadPolicy, tppSign, formType]);
 
   // Handle form submission
   const handleSubmit = useCallback(async (e) => {
@@ -188,18 +204,15 @@ const InterimHousingAgreement = ({ clientID: propClientID, formConfig }) => {
       hasReadPolicy: true,
       completionPercentage: 100,
       status: 'completed',
-      formData: {
-        acknowledgedAt: new Date().toISOString(),
-        policyVersion: formConfig?.version || '2024-v1',
-        ipAddress: window.location.hostname,
-        userAgent: navigator.userAgent
-      }
+      clientID,
+      formType,
+      acknowledgedAt: new Date().toISOString()
     };
 
     try {
       await dispatch(saveFormData({ 
         clientID, 
-        formType: 'termination', 
+        formType, 
         formData: submitData 
       })).unwrap();
       
@@ -208,7 +221,7 @@ const InterimHousingAgreement = ({ clientID: propClientID, formConfig }) => {
     } catch (error) {
       setLocalErrors([error.message || 'Failed to save termination policy acknowledgment']);
     }
-  }, [dispatch, clientID, tppSign, hasReadPolicy, formConfig]);
+  }, [dispatch, clientID, tppSign, hasReadPolicy, formType]);
 
   // Clear success messages
   const handleCloseSuccessSnackbar = useCallback(() => {
@@ -222,19 +235,23 @@ const InterimHousingAgreement = ({ clientID: propClientID, formConfig }) => {
     dispatch(clearErrors());
   }, [dispatch]);
 
-  if (formLoading) {
+  // ✅ FIX: Improved loading state
+  if (isInitialLoad && loading) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', p: 4, minHeight: 400 }}>
-        <Box sx={{ textAlign: 'center' }}>
-          <CircularProgress size={60} sx={{ mb: 2 }} />
-          <Typography variant="h6" color="text.secondary">
-            Loading termination policy data...
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Please wait while we retrieve the policy information
+      <Container maxWidth="lg">
+        <Box sx={{ 
+          display: 'flex', 
+          flexDirection: 'column',
+          justifyContent: 'center', 
+          alignItems: 'center', 
+          minHeight: 400 
+        }}>
+          <CircularProgress size={60} />
+          <Typography variant="body2" sx={{ mt: 2, color: 'text.secondary' }}>
+            Loading termination policy...
           </Typography>
         </Box>
-      </Box>
+      </Container>
     );
   }
 
@@ -254,7 +271,7 @@ const InterimHousingAgreement = ({ clientID: propClientID, formConfig }) => {
               <TerminationIcon sx={{ mr: 2, fontSize: 40 }} />
               <Box>
                 <Typography variant="h4" gutterBottom sx={{ fontWeight: 700, mb: 1 }}>
-                  Termination Policy & Procedure
+                  {title}
                 </Typography>
                 <Typography variant="h6" sx={{ opacity: 0.9, fontWeight: 400 }}>
                   Interim Housing Program Guidelines
@@ -279,17 +296,6 @@ const InterimHousingAgreement = ({ clientID: propClientID, formConfig }) => {
               </Zoom>
             )}
           </Box>
-
-          {/* Client Info */}
-          {selectedClient && (
-            <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
-              <PersonIcon sx={{ mr: 1, opacity: 0.9 }} />
-              <Typography variant="body1" sx={{ fontWeight: 500 }}>
-                Client: {selectedClient.firstName} {selectedClient.lastName}
-                {selectedClient.clientID && ` (ID: ${selectedClient.clientID})`}
-              </Typography>
-            </Box>
-          )}
         </Box>
 
         <CardContent sx={{ p: 0 }}>
@@ -336,32 +342,23 @@ const InterimHousingAgreement = ({ clientID: propClientID, formConfig }) => {
       </Card>
 
       {/* Error Alerts */}
-      {(localErrors.length > 0 || formErrors) && (
+      {localErrors.length > 0 && (
         <Fade in>
           <Alert 
             severity="error" 
             sx={{ mb: 3 }}
             onClose={handleClearErrors}
-            action={
-              <Button color="inherit" size="small" onClick={handleClearErrors}>
-                Dismiss
-              </Button>
-            }
           >
-            {localErrors.length > 0 ? (
-              <Box>
-                <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
-                  Please correct the following issues:
+            <Box>
+              <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+                Please correct the following issues:
+              </Typography>
+              {localErrors.map((error, index) => (
+                <Typography key={index} variant="body2" sx={{ ml: 2 }}>
+                  • {error}
                 </Typography>
-                {localErrors.map((error, index) => (
-                  <Typography key={index} variant="body2" sx={{ ml: 2 }}>
-                    • {error}
-                  </Typography>
-                ))}
-              </Box>
-            ) : (
-              formErrors
-            )}
+              ))}
+            </Box>
           </Alert>
         </Fade>
       )}
@@ -623,6 +620,9 @@ const InterimHousingAgreement = ({ clientID: propClientID, formConfig }) => {
       )}
     </Container>
   );
-};
+});
+
+// ✅ ADD DISPLAY NAME
+InterimHousingAgreement.displayName = 'InterimHousingAgreement';
 
 export default InterimHousingAgreement;

@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useState, useEffect, forwardRef, useImperativeHandle, useMemo } from "react";
 import { useSelector } from "react-redux";
 import {
     Box,
@@ -102,7 +102,8 @@ const agreementTerms = [
     }
 ];
 
-const HousingAgree = ({ clientID: propClientID }) => {
+// ✅ UPDATED: Wrapped with forwardRef to work with FormModal
+const HousingAgree = forwardRef(({ clientID: propClientID, title, formType = 'housingAgreement' }, ref) => {
     const selectedClient = useSelector((state) => state.clients?.selectedClient);
     const clientID = propClientID || selectedClient?.clientID;
 
@@ -121,7 +122,7 @@ const HousingAgree = ({ clientID: propClientID }) => {
         clearFormErrors,
         clearSuccessState
     } = useFormManager(
-        'housingAgree',
+        formType, // Use the formType prop (defaults to 'housingAgreement')
         clientID,
         { version: '2.0' },
         validationRules
@@ -137,6 +138,19 @@ const HousingAgree = ({ clientID: propClientID }) => {
     // Local state
     const [termsAcknowledged, setTermsAcknowledged] = useState({});
 
+    // ✅ FIXED: Calculate allTermsAcknowledged with useMemo to prevent unnecessary recalculations
+    const allTermsAcknowledged = useMemo(() => {
+        return agreementTerms.every(term => termsAcknowledged[term.id] === true);
+    }, [termsAcknowledged]);
+
+    // ✅ FIXED: Use useEffect with proper dependency tracking and prevent infinite loops
+    useEffect(() => {
+        // Only update if the value actually changed to prevent loops
+        if (formData.acknowledgmentConfirmed !== allTermsAcknowledged) {
+            updateField('acknowledgmentConfirmed', allTermsAcknowledged);
+        }
+    }, [allTermsAcknowledged]); // ✅ Only depend on allTermsAcknowledged, not updateField or formData
+
     // Calculate completion percentage
     const requiredFields = ['housingAgreeeSign', 'acknowledgmentConfirmed'];
     const completionPercentage = calculateFormCompletion(formData, requiredFields, [
@@ -144,6 +158,25 @@ const HousingAgree = ({ clientID: propClientID }) => {
         'clientUnderstanding',
         'dateAcknowledged'
     ]);
+
+    // ✅ ADDED: Expose getFormData method to parent FormModal
+    useImperativeHandle(ref, () => ({
+        getFormData: () => ({
+            housingAgreeeSign: formData.housingAgreeeSign || '',
+            acknowledgmentConfirmed: formData.acknowledgmentConfirmed || false,
+            clientUnderstanding: formData.clientUnderstanding || false,
+            dateAcknowledged: formData.dateAcknowledged || '',
+            termsAcknowledged: termsAcknowledged,
+            completionPercentage,
+            lastModified: new Date().toISOString(),
+            status: completionPercentage === 100 ? 'completed' : 'in_progress',
+            formData: {
+                formVersion: '2.0',
+                totalTerms: agreementTerms.length,
+                acknowledgedTerms: Object.values(termsAcknowledged).filter(Boolean).length
+            }
+        })
+    }));
 
     // Field change handlers
     const handleFieldChange = useCallback((fieldName) => (event) => {
@@ -157,13 +190,7 @@ const HousingAgree = ({ clientID: propClientID }) => {
             ...prev,
             [termId]: checked
         }));
-        
-        // Update overall acknowledgment status
-        const allTermsAcknowledged = agreementTerms.every(term => 
-            term.id === termId ? checked : termsAcknowledged[term.id]
-        );
-        updateField('acknowledgmentConfirmed', allTermsAcknowledged);
-    }, [termsAcknowledged, updateField]);
+    }, []);
 
     // Form submission
     const handleSubmit = useCallback(async (event) => {
@@ -175,112 +202,101 @@ const HousingAgree = ({ clientID: propClientID }) => {
             dateAcknowledged: new Date().toISOString()
         });
         
-        if (!result.success) {
-            console.error('Form submission failed:', result.errors);
+        if (result.success) {
+            console.log('✅ Housing agreement submitted successfully');
+        } else {
+            console.error('❌ Housing agreement submission failed:', result.error);
         }
     }, [submitForm, termsAcknowledged]);
 
-    // Save as draft
-    const handleSaveDraft = useCallback(async () => {
-        await saveDraft();
-    }, [saveDraft]);
-
-    // Auto-fill date
     const handleAutoFillDate = useCallback(() => {
-        updateField('dateAcknowledged', new Date().toISOString().split('T')[0]);
+        const today = new Date().toISOString().split('T')[0];
+        updateField('dateAcknowledged', today);
     }, [updateField]);
 
+    // Loading state
     if (formLoading) {
         return (
-            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', p: 4 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 400 }}>
                 <CircularProgress />
-                <Typography sx={{ ml: 2 }}>Loading housing agreement...</Typography>
             </Box>
+        );
+    }
+
+    // Client ID check
+    if (!clientID) {
+        return (
+            <Alert severity="error" sx={{ m: 2 }}>
+                No client selected. Please select a client to view their housing agreement.
+            </Alert>
         );
     }
 
     return (
         <Box sx={{ maxWidth: 900, mx: 'auto', p: 3 }}>
-            {/* Header Section */}
-            <Card elevation={2} sx={{ mb: 3 }}>
+            {/* Header */}
+            <Card elevation={3} sx={{ mb: 3, bgcolor: 'primary.main', color: 'white' }}>
                 <CardContent>
-                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                        <HomeIcon sx={{ mr: 2, color: 'primary.main', fontSize: 32 }} />
-                        <Box sx={{ flex: 1 }}>
-                            <Typography variant="h4" gutterBottom sx={{ fontWeight: 600 }}>
-                                Interim Housing (Shelter) Agreement
-                            </Typography>
-                            <Typography variant="body1" color="text.secondary">
-                                Please read and acknowledge your understanding of the terms and conditions 
-                                for temporary interim housing services.
-                            </Typography>
-                        </Box>
+                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                        <HomeIcon sx={{ fontSize: 40, mr: 2 }} />
+                        <Typography variant="h4" component="h1" sx={{ fontWeight: 600 }}>
+                            Interim Housing Agreement
+                        </Typography>
                     </Box>
-
-                    {/* Client Info */}
-                    {selectedClient && (
-                        <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                            <PersonIcon sx={{ mr: 1, color: 'text.secondary' }} />
-                            <Typography variant="body2" color="text.secondary">
-                                Client: <strong>{selectedClient.firstName} {selectedClient.lastName}</strong>
-                                {selectedClient.clientID && ` (ID: ${selectedClient.clientID})`}
-                            </Typography>
-                        </Box>
-                    )}
-
-                    {/* Progress Indicator */}
-                    <Box sx={{ mt: 2 }}>
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-                            <Typography variant="body2" color="text.secondary">
-                                Agreement Completion
-                            </Typography>
-                            <Chip 
-                                label={`${completionPercentage}% Complete`}
-                                color={completionPercentage === 100 ? 'success' : 'primary'}
-                                size="small"
-                            />
-                        </Box>
-                        <LinearProgress 
-                            variant="determinate" 
-                            value={completionPercentage} 
-                            sx={{ height: 8, borderRadius: 4 }}
-                            color={completionPercentage === 100 ? 'success' : 'primary'}
-                        />
-                    </Box>
+                    <Typography variant="subtitle1">
+                        Holliday's Helping Hands - Temporary Housing Services
+                    </Typography>
                 </CardContent>
             </Card>
 
-            {/* Error Alerts */}
-            {(localErrors.length > 0 || validationErrors.length > 0) && (
-                <Alert 
-                    severity="error" 
-                    sx={{ mb: 3 }}
-                    onClose={clearFormErrors}
-                >
-                    <Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>
-                        Please address the following issues:
-                    </Typography>
-                    {[...localErrors, ...validationErrors].map((error, index) => (
-                        <Typography key={index} variant="body2">
-                            • {error}
+            {/* Progress Indicator */}
+            <Card elevation={2} sx={{ mb: 3 }}>
+                <CardContent>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                        <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                            Form Completion
                         </Typography>
-                    ))}
+                        <Chip 
+                            label={`${completionPercentage}%`}
+                            color={completionPercentage === 100 ? "success" : "warning"}
+                            size="small"
+                        />
+                    </Box>
+                    <LinearProgress 
+                        variant="determinate" 
+                        value={completionPercentage} 
+                        sx={{ height: 8, borderRadius: 5 }}
+                    />
+                </CardContent>
+            </Card>
+
+            {/* Error Display */}
+            {(localErrors.length > 0 || Object.keys(validationErrors).length > 0) && (
+                <Alert severity="error" sx={{ mb: 3 }} onClose={clearFormErrors}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+                        Please correct the following errors:
+                    </Typography>
+                    <List dense>
+                        {localErrors.map((error, index) => (
+                            <ListItem key={`local-${index}`}>
+                                <ListItemText primary={error} />
+                            </ListItem>
+                        ))}
+                        {Object.entries(validationErrors).map(([field, error]) => (
+                            <ListItem key={`validation-${field}`}>
+                                <ListItemText primary={`${field}: ${error}`} />
+                            </ListItem>
+                        ))}
+                    </List>
                 </Alert>
             )}
 
-            {/* Main Form */}
+            {/* Form */}
             <form onSubmit={handleSubmit}>
-                {/* Introduction Section */}
+                {/* Introduction */}
                 <Paper elevation={1} sx={{ p: 3, mb: 3 }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                        <InfoIcon sx={{ mr: 2, color: 'info.main' }} />
-                        <Typography variant="h6" sx={{ fontWeight: 600, color: 'primary.main' }}>
-                            Understanding Your Stay
-                        </Typography>
-                    </Box>
-                    
                     <Alert severity="info" sx={{ mb: 2 }}>
-                        <Typography variant="body2">
+                        <Typography variant="body1" sx={{ fontWeight: 500 }}>
                             I understand and agree that <strong>Holliday's Helping Hands</strong> is temporary interim housing for me. 
                             It is a shelter and I am not protected by landlord/tenant rights.
                         </Typography>
@@ -475,6 +491,9 @@ const HousingAgree = ({ clientID: propClientID }) => {
             </Snackbar>
         </Box>
     );
-};
+});
+
+// ✅ ADDED: Set display name for debugging
+HousingAgree.displayName = 'HousingAgree';
 
 export default HousingAgree;

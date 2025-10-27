@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useMemo, forwardRef, useImperativeHandle } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import {
   Box,
@@ -25,8 +25,7 @@ import {
   Fade,
   Zoom,
   useTheme,
-  alpha,
-  Grid
+  alpha
 } from '@mui/material';
 import {
   Feedback as GrievanceIcon,
@@ -73,18 +72,18 @@ const GRIEVANCE_SECTIONS = [
     title: 'Grievance Policy & Client Rights',
     icon: PolicyIcon,
     content: {
-      overview: `Holliday's Helping Hands Clients have the right to express their dissatisfaction relating to perceived:`,
+      overview: "Holliday's Helping Hands Clients have the right to express their dissatisfaction relating to perceived:",
       rights: [
         'Unfair or inequitable administration of program policies',
-        'Unfair or inequitable treatment or services from Holliday\'s Helping Hands',
+        "Unfair or inequitable treatment or services from Holliday's Helping Hands",
         'Inadequate program services and/or building conditions',
         'Denial of services',
-        'Inappropriate behavior on the part of Holliday\'s Helping Hands staff or Clients',
+        "Inappropriate behavior on the part of Holliday's Helping Hands staff or Clients",
         'Discrimination related to race, disability, ethnicity, sex, age, religion, sexual orientation or family status',
         'Termination of services (if applicable)'
       ],
-      commitment: `Every reasonable effort will be made by Holliday's Helping Hands staff and management to resolve any questions or concerns at the time they arise by initiating discussion. If the problem cannot be resolved to the Client's satisfaction, she/he may initiate a grievance.`,
-      protection: `An individual will not be faulted, nor will any retaliatory action be taken, for the filing of a grievance. Grievance information will be treated discreetly and confidentially.`
+      commitment: "Every reasonable effort will be made by Holliday's Helping Hands staff and management to resolve any questions or concerns at the time they arise by initiating discussion. If the problem cannot be resolved to the Client's satisfaction, she/he may initiate a grievance.",
+      protection: "An individual will not be faulted, nor will any retaliatory action be taken, for the filing of a grievance. Grievance information will be treated discreetly and confidentially."
     }
   },
   {
@@ -92,15 +91,15 @@ const GRIEVANCE_SECTIONS = [
     title: 'Grievance Review & Investigation Process',
     icon: ProcessIcon,
     content: {
-      overview: `Holliday's staff are responsible for ensuring that Holliday's Helping Hands Clients know and understand agency grievance procedures.`,
+      overview: "Holliday's staff are responsible for ensuring that Holliday's Helping Hands Clients know and understand agency grievance procedures.",
       steps: [
         {
           title: 'Posted Procedures',
-          description: 'A copy of the grievance procedure will be posted at all Holliday\'s Helping Hands sites.'
+          description: "A copy of the grievance procedure will be posted at all Holliday's Helping Hands sites."
         },
         {
           title: 'Initial Resolution',
-          description: 'If a Client has a grievance that cannot be resolved directly with the program or staff Client involved, the Client should report it to the staff Client\'s manager. It is the responsibility of the manager to speak to all parties involved and try to settle the matter to the satisfaction of all parties.'
+          description: "If a Client has a grievance that cannot be resolved directly with the program or staff Client involved, the Client should report it to the staff Client's manager. It is the responsibility of the manager to speak to all parties involved and try to settle the matter to the satisfaction of all parties."
         },
         {
           title: 'Urgent Grievances',
@@ -130,13 +129,13 @@ const GRIEVANCE_SECTIONS = [
     title: 'External Dispute Resolution & Mediation',
     icon: JusticeIcon,
     content: {
-      overview: `If the client is not satisfied with the decision of the investigating Department Head and feels that the grievance is unresolved, additional options are available.`,
+      overview: "If the client is not satisfied with the decision of the investigating Department Head and feels that the grievance is unresolved, additional options are available.",
       process: [
         'The client may request in writing a review of the grievance with an outside dispute resolution service (mediator).',
-        'Such mediator shall be selected and agreed upon by the complainant and Holliday\'s Helping Hands.',
+        "Such mediator shall be selected and agreed upon by the complainant and Holliday's Helping Hands.",
         'Mediation shall take place within 48 hours of the meeting between the complainant and the investigating Department Head.',
         'An impartial mediator shall be selected and the mediation governed according to the rules of dispute resolution.',
-        'The decision of the mediator shall be final and binding, and there shall be no further appeal avenues available to the complainant or Holliday\'s Helping Hands.'
+        "The decision of the mediator shall be final and binding, and there shall be no further appeal avenues available to the complainant or Holliday's Helping Hands."
       ],
       responsibilities: [
         'When a grievance has not been resolved internally and request for outside dispute resolution is made, the Department Head shall contact the agreed upon dispute resolution service.',
@@ -149,7 +148,7 @@ const GRIEVANCE_SECTIONS = [
     title: 'Insurance & Legal Issues',
     icon: LegalIcon,
     content: {
-      overview: `In the event a client grievance or complaint becomes a legal or insurance issue, specific procedures will be followed.`,
+      overview: "In the event a client grievance or complaint becomes a legal or insurance issue, specific procedures will be followed.",
       procedures: [
         'The Chief Compliance Officer will handle all insurance proceedings.',
         'The Chief Compliance Officer will assign any court appearances or collecting of evidence to the appropriate Department Head.',
@@ -171,12 +170,12 @@ const GRIEVANCE_SECTIONS = [
       ],
       employeeGrievances: [
         'The Director of Administrative Services will review the facts, investigation report and the determination of all grievance complaints relating to clients versus employee involvement.',
-        'Employees submitting a grievance and/or complaint unrelated to clients or customers should follow the policies set forth within the Holliday\'s Helping Hands Handbook.'
+        "Employees submitting a grievance and/or complaint unrelated to clients or customers should follow the policies set forth within the Holliday's Helping Hands Handbook."
       ],
       documentation: [
         'The Assistant to the CEO will update the log noting the determination; date completed and if any follow up is needed.',
-        'Copies of the determination will be forwarded to: 1) the Manager deemed responsible for the area or subject being grieved, 2) the Associate Director of the client\'s residential program, 3) the Advocate who will notify the client if available, 4) the Department Head/Director, and 5) the Director of Administrative Services.',
-        'For any grievances alleging misconduct, inappropriate behavior by Holliday\'s staff, a copy of the determination will be forwarded to the Director of Human Resources and Chief Operating Officer.',
+        "Copies of the determination will be forwarded to: 1) the Manager deemed responsible for the area or subject being grieved, 2) the Associate Director of the client's residential program, 3) the Advocate who will notify the client if available, 4) the Department Head/Director, and 5) the Director of Administrative Services.",
+        "For any grievances alleging misconduct, inappropriate behavior by Holliday's staff, a copy of the determination will be forwarded to the Director of Human Resources and Chief Operating Officer.",
         'Grievance complaint forms and subsequent determinations shall be maintained in a confidential locked file cabinet located in the area of the executive offices.',
         'These files shall be made accessible to LAHSA upon request.'
       ]
@@ -188,15 +187,20 @@ const GRIEVANCE_SECTIONS = [
     icon: SecurityIcon,
     content: {
       review: [
-        'Grievance determinations may be reviewed at the sole discretion of the CEO or any other Department Director associated with the grievance or complaint.',
-        'In the event a Holliday\'s policy or procedure was not followed or an employee is found to be at fault, the Staff deemed responsible for the area or subject being grieved shall submit in writing actions to correct the policy or procedure or if appropriate employee correction or disciplinary actions to be taken.'
+        'The Director of Administrative Services will review grievance determinations on a quarterly basis.',
+        'If patterns or trends emerge requiring policy changes or corrective action, appropriate measures will be recommended.',
+        'All staff will be notified of policy updates resulting from grievance reviews.'
       ],
-      understanding: `It should be understood that not every problem can be resolved to everyone's total satisfaction, but only through understanding and discussion of mutual problems can our clients and Holliday's Helping Hands develop confidence in each other. This confidence is important to the operation of an efficient, harmonious, and profitable business relationship.`
+      commitment: [
+        "Holliday's Helping Hands is committed to continuous improvement of services and policies.",
+        'Client feedback through the grievance process helps us serve you better.',
+        'We value your input and take all concerns seriously.'
+      ]
     }
   }
 ];
 
-// Enhanced accordion section component
+// Grievance Section Component
 const GrievanceSection = ({ section, expanded, onChange, completed }) => {
   const theme = useTheme();
   const IconComponent = section.icon;
@@ -259,11 +263,10 @@ const GrievanceSection = ({ section, expanded, onChange, completed }) => {
           <Typography variant="body1" paragraph sx={{ fontWeight: 500 }}>
             {content.overview}
           </Typography>
-          
-          <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'primary.main', mb: 1 }}>
+          <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'primary.main', mb: 1, mt: 2 }}>
             Mediation Process:
           </Typography>
-          <List dense sx={{ mb: 2 }}>
+          <List dense>
             {content.process.map((item, index) => (
               <ListItem key={index} sx={{ pl: 0 }}>
                 <ListItemIcon sx={{ minWidth: 32 }}>
@@ -273,15 +276,14 @@ const GrievanceSection = ({ section, expanded, onChange, completed }) => {
               </ListItem>
             ))}
           </List>
-          
-          <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'primary.main', mb: 1 }}>
-            Department Head Responsibilities:
+          <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'primary.main', mb: 1, mt: 2 }}>
+            Responsibilities:
           </Typography>
           <List dense>
             {content.responsibilities.map((item, index) => (
               <ListItem key={index} sx={{ pl: 0 }}>
                 <ListItemIcon sx={{ minWidth: 32 }}>
-                  <BusinessIcon color="primary" fontSize="small" />
+                  <SecurityIcon color="primary" fontSize="small" />
                 </ListItemIcon>
                 <ListItemText primary={item} />
               </ListItem>
@@ -317,7 +319,7 @@ const GrievanceSection = ({ section, expanded, onChange, completed }) => {
           <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'primary.main', mb: 1 }}>
             Client Grievances:
           </Typography>
-          <List dense sx={{ mb: 2 }}>
+          <List dense>
             {content.clientGrievances.map((item, index) => (
               <ListItem key={index} sx={{ pl: 0 }}>
                 <ListItemIcon sx={{ minWidth: 32 }}>
@@ -328,10 +330,10 @@ const GrievanceSection = ({ section, expanded, onChange, completed }) => {
             ))}
           </List>
           
-          <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'primary.main', mb: 1 }}>
+          <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'primary.main', mb: 1, mt: 2 }}>
             Employee Grievances:
           </Typography>
-          <List dense sx={{ mb: 2 }}>
+          <List dense>
             {content.employeeGrievances.map((item, index) => (
               <ListItem key={index} sx={{ pl: 0 }}>
                 <ListItemIcon sx={{ minWidth: 32 }}>
@@ -342,8 +344,8 @@ const GrievanceSection = ({ section, expanded, onChange, completed }) => {
             ))}
           </List>
           
-          <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'primary.main', mb: 1 }}>
-            Documentation Requirements:
+          <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'primary.main', mb: 1, mt: 2 }}>
+            Documentation & Records:
           </Typography>
           <List dense>
             {content.documentation.map((item, index) => (
@@ -363,13 +365,13 @@ const GrievanceSection = ({ section, expanded, onChange, completed }) => {
       return (
         <Box>
           <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'primary.main', mb: 1 }}>
-            Review Process:
+            Quarterly Review Process:
           </Typography>
-          <List dense sx={{ mb: 2 }}>
+          <List dense>
             {content.review.map((item, index) => (
               <ListItem key={index} sx={{ pl: 0 }}>
                 <ListItemIcon sx={{ minWidth: 32 }}>
-                  <CheckCircleIcon color="primary" fontSize="small" />
+                  <ProcessIcon color="primary" fontSize="small" />
                 </ListItemIcon>
                 <ListItemText primary={item} />
               </ListItem>
@@ -377,78 +379,89 @@ const GrievanceSection = ({ section, expanded, onChange, completed }) => {
           </List>
           
           <Alert severity="success" sx={{ mt: 2 }}>
-            <Typography variant="body2" sx={{ fontWeight: 500 }}>
-              {content.understanding}
+            <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+              Our Commitment to You:
             </Typography>
+            {content.commitment.map((item, index) => (
+              <Typography key={index} variant="body2" paragraph={index < content.commitment.length - 1}>
+                • {item}
+              </Typography>
+            ))}
           </Alert>
         </Box>
       );
     }
-    
-    return null;
   };
   
   return (
     <Accordion 
-      expanded={expanded} 
+      expanded={expanded}
       onChange={onChange}
-      elevation={expanded ? 3 : 1}
+      elevation={3}
       sx={{
         mb: 2,
-        border: expanded ? `2px solid ${theme.palette.primary.main}` : `1px solid ${theme.palette.divider}`,
         '&:before': { display: 'none' },
-        borderRadius: 2,
-        overflow: 'hidden'
+        '&.Mui-expanded': {
+          margin: '0 0 16px 0',
+        }
       }}
     >
-      <AccordionSummary 
+      <AccordionSummary
         expandIcon={<ExpandMoreIcon />}
         sx={{
-          bgcolor: expanded ? alpha(theme.palette.primary.main, 0.05) : 'background.paper',
+          bgcolor: alpha(theme.palette.primary.main, 0.05),
           '&:hover': {
-            bgcolor: alpha(theme.palette.primary.main, 0.08)
+            bgcolor: alpha(theme.palette.primary.main, 0.1),
+          },
+          '&.Mui-expanded': {
+            bgcolor: alpha(theme.palette.primary.main, 0.15),
           }
         }}
       >
         <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
-          <IconComponent 
-            sx={{ 
-              mr: 2, 
-              color: expanded ? 'primary.main' : 'text.secondary',
-              transition: 'color 0.3s ease'
-            }} 
-          />
-          <Box sx={{ flex: 1 }}>
-            <Typography variant="h6" sx={{ fontWeight: 600 }}>
-              {section.title}
-            </Typography>
-          </Box>
+          <IconComponent sx={{ mr: 2, color: 'primary.main' }} />
+          <Typography variant="h6" sx={{ fontWeight: 600, flexGrow: 1 }}>
+            {section.title}
+          </Typography>
           {completed && (
-            <CheckCircleIcon sx={{ color: 'success.main', ml: 1 }} />
+            <Chip
+              icon={<CheckCircleIcon />}
+              label="Reviewed"
+              color="success"
+              size="small"
+              sx={{ mr: 2 }}
+            />
           )}
         </Box>
       </AccordionSummary>
-      
-      <AccordionDetails sx={{ p: 3 }}>
-        {renderContent()}
+      <AccordionDetails>
+        <Box sx={{ p: 2 }}>
+          {renderContent()}
+        </Box>
       </AccordionDetails>
     </Accordion>
   );
 };
 
-const ClientGrievances = ({ clientID: propClientID, formConfig }) => {
+// ✅ MAIN COMPONENT WITH FORWARDREF
+const ClientGrievances = forwardRef(({ 
+  clientID, 
+  title = "Client Grievances Policy & Procedure", 
+  formType = "clientGrievances" 
+}, ref) => {
   const theme = useTheme();
   const dispatch = useDispatch();
   
-  // Redux selectors
-  const selectedClient = useSelector((state) => state.clients?.selectedClient);
-  const grievancesForm = useSelector(selectFormByType('grievances'));
-  const formLoading = useSelector(selectFormLoading('grievances'));
+  // Redux selectors - using the formType parameter
+  const existingData = useSelector((state) => selectFormByType(state, formType));
+  const loading = useSelector(selectFormLoading);
   const saving = useSelector(selectSaving);
   const autoSaving = useSelector(selectAutoSaving);
   const saveSuccess = useSelector(selectSaveSuccess);
   const unsavedChanges = useSelector(selectUnsavedChanges);
-  const formErrors = useSelector((state) => state.authSig.formErrors.grievances);
+  
+  // ✅ FIX: Add local loading state to prevent infinite loops
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
   
   // Local state
   const [formData, setFormData] = useState({
@@ -466,8 +479,16 @@ const ClientGrievances = ({ clientID: propClientID, formConfig }) => {
     isSectionVisited
   } = useFormAccordion(GRIEVANCE_SECTIONS);
   
-  // Get client ID from props or Redux
-  const clientID = propClientID || selectedClient?.clientID;
+  // ✅ EXPOSE getFormData VIA REF
+  useImperativeHandle(ref, () => ({
+    getFormData: () => ({
+      ...formData,
+      sectionsRead: Array.from(visitedSections),
+      readingProgress,
+      clientID,
+      formType
+    })
+  }));
   
   // Calculate overall completion percentage
   const completionPercentage = useMemo(() => {
@@ -483,30 +504,33 @@ const ClientGrievances = ({ clientID: propClientID, formConfig }) => {
            visitedSections.size >= GRIEVANCE_SECTIONS.length * 0.8;
   }, [clientID, formData.clientGrievanceSign, visitedSections.size]);
   
-  // Auto-save form data
-  const autoSaveData = useMemo(() => ({
-    ...formData,
-    sectionsRead: Array.from(visitedSections),
-    readingProgress,
-    completionPercentage,
-    lastModified: new Date().toISOString()
-  }), [formData, visitedSections, readingProgress, completionPercentage]);
-  
-  // Load form data when component mounts
+  // ✅ FIX: Load form data with error handling
   useEffect(() => {
-    if (clientID) {
-      dispatch(fetchFormData({ clientID, formType: 'grievances' }));
+    if (clientID && formType) {
+      dispatch(fetchFormData({ clientID, formType }))
+        .unwrap()
+        .then((data) => {
+          console.log('Form data loaded:', data);
+        })
+        .catch((error) => {
+          console.warn('Failed to load form data (form will work with empty data):', error);
+        })
+        .finally(() => {
+          setTimeout(() => setIsInitialLoad(false), 1000);
+        });
+    } else {
+      setIsInitialLoad(false);
     }
-  }, [dispatch, clientID]);
+  }, [dispatch, clientID, formType]);
   
   // Update local state when Redux form data changes
   useEffect(() => {
-    if (grievancesForm && Object.keys(grievancesForm).length > 0) {
+    if (existingData && Object.keys(existingData).length > 0) {
       setFormData({
-        clientGrievanceSign: grievancesForm.clientGrievanceSign || ""
+        clientGrievanceSign: existingData.clientGrievanceSign || ""
       });
     }
-  }, [grievancesForm]);
+  }, [existingData]);
   
   // Update unsaved changes in Redux
   useEffect(() => {
@@ -529,10 +553,10 @@ const ClientGrievances = ({ clientID: propClientID, formConfig }) => {
     setLocalErrors([]);
     
     dispatch(updateFormLocal({
-      formType: 'grievances',
+      formType,
       formData: newFormData
     }));
-  }, [dispatch, formData]);
+  }, [dispatch, formData, formType]);
 
   // Handle form submission
   const handleSubmit = useCallback(async (e) => {
@@ -549,7 +573,7 @@ const ClientGrievances = ({ clientID: propClientID, formConfig }) => {
     }
     
     if (visitedSections.size < GRIEVANCE_SECTIONS.length * 0.8) {
-      validationErrors.push("Please review at least 80% of the grievance policy sections before signing.");
+      validationErrors.push("Please review at least 80% of the policy sections before signing.");
     }
     
     if (validationErrors.length > 0) {
@@ -563,27 +587,24 @@ const ClientGrievances = ({ clientID: propClientID, formConfig }) => {
       readingProgress,
       completionPercentage: 100,
       status: 'completed',
-      formData: {
-        acknowledgedAt: new Date().toISOString(),
-        policyVersion: formConfig?.version || '2024-v1',
-        ipAddress: window.location.hostname,
-        userAgent: navigator.userAgent
-      }
+      clientID,
+      formType,
+      acknowledgedAt: new Date().toISOString()
     };
 
     try {
       await dispatch(saveFormData({ 
         clientID, 
-        formType: 'grievances', 
+        formType, 
         formData: submitData 
       })).unwrap();
       
       setLocalErrors([]);
       setShowSuccessSnackbar(true);
     } catch (error) {
-      setLocalErrors([error.message || 'Failed to save grievances acknowledgment']);
+      setLocalErrors([error.message || 'Failed to save grievances policy acknowledgment']);
     }
-  }, [dispatch, clientID, formData, visitedSections, readingProgress, formConfig]);
+  }, [dispatch, clientID, formData, visitedSections, readingProgress, formType]);
 
   // Clear success messages
   const handleCloseSuccessSnackbar = useCallback(() => {
@@ -597,113 +618,77 @@ const ClientGrievances = ({ clientID: propClientID, formConfig }) => {
     dispatch(clearErrors());
   }, [dispatch]);
 
-  if (formLoading) {
+  // ✅ FIX: Improved loading state
+  if (isInitialLoad && loading) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', p: 4, minHeight: 400 }}>
-        <Box sx={{ textAlign: 'center' }}>
-          <CircularProgress size={60} sx={{ mb: 2 }} />
-          <Typography variant="h6" color="text.secondary">
-            Loading grievances data...
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Please wait while we retrieve the grievance policy information
+      <Container maxWidth="lg">
+        <Box sx={{ 
+          display: 'flex', 
+          flexDirection: 'column',
+          justifyContent: 'center', 
+          alignItems: 'center', 
+          minHeight: 400 
+        }}>
+          <CircularProgress size={60} />
+          <Typography variant="body2" sx={{ mt: 2, color: 'text.secondary' }}>
+            Loading grievances policy...
           </Typography>
         </Box>
-      </Box>
+      </Container>
     );
   }
 
   return (
-    <Container maxWidth="lg" sx={{ py: 3 }}>
-      {/* Header Section */}
-      <Card elevation={3} sx={{ mb: 4, overflow: 'hidden' }}>
-        <Box
-          sx={{
-            background: `linear-gradient(135deg, ${theme.palette.secondary.main} 0%, ${theme.palette.secondary.dark} 100%)`,
-            color: 'white',
-            p: 4
-          }}
-        >
-          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center' }}>
-              <GrievanceIcon sx={{ mr: 2, fontSize: 40 }} />
-              <Box>
-                <Typography variant="h4" gutterBottom sx={{ fontWeight: 700, mb: 1 }}>
-                  Client Grievances
-                </Typography>
-                <Typography variant="h6" sx={{ opacity: 0.9, fontWeight: 400 }}>
-                  Policy & Procedures for Filing Complaints
-                </Typography>
-              </Box>
-            </Box>
-            
-            {/* Auto-save indicator */}
-            {autoSaving && (
-              <Zoom in={autoSaving}>
-                <Chip 
-                  label="Auto-saving..." 
-                  icon={<AutoSaveIcon />}
-                  color="default"
-                  variant="filled"
-                  sx={{ 
-                    bgcolor: 'rgba(255,255,255,0.2)', 
-                    color: 'white',
-                    '& .MuiChip-icon': { color: 'white' }
-                  }}
-                />
-              </Zoom>
-            )}
-          </Box>
-
-          {/* Client Info */}
-          {selectedClient && (
-            <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
-              <PersonIcon sx={{ mr: 1, opacity: 0.9 }} />
-              <Typography variant="body1" sx={{ fontWeight: 500 }}>
-                Client: {selectedClient.firstName} {selectedClient.lastName}
-                {selectedClient.clientID && ` (ID: ${selectedClient.clientID})`}
-              </Typography>
-            </Box>
-          )}
+    <Container maxWidth="lg" sx={{ py: 4 }}>
+      {/* Header */}
+      <Paper elevation={3} sx={{ p: 4, mb: 4, bgcolor: 'primary.main', color: 'primary.contrastText' }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+          <GrievanceIcon sx={{ fontSize: 48, mr: 2 }} />
+          <Typography variant="h4" component="h1" sx={{ fontWeight: 700 }}>
+            {title}
+          </Typography>
         </Box>
+        <Typography variant="subtitle1" sx={{ opacity: 0.9 }}>
+          Your Rights and the Grievance Process
+        </Typography>
+      </Paper>
 
-        <CardContent sx={{ p: 0 }}>
-          {/* Progress Indicator */}
-          <Box sx={{ p: 4, pb: 2 }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-              <Typography variant="h6" sx={{ fontWeight: 600 }}>
+      {/* Progress Card */}
+      <Card sx={{ mb: 4 }}>
+        <CardContent>
+          <Box sx={{ mb: 2 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+              <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
                 Policy Review Progress
               </Typography>
               <Chip 
                 label={`${completionPercentage}% Complete`}
-                color={completionPercentage === 100 ? 'success' : 'primary'}
-                variant="filled"
-                sx={{ fontWeight: 600 }}
+                color={completionPercentage === 100 ? "success" : "default"}
+                size="small"
               />
             </Box>
-            
             <LinearProgress 
               variant="determinate" 
               value={completionPercentage} 
-              sx={{ 
-                height: 12, 
-                borderRadius: 6,
-                bgcolor: alpha(theme.palette.grey[300], 0.3),
-                '& .MuiLinearProgress-bar': {
-                  borderRadius: 6,
-                  background: completionPercentage === 100 
-                    ? `linear-gradient(45deg, ${theme.palette.success.main}, ${theme.palette.success.light})`
-                    : `linear-gradient(45deg, ${theme.palette.primary.main}, ${theme.palette.primary.light})`
-                }
-              }}
+              sx={{ height: 8, borderRadius: 4 }}
             />
-            
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 1 }}>
+          </Box>
+          
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 2 }}>
+            <Box>
               <Typography variant="caption" color="text.secondary">
-                {visitedSections.size} of {GRIEVANCE_SECTIONS.length} sections reviewed ({readingProgress}%)
+                Sections Read
               </Typography>
+              <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                {visitedSections.size} / {GRIEVANCE_SECTIONS.length}
+              </Typography>
+            </Box>
+            <Box>
               <Typography variant="caption" color="text.secondary">
-                {formData.clientGrievanceSign ? 'Signature provided' : 'Signature required'}
+                Signature
+              </Typography>
+              <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                {formData.clientGrievanceSign ? 'Provided' : 'Required'}
               </Typography>
             </Box>
           </Box>
@@ -711,32 +696,23 @@ const ClientGrievances = ({ clientID: propClientID, formConfig }) => {
       </Card>
 
       {/* Error Alerts */}
-      {(localErrors.length > 0 || formErrors) && (
+      {localErrors.length > 0 && (
         <Fade in>
           <Alert 
             severity="error" 
             sx={{ mb: 3 }}
             onClose={handleClearErrors}
-            action={
-              <Button color="inherit" size="small" onClick={handleClearErrors}>
-                Dismiss
-              </Button>
-            }
           >
-            {localErrors.length > 0 ? (
-              <Box>
-                <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
-                  Please correct the following issues:
+            <Box>
+              <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+                Please correct the following issues:
+              </Typography>
+              {localErrors.map((error, index) => (
+                <Typography key={index} variant="body2" sx={{ ml: 2 }}>
+                  • {error}
                 </Typography>
-                {localErrors.map((error, index) => (
-                  <Typography key={index} variant="body2" sx={{ ml: 2 }}>
-                    • {error}
-                  </Typography>
-                ))}
-              </Box>
-            ) : (
-              formErrors
-            )}
+              ))}
+            </Box>
           </Alert>
         </Fade>
       )}
@@ -887,6 +863,9 @@ const ClientGrievances = ({ clientID: propClientID, formConfig }) => {
       )}
     </Container>
   );
-};
+});
+
+// ✅ ADD DISPLAY NAME
+ClientGrievances.displayName = 'ClientGrievances';
 
 export default ClientGrievances;

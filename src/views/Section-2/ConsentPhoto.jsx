@@ -1,7 +1,7 @@
-// ✅ Updated ConsentPhoto.jsx - Key fixes for data flow
+// ✅ Updated ConsentPhoto.jsx - Complete with Enhanced Form Management + forwardRef
 
-import React, { useCallback, useState, useEffect } from "react";
-import { useSelector, useDispatch } from "react-redux";
+import React, { useCallback, useState, forwardRef, useImperativeHandle } from "react";
+import { useSelector } from "react-redux";
 import {
     Box,
     Typography,
@@ -20,10 +20,7 @@ import {
     Stepper,
     Step,
     StepLabel,
-    StepContent,
-    Accordion,
-    AccordionSummary,
-    AccordionDetails
+    StepContent
 } from '@mui/material';
 import { Autocomplete } from '@mui/material';
 import {
@@ -54,7 +51,7 @@ import {
 
 // ✅ Enhanced form validation rules
 const validationRules = createFormValidator({
-    required: ['clientReleaseItems', 'clientReleasePurposes', 'consentPhotoSign1'],
+    required: ['clientReleaseItems', 'clientReleasePurposes', 'consentPhotoSign1', 'consentPhotoEffectiveDate', 'consentPhotoExpireDate'],
     custom: {
         clientReleaseItems: (value) => {
             if (!value || !Array.isArray(value) || value.length === 0) {
@@ -120,7 +117,7 @@ const stepperSteps = [
     }
 ];
 
-const ConsentPhoto = ({ clientID: propClientID }) => {
+const ConsentPhoto = forwardRef(({ clientID: propClientID }, ref) => {
     const selectedClient = useSelector((state) => state.clients?.selectedClient);
     const clientID = propClientID || selectedClient?.clientID;
 
@@ -172,7 +169,7 @@ const ConsentPhoto = ({ clientID: propClientID }) => {
     // Local state
     const [showRevocationSection, setShowRevocationSection] = useState(false);
 
-    // ✅ Calculate completion percentage with all required fields
+    // ✅ Calculate completion percentage with all required fields (MUST be before useImperativeHandle)
     const requiredFields = [
         'clientReleaseItems', 'clientReleasePurposes', 'consentPhotoSign1',
         'consentPhotoEffectiveDate', 'consentPhotoExpireDate'
@@ -185,6 +182,19 @@ const ConsentPhoto = ({ clientID: propClientID }) => {
     ];
     
     const completionPercentage = calculateFormCompletion(formData, requiredFields, allFields);
+
+    // ✅ Expose getFormData method for AuthSig modal integration (AFTER completionPercentage is calculated)
+    useImperativeHandle(ref, () => ({
+        getFormData: () => ({
+            ...formData,
+            clientID,
+            formType: 'consentPhoto',
+            formVersion: '2.0',
+            stepperProgress,
+            completedSteps: activeStep + 1,
+            completionPercentage
+        })
+    }), [formData, clientID, stepperProgress, activeStep, completionPercentage]);
 
     // ✅ Enhanced field change handlers with proper data structure
     const handleMultiSelectChange = useCallback((fieldName, selectedValues) => {
@@ -664,6 +674,8 @@ const ConsentPhoto = ({ clientID: propClientID }) => {
             </Snackbar>
         </Box>
     );
-};
+});
+
+ConsentPhoto.displayName = 'ConsentPhoto';
 
 export default ConsentPhoto;

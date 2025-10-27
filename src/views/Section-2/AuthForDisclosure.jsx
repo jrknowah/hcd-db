@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useMemo, forwardRef, useImperativeHandle } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import {
   Box,
@@ -36,18 +36,14 @@ import {
   Save as SaveIcon,
   CheckCircle as CheckCircleIcon,
   Warning as WarningIcon,
-  Person as PersonIcon,
   ExpandMore as ExpandMoreIcon,
   Security as SecurityIcon,
-  LocalHospital as MedicalIcon,
   Psychology as MentalHealthIcon,
   Coronavirus as HIVIcon,
   LocalPharmacy as SubstanceIcon,
-  AutoMode as AutoSaveIcon,
   CloudDone as CloudDoneIcon,
   Info as InfoIcon,
   Business as OrganizationIcon,
-  Groups as PartnersIcon,
   Assignment as ServicesIcon
 } from '@mui/icons-material';
 
@@ -55,21 +51,14 @@ import {
 import {
   fetchFormData,
   saveFormData,
-  autoSaveFormData,
-  updateFormLocal,
-  clearErrors,
   clearSuccessFlags,
   setUnsavedChanges,
   selectFormByType,
   selectFormLoading,
   selectSaving,
-  selectAutoSaving,
   selectSaveSuccess,
   selectUnsavedChanges
 } from '../../backend/store/slices/authSigSlice';
-
-// Import custom hooks
-import { useFormManager, useFormAccordion } from '../../hooks/useFormManager';
 
 // Authorization content sections
 const AUTHORIZATION_SECTIONS = [
@@ -241,17 +230,14 @@ const AuthorizationSection = ({ section, expanded, onChange, completed }) => {
           <Typography variant="body1" paragraph sx={{ fontWeight: 500 }}>
             {content.consent}
           </Typography>
-          <Typography variant="body1" paragraph>
+          <Typography variant="body1" paragraph sx={{ fontWeight: 500 }}>
             {content.disclosure}
-          </Typography>
-          <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1, mt: 2 }}>
-            Authorization Details:
           </Typography>
           <List dense>
             {content.details.map((detail, index) => (
               <ListItem key={index} sx={{ pl: 0 }}>
                 <ListItemIcon sx={{ minWidth: 32 }}>
-                  <CheckCircleIcon color="primary" fontSize="small" />
+                  <ShareIcon color="primary" fontSize="small" />
                 </ListItemIcon>
                 <ListItemText primary={detail} />
               </ListItem>
@@ -264,9 +250,9 @@ const AuthorizationSection = ({ section, expanded, onChange, completed }) => {
     if (section.id === 'terms') {
       return (
         <Box>
-          <Alert severity="info" sx={{ mb: 2 }}>
+          <Alert severity="info" sx={{ mb: 3 }}>
             <Typography variant="body2" sx={{ fontWeight: 600 }}>
-              Validity Period: {content.validity}
+              {content.validity}
             </Typography>
           </Alert>
           
@@ -285,13 +271,13 @@ const AuthorizationSection = ({ section, expanded, onChange, completed }) => {
           </List>
           
           <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
-            Important Understanding:
+            I Understand:
           </Typography>
           <List dense>
             {content.understanding.map((item, index) => (
               <ListItem key={index} sx={{ pl: 0 }}>
                 <ListItemIcon sx={{ minWidth: 32 }}>
-                  <CheckCircleIcon color="success" fontSize="small" />
+                  <CheckCircleIcon color="primary" fontSize="small" />
                 </ListItemIcon>
                 <ListItemText primary={item} />
               </ListItem>
@@ -300,409 +286,283 @@ const AuthorizationSection = ({ section, expanded, onChange, completed }) => {
         </Box>
       );
     }
-    
-    return null;
   };
   
   return (
     <Accordion 
-      expanded={expanded} 
+      expanded={expanded}
       onChange={onChange}
-      elevation={expanded ? 3 : 1}
+      elevation={3}
       sx={{
         mb: 2,
-        border: expanded ? `2px solid ${theme.palette.primary.main}` : `1px solid ${theme.palette.divider}`,
         '&:before': { display: 'none' },
-        borderRadius: 2,
-        overflow: 'hidden'
+        '&.Mui-expanded': {
+          margin: '0 0 16px 0',
+        }
       }}
     >
-      <AccordionSummary 
+      <AccordionSummary
         expandIcon={<ExpandMoreIcon />}
         sx={{
-          bgcolor: expanded ? alpha(theme.palette.primary.main, 0.05) : 'background.paper',
+          bgcolor: alpha(theme.palette.primary.main, 0.05),
           '&:hover': {
-            bgcolor: alpha(theme.palette.primary.main, 0.08)
+            bgcolor: alpha(theme.palette.primary.main, 0.1),
+          },
+          '&.Mui-expanded': {
+            bgcolor: alpha(theme.palette.primary.main, 0.15),
           }
         }}
       >
         <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
-          <IconComponent 
-            sx={{ 
-              mr: 2, 
-              color: expanded ? 'primary.main' : 'text.secondary',
-              transition: 'color 0.3s ease'
-            }} 
-          />
-          <Box sx={{ flex: 1 }}>
-            <Typography variant="h6" sx={{ fontWeight: 600 }}>
-              {section.title}
-            </Typography>
-          </Box>
+          <IconComponent sx={{ mr: 2, color: 'primary.main' }} />
+          <Typography variant="h6" sx={{ fontWeight: 600, flexGrow: 1 }}>
+            {section.title}
+          </Typography>
           {completed && (
-            <CheckCircleIcon sx={{ color: 'success.main', ml: 1 }} />
+            <Chip
+              icon={<CheckCircleIcon />}
+              label="Reviewed"
+              color="success"
+              size="small"
+              sx={{ mr: 2 }}
+            />
           )}
         </Box>
       </AccordionSummary>
-      
-      <AccordionDetails sx={{ p: 3 }}>
-        {renderContent()}
+      <AccordionDetails>
+        <Box sx={{ p: 2 }}>
+          {renderContent()}
+        </Box>
       </AccordionDetails>
     </Accordion>
   );
 };
 
-const AuthForDisclosure = ({ clientID: propClientID, formConfig }) => {
-  const theme = useTheme();
+// Main component with forwardRef
+const AuthForDisclosure = forwardRef(({ 
+  clientID, 
+  title = "Authorization for Use or Disclosure of Health/Mental Health Information", 
+  formType = "authForDisclosure" // ✅ CRITICAL: Correct formType
+}, ref) => {
   const dispatch = useDispatch();
-  
+  const theme = useTheme();
+
   // Redux selectors
-  const selectedClient = useSelector((state) => state.clients?.selectedClient);
-  const authDisclosureForm = useSelector(selectFormByType('authDisclosure'));
-  const formLoading = useSelector(selectFormLoading('authDisclosure'));
+  const existingData = useSelector((state) => selectFormByType(state, formType));
+  const loading = useSelector(selectFormLoading);
   const saving = useSelector(selectSaving);
-  const autoSaving = useSelector(selectAutoSaving);
   const saveSuccess = useSelector(selectSaveSuccess);
   const unsavedChanges = useSelector(selectUnsavedChanges);
-  const formErrors = useSelector((state) => state.authSig.formErrors.authDisclosure);
-  
-  // Local state
+
+  // ✅ FIX: Local loading state to prevent infinite loops
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
+
+  // Local state for form data
   const [formState, setFormState] = useState({
-    atrClientSign: "",
+    atrClientSign: '',
     mentalHealthAuth: false,
     hivAidsAuth: false,
-    substanceUseAuth: false,
+    substanceUseAuth: false
   });
-  const [localErrors, setLocalErrors] = useState([]);
+
+  // State for UI interactions
+  const [expandedSection, setExpandedSection] = useState('overview');
+  const [completedSections, setCompletedSections] = useState([]);
   const [showSuccessSnackbar, setShowSuccessSnackbar] = useState(false);
-  
-  // Accordion management
-  const {
-    expandedSection,
-    visitedSections,
-    completionPercentage: readingProgress,
-    handleAccordionChange,
-    isSectionVisited
-  } = useFormAccordion(AUTHORIZATION_SECTIONS);
-  
-  // Get client ID from props or Redux
-  const clientID = propClientID || selectedClient?.clientID;
-  
-  // Calculate overall completion percentage
-  const completionPercentage = useMemo(() => {
-    const readingComplete = readingProgress > 90 ? 40 : (readingProgress * 0.4);
-    const checkboxComplete = (Object.values(formState).filter(val => val === true).length / 3) * 30;
-    const signatureComplete = formState.atrClientSign.trim() ? 30 : 0;
-    return Math.round(readingComplete + checkboxComplete + signatureComplete);
-  }, [readingProgress, formState]);
-  
-  // Form validation
-  const isValid = useMemo(() => {
-    return clientID && 
-           formState.atrClientSign.trim() && 
-           visitedSections.size >= AUTHORIZATION_SECTIONS.length * 0.8 &&
-           (formState.mentalHealthAuth || formState.hivAidsAuth || formState.substanceUseAuth);
-  }, [clientID, formState, visitedSections.size]);
-  
-  // Auto-save form data
-  const formData = useMemo(() => ({
-    ...formState,
-    sectionsRead: Array.from(visitedSections),
-    readingProgress,
-    completionPercentage,
-    lastModified: new Date().toISOString()
-  }), [formState, visitedSections, readingProgress, completionPercentage]);
-  
-  // Load form data when component mounts
+  const [hasReviewedAll, setHasReviewedAll] = useState(false);
+
+  // Expose getFormData method via ref
+  useImperativeHandle(ref, () => ({
+    getFormData: () => ({
+      ...formState,
+      clientID,
+      formType
+    })
+  }));
+
+  // ✅ FIX: Load existing form data with proper error handling
   useEffect(() => {
-    if (clientID) {
-      dispatch(fetchFormData({ clientID, formType: 'authDisclosure' }));
+    if (clientID && formType) {
+      dispatch(fetchFormData({ clientID, formType }))
+        .unwrap()
+        .then((data) => {
+          console.log('Form data loaded successfully:', data);
+        })
+        .catch((error) => {
+          console.warn('Failed to load existing form data (form will work with empty data):', error);
+        })
+        .finally(() => {
+          // Always clear initial load state after 1 second max
+          setTimeout(() => setIsInitialLoad(false), 1000);
+        });
+    } else {
+      // No clientID, just show the form
+      setIsInitialLoad(false);
     }
-  }, [dispatch, clientID]);
-  
-  // Update local state when Redux form data changes
+  }, [dispatch, clientID, formType]);
+
+  // Populate form when data is loaded
   useEffect(() => {
-    if (authDisclosureForm && Object.keys(authDisclosureForm).length > 0) {
+    if (existingData) {
       setFormState({
-        atrClientSign: authDisclosureForm.atrClientSign || "",
-        mentalHealthAuth: authDisclosureForm.mentalHealthAuth === "true" || authDisclosureForm.mentalHealthAuth === true,
-        hivAidsAuth: authDisclosureForm.hivAidsAuth === "true" || authDisclosureForm.hivAidsAuth === true,
-        substanceUseAuth: authDisclosureForm.substanceUseAuth === "true" || authDisclosureForm.substanceUseAuth === true,
+        atrClientSign: existingData.atrClientSign || '',
+        mentalHealthAuth: existingData.mentalHealthAuth || false,
+        hivAidsAuth: existingData.hivAidsAuth || false,
+        substanceUseAuth: existingData.substanceUseAuth || false
       });
     }
-  }, [authDisclosureForm]);
-  
-  // Update unsaved changes in Redux
-  useEffect(() => {
-    dispatch(setUnsavedChanges(completionPercentage > 0 && !saveSuccess));
-  }, [dispatch, completionPercentage, saveSuccess]);
-  
-  // Handle success notifications
-  useEffect(() => {
-    if (saveSuccess) {
-      setShowSuccessSnackbar(true);
-    }
-  }, [saveSuccess]);
+  }, [existingData]);
 
-  // Handle form changes
+  // Handle accordion section changes
+  const handleSectionChange = useCallback((sectionId) => (event, isExpanded) => {
+    setExpandedSection(isExpanded ? sectionId : false);
+    
+    // Mark section as completed when collapsed after being expanded
+    if (!isExpanded && !completedSections.includes(sectionId)) {
+      setCompletedSections(prev => [...prev, sectionId]);
+    }
+  }, [completedSections]);
+
+  // Check if all sections have been reviewed
+  useEffect(() => {
+    const allSectionsReviewed = AUTHORIZATION_SECTIONS.every(
+      section => completedSections.includes(section.id)
+    );
+    setHasReviewedAll(allSectionsReviewed);
+  }, [completedSections]);
+
+  // Handle form field changes
   const handleChange = useCallback((e) => {
-    const { name, value, type, checked } = e.target;
-    const newFormState = {
-      ...formState,
-      [name]: type === "checkbox" ? checked : value,
-    };
+    const { name, value, checked, type } = e.target;
+    const fieldValue = type === 'checkbox' ? checked : value;
     
-    setFormState(newFormState);
-    setLocalErrors([]);
-    
-    dispatch(updateFormLocal({
-      formType: 'authDisclosure',
-      formData: newFormState
+    setFormState(prev => ({
+      ...prev,
+      [name]: fieldValue
     }));
-  }, [dispatch, formState]);
+    
+    dispatch(setUnsavedChanges(true));
+  }, [dispatch]);
 
-  // Handle form submission
+  // Validate form
+  const isValid = useMemo(() => {
+    return (
+      formState.atrClientSign.trim() !== '' &&
+      hasReviewedAll &&
+      (formState.mentalHealthAuth || formState.hivAidsAuth || formState.substanceUseAuth)
+    );
+  }, [formState, hasReviewedAll]);
+
+  // Handle form save
   const handleSave = useCallback(async (e) => {
-    e?.preventDefault();
+    e.preventDefault();
     
-    const validationErrors = [];
-    
-    if (!clientID) {
-      validationErrors.push("No client selected. Please select a client first.");
-    }
-
-    if (!formState.atrClientSign.trim()) {
-      validationErrors.push("Electronic signature is required to complete the authorization.");
-    }
-    
-    if (!formState.mentalHealthAuth && !formState.hivAidsAuth && !formState.substanceUseAuth) {
-      validationErrors.push("Please select at least one type of information to authorize for sharing.");
-    }
-    
-    if (visitedSections.size < AUTHORIZATION_SECTIONS.length * 0.8) {
-      validationErrors.push("Please review at least 80% of the authorization sections before signing.");
-    }
-    
-    if (validationErrors.length > 0) {
-      setLocalErrors(validationErrors);
+    if (!isValid || !clientID) {
       return;
     }
 
-    const submitData = {
+    const formData = {
       ...formState,
-      mentalHealthAuth: formState.mentalHealthAuth.toString(),
-      hivAidsAuth: formState.hivAidsAuth.toString(),
-      substanceUseAuth: formState.substanceUseAuth.toString(),
-      sectionsRead: Array.from(visitedSections),
-      readingProgress,
-      completionPercentage: 100,
-      status: 'completed',
-      formData: {
-        acknowledgedAt: new Date().toISOString(),
-        authorizationVersion: formConfig?.version || '2024-v1',
-        ipAddress: window.location.hostname,
-        userAgent: navigator.userAgent
-      }
+      clientID,
+      formType
     };
 
     try {
-      await dispatch(saveFormData({ 
-        clientID, 
-        formType: 'authDisclosure', 
-        formData: submitData 
-      })).unwrap();
-      
-      setLocalErrors([]);
+      await dispatch(saveFormData(formData)).unwrap();
       setShowSuccessSnackbar(true);
+      dispatch(setUnsavedChanges(false));
     } catch (error) {
-      setLocalErrors([error.message || 'Failed to save authorization data']);
+      console.error('Failed to save authorization:', error);
     }
-  }, [dispatch, clientID, formState, visitedSections, readingProgress, formConfig]);
+  }, [dispatch, formState, clientID, formType, isValid]);
 
-  // Clear success messages
+  // Handle success snackbar close
   const handleCloseSuccessSnackbar = useCallback(() => {
     setShowSuccessSnackbar(false);
     dispatch(clearSuccessFlags());
   }, [dispatch]);
 
-  // Clear errors
-  const handleClearErrors = useCallback(() => {
-    setLocalErrors([]);
-    dispatch(clearErrors());
-  }, [dispatch]);
+  // Calculate progress
+  const progress = useMemo(() => {
+    const totalSections = AUTHORIZATION_SECTIONS.length;
+    const completed = completedSections.length;
+    return (completed / totalSections) * 100;
+  }, [completedSections]);
 
-  if (formLoading) {
+  // ✅ FIX: Improved loading state - only show briefly
+  if (isInitialLoad && loading) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', p: 4, minHeight: 400 }}>
-        <Box sx={{ textAlign: 'center' }}>
-          <CircularProgress size={60} sx={{ mb: 2 }} />
-          <Typography variant="h6" color="text.secondary">
-            Loading authorization data...
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Please wait while we retrieve your authorization information
+      <Container maxWidth="lg">
+        <Box sx={{ 
+          display: 'flex', 
+          flexDirection: 'column',
+          justifyContent: 'center', 
+          alignItems: 'center', 
+          minHeight: 400 
+        }}>
+          <CircularProgress size={60} />
+          <Typography variant="body2" sx={{ mt: 2, color: 'text.secondary' }}>
+            Loading authorization form...
           </Typography>
         </Box>
-      </Box>
+      </Container>
     );
   }
 
+  // ✅ Show form even if loading fails
   return (
-    <Container maxWidth="lg" sx={{ py: 3 }}>
+    <Container maxWidth="lg" sx={{ py: 4 }}>
       {/* Header Section */}
-      <Card elevation={3} sx={{ mb: 4, overflow: 'hidden' }}>
-        <Box
-          sx={{
-            background: `linear-gradient(135deg, ${theme.palette.info.main} 0%, ${theme.palette.info.dark} 100%)`,
-            color: 'white',
-            p: 4
-          }}
-        >
-          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center' }}>
-              <ShareIcon sx={{ mr: 2, fontSize: 40 }} />
-              <Box>
-                <Typography variant="h4" gutterBottom sx={{ fontWeight: 700, mb: 1 }}>
-                  Authorization For Information Disclosure
-                </Typography>
-                <Typography variant="h6" sx={{ opacity: 0.9, fontWeight: 400 }}>
-                  Health & Social Service Information Sharing
-                </Typography>
-              </Box>
-            </Box>
-            
-            {/* Auto-save indicator */}
-            {autoSaving && (
-              <Zoom in={autoSaving}>
-                <Chip 
-                  label="Auto-saving..." 
-                  icon={<AutoSaveIcon />}
-                  color="default"
-                  variant="filled"
-                  sx={{ 
-                    bgcolor: 'rgba(255,255,255,0.2)', 
-                    color: 'white',
-                    '& .MuiChip-icon': { color: 'white' }
-                  }}
-                />
-              </Zoom>
-            )}
-          </Box>
-
-          {/* Client Info */}
-          {selectedClient && (
-            <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
-              <PersonIcon sx={{ mr: 1, opacity: 0.9 }} />
-              <Typography variant="body1" sx={{ fontWeight: 500 }}>
-                Client: {selectedClient.firstName} {selectedClient.lastName}
-                {selectedClient.clientID && ` (ID: ${selectedClient.clientID})`}
-              </Typography>
-            </Box>
-          )}
+      <Paper elevation={3} sx={{ p: 4, mb: 4, bgcolor: 'primary.main', color: 'primary.contrastText' }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+          <ShareIcon sx={{ fontSize: 48, mr: 2 }} />
+          <Typography variant="h4" component="h1" sx={{ fontWeight: 700 }}>
+            {title}
+          </Typography>
         </Box>
+        <Typography variant="subtitle1" sx={{ opacity: 0.9 }}>
+          Community Health and Integrated Programs (CHIP)
+        </Typography>
+      </Paper>
 
-        <CardContent sx={{ p: 0 }}>
-          {/* Progress Indicator */}
-          <Box sx={{ p: 4, pb: 2 }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-              <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                Authorization Progress
-              </Typography>
-              <Chip 
-                label={`${completionPercentage}% Complete`}
-                color={completionPercentage === 100 ? 'success' : 'primary'}
-                variant="filled"
-                sx={{ fontWeight: 600 }}
-              />
-            </Box>
-            
-            <LinearProgress 
-              variant="determinate" 
-              value={completionPercentage} 
-              sx={{ 
-                height: 12, 
-                borderRadius: 6,
-                bgcolor: alpha(theme.palette.grey[300], 0.3),
-                '& .MuiLinearProgress-bar': {
-                  borderRadius: 6,
-                  background: completionPercentage === 100 
-                    ? `linear-gradient(45deg, ${theme.palette.success.main}, ${theme.palette.success.light})`
-                    : `linear-gradient(45deg, ${theme.palette.primary.main}, ${theme.palette.primary.light})`
-                }
-              }}
+      {/* Progress Indicator */}
+      <Card sx={{ mb: 4 }}>
+        <CardContent>
+          <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+            <Typography variant="subtitle1" sx={{ flexGrow: 1, fontWeight: 600 }}>
+              Review Progress
+            </Typography>
+            <Chip 
+              label={`${completedSections.length} / ${AUTHORIZATION_SECTIONS.length} Sections`}
+              color={hasReviewedAll ? "success" : "default"}
+              size="small"
             />
-            
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 1 }}>
-              <Typography variant="caption" color="text.secondary">
-                {visitedSections.size} of {AUTHORIZATION_SECTIONS.length} sections reviewed
-              </Typography>
-              <Typography variant="caption" color="text.secondary">
-                {Object.values(formState).filter(val => val === true).length} authorization(s) selected
-              </Typography>
-            </Box>
           </Box>
+          <LinearProgress 
+            variant="determinate" 
+            value={progress} 
+            sx={{ height: 8, borderRadius: 4 }}
+          />
         </CardContent>
       </Card>
 
-      {/* Error Alerts */}
-      {(localErrors.length > 0 || formErrors) && (
-        <Fade in>
-          <Alert 
-            severity="error" 
-            sx={{ mb: 3 }}
-            onClose={handleClearErrors}
-            action={
-              <Button color="inherit" size="small" onClick={handleClearErrors}>
-                Dismiss
-              </Button>
-            }
-          >
-            {localErrors.length > 0 ? (
-              <Box>
-                <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
-                  Please correct the following issues:
-                </Typography>
-                {localErrors.map((error, index) => (
-                  <Typography key={index} variant="body2" sx={{ ml: 2 }}>
-                    • {error}
-                  </Typography>
-                ))}
-              </Box>
-            ) : (
-              formErrors
-            )}
-          </Alert>
-        </Fade>
-      )}
-
-      {/* Important Notice Banner */}
-      <Alert severity="info" sx={{ mb: 3 }}>
-        <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
-          IMPORTANT AUTHORIZATION NOTICE
-        </Typography>
-        <Typography variant="body2">
-          This authorization allows your health and social service information to be shared 
-          among County programs and partners to improve your care coordination and access to services.
-        </Typography>
-      </Alert>
-
-      {/* Authorization Content - Organized in Accordions */}
+      {/* Authorization Sections */}
       <Box sx={{ mb: 4 }}>
         {AUTHORIZATION_SECTIONS.map((section) => (
           <AuthorizationSection
             key={section.id}
             section={section}
             expanded={expandedSection === section.id}
-            onChange={handleAccordionChange(section.id)}
-            completed={isSectionVisited(section.id)}
+            onChange={handleSectionChange(section.id)}
+            completed={completedSections.includes(section.id)}
           />
         ))}
       </Box>
 
-      {/* Specific Authorizations Section */}
+      {/* Information Types Section */}
       <Paper elevation={2} sx={{ p: 4, mb: 3 }}>
-        <Typography variant="h6" gutterBottom sx={{ fontWeight: 600, color: 'primary.main', mb: 3 }}>
-          Specific Information Authorizations
+        <Typography variant="h6" gutterBottom sx={{ fontWeight: 600, color: 'primary.main' }}>
+          Specific Authorization for Sensitive Information
         </Typography>
         <Typography variant="body1" sx={{ mb: 3 }}>
           I specifically authorize my current, past, and future treating providers and organizations 
@@ -719,8 +579,6 @@ const AuthForDisclosure = ({ clientID: propClientID, formConfig }) => {
                     checked={formState.mentalHealthAuth}
                     onChange={handleChange}
                     color="primary"
-                    icon={<MentalHealthIcon />}
-                    checkedIcon={<MentalHealthIcon />}
                   />
                 }
                 label={
@@ -750,8 +608,6 @@ const AuthForDisclosure = ({ clientID: propClientID, formConfig }) => {
                     checked={formState.hivAidsAuth}
                     onChange={handleChange}
                     color="primary"
-                    icon={<HIVIcon />}
-                    checkedIcon={<HIVIcon />}
                   />
                 }
                 label={
@@ -781,8 +637,6 @@ const AuthForDisclosure = ({ clientID: propClientID, formConfig }) => {
                     checked={formState.substanceUseAuth}
                     onChange={handleChange}
                     color="primary"
-                    icon={<SubstanceIcon />}
-                    checkedIcon={<SubstanceIcon />}
                   />
                 }
                 label={
@@ -918,6 +772,8 @@ const AuthForDisclosure = ({ clientID: propClientID, formConfig }) => {
       )}
     </Container>
   );
-};
+});
+
+AuthForDisclosure.displayName = 'AuthForDisclosure';
 
 export default AuthForDisclosure;

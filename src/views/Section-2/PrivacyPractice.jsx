@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, forwardRef, useImperativeHandle } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import {
   Box,
@@ -52,7 +52,8 @@ import {
   selectSaveSuccess
 } from '../../backend/store/slices/authSigSlice';
 
-const PrivacyPractice = ({ clientID: propClientID }) => {
+// ✅ UPDATED: Wrapped with forwardRef to work with FormModal
+const PrivacyPractice = forwardRef(({ clientID: propClientID, title, formType = 'privacyPractice' }, ref) => {
   const dispatch = useDispatch();
   
   // Redux selectors
@@ -91,6 +92,19 @@ const PrivacyPractice = ({ clientID: propClientID }) => {
     typeof value === 'boolean' ? value : (value && value.trim() !== "")
   ).length - 2; // Exclude copyDate and copyInitials from required
   const completionPercentage = Math.round((completedFields / requiredFields) * 100);
+
+  // ✅ ADDED: Expose getFormData method to parent FormModal
+  useImperativeHandle(ref, () => ({
+    getFormData: () => ({
+      signature: formData.clientSignature,
+      completionPercentage,
+      status: completionPercentage === 100 ? 'completed' : 'in_progress',
+      formData: {
+        ...formData,
+        acknowledgedAt: new Date().toISOString()
+      }
+    })
+  }));
 
   // Load form data when component mounts
   useEffect(() => {
@@ -220,143 +234,136 @@ const PrivacyPractice = ({ clientID: propClientID }) => {
     );
   }
 
+  if (!clientID) {
+    return (
+      <Alert severity="error" sx={{ m: 2 }}>
+        No client selected. Please select a client to view their privacy practice acknowledgment.
+      </Alert>
+    );
+  }
+
   return (
     <Box sx={{ maxWidth: 1000, mx: 'auto', p: 3 }}>
       {/* Header Section */}
-      <Card elevation={2} sx={{ mb: 3 }}>
+      <Card elevation={3} sx={{ mb: 3, bgcolor: 'primary.main', color: 'white' }}>
         <CardContent>
-          <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-            <SecurityIcon sx={{ mr: 2, color: 'primary.main', fontSize: 32 }} />
-            <Box sx={{ flex: 1 }}>
-              <Typography variant="h4" gutterBottom sx={{ fontWeight: 600 }}>
-                Notice of Privacy Practices
-              </Typography>
-              <Typography variant="body1" color="text.secondary">
-                This notice describes how medical information about you may be used and disclosed
-              </Typography>
-            </Box>
+          <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+            <SecurityIcon sx={{ fontSize: 40, mr: 2 }} />
+            <Typography variant="h4" component="h1" sx={{ fontWeight: 600 }}>
+              Notice of Privacy Practices
+            </Typography>
           </Box>
-
-          {/* Client Info */}
-          {selectedClient && (
-            <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-              <PersonIcon sx={{ mr: 1, color: 'text.secondary' }} />
-              <Typography variant="body2" color="text.secondary">
-                Client: <strong>{selectedClient.firstName} {selectedClient.lastName}</strong> 
-                {selectedClient.clientID && ` (ID: ${selectedClient.clientID})`}
-              </Typography>
-            </Box>
-          )}
-
-          {/* Progress Indicator */}
-          <Box sx={{ mt: 2 }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-              <Typography variant="body2" color="text.secondary">
-                Acknowledgment Progress
-              </Typography>
-              <Chip 
-                label={`${completionPercentage}% Complete`}
-                color={completionPercentage === 100 ? 'success' : 'primary'}
-                size="small"
-              />
-            </Box>
-            <LinearProgress 
-              variant="determinate" 
-              value={completionPercentage} 
-              sx={{ height: 8, borderRadius: 4 }}
-              color={completionPercentage === 100 ? 'success' : 'primary'}
-            />
-          </Box>
+          <Typography variant="subtitle1">
+            LA County Department of Health Services
+          </Typography>
+          <Typography variant="body2" sx={{ mt: 1, opacity: 0.9 }}>
+            Please review and acknowledge your understanding of our privacy practices
+          </Typography>
         </CardContent>
       </Card>
 
-      {/* Error Alerts */}
+      {/* Progress Indicator */}
+      <Card elevation={2} sx={{ mb: 3 }}>
+        <CardContent>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+            <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+              Form Completion
+            </Typography>
+            <Chip 
+              label={`${completionPercentage}%`}
+              color={completionPercentage === 100 ? "success" : "warning"}
+              size="small"
+            />
+          </Box>
+          <LinearProgress 
+            variant="determinate" 
+            value={completionPercentage} 
+            sx={{ height: 8, borderRadius: 5 }}
+          />
+        </CardContent>
+      </Card>
+
+      {/* Error Display */}
       {(localErrors.length > 0 || formErrors) && (
-        <Alert 
-          severity="error" 
-          sx={{ mb: 3 }}
-          onClose={handleClearErrors}
-        >
-          {localErrors.length > 0 ? (
-            <Box>
-              {localErrors.map((error, index) => (
-                <Typography key={index} variant="body2">
-                  • {error}
-                </Typography>
-              ))}
-            </Box>
-          ) : (
-            formErrors
-          )}
+        <Alert severity="error" sx={{ mb: 3 }} onClose={handleClearErrors}>
+          <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+            Please correct the following errors:
+          </Typography>
+          {localErrors.map((error, index) => (
+            <Typography key={index} variant="body2">• {error}</Typography>
+          ))}
+          {formErrors && <Typography variant="body2">• {formErrors}</Typography>}
         </Alert>
       )}
 
-      {/* Notice Header */}
-      <Paper elevation={1} sx={{ p: 3, mb: 3, bgcolor: 'error.50', border: '2px solid', borderColor: 'error.200' }}>
-        <Typography variant="h6" sx={{ fontWeight: 700, color: 'error.main', textAlign: 'center' }}>
-          THIS NOTICE DESCRIBES HOW MEDICAL INFORMATION ABOUT YOU MAY BE USED AND DISCLOSED AND HOW YOU CAN GET ACCESS TO THIS INFORMATION. PLEASE REVIEW IT CAREFULLY.
-        </Typography>
-      </Paper>
-
-      {/* Who Will Follow Section */}
+      {/* Privacy Practices Pledge */}
       <Paper elevation={1} sx={{ p: 3, mb: 3 }}>
         <Typography variant="h6" gutterBottom sx={{ fontWeight: 600, color: 'primary.main' }}>
-          WHO WILL FOLLOW THIS NOTICE OF PRIVACY PRACTICES
-        </Typography>
-        <Typography variant="body2" sx={{ lineHeight: 1.6 }}>
-          This Notice describes the privacy practices followed by the workforce members of the County of Los Angeles Department of Health Services, Mental Health, and Public Health, collectively referred to as the Health Agency (Agency). Workforce members include doctors, nurses, residents, therapists, case managers, students, volunteers, and other health care staff who help with your care at an Agency facility.
-        </Typography>
-      </Paper>
-
-      {/* Our Pledge Section */}
-      <Paper elevation={1} sx={{ p: 3, mb: 3 }}>
-        <Typography variant="h6" gutterBottom sx={{ fontWeight: 600, color: 'primary.main' }}>
-          OUR PLEDGE REGARDING YOUR HEALTH INFORMATION
-        </Typography>
-        <Typography variant="body2" sx={{ mb: 2 }}>
-          The law requires the Agency to:
+          My Privacy Practice Pledge
         </Typography>
         
         <FormGroup>
           <FormControlLabel
             control={
               <Checkbox
-                checked={formData.ppHI1}
+                checked={formData.ppHI1 || false}
                 onChange={handleCheckboxChange('ppHI1')}
                 color="primary"
               />
             }
-            label="Keep your medical records and health information, also known as protected health information, private and secure."
+            label={
+              <Typography variant="body2">
+                I understand the purpose for which my health information may be used or disclosed.
+              </Typography>
+            }
+            sx={{ mb: 1.5 }}
           />
+          
           <FormControlLabel
             control={
               <Checkbox
-                checked={formData.ppHI2}
+                checked={formData.ppHI2 || false}
                 onChange={handleCheckboxChange('ppHI2')}
                 color="primary"
               />
             }
-            label="Give you this Notice which explains your rights and our legal duties with respect to your health information."
+            label={
+              <Typography variant="body2">
+                I understand my rights regarding my health information.
+              </Typography>
+            }
+            sx={{ mb: 1.5 }}
           />
+          
           <FormControlLabel
             control={
               <Checkbox
-                checked={formData.ppHI3}
+                checked={formData.ppHI3 || false}
                 onChange={handleCheckboxChange('ppHI3')}
                 color="primary"
               />
             }
-            label="Tell you about our privacy practices and follow the terms of this Notice."
+            label={
+              <Typography variant="body2">
+                I understand how to file a complaint if I believe my privacy rights have been violated.
+              </Typography>
+            }
+            sx={{ mb: 1.5 }}
           />
+          
           <FormControlLabel
             control={
               <Checkbox
-                checked={formData.ppHI4}
+                checked={formData.ppHI4 || false}
                 onChange={handleCheckboxChange('ppHI4')}
                 color="primary"
               />
             }
-            label="Notify you if there has been a breach of the privacy of your health information."
+            label={
+              <Typography variant="body2">
+                I acknowledge that I have received or been offered a copy of this Notice of Privacy Practices.
+              </Typography>
+            }
           />
         </FormGroup>
       </Paper>
@@ -517,7 +524,7 @@ const PrivacyPractice = ({ clientID: propClientID }) => {
         </Typography>
         
         <Grid container spacing={3}>
-          <Grid item xs={12} md={12}>
+          <Grid item xs={12} md={6}>
             <TextField
               fullWidth
               label="Client Signature"
@@ -525,7 +532,50 @@ const PrivacyPractice = ({ clientID: propClientID }) => {
               value={formData.clientSignature}
               onChange={handleTextChange('clientSignature')}
               required
-              sx={{ mb: 2 }}
+              placeholder="Type your full legal name"
+              helperText="Electronic signature"
+            />
+          </Grid>
+          <Grid item xs={12} md={6}>
+            <TextField
+              fullWidth
+              label="Client Printed Name"
+              variant="outlined"
+              value={formData.clientPrintedName}
+              onChange={handleTextChange('clientPrintedName')}
+              required
+            />
+          </Grid>
+          <Grid item xs={12} md={6}>
+            <TextField
+              fullWidth
+              label="Staff Signature"
+              variant="outlined"
+              value={formData.staffSignature}
+              onChange={handleTextChange('staffSignature')}
+              required
+              placeholder="Staff member name"
+            />
+          </Grid>
+          <Grid item xs={12} md={3}>
+            <TextField
+              fullWidth
+              label="Copy Given Date"
+              variant="outlined"
+              type="date"
+              value={formData.copyDate}
+              onChange={handleTextChange('copyDate')}
+              InputLabelProps={{ shrink: true }}
+            />
+          </Grid>
+          <Grid item xs={12} md={3}>
+            <TextField
+              fullWidth
+              label="Initials"
+              variant="outlined"
+              value={formData.copyInitials}
+              onChange={handleTextChange('copyInitials')}
+              inputProps={{ maxLength: 3 }}
             />
           </Grid>
         </Grid>
@@ -579,6 +629,9 @@ const PrivacyPractice = ({ clientID: propClientID }) => {
       </Snackbar>
     </Box>
   );
-};
+});
+
+// ✅ ADDED: Set display name for debugging
+PrivacyPractice.displayName = 'PrivacyPractice';
 
 export default PrivacyPractice;
