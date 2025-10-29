@@ -7,6 +7,7 @@ const { BlobServiceClient } = require('@azure/storage-blob');
 // ✅ FIXED: Better database connection handling
 let dbConnected = false;
 let dbModule = null;
+let clientsRouterLoaded = false;
 
 // Only connect to database if NOT in test mode
 if (process.env.NODE_ENV !== 'test') {
@@ -144,7 +145,7 @@ app.use((req, res, next) => {
 });
 
 // ✅ NEW: Track which routers are loaded
-let clientsRouterLoaded = false;
+// let clientsRouterLoaded = false;
 let clientFaceRouterLoaded = false;
 let referralsRouterLoaded = false;
 let dischargeRouterLoaded = false;
