@@ -21,7 +21,10 @@ import {
   Container,
   CircularProgress,
   Snackbar,
-  Alert
+  Alert,
+  Tabs,
+  Tab,
+  Badge
 } from '@mui/material';
 import {
   Close as CloseIcon,
@@ -37,6 +40,7 @@ import {
   FilterList as FilterIcon,
   Save as SaveIcon,
   CheckCircle as CheckCircleIcon,
+  FolderOpen as ArchiveIcon
 } from '@mui/icons-material';
 
 // ✅ Redux imports
@@ -68,6 +72,7 @@ import AdvCareAck from './AdvCareAck';
 import HousingAgree from './HousingAgree';
 import ConsentPhoto from './ConsentPhoto';
 import AuthUseDiscHMHInfo from './AuthUseDiscHMHInfo';
+import AuthSigArchive from './AuthSigArchive';
 
 // Mock component for forms not yet implemented
 const MockComponent = ({ title, clientID }) => (
@@ -890,12 +895,22 @@ const PrioritySection = ({ priority, count, children }) => {
 };
 
 // ============================================================================
+// TAB PANEL COMPONENT
+// ============================================================================
+const TabPanel = ({ children, value, index }) => (
+  <div hidden={value !== index} role="tabpanel">
+    {value === index && <Box>{children}</Box>}
+  </div>
+);
+
+// ============================================================================
 // MAIN AUTHSIG COMPONENT
 // ============================================================================
 const AuthSig = () => {
   const theme = useTheme();
   const [activeModal, setActiveModal] = useState(null);
   const [categoryFilter, setCategoryFilter] = useState('all');
+  const [activeTab, setActiveTab] = useState(0); // ✅ NEW: Tab state
   
   // ✅ Get client from URL/persistence
   const { clientID, client, loading: clientLoading } = useClientPersistence();
@@ -932,6 +947,10 @@ const AuthSig = () => {
   
   const handleCategoryChange = useCallback((category) => {
     setCategoryFilter(category);
+  }, []);
+  
+  const handleTabChange = useCallback((event, newValue) => {
+    setActiveTab(newValue);
   }, []);
   
   // ✅ Handle loading state
@@ -1060,57 +1079,96 @@ const AuthSig = () => {
         </Box>
       </Paper>
 
-      {/* Category Filter */}
-      <CategoryFilter 
-        categories={categories}
-        activeCategory={categoryFilter}
-        onChange={handleCategoryChange}
-      />
+      {/* ✅ NEW: Tabs for Forms and Archive */}
+      <Paper elevation={2} sx={{ mb: 3 }}>
+        <Tabs 
+          value={activeTab} 
+          onChange={handleTabChange}
+          sx={{ 
+            borderBottom: 1, 
+            borderColor: 'divider',
+            px: 2
+          }}
+        >
+          <Tab 
+            label={
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <DocumentIcon />
+                <Typography>Authorization Forms</Typography>
+                <Badge badgeContent={FORM_CONFIGS.length} color="primary" />
+              </Box>
+            }
+          />
+          <Tab 
+            label={
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <ArchiveIcon />
+                <Typography>Archive</Typography>
+              </Box>
+            }
+          />
+        </Tabs>
+      </Paper>
 
-      {/* Forms Grid organized by priority with better visual hierarchy */}
-      {['high', 'medium', 'low'].map(priority => {
-        const priorityForms = formsByPriority[priority];
-        if (!priorityForms || priorityForms.length === 0) return null;
-        
-        return (
-          <PrioritySection 
-            key={priority} 
-            priority={priority} 
-            count={priorityForms.length}
-          >
-            <Grid container spacing={3}>
-              {priorityForms.map((form) => (
-                <Grid item xs={12} sm={6} lg={4} key={form.id}>
-                  <FormCard 
-                    form={form}
-                    onOpen={handleOpenModal}
-                  />
-                </Grid>
-              ))}
-            </Grid>
-          </PrioritySection>
-        );
-      })}
+      {/* ✅ Tab Panel: Forms View */}
+      <TabPanel value={activeTab} index={0}>
+        {/* Category Filter */}
+        <CategoryFilter 
+          categories={categories}
+          activeCategory={categoryFilter}
+          onChange={handleCategoryChange}
+        />
 
-      {/* No forms message */}
-      {filteredForms.length === 0 && (
-        <Paper sx={{ p: 6, textAlign: 'center' }}>
-          <DocumentIcon sx={{ fontSize: 80, color: 'text.secondary', mb: 2 }} />
-          <Typography variant="h5" gutterBottom color="text.secondary">
-            No forms found
-          </Typography>
-          <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-            Try selecting a different category to see available forms.
-          </Typography>
-          <Button 
-            variant="contained" 
-            onClick={() => setCategoryFilter('all')}
-            startIcon={<FilterIcon />}
-          >
-            Show All Forms
-          </Button>
-        </Paper>
-      )}
+        {/* Forms Grid organized by priority with better visual hierarchy */}
+        {['high', 'medium', 'low'].map(priority => {
+          const priorityForms = formsByPriority[priority];
+          if (!priorityForms || priorityForms.length === 0) return null;
+          
+          return (
+            <PrioritySection 
+              key={priority} 
+              priority={priority} 
+              count={priorityForms.length}
+            >
+              <Grid container spacing={3}>
+                {priorityForms.map((form) => (
+                  <Grid item xs={12} sm={6} lg={4} key={form.id}>
+                    <FormCard 
+                      form={form}
+                      onOpen={handleOpenModal}
+                    />
+                  </Grid>
+                ))}
+              </Grid>
+            </PrioritySection>
+          );
+        })}
+
+        {/* No forms message */}
+        {filteredForms.length === 0 && (
+          <Paper sx={{ p: 6, textAlign: 'center' }}>
+            <DocumentIcon sx={{ fontSize: 80, color: 'text.secondary', mb: 2 }} />
+            <Typography variant="h5" gutterBottom color="text.secondary">
+              No forms found
+            </Typography>
+            <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+              Try selecting a different category to see available forms.
+            </Typography>
+            <Button 
+              variant="contained" 
+              onClick={() => setCategoryFilter('all')}
+              startIcon={<FilterIcon />}
+            >
+              Show All Forms
+            </Button>
+          </Paper>
+        )}
+      </TabPanel>
+
+      {/* ✅ Tab Panel: Archive View */}
+      <TabPanel value={activeTab} index={1}>
+        <AuthSigArchive clientID={clientID} />
+      </TabPanel>
 
       {/* ✅ Enhanced Modal with clientID prop and all TODOs completed */}
       <FormModal 

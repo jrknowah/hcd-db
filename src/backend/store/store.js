@@ -1,7 +1,6 @@
 // src/store/index.js
 import { configureStore } from '@reduxjs/toolkit';
 import rootReducer from './reducers'; // or combineReducers
-import { persistenceMiddleware } from '../middleware/persistenceMiddleware';
 // import { rehydrateState } from '../../utils/rehydrate';
 import auth from './slices/authSlice';
 import clients from './slices/clientSlice';
@@ -81,7 +80,6 @@ const store = configureStore({
         ]
       },
     }),
-    // .concat(persistenceMiddleware),
   devTools: process.env.NODE_ENV !== 'production',
 });
 

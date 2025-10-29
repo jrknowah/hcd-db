@@ -30,6 +30,22 @@ if (process.env.NODE_ENV !== 'test') {
   dbConnected = false;
 }
 
+try {
+  const filesRouter = require('./routes/files.js');
+  app.use('/api', filesRouter);
+  console.log('✅ Files router loaded from ./routes/files.js');
+  filesRouterLoaded = true;
+} catch (err) {
+  console.error('❌ Files router failed to load:', err.message);
+  console.log('   Using mock file upload endpoint (local dev only)');
+  
+  // Create minimal mock file upload for local development
+  const multer = require('multer');
+  const upload = multer({ 
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 15 * 1024 * 1024 }
+  });
+
 // Middleware
 app.use(cors({
   origin: ['http://localhost:3000', 
@@ -177,21 +193,21 @@ try {
 }
 // ✅ NEW: Try to load files router for Azure Blob Storage
 // ✅ UPDATED CODE - Show the real error
-try {
-  const filesRouter = require('./routes/files.js');
-  app.use('/api', filesRouter);
-  console.log('✅ Files router loaded from ./routes/files.js');
-  filesRouterLoaded = true;
-} catch (err) {
-  console.error('❌ Files router failed to load:', err.message);
-  console.log('   Using mock file upload endpoint (local dev only)');
+// try {
+//   const filesRouter = require('./routes/files.js');
+//   app.use('/api', filesRouter);
+//   console.log('✅ Files router loaded from ./routes/files.js');
+//   filesRouterLoaded = true;
+// } catch (err) {
+//   console.error('❌ Files router failed to load:', err.message);
+//   console.log('   Using mock file upload endpoint (local dev only)');
   
-  // Create minimal mock file upload for local development
-  const multer = require('multer');
-  const upload = multer({ 
-    storage: multer.memoryStorage(),
-    limits: { fileSize: 15 * 1024 * 1024 }
-  });
+//   // Create minimal mock file upload for local development
+//   const multer = require('multer');
+//   const upload = multer({ 
+//     storage: multer.memoryStorage(),
+//     limits: { fileSize: 15 * 1024 * 1024 }
+//   });
   
   app.post('/api/upload', upload.single('file'), (req, res) => {
     console.log('📤 Mock upload:', req.file?.originalname);
