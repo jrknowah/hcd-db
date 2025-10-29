@@ -7,27 +7,6 @@ const { BlobServiceClient } = require('@azure/storage-blob');
 // ✅ FIXED: Better database connection handling
 let dbConnected = false;
 let dbModule = null;
-let clientsRouterLoaded = false;
-let clientFaceRouterLoaded = false;
-let referralsRouterLoaded = false;
-let dischargeRouterLoaded = false;
-let filesRouterLoaded = false;
-// ✅ NEW: Section 4 router tracking
-let carePlansRouterLoaded = false;
-let encounterNotesRouterLoaded = false;
-let bioSocialRouterLoaded = false;
-let mentalHealthRouterLoaded = false;
-let reassessmentRouterLoaded = false;
-let mentalArchiveRouterLoaded = false;
-let authSigRouterLoaded = false;
-let medFaceSheetRouterLoaded = false;
-let medScreeningRouterLoaded = false;
-let nursingAdmissionRouterLoaded = false;
-let progressNoteRouterLoaded = false;
-let idtProviderRouterLoaded = false;
-let idtNursingRouterLoaded = false;
-let nursingArchiveRouterLoaded = false;
-let routerLoaded = false;
 
 // Only connect to database if NOT in test mode
 if (process.env.NODE_ENV !== 'test') {
@@ -51,75 +30,15 @@ if (process.env.NODE_ENV !== 'test') {
   dbConnected = false;
 }
 
-// ============================================================================
-// FILES ROUTER - Load first, close properly
-// ============================================================================
-try {
-  const filesRouter = require('./routes/files.js');
-  app.use('/api', filesRouter);
-  console.log('✅ Files router loaded from ./routes/files.js');
-  filesRouterLoaded = true;
-} catch (err) {
-  console.error('❌ Files router failed to load:', err.message);
-  console.log('   Using mock file upload endpoint (local dev only)');
-  
-  // Create minimal mock file upload for local development
-  const multer = require('multer');
-  const upload = multer({ 
-    storage: multer.memoryStorage(),
-    limits: { fileSize: 15 * 1024 * 1024 }
-  });
-  
-  app.post('/api/upload', upload.single('file'), (req, res) => {
-    console.log('📤 Mock upload:', req.file?.originalname);
-    res.json({
-      success: true,
-      storage: 'mock',
-      fileName: req.file?.originalname || 'unknown',
-      message: 'Mock upload (files.js not loaded)',
-      size: req.file?.size || 0
-    });
-  });
-  
-  app.get('/api/files/:clientID', (req, res) => {
-    console.log('📂 Mock list files:', req.params.clientID);
-    res.json([]);
-  });
-  
-  app.get('/api/list', (req, res) => {
-    console.log('📋 Mock list all files');
-    res.json({ files: [], total: 0, storage: 'mock' });
-  });
-  
-  filesRouterLoaded = false;
-} // ✅ CLOSE THE TRY-CATCH BLOCK HERE!
-
-// ============================================================================
-// Middleware - NOW OUTSIDE the try-catch
-// ============================================================================
+// Middleware
 app.use(cors({
-  origin: [
-    'http://localhost:3000', 
+  origin: ['http://localhost:3000', 
     'http://localhost:5173',
-    'https://zealous-river-09541d21e.1.azurestaticapps.net',
-    'https://hcd-db-backend-fdfmekfgehbhf0db.westus2-01.azurewebsites.net'
+    'https://zealous-river-09541d21e.1.azurestaticapps.net' 
   ],
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  credentials: true
 }));
 app.use(express.json());
-
-// ============================================================================
-// Request logging middleware
-// ============================================================================
-app.use((req, res, next) => {
-  console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
-  if (req.body && Object.keys(req.body).length > 0) {
-    console.log('📤 Request body:', req.body);
-  }
-  next();
-});
 
 // ============================================================================
 // Azure Authentication Endpoints
@@ -199,53 +118,39 @@ app.post('/saveClientAllergies', async (req, res) => {
     allergies 
   });
 })
-
-
-
-// ============================================================================
-// Section 1: CLIENT INFORMATION ROUTES
-// ============================================================================
-console.log('📁 Loading Section 1 - Client Information Routes...');
-
-// Clients Router
-try {
-  console.log('🔍 Attempting to load ./routes/clients.js...');
-  const clientsRouter = require('./routes/clients.js');
-  
-  if (!clientsRouter) {
-    throw new Error('clients.js returned null or undefined');
+// Request logging middleware
+app.use((req, res, next) => {
+  console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
+  if (req.body && Object.keys(req.body).length > 0) {
+    console.log('📤 Request body:', req.body);
   }
-  
+  next();
+});
+
+// ✅ NEW: Track which routers are loaded
+let clientsRouterLoaded = false;
+let clientFaceRouterLoaded = false;
+let referralsRouterLoaded = false;
+let dischargeRouterLoaded = false;
+let filesRouterLoaded = false;
+// ✅ NEW: Section 4 router tracking
+let carePlansRouterLoaded = false;
+let encounterNotesRouterLoaded = false;
+let bioSocialRouterLoaded = false;
+let mentalHealthRouterLoaded = false;
+let reassessmentRouterLoaded = false;
+let mentalArchiveRouterLoaded = false;
+
+// ✅ NEW: Try to load your actual routes first
+try {
+  const clientsRouter = require('./routes/clients.js');
   app.use('/api/clients', clientsRouter);
   console.log('✅ Real clients router loaded from ./routes/clients.js');
   clientsRouterLoaded = true;
-  
 } catch (err) {
-  console.error('❌ Failed to load ./routes/clients.js');
-  console.error('   Error message:', err.message);
-  console.error('   Error stack:', err.stack);
-  
-  // ✅ Create error response router (not mock data)
-  console.log('⚠️  Creating error response router for /api/clients');
-  const errorRouter = express.Router();
-  
-  errorRouter.all('*', (req, res) => {
-    console.error(`❌ Clients route accessed but router failed to load: ${req.method} ${req.path}`);
-    res.status(503).json({
-      error: 'Service Unavailable',
-      message: 'The clients router failed to load on the server',
-      details: 'Database connection or file loading issue',
-      timestamp: new Date().toISOString(),
-      path: req.path
-    });
-  });
-  
-  app.use('/api/clients', errorRouter);
-  console.log('⚠️  Error response router registered at /api/clients');
-  clientsRouterLoaded = false;
+  console.log('⚠️  Could not load ./routes/clients.js:', err.message);
 }
 
-// ClientFace Router
 try {
   const clientFaceRouter = require('./routes/clientFace.js');
   app.use('/api', clientFaceRouter);
@@ -253,11 +158,7 @@ try {
   clientFaceRouterLoaded = true;
 } catch (err) {
   console.log('⚠️  Could not load ./routes/clientFace.js:', err.message);
-  clientFaceRouterLoaded = false;
 }
-
-console.log('✅ Section 1 loading complete\n');
-
 try {
   const dischargeRouter = require('./routes/discharge.js');
   app.use('/api', dischargeRouter);
@@ -274,52 +175,27 @@ try {
 } catch (err) {
   console.log('⚠️  Could not load ./routes/referrals.js:', err.message);
 }
+
+
 // ✅ NEW: Try to load files router for Azure Blob Storage
 // ✅ UPDATED CODE - Show the real error
-// try {
-//   const filesRouter = require('./routes/files.js');
-//   app.use('/api', filesRouter);
-//   console.log('✅ Files router loaded from ./routes/files.js');
-//   filesRouterLoaded = true;
-// } catch (err) {
-//   console.error('❌ Files router failed to load:', err.message);
-//   console.log('   Using mock file upload endpoint (local dev only)');
-  
-//   // Create minimal mock file upload for local development
-//   const multer = require('multer');
-//   const upload = multer({ 
-//     storage: multer.memoryStorage(),
-//     limits: { fileSize: 15 * 1024 * 1024 }
-//   });
-  
-//   app.post('/api/upload', upload.single('file'), (req, res) => {
-//     console.log('📤 Mock upload:', req.file?.originalname);
-//     res.json({
-//       success: true,
-//       storage: 'mock',
-//       fileName: req.file?.originalname || 'unknown',
-//       message: 'Mock upload (files.js not loaded)',
-//       size: req.file?.size || 0
-//     });
-//   });
-  
-//   app.get('/api/files/:clientID', (req, res) => {
-//     console.log('📂 Mock list files:', req.params.clientID);
-//     res.json([]);
-//   });
-  
-//   app.get('/api/list', (req, res) => {
-//     console.log('📋 Mock list all files');
-//     res.json({ files: [], total: 0, storage: 'mock' });
-//   });
-  
-//   filesRouterLoaded = false;
-// }
+try {
+  const filesRouter = require('./routes/files.js');
+  app.use('/api', filesRouter);
+  console.log('✅ Files router loaded from ./routes/files.js');
+  filesRouterLoaded = true;
+} catch (err) {
+  console.error('❌ CRITICAL ERROR loading files router:');
+  console.error('   Message:', err.message);
+  console.error('   Stack:', err.stack);
+  // Don't load fallback - let it fail so we see the error
+  throw err; // Re-throw to see what's wrong
+}
   // ============================================================================
 // Section 2: Authorization & Signatures Routes
 // ============================================================================
 
-
+let authSigRouterLoaded = false;
 
 console.log('📝 Loading Section 2 Authorization & Signatures Routes...');
 
@@ -905,13 +781,19 @@ app.get('/api/debug/database', async (req, res) => {
 
 
 //Section 5: Medical===================================================================
-
+let medFaceSheetRouterLoaded = false;
+let medScreeningRouterLoaded = false;
+let nursingAdmissionRouterLoaded = false;
+let progressNoteRouterLoaded = false;
+let idtProviderRouterLoaded = false;
+let idtNursingRouterLoaded = false;
+let nursingArchiveRouterLoaded = false;
 
 console.log('🏥 Loading Section 5 Medical Routes...');
 console.log('🔍 Current directory:', __dirname);
 
 // Try loading medical.js first (with database)
-
+let routerLoaded = false;
 try {
   console.log('🔍 Attempting to load ./routes/medical.js...');
   const medicalRouter = require('./routes/medical.js');
