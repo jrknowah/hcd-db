@@ -8,6 +8,26 @@ const { BlobServiceClient } = require('@azure/storage-blob');
 let dbConnected = false;
 let dbModule = null;
 let clientsRouterLoaded = false;
+let clientFaceRouterLoaded = false;
+let referralsRouterLoaded = false;
+let dischargeRouterLoaded = false;
+let filesRouterLoaded = false;
+// ✅ NEW: Section 4 router tracking
+let carePlansRouterLoaded = false;
+let encounterNotesRouterLoaded = false;
+let bioSocialRouterLoaded = false;
+let mentalHealthRouterLoaded = false;
+let reassessmentRouterLoaded = false;
+let mentalArchiveRouterLoaded = false;
+let authSigRouterLoaded = false;
+let medFaceSheetRouterLoaded = false;
+let medScreeningRouterLoaded = false;
+let nursingAdmissionRouterLoaded = false;
+let progressNoteRouterLoaded = false;
+let idtProviderRouterLoaded = false;
+let idtNursingRouterLoaded = false;
+let nursingArchiveRouterLoaded = false;
+let routerLoaded = false;
 
 // Only connect to database if NOT in test mode
 if (process.env.NODE_ENV !== 'test') {
@@ -144,19 +164,7 @@ app.use((req, res, next) => {
   next();
 });
 
-// ✅ NEW: Track which routers are loaded
-// let clientsRouterLoaded = false;
-let clientFaceRouterLoaded = false;
-let referralsRouterLoaded = false;
-let dischargeRouterLoaded = false;
-let filesRouterLoaded = false;
-// ✅ NEW: Section 4 router tracking
-let carePlansRouterLoaded = false;
-let encounterNotesRouterLoaded = false;
-let bioSocialRouterLoaded = false;
-let mentalHealthRouterLoaded = false;
-let reassessmentRouterLoaded = false;
-let mentalArchiveRouterLoaded = false;
+
 
 // ✅ NEW: Try to load your actual routes first
 try {
@@ -237,7 +245,7 @@ try {
 // Section 2: Authorization & Signatures Routes
 // ============================================================================
 
-let authSigRouterLoaded = false;
+
 
 console.log('📝 Loading Section 2 Authorization & Signatures Routes...');
 
@@ -823,19 +831,13 @@ app.get('/api/debug/database', async (req, res) => {
 
 
 //Section 5: Medical===================================================================
-let medFaceSheetRouterLoaded = false;
-let medScreeningRouterLoaded = false;
-let nursingAdmissionRouterLoaded = false;
-let progressNoteRouterLoaded = false;
-let idtProviderRouterLoaded = false;
-let idtNursingRouterLoaded = false;
-let nursingArchiveRouterLoaded = false;
+
 
 console.log('🏥 Loading Section 5 Medical Routes...');
 console.log('🔍 Current directory:', __dirname);
 
 // Try loading medical.js first (with database)
-let routerLoaded = false;
+
 try {
   console.log('🔍 Attempting to load ./routes/medical.js...');
   const medicalRouter = require('./routes/medical.js');
