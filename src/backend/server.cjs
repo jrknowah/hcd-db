@@ -51,6 +51,9 @@ if (process.env.NODE_ENV !== 'test') {
   dbConnected = false;
 }
 
+// ============================================================================
+// FILES ROUTER - Load first, close properly
+// ============================================================================
 try {
   const filesRouter = require('./routes/files.js');
   app.use('/api', filesRouter);
@@ -66,9 +69,34 @@ try {
     storage: multer.memoryStorage(),
     limits: { fileSize: 15 * 1024 * 1024 }
   });
+  
+  app.post('/api/upload', upload.single('file'), (req, res) => {
+    console.log('📤 Mock upload:', req.file?.originalname);
+    res.json({
+      success: true,
+      storage: 'mock',
+      fileName: req.file?.originalname || 'unknown',
+      message: 'Mock upload (files.js not loaded)',
+      size: req.file?.size || 0
+    });
+  });
+  
+  app.get('/api/files/:clientID', (req, res) => {
+    console.log('📂 Mock list files:', req.params.clientID);
+    res.json([]);
+  });
+  
+  app.get('/api/list', (req, res) => {
+    console.log('📋 Mock list all files');
+    res.json({ files: [], total: 0, storage: 'mock' });
+  });
+  
+  filesRouterLoaded = false;
+} // ✅ CLOSE THE TRY-CATCH BLOCK HERE!
 
-// Middleware
-// Replace the existing CORS middleware with this:
+// ============================================================================
+// Middleware - NOW OUTSIDE the try-catch
+// ============================================================================
 app.use(cors({
   origin: [
     'http://localhost:3000', 
@@ -81,7 +109,20 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 app.use(express.json());
+
+// Options handler for preflight
 app.options('*', cors());
+
+// ============================================================================
+// Request logging middleware
+// ============================================================================
+app.use((req, res, next) => {
+  console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
+  if (req.body && Object.keys(req.body).length > 0) {
+    console.log('📤 Request body:', req.body);
+  }
+  next();
+});
 
 // ============================================================================
 // Azure Authentication Endpoints
@@ -224,29 +265,29 @@ try {
 //     limits: { fileSize: 15 * 1024 * 1024 }
 //   });
   
-  app.post('/api/upload', upload.single('file'), (req, res) => {
-    console.log('📤 Mock upload:', req.file?.originalname);
-    res.json({
-      success: true,
-      storage: 'mock',
-      fileName: req.file?.originalname || 'unknown',
-      message: 'Mock upload (files.js not loaded)',
-      size: req.file?.size || 0
-    });
-  });
+//   app.post('/api/upload', upload.single('file'), (req, res) => {
+//     console.log('📤 Mock upload:', req.file?.originalname);
+//     res.json({
+//       success: true,
+//       storage: 'mock',
+//       fileName: req.file?.originalname || 'unknown',
+//       message: 'Mock upload (files.js not loaded)',
+//       size: req.file?.size || 0
+//     });
+//   });
   
-  app.get('/api/files/:clientID', (req, res) => {
-    console.log('📂 Mock list files:', req.params.clientID);
-    res.json([]);
-  });
+//   app.get('/api/files/:clientID', (req, res) => {
+//     console.log('📂 Mock list files:', req.params.clientID);
+//     res.json([]);
+//   });
   
-  app.get('/api/list', (req, res) => {
-    console.log('📋 Mock list all files');
-    res.json({ files: [], total: 0, storage: 'mock' });
-  });
+//   app.get('/api/list', (req, res) => {
+//     console.log('📋 Mock list all files');
+//     res.json({ files: [], total: 0, storage: 'mock' });
+//   });
   
-  filesRouterLoaded = false;
-}
+//   filesRouterLoaded = false;
+// }
   // ============================================================================
 // Section 2: Authorization & Signatures Routes
 // ============================================================================
