@@ -202,27 +202,53 @@ app.post('/saveClientAllergies', async (req, res) => {
     allergies 
   });
 })
-// Request logging middleware
-app.use((req, res, next) => {
-  console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
-  if (req.body && Object.keys(req.body).length > 0) {
-    console.log('📤 Request body:', req.body);
-  }
-  next();
-});
 
 
 
-// ✅ NEW: Try to load your actual routes first
+// ============================================================================
+// Section 1: CLIENT INFORMATION ROUTES
+// ============================================================================
+console.log('📁 Loading Section 1 - Client Information Routes...');
+
+// Clients Router
 try {
+  console.log('🔍 Attempting to load ./routes/clients.js...');
   const clientsRouter = require('./routes/clients.js');
+  
+  if (!clientsRouter) {
+    throw new Error('clients.js returned null or undefined');
+  }
+  
   app.use('/api/clients', clientsRouter);
   console.log('✅ Real clients router loaded from ./routes/clients.js');
   clientsRouterLoaded = true;
+  
 } catch (err) {
-  console.log('⚠️  Could not load ./routes/clients.js:', err.message);
+  console.error('❌ Failed to load ./routes/clients.js');
+  console.error('   Error message:', err.message);
+  console.error('   Error stack:', err.stack);
+  
+  // ✅ Create error response router (not mock data)
+  console.log('⚠️  Creating error response router for /api/clients');
+  const errorRouter = express.Router();
+  
+  errorRouter.all('*', (req, res) => {
+    console.error(`❌ Clients route accessed but router failed to load: ${req.method} ${req.path}`);
+    res.status(503).json({
+      error: 'Service Unavailable',
+      message: 'The clients router failed to load on the server',
+      details: 'Database connection or file loading issue',
+      timestamp: new Date().toISOString(),
+      path: req.path
+    });
+  });
+  
+  app.use('/api/clients', errorRouter);
+  console.log('⚠️  Error response router registered at /api/clients');
+  clientsRouterLoaded = false;
 }
 
+// ClientFace Router
 try {
   const clientFaceRouter = require('./routes/clientFace.js');
   app.use('/api', clientFaceRouter);
@@ -230,7 +256,11 @@ try {
   clientFaceRouterLoaded = true;
 } catch (err) {
   console.log('⚠️  Could not load ./routes/clientFace.js:', err.message);
+  clientFaceRouterLoaded = false;
 }
+
+console.log('✅ Section 1 loading complete\n');
+
 try {
   const dischargeRouter = require('./routes/discharge.js');
   app.use('/api', dischargeRouter);

@@ -9,6 +9,7 @@ try {
   const azureSql = require('../store/azureSql');
   getPool = azureSql.getPool;
   console.log('✅ azureSql loaded from ../store/azureSql');
+  console.log('✅ clients.js: azureSql loaded successfully');
 } catch (err) {
   try {
     // Try store directory
