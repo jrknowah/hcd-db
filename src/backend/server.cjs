@@ -110,9 +110,6 @@ app.use(cors({
 }));
 app.use(express.json());
 
-// Options handler for preflight
-app.options('*', cors());
-
 // ============================================================================
 // Request logging middleware
 // ============================================================================
