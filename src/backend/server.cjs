@@ -68,14 +68,20 @@ try {
   });
 
 // Middleware
+// Replace the existing CORS middleware with this:
 app.use(cors({
-  origin: ['http://localhost:3000', 
+  origin: [
+    'http://localhost:3000', 
     'http://localhost:5173',
-    'https://zealous-river-09541d21e.1.azurestaticapps.net' 
+    'https://zealous-river-09541d21e.1.azurestaticapps.net',
+    'https://hcd-db-backend-fdfmekfgehbhf0db.westus2-01.azurewebsites.net'
   ],
-  credentials: true
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
 app.use(express.json());
+app.options('*', cors());
 
 // ============================================================================
 // Azure Authentication Endpoints
