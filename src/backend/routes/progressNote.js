@@ -59,14 +59,14 @@ router.get('/progress-notes/:clientID/summary', async (req, res) => {
           COUNT(CASE WHEN noteStatus = 'Active' THEN 1 END) as activeNotes,
           COUNT(CASE WHEN requiresFollowUp = 1 THEN 1 END) as followUpRequired,
           COUNT(CASE WHEN createdAt >= DATEADD(day, -30, GETDATE()) THEN 1 END) as recentActivity
-        FROM ProgressNotes 
+        FROM progress_notes 
         WHERE clientID = @clientID AND noteStatus != 'Deleted'
       ),
       SiteCounts AS (
         SELECT 
           nurseNoteSite,
           COUNT(*) as count
-        FROM ProgressNotes 
+        FROM progress_notes 
         WHERE clientID = @clientID AND noteStatus != 'Deleted'
         GROUP BY nurseNoteSite
       ),
@@ -74,7 +74,7 @@ router.get('/progress-notes/:clientID/summary', async (req, res) => {
         SELECT 
           notePriority,
           COUNT(*) as count
-        FROM ProgressNotes 
+        FROM progress_notes 
         WHERE clientID = @clientID AND noteStatus != 'Deleted'
         GROUP BY notePriority
       ),
@@ -82,7 +82,7 @@ router.get('/progress-notes/:clientID/summary', async (req, res) => {
         SELECT 
           noteCategory,
           COUNT(*) as count
-        FROM ProgressNotes 
+        FROM progress_notes 
         WHERE clientID = @clientID AND noteStatus != 'Deleted'
         GROUP BY noteCategory
       )
@@ -203,7 +203,7 @@ router.get('/progress-notes/:clientID/recent', async (req, res) => {
         followUpDate,
         createdBy,
         createdAt
-      FROM ProgressNotes 
+      FROM progress_notes 
       WHERE clientID = @clientID 
         AND noteStatus != 'Deleted'
         AND createdAt >= DATEADD(day, -@days, GETDATE())
@@ -252,7 +252,7 @@ router.get('/progress-notes/:clientID/follow-ups', async (req, res) => {
           WHEN followUpDate <= DATEADD(day, 7, GETDATE()) THEN 'Due Soon'
           ELSE 'Scheduled'
         END as followUpStatus
-      FROM ProgressNotes 
+      FROM progress_notes 
       WHERE clientID = @clientID 
         AND requiresFollowUp = 1
         AND noteStatus = 'Active'
@@ -296,7 +296,7 @@ router.get('/progress-notes/site/:siteID', async (req, res) => {
         followUpDate,
         createdBy,
         createdAt
-      FROM ProgressNotes 
+      FROM progress_notes 
       WHERE nurseNoteSite = @siteID 
         AND noteStatus != 'Deleted'
       ORDER BY nurseNoteDate DESC, createdAt DESC
@@ -351,7 +351,7 @@ router.get('/progress-notes/:clientID', async (req, res) => {
         updatedAt,
         lastViewedBy,
         lastViewedAt
-      FROM ProgressNotes 
+      FROM progress_notes 
       WHERE clientID = @clientID
     `;
     
@@ -398,7 +398,7 @@ router.get('/progress-notes/:clientID', async (req, res) => {
       .input('viewedBy', sql.NVarChar, 'system')
       .input('viewedAt', sql.DateTime2, new Date())
       .query(`
-        UPDATE ProgressNotes 
+        UPDATE progress_notes 
         SET lastViewedBy = @viewedBy, lastViewedAt = @viewedAt 
         WHERE clientID = @clientID
       `);
@@ -433,7 +433,7 @@ router.post('/progress-notes/:clientID', async (req, res) => {
     
     // Insert new progress note
     const insertQuery = `
-      INSERT INTO ProgressNotes (
+      INSERT INTO progress_notes (
         clientID, nurseNoteDate, nurseNoteSite, nurseNote,
         noteCategory, notePriority, requiresFollowUp, followUpDate,
         noteStatus, createdBy, createdAt
@@ -495,7 +495,7 @@ router.put('/progress-notes/:noteID', async (req, res) => {
     // Check if note exists
     const checkResult = await pool.request()
       .input('noteID', sql.Int, noteID)
-      .query('SELECT noteID FROM ProgressNotes WHERE noteID = @noteID');
+      .query('SELECT noteID FROM progress_notes WHERE noteID = @noteID');
     
     if (checkResult.recordset.length === 0) {
       return res.status(404).json({ error: 'Progress note not found' });
@@ -553,7 +553,7 @@ router.put('/progress-notes/:noteID', async (req, res) => {
     }
     
     const updateQuery = `
-      UPDATE ProgressNotes 
+      UPDATE progress_notes 
       SET ${updateFields.join(', ')}, updatedBy = @updatedBy, updatedAt = @updatedAt
       OUTPUT INSERTED.noteID as _id, INSERTED.*
       WHERE noteID = @noteID
@@ -587,7 +587,7 @@ router.delete('/progress-notes/:noteID', async (req, res) => {
     // Check if note exists
     const checkResult = await pool.request()
       .input('noteID', sql.Int, noteID)
-      .query('SELECT noteID, clientID FROM ProgressNotes WHERE noteID = @noteID');
+      .query('SELECT noteID, clientID FROM progress_notes WHERE noteID = @noteID');
     
     if (checkResult.recordset.length === 0) {
       return res.status(404).json({ error: 'Progress note not found' });
@@ -595,7 +595,7 @@ router.delete('/progress-notes/:noteID', async (req, res) => {
     
     // Soft delete by updating status (recommended) or hard delete
     const deleteQuery = `
-      UPDATE ProgressNotes 
+      UPDATE progress_notes 
       SET noteStatus = 'Deleted', 
           updatedBy = @deletedBy, 
           updatedAt = @deletedAt
