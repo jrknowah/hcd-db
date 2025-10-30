@@ -241,7 +241,7 @@ const Medical = () => {
                   <NotesIcon color="primary" />
                   Progress Notes
                 </Typography>
-                <ProgressNote />
+                <ProgressNote clientID={clientID} />
               </Box>
             )}
 

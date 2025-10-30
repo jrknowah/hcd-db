@@ -1,21 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const sql = require('mssql');
-
-// Database connection - adjust config as needed
-const dbConfig = {
-  server: process.env.DB_SERVER,
-  database: process.env.DB_DATABASE,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  port: parseInt(process.env.DB_PORT) || 1433,
-  options: {
-    encrypt: true,
-    trustServerCertificate: true,
-    enableArithAbort: true,
-    requestTimeout: 30000,
-  },
-};
+const { connectToAzureSQL } = require('../store/azureSql');
 
 // Utility function to handle database errors
 const handleDatabaseError = (error, res, operation) => {
@@ -59,7 +45,7 @@ router.get('/progress-notes/:clientID', async (req, res) => {
       return res.status(400).json({ error: 'Client ID is required' });
     }
 
-    const pool = await sql.connect(dbConfig);
+    const pool = await connectToAzureSQL();
     
     let query = `
       SELECT 
@@ -123,7 +109,7 @@ router.get('/progress-notes/:clientID', async (req, res) => {
     // Update last viewed timestamp for audit
     await pool.request()
       .input('clientID', sql.NVarChar, clientID)
-      .input('viewedBy', sql.NVarChar, req.user?.email || 'system')
+      .input('viewedBy', sql.NVarChar, 'system')
       .input('viewedAt', sql.DateTime2, new Date())
       .query(`
         UPDATE ProgressNotes 
@@ -131,6 +117,7 @@ router.get('/progress-notes/:clientID', async (req, res) => {
         WHERE clientID = @clientID
       `);
     
+    console.log(`✅ Retrieved ${result.recordset.length} progress notes for client ${clientID}`);
     res.json(result.recordset);
     
   } catch (error) {
@@ -154,7 +141,7 @@ router.post('/progress-notes/:clientID', async (req, res) => {
       return res.status(400).json({ error: validation.message });
     }
     
-    const pool = await sql.connect(dbConfig);
+    const pool = await connectToAzureSQL();
     const request = pool.request();
     
     // Insert new progress note
@@ -181,12 +168,13 @@ router.post('/progress-notes/:clientID', async (req, res) => {
     request.input('requiresFollowUp', sql.Bit, noteData.requiresFollowUp || false);
     request.input('followUpDate', sql.Date, noteData.followUpDate || null);
     request.input('noteStatus', sql.NVarChar, noteData.noteStatus || 'Active');
-    request.input('createdBy', sql.NVarChar, noteData.createdBy);
+    request.input('createdBy', sql.NVarChar, noteData.createdBy || 'system');
     request.input('createdAt', sql.DateTime2, new Date());
     
     const result = await request.query(insertQuery);
     
     if (result.recordset.length > 0) {
+      console.log(`✅ Created progress note for client ${clientID}`);
       res.status(201).json(result.recordset[0]);
     } else {
       res.status(500).json({ error: 'Failed to create progress note' });
@@ -215,7 +203,7 @@ router.put('/progress-notes/:noteID', async (req, res) => {
       }
     }
     
-    const pool = await sql.connect(dbConfig);
+    const pool = await connectToAzureSQL();
     
     // Check if note exists
     const checkResult = await pool.request()
@@ -230,7 +218,7 @@ router.put('/progress-notes/:noteID', async (req, res) => {
     const updateFields = [];
     const request = pool.request();
     request.input('noteID', sql.Int, noteID);
-    request.input('updatedBy', sql.NVarChar, updateData.updatedBy);
+    request.input('updatedBy', sql.NVarChar, updateData.updatedBy || 'system');
     request.input('updatedAt', sql.DateTime2, new Date());
     
     if (updateData.nurseNoteDate) {
@@ -287,6 +275,7 @@ router.put('/progress-notes/:noteID', async (req, res) => {
     const result = await request.query(updateQuery);
     
     if (result.recordset.length > 0) {
+      console.log(`✅ Updated progress note ${noteID}`);
       res.json(result.recordset[0]);
     } else {
       res.status(500).json({ error: 'Failed to update progress note' });
@@ -306,7 +295,7 @@ router.delete('/progress-notes/:noteID', async (req, res) => {
       return res.status(400).json({ error: 'Note ID is required' });
     }
     
-    const pool = await sql.connect(dbConfig);
+    const pool = await connectToAzureSQL();
     
     // Check if note exists
     const checkResult = await pool.request()
@@ -326,16 +315,14 @@ router.delete('/progress-notes/:noteID', async (req, res) => {
       WHERE noteID = @noteID
     `;
     
-    // For hard delete, use this instead:
-    // const deleteQuery = 'DELETE FROM ProgressNotes WHERE noteID = @noteID';
-    
     const result = await pool.request()
       .input('noteID', sql.Int, noteID)
-      .input('deletedBy', sql.NVarChar, req.user?.email || 'system')
+      .input('deletedBy', sql.NVarChar, 'system')
       .input('deletedAt', sql.DateTime2, new Date())
       .query(deleteQuery);
     
     if (result.rowsAffected[0] > 0) {
+      console.log(`✅ Deleted progress note ${noteID}`);
       res.json({ message: 'Progress note deleted successfully', noteID });
     } else {
       res.status(500).json({ error: 'Failed to delete progress note' });
@@ -355,7 +342,7 @@ router.get('/progress-notes/:clientID/summary', async (req, res) => {
       return res.status(400).json({ error: 'Client ID is required' });
     }
     
-    const pool = await sql.connect(dbConfig);
+    const pool = await connectToAzureSQL();
     
     // Get comprehensive summary using SQL analytics
     const summaryQuery = `
@@ -444,6 +431,7 @@ router.get('/progress-notes/:clientID/summary', async (req, res) => {
         });
       }
       
+      console.log(`✅ Retrieved summary for client ${clientID}`);
       res.json({
         totalNotes: summary.totalNotes || 0,
         activeNotes: summary.activeNotes || 0,
@@ -480,7 +468,7 @@ router.get('/progress-notes/:clientID/recent', async (req, res) => {
       return res.status(400).json({ error: 'Client ID is required' });
     }
     
-    const pool = await sql.connect(dbConfig);
+    const pool = await connectToAzureSQL();
     
     const query = `
       SELECT 
@@ -507,6 +495,7 @@ router.get('/progress-notes/:clientID/recent', async (req, res) => {
       .input('days', sql.Int, parseInt(days))
       .query(query);
     
+    console.log(`✅ Retrieved ${result.recordset.length} recent notes for client ${clientID}`);
     res.json(result.recordset);
     
   } catch (error) {
@@ -524,7 +513,7 @@ router.get('/progress-notes/site/:siteID', async (req, res) => {
       return res.status(400).json({ error: 'Site ID is required' });
     }
     
-    const pool = await sql.connect(dbConfig);
+    const pool = await connectToAzureSQL();
     
     const query = `
       SELECT 
@@ -552,6 +541,7 @@ router.get('/progress-notes/site/:siteID', async (req, res) => {
       .input('offset', sql.Int, parseInt(offset))
       .query(query);
     
+    console.log(`✅ Retrieved ${result.recordset.length} notes for site ${siteID}`);
     res.json(result.recordset);
     
   } catch (error) {
@@ -568,7 +558,7 @@ router.get('/progress-notes/:clientID/follow-ups', async (req, res) => {
       return res.status(400).json({ error: 'Client ID is required' });
     }
     
-    const pool = await sql.connect(dbConfig);
+    const pool = await connectToAzureSQL();
     
     const query = `
       SELECT 
@@ -599,11 +589,21 @@ router.get('/progress-notes/:clientID/follow-ups', async (req, res) => {
       .input('clientID', sql.NVarChar, clientID)
       .query(query);
     
+    console.log(`✅ Retrieved ${result.recordset.length} follow-up notes for client ${clientID}`);
     res.json(result.recordset);
     
   } catch (error) {
     handleDatabaseError(error, res, 'fetching follow-up notes');
   }
+});
+
+// Error handling middleware
+router.use((error, req, res, next) => {
+  console.error("❌ Progress Notes Route Error:", error);
+  res.status(500).json({
+    error: "Internal server error in progress notes routes",
+    details: error.message
+  });
 });
 
 module.exports = router;

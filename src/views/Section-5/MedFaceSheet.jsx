@@ -1,4 +1,4 @@
-// MedFaceSheet.jsx - Fixed error handling
+// MedFaceSheet.jsx - Enhanced dropdown visibility
 import React, { useEffect, useState } from "react";
 import PropTypes from "prop-types";
 import { useDispatch, useSelector } from "react-redux";
@@ -52,7 +52,7 @@ import {
 import logUserAction from "../../backend/config/logAction";
 import { medCond, allergyList } from "../../data/arrayList";
 
-// Custom styles for react-select to match Material-UI theme
+// ✅ ENHANCED: Custom styles for react-select with better dropdown visibility
 const customSelectStyles = {
   control: (provided, state) => ({
     ...provided,
@@ -70,6 +70,47 @@ const customSelectStyles = {
   menu: (provided) => ({
     ...provided,
     zIndex: 9999,
+    maxHeight: '300px',
+  }),
+  menuList: (provided) => ({
+    ...provided,
+    maxHeight: '300px',
+    overflowY: 'auto',
+    padding: '4px 0',
+  }),
+  menuPortal: (provided) => ({
+    ...provided,
+    zIndex: 9999,
+  }),
+  option: (provided, state) => ({
+    ...provided,
+    backgroundColor: state.isSelected 
+      ? '#1976d2' 
+      : state.isFocused 
+      ? 'rgba(25, 118, 210, 0.08)' 
+      : 'white',
+    color: state.isSelected ? 'white' : 'rgba(0, 0, 0, 0.87)',
+    padding: '8px 12px',
+    cursor: 'pointer',
+    '&:active': {
+      backgroundColor: 'rgba(25, 118, 210, 0.16)',
+    },
+  }),
+  multiValue: (provided) => ({
+    ...provided,
+    backgroundColor: 'rgba(25, 118, 210, 0.08)',
+  }),
+  multiValueLabel: (provided) => ({
+    ...provided,
+    color: '#1976d2',
+  }),
+  multiValueRemove: (provided) => ({
+    ...provided,
+    color: '#1976d2',
+    ':hover': {
+      backgroundColor: '#1976d2',
+      color: 'white',
+    },
   }),
 };
 
@@ -271,7 +312,7 @@ const MedFaceSheet = ({ clientID }) => {
         </Alert>
       )}
 
-      {/* ✅ FIXED: Error Message - Convert error object to string */}
+      {/* ✅ Error Message */}
       {error && (
         <Alert severity="error" sx={{ mb: 2 }}>
           Error: {getErrorMessage(error)}
@@ -291,7 +332,9 @@ const MedFaceSheet = ({ clientID }) => {
           <Grid container spacing={3}>
             {/* Medical Conditions */}
             <Grid item xs={12}>
-              <Typography variant="body1" sx={{ mb: 1 }}>Medical Conditions</Typography>
+              <Typography variant="body1" sx={{ mb: 1, fontWeight: 500 }}>
+                Medical Conditions
+              </Typography>
               <Select
                 isMulti
                 options={medCond}
@@ -299,12 +342,17 @@ const MedFaceSheet = ({ clientID }) => {
                 onChange={(value) => handleSelectChange("clientMedConditions", value)}
                 placeholder="Select medical conditions..."
                 styles={customSelectStyles}
+                menuPortalTarget={document.body}
+                menuPosition="fixed"
+                maxMenuHeight={300}
               />
             </Grid>
 
             {/* Additional Medical History */}
             <Grid item xs={12} md={6}>
-              <Typography variant="body1" sx={{ mb: 1 }}>Additional Medical History</Typography>
+              <Typography variant="body1" sx={{ mb: 1, fontWeight: 500 }}>
+                Additional Medical History
+              </Typography>
               <TextField
                 fullWidth
                 multiline
@@ -312,12 +360,15 @@ const MedFaceSheet = ({ clientID }) => {
                 name="clientAddMedHistory"
                 value={formData.clientAddMedHistory}
                 onChange={handleInputChange}
+                placeholder="Enter additional medical history..."
               />
             </Grid>
 
             {/* Pertinent Information */}
             <Grid item xs={12} md={6}>
-              <Typography variant="body1" sx={{ mb: 1 }}>Pertinent Information</Typography>
+              <Typography variant="body1" sx={{ mb: 1, fontWeight: 500 }}>
+                Pertinent Information
+              </Typography>
               <TextField
                 fullWidth
                 multiline
@@ -325,17 +376,21 @@ const MedFaceSheet = ({ clientID }) => {
                 name="clientMedPertinent"
                 value={formData.clientMedPertinent}
                 onChange={handleInputChange}
+                placeholder="Enter pertinent information..."
               />
             </Grid>
 
             {/* Previous Lab Work */}
             <Grid item xs={12} md={6}>
-              <Typography variant="body1" sx={{ mb: 1 }}>Review of Charts/Previous Lab Work</Typography>
+              <Typography variant="body1" sx={{ mb: 1, fontWeight: 500 }}>
+                Review of Charts/Previous Lab Work
+              </Typography>
               <FormControl fullWidth>
                 <MuiSelect
                   name="clientPreviousLab"
                   value={formData.clientPreviousLab}
                   onChange={handleInputChange}
+                  displayEmpty
                 >
                   <MenuItem value="">Select...</MenuItem>
                   <MenuItem value="Yes">Yes</MenuItem>
@@ -344,12 +399,23 @@ const MedFaceSheet = ({ clientID }) => {
               </FormControl>
             </Grid>
 
-            {/* Allergies */}
+            {/* ✅ ENHANCED: Allergies Section with improved dropdown */}
             <Grid item xs={12}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
                 <AllergyIcon color="warning" />
-                <Typography variant="body1">Allergy/Intolerance History</Typography>
+                <Typography variant="body1" sx={{ fontWeight: 500 }}>
+                  Allergy/Intolerance History
+                </Typography>
+                <Chip 
+                  label={`${allergyList.length} options available`} 
+                  size="small" 
+                  color="info" 
+                  variant="outlined"
+                />
               </Box>
+              <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>
+                Select all applicable allergies. This list includes drug, food, and environmental allergies.
+              </Typography>
               <Select
                 isMulti
                 options={allergyList?.map((item) => ({ 
@@ -358,8 +424,14 @@ const MedFaceSheet = ({ clientID }) => {
                 })) || []}
                 value={formData.clientAllergies}
                 onChange={(value) => handleSelectChange("clientAllergies", value)}
-                placeholder="Select allergies..."
+                placeholder="Click here to select allergies..."
                 styles={customSelectStyles}
+                menuPortalTarget={document.body}
+                menuPosition="fixed"
+                maxMenuHeight={300}
+                closeMenuOnScroll={false}
+                isClearable
+                isSearchable
               /> 
             </Grid>
 
@@ -470,7 +542,7 @@ const MedFaceSheet = ({ clientID }) => {
         <DialogContent>
           <Grid container spacing={2} sx={{ mt: 1 }}>
             <Grid item xs={12} sm={6}>
-              <label>Date</label>
+              <Typography variant="body2" sx={{ mb: 1, fontWeight: 500 }}>Date</Typography>
               <TextField
                 fullWidth
                 type="date"
@@ -481,39 +553,43 @@ const MedFaceSheet = ({ clientID }) => {
               />
             </Grid>
             <Grid item xs={12} sm={6}>
-              <label>Location</label>
+              <Typography variant="body2" sx={{ mb: 1, fontWeight: 500 }}>Location</Typography>
               <TextField
                 fullWidth
                 name="medApptLoc"
                 value={medApptData.medApptLoc}
                 onChange={handleAppointmentChange}
+                placeholder="Enter location..."
               />
             </Grid>
             <Grid item xs={12} sm={6}>
-              <label>Type</label>
+              <Typography variant="body2" sx={{ mb: 1, fontWeight: 500 }}>Type</Typography>
               <TextField
                 fullWidth
                 name="medApptType"
                 value={medApptData.medApptType}
                 onChange={handleAppointmentChange}
+                placeholder="Enter appointment type..."
               />
             </Grid>
             <Grid item xs={12} sm={6}>
-              <label>Provider</label>
+              <Typography variant="body2" sx={{ mb: 1, fontWeight: 500 }}>Provider</Typography>
               <TextField
                 fullWidth
                 name="medApptProv"
                 value={medApptData.medApptProv}
                 onChange={handleAppointmentChange}
+                placeholder="Enter provider name..."
               />
             </Grid>
             <Grid item xs={12}>
-              <Typography variant="body1" sx={{ mb: 1 }}>Transportation?</Typography>
+              <Typography variant="body2" sx={{ mb: 1, fontWeight: 500 }}>Transportation?</Typography>
               <FormControl fullWidth>
                 <MuiSelect
                   name="medApptTranport"
                   value={medApptData.medApptTranport}
                   onChange={handleAppointmentChange}
+                  displayEmpty
                 >
                   <MenuItem value="">Select...</MenuItem>
                   <MenuItem value="Yes">Yes</MenuItem>

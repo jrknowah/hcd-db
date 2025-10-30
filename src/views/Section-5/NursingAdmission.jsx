@@ -271,7 +271,21 @@ const NursingAdmission = ({ clientID }) => {
     
     if (Object.keys(savedData).length > 0) {
       console.log('📥 Loading saved data into form');
-      setFormData(savedData);
+      
+      // ✅ FIX: Merge saved data while preserving nested object structure
+      setFormData(prev => ({
+        ...prev,  // Start with default structure
+        ...savedData,  // Override with saved data
+        // ✅ CRITICAL: Safely merge nested objects to prevent undefined errors
+        frontBodyInspection: {
+          ...prev.frontBodyInspection,  // Keep default structure
+          ...(savedData.frontBodyInspection || {})  // Merge saved data if exists
+        },
+        rearBodyInspection: {
+          ...prev.rearBodyInspection,  // Keep default structure
+          ...(savedData.rearBodyInspection || {})  // Merge saved data if exists
+        }
+      }));
     }
   }, [savedData]);
 
@@ -1167,7 +1181,7 @@ export const store = configureStore({
                           label={item.label}
                           multiline
                           rows={2}
-                          value={formData.rearBodyInspection[item.key] || ''}
+                          value={formData.rearBodyInspection?.[item.key] || ''}
                           onChange={(e) => handleBodyInspectionChange('rearBodyInspection', item.key, e.target.value)}
                         />
                       </Grid>

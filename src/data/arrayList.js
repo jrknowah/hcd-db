@@ -397,14 +397,64 @@ export const cmNoteType = [
 export const srcSiteList = ["", "Arlington-LA","Arroyo","East LA","Lakeview Terrace","Long Beach 4th", "Motel 6","Percy","Torrance-Cabrillo"];
 
 export const allergyList = [ 
-    { id: 'No Allergies', value: 'No Allergies' },
-    { id: 'Drug Allergy', value: 'Drug Allergy' },
-    { id: 'Food Allergy', value: 'Food Allergy' },
-    { id: 'Insect Allergy', value: 'Insect Allergy' },
-    { id: 'Latex Allergy', value: 'Latex Allergy' },
-    { id: 'Mold Allergy', value: 'Mold Allergy' },
-    { id: 'Pet Allergy', value: 'Pet Allergy' },
-    { id: 'Pollen Allergy', value: 'Pollen Allergy' }
+    // No Allergies Option
+    { id: 'No Known Allergies', value: 'No Known Allergies' },
+    { id: 'NKDA', value: 'NKDA (No Known Drug Allergies)' },
+    
+    // Common Drug Allergies
+    { id: 'Penicillin', value: 'Penicillin' },
+    { id: 'Amoxicillin', value: 'Amoxicillin' },
+    { id: 'Ampicillin', value: 'Ampicillin' },
+    { id: 'Sulfa Drugs', value: 'Sulfa Drugs (Sulfonamides)' },
+    { id: 'Cephalosporins', value: 'Cephalosporins' },
+    { id: 'Tetracycline', value: 'Tetracycline' },
+    { id: 'Erythromycin', value: 'Erythromycin' },
+    { id: 'Ciprofloxacin', value: 'Ciprofloxacin (Cipro)' },
+    { id: 'Aspirin', value: 'Aspirin' },
+    { id: 'Ibuprofen', value: 'Ibuprofen (NSAIDs)' },
+    { id: 'Codeine', value: 'Codeine' },
+    { id: 'Morphine', value: 'Morphine' },
+    { id: 'Oxycodone', value: 'Oxycodone' },
+    { id: 'Hydrocodone', value: 'Hydrocodone' },
+    { id: 'Tramadol', value: 'Tramadol' },
+    { id: 'Vancomycin', value: 'Vancomycin' },
+    { id: 'Contrast Dye', value: 'Contrast Dye (Iodine)' },
+    { id: 'Anesthesia', value: 'Anesthesia (Local or General)' },
+    { id: 'Anticonvulsants', value: 'Anticonvulsants' },
+    { id: 'Insulin', value: 'Insulin' },
+    { id: 'Statins', value: 'Statins (Cholesterol Medications)' },
+    
+    // Food Allergies
+    { id: 'Peanuts', value: 'Peanuts' },
+    { id: 'Tree Nuts', value: 'Tree Nuts (Almonds, Walnuts, etc.)' },
+    { id: 'Milk/Dairy', value: 'Milk/Dairy Products' },
+    { id: 'Eggs', value: 'Eggs' },
+    { id: 'Wheat/Gluten', value: 'Wheat/Gluten' },
+    { id: 'Soy', value: 'Soy Products' },
+    { id: 'Fish', value: 'Fish' },
+    { id: 'Shellfish', value: 'Shellfish (Shrimp, Crab, Lobster)' },
+    { id: 'Sesame', value: 'Sesame' },
+    { id: 'Sulfites', value: 'Sulfites' },
+    { id: 'Food Dyes', value: 'Food Dyes/Additives' },
+    
+    // Environmental/Other Allergies
+    { id: 'Latex', value: 'Latex' },
+    { id: 'Adhesive Tape', value: 'Adhesive/Tape' },
+    { id: 'Bee Stings', value: 'Bee Stings/Venom' },
+    { id: 'Wasp Stings', value: 'Wasp Stings' },
+    { id: 'Fire Ants', value: 'Fire Ants' },
+    { id: 'Pollen', value: 'Pollen (Seasonal)' },
+    { id: 'Dust Mites', value: 'Dust Mites' },
+    { id: 'Mold', value: 'Mold/Mildew' },
+    { id: 'Pet Dander - Cats', value: 'Pet Dander (Cats)' },
+    { id: 'Pet Dander - Dogs', value: 'Pet Dander (Dogs)' },
+    { id: 'Perfumes/Fragrances', value: 'Perfumes/Fragrances' },
+    { id: 'Smoke', value: 'Smoke/Tobacco' },
+    
+    // Other/Miscellaneous
+    { id: 'Other Drug Allergy', value: 'Other Drug Allergy (Specify in Notes)' },
+    { id: 'Other Food Allergy', value: 'Other Food Allergy (Specify in Notes)' },
+    { id: 'Other Environmental', value: 'Other Environmental (Specify in Notes)' }
 ];
 
 // export const allergyList = [ 

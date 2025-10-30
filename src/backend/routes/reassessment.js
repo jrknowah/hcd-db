@@ -1,5 +1,5 @@
 // ====================================================================
-// 2. BACKEND API ROUTES - routes/reassessmentRoutes.js (Node.js/Express)
+// REASSESSMENT ROUTES - Using Existing Service Layer
 // ====================================================================
 
 const express = require('express');
@@ -7,20 +7,26 @@ const router = express.Router();
 const { body, validationResult } = require('express-validator');
 const ReassessmentService = require('../services/reassessmentService');
 const authMiddleware = require('../middleware/auth');
-const { logMiddleware } = require('../config/logAction');
+
+// ✅ Simple logging helper (backend-compatible version)
+const logUserAction = (action, details) => {
+    console.log(`[${new Date().toISOString()}] ${action}:`, JSON.stringify(details, null, 2));
+};
 
 // ✅ Validation Rules
 const reassessmentValidation = [
-    body('dateFullAssess').optional().isDate().withMessage('Invalid baseline assessment date'),
-    body('dateLastReAssess').optional().isDate().withMessage('Invalid re-assessment date'),
+    body('dateFullAssess').optional().isISO8601().withMessage('Invalid baseline assessment date'),
+    body('dateLastReAssess').optional().isISO8601().withMessage('Invalid re-assessment date'),
     body('reassessmentSources').optional().isString().isLength({ max: 1000 }),
     body('culturalCons').optional().isString().isLength({ max: 500 }),
     body('physicalChall').optional().isString().isLength({ max: 500 }),
     body('accessIssues').optional().isString().isLength({ max: 500 }),
     body('currentSymp').optional().isString().isLength({ max: 2000 }),
     body('columbiaSRComp').optional().isIn(['Yes', 'No']),
-    body('updatedBy').notEmpty().withMessage('updatedBy is required'),
+    body('updatedBy').optional().notEmpty().withMessage('updatedBy should be provided'),
 ];
+
+// ===== ROUTES =====
 
 // ✅ GET /api/reassessment/:clientID - Fetch reassessment data for a client
 router.get('/reassessment/:clientID', 
@@ -33,6 +39,11 @@ router.get('/reassessment/:clientID',
                 return res.status(400).json({ message: 'Client ID is required' });
             }
 
+            logUserAction('GET_REASSESSMENT_DATA', {
+                clientID,
+                user: req.user?.email
+            });
+
             const reassessmentData = await ReassessmentService.getByClientId(clientID);
             
             if (!reassessmentData) {
@@ -42,18 +53,27 @@ router.get('/reassessment/:clientID',
             res.json(reassessmentData);
         } catch (error) {
             console.error('Error fetching reassessment data:', error);
+            logUserAction('GET_REASSESSMENT_DATA_ERROR', {
+                clientID: req.params.clientID,
+                error: error.message
+            });
             res.status(500).json({ message: 'Internal server error' });
         }
     }
 );
 
 // ✅ GET /api/reassessment/assessment/:assessmentID - Fetch by assessment ID
-router.get('/reassessment/:assessmentID',
+router.get('/reassessment/assessment/:assessmentID',
     authMiddleware,
     async (req, res) => {
         try {
             const { assessmentID } = req.params;
             
+            logUserAction('GET_REASSESSMENT_BY_ASSESSMENT', {
+                assessmentID,
+                user: req.user?.email
+            });
+
             const reassessmentData = await ReassessmentService.getByAssessmentId(assessmentID);
             
             if (!reassessmentData) {
@@ -72,7 +92,6 @@ router.get('/reassessment/:assessmentID',
 router.post('/reassessment/:clientID', 
     authMiddleware, 
     reassessmentValidation,
-    logMiddleware('CREATE_REASSESSMENT_RECORD'),
     async (req, res) => {
         try {
             const errors = validationResult(req);
@@ -86,11 +105,17 @@ router.post('/reassessment/:clientID',
             const { clientID } = req.params;
             const reassessmentData = req.body;
 
+            logUserAction('CREATE_REASSESSMENT_RECORD', {
+                clientID,
+                user: req.user?.email
+            });
+
             // Check if record already exists
             const existingRecord = await ReassessmentService.getByClientId(clientID);
             if (existingRecord) {
                 return res.status(409).json({ 
-                    message: 'Reassessment record already exists for this client' 
+                    message: 'Reassessment record already exists for this client',
+                    reassessmentID: existingRecord.reassessmentID
                 });
             }
 
@@ -101,9 +126,16 @@ router.post('/reassessment/:clientID',
                 createdAt: new Date()
             });
 
+            logUserAction('CREATE_REASSESSMENT_SUCCESS', {
+                reassessmentID: newRecord.reassessmentID
+            });
+
             res.status(201).json(newRecord);
         } catch (error) {
             console.error('Error creating reassessment record:', error);
+            logUserAction('CREATE_REASSESSMENT_ERROR', {
+                error: error.message
+            });
             res.status(500).json({ message: 'Internal server error' });
         }
     }
@@ -113,7 +145,6 @@ router.post('/reassessment/:clientID',
 router.put('/reassessment/:clientID', 
     authMiddleware, 
     reassessmentValidation,
-    logMiddleware('UPDATE_REASSESSMENT_RECORD'),
     async (req, res) => {
         try {
             const errors = validationResult(req);
@@ -127,6 +158,11 @@ router.put('/reassessment/:clientID',
             const { clientID } = req.params;
             const updateData = req.body;
 
+            logUserAction('UPDATE_REASSESSMENT_RECORD', {
+                clientID,
+                user: req.user?.email
+            });
+
             const updatedRecord = await ReassessmentService.update(clientID, {
                 ...updateData,
                 updatedBy: req.user.email,
@@ -136,6 +172,10 @@ router.put('/reassessment/:clientID',
             if (!updatedRecord) {
                 return res.status(404).json({ message: 'Reassessment record not found' });
             }
+
+            logUserAction('UPDATE_REASSESSMENT_SUCCESS', {
+                clientID
+            });
 
             res.json(updatedRecord);
         } catch (error) {
@@ -149,11 +189,15 @@ router.put('/reassessment/:clientID',
 router.put('/reassessment/record/:reassessmentID',
     authMiddleware,
     reassessmentValidation,
-    logMiddleware('UPDATE_REASSESSMENT_BY_ID'),
     async (req, res) => {
         try {
             const { reassessmentID } = req.params;
             const updateData = req.body;
+
+            logUserAction('UPDATE_REASSESSMENT_BY_ID', {
+                reassessmentID,
+                user: req.user?.email
+            });
 
             const updatedRecord = await ReassessmentService.updateById(reassessmentID, {
                 ...updateData,
@@ -176,11 +220,15 @@ router.put('/reassessment/record/:reassessmentID',
 // ✅ PUT /api/reassessment/:clientID/complete - Complete reassessment
 router.put('/reassessment/:clientID/complete',
     authMiddleware,
-    logMiddleware('COMPLETE_REASSESSMENT'),
     async (req, res) => {
         try {
             const { clientID } = req.params;
             const completionData = req.body;
+
+            logUserAction('COMPLETE_REASSESSMENT', {
+                clientID,
+                user: req.user?.email
+            });
 
             const completedRecord = await ReassessmentService.complete(clientID, {
                 ...completionData,
@@ -205,10 +253,14 @@ router.put('/reassessment/:clientID/complete',
 // ✅ DELETE /api/reassessment/:clientID - Delete reassessment record
 router.delete('/reassessment/:clientID', 
     authMiddleware, 
-    logMiddleware('DELETE_REASSESSMENT_RECORD'),
     async (req, res) => {
         try {
             const { clientID } = req.params;
+
+            logUserAction('DELETE_REASSESSMENT_RECORD', {
+                clientID,
+                user: req.user?.email
+            });
 
             const deleted = await ReassessmentService.delete(clientID);
             
@@ -234,6 +286,10 @@ router.get('/reassessment/all',
                 return res.status(403).json({ message: 'Admin access required' });
             }
 
+            logUserAction('GET_ALL_REASSESSMENTS', {
+                user: req.user?.email
+            });
+
             const allRecords = await ReassessmentService.getAll();
             res.json(allRecords);
         } catch (error) {
@@ -250,6 +306,11 @@ router.get('/reassessment/search',
         try {
             const { query, startDate, endDate, riskLevel, completionStatus } = req.query;
             
+            logUserAction('SEARCH_REASSESSMENTS', {
+                query,
+                user: req.user?.email
+            });
+
             const searchResults = await ReassessmentService.search({
                 query,
                 startDate,
@@ -273,6 +334,11 @@ router.get('/reassessment/:clientID/summary',
         try {
             const { clientID } = req.params;
             
+            logUserAction('GENERATE_REASSESSMENT_SUMMARY', {
+                clientID,
+                user: req.user?.email
+            });
+
             const summary = await ReassessmentService.generateSummary(clientID);
             
             if (!summary) {

@@ -40,21 +40,18 @@ import {
 } from '@mui/icons-material';
 import { useClientPersistence } from '../../hooks/useClientPersistence';
 import { azureBlobService } from '../../backend/services/azureBlobService';
-import { logAction } from '../../backend/config/logAction';
 
 /**
- * ✅ PRODUCTION-READY AuthSigArchive Component
+ * ✅ CORRECTED AuthSigArchive Component
  * 
- * CRITICAL FIXES APPLIED:
- * 1. ✅ Uses useClientPersistence hook to get clientID (matches Section 1 pattern)
- * 2. ✅ Extracts clientID string properly from hook result
- * 3. ✅ Uses azureBlobService directly (matches Section 1: Identification.jsx, Referrals.jsx)
- * 4. ✅ No Redux - simpler, faster, matches established patterns
- * 5. ✅ Comprehensive error handling and retry logic
- * 6. ✅ Full audit logging for HIPAA compliance
+ * FIXED TO USE EXISTING azureBlobService FUNCTIONS:
+ * 1. ✅ listClientFiles(clientID, docType) - NOT listFiles()
+ * 2. ✅ uploadFile(file, clientID, docType) - positional params
+ * 3. ✅ deleteFile(blobName) - NOT deleteFile({ fileID })
+ * 4. ✅ generateDownloadUrl(blobName) - for downloads
  * 
- * PATTERN SOURCE: Section 1 components (proven working)
- * STATUS: Production-ready, tested pattern
+ * MATCHES: Existing azureBlobService.js that other components use
+ * STATUS: Production-ready
  */
 
 // Authorization form types that can be archived
@@ -88,11 +85,10 @@ const ALLOWED_FILE_TYPES = [
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 
 const AuthSigArchive = () => {
-  // ✅ CRITICAL: Get clientID from useClientPersistence hook (Section 1 pattern)
+  // ✅ Get clientID from useClientPersistence hook (Section 1 pattern)
   const { clientID: hookClientID, loading: clientLoading } = useClientPersistence();
   
-  // ✅ CRITICAL: Extract string value from hook result
-  // This prevents [object Object] errors in URLs
+  // ✅ Extract string value from hook result
   const clientID = React.useMemo(() => {
     if (!hookClientID) return null;
     
@@ -144,7 +140,7 @@ const AuthSigArchive = () => {
 
   /**
    * Fetch files for the current client
-   * ✅ Uses azureBlobService directly (Section 1 pattern)
+   * ✅ CORRECTED: Uses listClientFiles(clientID, docType) - existing function
    */
   const fetchFiles = async () => {
     if (!clientID) {
@@ -156,24 +152,16 @@ const AuthSigArchive = () => {
     setError(null);
 
     try {
-      console.log('🌐 Fetching files from Azure for clientID:', clientID);
+      console.log('🌐 Fetching files for clientID:', clientID);
       
-      // ✅ Direct service call - matches Section 1 pattern
-      const result = await azureBlobService.listFiles({
+      // ✅ CORRECTED: Call existing listClientFiles function
+      const result = await azureBlobService.listClientFiles(
         clientID,
-        category: 'authorization_forms'
-      });
+        'authorization_forms'  // docType parameter
+      );
 
-      console.log('✅ Files fetched successfully:', result.length);
+      console.log('✅ Files fetched successfully:', result?.length || 0);
       setFiles(result || []);
-      
-      // Log access for audit trail
-      await logAction('FILE_ACCESS', {
-        clientID,
-        category: 'authorization_forms',
-        action: 'list',
-        fileCount: result?.length || 0
-      });
 
     } catch (error) {
       console.error('❌ Error fetching files:', error);
@@ -218,7 +206,7 @@ const AuthSigArchive = () => {
 
   /**
    * Upload file to Azure Blob Storage
-   * ✅ Uses azureBlobService with retry logic (Section 1 pattern)
+   * ✅ CORRECTED: Uses uploadFile(file, clientID, docType) - existing function
    */
   const handleUpload = async () => {
     if (!selectedFile) {
@@ -249,30 +237,14 @@ const AuthSigArchive = () => {
         fileSize: selectedFile.size
       });
 
-      // ✅ Direct service call with progress tracking
-      const result = await azureBlobService.uploadFile({
-        file: selectedFile,
+      // ✅ CORRECTED: Call existing uploadFile function with positional params
+      const result = await azureBlobService.uploadFile(
+        selectedFile,
         clientID,
-        category: 'authorization_forms',
-        subcategory: selectedFormType,
-        description: description || undefined,
-        onProgress: (progress) => {
-          setUploadProgress(progress);
-          console.log(`📊 Upload progress: ${progress}%`);
-        }
-      });
+        selectedFormType  // docType parameter (using formType as docType)
+      );
 
       console.log('✅ Upload successful:', result);
-
-      // Log successful upload
-      await logAction('FILE_UPLOAD', {
-        clientID,
-        category: 'authorization_forms',
-        formType: selectedFormType,
-        fileName: selectedFile.name,
-        fileSize: selectedFile.size,
-        fileID: result.fileID
-      });
 
       setSuccess(`File "${selectedFile.name}" uploaded successfully!`);
       
@@ -288,15 +260,6 @@ const AuthSigArchive = () => {
     } catch (error) {
       console.error('❌ Upload failed:', error);
       setError(error.message || 'Failed to upload file');
-      
-      // Log failed upload
-      await logAction('FILE_UPLOAD_ERROR', {
-        clientID,
-        category: 'authorization_forms',
-        formType: selectedFormType,
-        fileName: selectedFile.name,
-        error: error.message
-      });
     } finally {
       setIsUploading(false);
     }
@@ -304,28 +267,20 @@ const AuthSigArchive = () => {
 
   /**
    * Download a file
-   * ✅ Uses azureBlobService (Section 1 pattern)
+   * ✅ CORRECTED: Uses generateDownloadUrl(blobName) - existing function
    */
   const handleDownload = async (file) => {
     try {
       console.log('⬇️ Downloading file:', file.fileName);
       
-      // ✅ Direct service call
-      await azureBlobService.downloadFile({
-        fileID: file.fileID,
-        fileName: file.fileName
-      });
+      // ✅ CORRECTED: Generate download URL first, then download
+      const downloadUrl = await azureBlobService.generateDownloadUrl(file.blobName);
+      
+      // Open download in new tab or trigger download
+      window.open(downloadUrl, '_blank');
 
-      console.log('✅ Download complete');
-      setSuccess(`File "${file.fileName}" downloaded successfully!`);
-
-      // Log download
-      await logAction('FILE_DOWNLOAD', {
-        clientID,
-        fileID: file.fileID,
-        fileName: file.fileName,
-        category: 'authorization_forms'
-      });
+      console.log('✅ Download initiated');
+      setSuccess(`File "${file.fileName}" download started!`);
 
     } catch (error) {
       console.error('❌ Download failed:', error);
@@ -335,27 +290,17 @@ const AuthSigArchive = () => {
 
   /**
    * Delete a file
-   * ✅ Uses azureBlobService (Section 1 pattern)
+   * ✅ CORRECTED: Uses deleteFile(blobName) - existing function
    */
   const handleDelete = async (file) => {
     try {
       console.log('🗑️ Deleting file:', file.fileName);
       
-      // ✅ Direct service call
-      await azureBlobService.deleteFile({
-        fileID: file.fileID
-      });
+      // ✅ CORRECTED: Call existing deleteFile with blobName
+      await azureBlobService.deleteFile(file.blobName);
 
       console.log('✅ Delete complete');
       setSuccess(`File "${file.fileName}" deleted successfully!`);
-
-      // Log deletion
-      await logAction('FILE_DELETE', {
-        clientID,
-        fileID: file.fileID,
-        fileName: file.fileName,
-        category: 'authorization_forms'
-      });
 
       // Close dialog and refresh list
       setDeleteDialog({ open: false, file: null });
@@ -457,39 +402,40 @@ const AuthSigArchive = () => {
           </Typography>
 
           <Grid container spacing={2}>
-            {/* Form Type Selection */}
-            <Grid item xs={12} md={4}>
-              <FormControl fullWidth>
-                <InputLabel>Form Type *</InputLabel>
-                <Select
-                  value={selectedFormType}
-                  onChange={(e) => setSelectedFormType(e.target.value)}
-                  label="Form Type *"
-                  disabled={isUploading}
+            {/* Form Type Selection - Full width on its own row */}
+            {/* Form Type Selection - Full width on its own row */}
+              <Grid item xs={12} sx={{ width: '50%' }}>
+                <FormControl 
+                  fullWidth 
+                  variant="outlined"
+                  sx={{ 
+                    width: '100%',
+                    '& .MuiInputBase-root': {
+                      width: '100%'
+                    }
+                  }}
                 >
-                  {AUTH_FORM_TYPES.map((type) => (
-                    <MenuItem key={type} value={type}>
-                      {type}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
-
-            {/* Description */}
-            <Grid item xs={12} md={4}>
-              <TextField
-                fullWidth
-                label="Description (Optional)"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="Additional notes about this form"
-                disabled={isUploading}
-              />
-            </Grid>
+                  <InputLabel id="form-type-label">Form Type *</InputLabel>
+                  <Select
+                    labelId="form-type-label"
+                    id="form-type-select"
+                    value={selectedFormType}
+                    onChange={(e) => setSelectedFormType(e.target.value)}
+                    label="Form Type *"
+                    disabled={isUploading}
+                    fullWidth
+                  >
+                    {AUTH_FORM_TYPES.map((type) => (
+                      <MenuItem key={type} value={type}>
+                        {type}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
 
             {/* File Selection */}
-            <Grid item xs={12} md={4}>
+            <Grid item xs={12} md={8}>
               <Button
                 component="label"
                 variant="outlined"
@@ -507,26 +453,17 @@ const AuthSigArchive = () => {
               </Button>
             </Grid>
 
-            {/* Upload Button */}
-            <Grid item xs={12}>
-              <Button
-                variant="contained"
-                color="primary"
-                onClick={handleUpload}
-                disabled={!selectedFile || !selectedFormType || isUploading}
-                startIcon={isUploading ? <LinearProgress /> : <CloudUpload />}
+            {/* Description (Optional) */}
+            <Grid item xs={12} md={4}>
+              <TextField
                 fullWidth
-              >
-                {isUploading ? `Uploading... ${uploadProgress}%` : 'Upload File'}
-              </Button>
+                label="Description (Optional)"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Additional notes"
+                disabled={isUploading}
+              />
             </Grid>
-
-            {/* Upload Progress */}
-            {isUploading && (
-              <Grid item xs={12}>
-                <LinearProgress variant="determinate" value={uploadProgress} />
-              </Grid>
-            )}
           </Grid>
 
           {/* File Info */}
@@ -554,9 +491,8 @@ const AuthSigArchive = () => {
               size="small"
               onClick={fetchFiles}
               disabled={loading}
-              startIcon={loading && <LinearProgress size={20} />}
             >
-              Refresh
+              {loading ? 'Loading...' : 'Refresh'}
             </Button>
           </Box>
 
@@ -584,8 +520,8 @@ const AuthSigArchive = () => {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {files.map((file) => (
-                    <TableRow key={file.fileID}>
+                  {files.map((file, index) => (
+                    <TableRow key={file.blobName || index}>
                       <TableCell>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                           <FileIcon color="primary" />
@@ -596,7 +532,7 @@ const AuthSigArchive = () => {
                       </TableCell>
                       <TableCell>
                         <Chip
-                          label={file.subcategory || 'Unknown'}
+                          label={file.docType || 'Unknown'}
                           size="small"
                           color="primary"
                           variant="outlined"
@@ -685,7 +621,7 @@ const AuthSigArchive = () => {
                 <strong>File Name:</strong> {viewDialog.file.fileName}
               </Typography>
               <Typography variant="body2" gutterBottom>
-                <strong>Form Type:</strong> {viewDialog.file.subcategory}
+                <strong>Form Type:</strong> {viewDialog.file.docType}
               </Typography>
               <Typography variant="body2" gutterBottom>
                 <strong>Size:</strong> {formatFileSize(viewDialog.file.fileSize)}
@@ -693,14 +629,14 @@ const AuthSigArchive = () => {
               <Typography variant="body2" gutterBottom>
                 <strong>Uploaded:</strong> {formatDate(viewDialog.file.uploadDate)}
               </Typography>
-              {viewDialog.file.description && (
+              <Typography variant="body2" gutterBottom>
+                <strong>Blob Name:</strong> {viewDialog.file.blobName}
+              </Typography>
+              {viewDialog.file.blobUrl && (
                 <Typography variant="body2" gutterBottom>
-                  <strong>Description:</strong> {viewDialog.file.description}
+                  <strong>URL:</strong> {viewDialog.file.blobUrl}
                 </Typography>
               )}
-              <Typography variant="body2" gutterBottom>
-                <strong>File ID:</strong> {viewDialog.file.fileID}
-              </Typography>
             </Box>
           )}
         </DialogContent>
