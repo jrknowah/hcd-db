@@ -1,10 +1,11 @@
 // routes/medical.js - Backend routes for medical face sheet
+// ✅ STANDARDIZED: Uses medical_face_sheet table throughout
 const express = require("express");
 const router = express.Router();
 const sql = require("mssql");
 const { connectToAzureSQL } = require("../store/azureSql");
 
-// Middleware for logging (optional)
+// Middleware for logging
 router.use((req, res, next) => {
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.originalUrl}`);
   next();
@@ -14,7 +15,7 @@ router.use((req, res, next) => {
 // MEDICAL INFORMATION ROUTES
 // ===================================================================
 
-// 🔧 FIXED: GET /api/medical/info/:clientID (removed /medical prefix)
+// GET /api/medical/info/:clientID
 router.get("/info/:clientID", async (req, res) => {
   const { clientID } = req.params;
   
@@ -35,7 +36,7 @@ router.get("/info/:clientID", async (req, res) => {
           createdAt,
           updatedBy,
           updatedAt
-        FROM MedicalInfo 
+        FROM medical_face_sheet 
         WHERE clientID = @clientID
       `);
     
@@ -47,6 +48,7 @@ router.get("/info/:clientID", async (req, res) => {
         clientMedConditions: record.clientMedConditions ? JSON.parse(record.clientMedConditions) : [],
         clientAllergies: record.clientAllergies ? JSON.parse(record.clientAllergies) : []
       };
+      console.log(`✅ Retrieved medical info for client ${clientID}`);
     } else {
       // Return empty structure if no data
       medicalInfo = {
@@ -57,9 +59,9 @@ router.get("/info/:clientID", async (req, res) => {
         clientPreviousLab: '',
         clientAllergies: []
       };
+      console.log(`ℹ️  No medical info found for client ${clientID}, returning empty structure`);
     }
     
-    console.log(`✅ Retrieved medical info for client ${clientID}`);
     res.json(medicalInfo);
     
   } catch (err) {
@@ -71,7 +73,7 @@ router.get("/info/:clientID", async (req, res) => {
   }
 });
 
-// 🔧 FIXED: POST /api/medical/info/:clientID
+// POST /api/medical/info/:clientID
 router.post("/info/:clientID", async (req, res) => {
   const { clientID } = req.params;
   const {
@@ -83,6 +85,15 @@ router.post("/info/:clientID", async (req, res) => {
     createdBy,
     updatedBy
   } = req.body;
+
+  console.log(`💾 Saving medical info for client ${clientID}`);
+  console.log(`📋 Data received:`, {
+    clientMedConditions: clientMedConditions?.length || 0,
+    clientAddMedHistory: clientAddMedHistory?.length || 0,
+    clientMedPertinent: clientMedPertinent?.length || 0,
+    clientPreviousLab,
+    clientAllergies: clientAllergies?.length || 0
+  });
 
   try {
     const pool = await connectToAzureSQL();
@@ -100,7 +111,7 @@ router.post("/info/:clientID", async (req, res) => {
       .input("createdAt", sql.DateTime, new Date())
       .input("updatedAt", sql.DateTime, new Date())
       .query(`
-        MERGE MedicalInfo AS target
+        MERGE medical_face_sheet AS target
         USING (SELECT @clientID AS clientID) AS source
         ON target.clientID = source.clientID
         WHEN MATCHED THEN UPDATE SET
@@ -127,10 +138,16 @@ router.post("/info/:clientID", async (req, res) => {
     };
 
     console.log(`✅ Saved medical info for client ${clientID}`);
+    console.log(`📊 Saved data:`, {
+      clientMedConditions: response.clientMedConditions.length,
+      clientAllergies: response.clientAllergies.length,
+      updatedAt: response.updatedAt
+    });
     res.json(response);
     
   } catch (err) {
     console.error("❌ Error saving medical info:", err);
+    console.error("❌ SQL Error details:", err.message);
     res.status(500).json({ 
       error: "Error saving medical information",
       details: err.message 
@@ -142,7 +159,7 @@ router.post("/info/:clientID", async (req, res) => {
 // APPOINTMENTS ROUTES
 // ===================================================================
 
-// 🔧 FIXED: GET /api/medical/appointments/:clientID
+// GET /api/medical/appointments/:clientID
 router.get("/appointments/:clientID", async (req, res) => {
   const { clientID } = req.params;
   
@@ -181,7 +198,7 @@ router.get("/appointments/:clientID", async (req, res) => {
   }
 });
 
-// 🔧 FIXED: POST /api/medical/appointments/:clientID
+// POST /api/medical/appointments/:clientID
 router.post("/appointments/:clientID", async (req, res) => {
   const { clientID } = req.params;
   const {
@@ -230,7 +247,7 @@ router.post("/appointments/:clientID", async (req, res) => {
   }
 });
 
-// 🔧 FIXED: PUT /api/medical/appointments/:appointmentID
+// PUT /api/medical/appointments/:appointmentID
 router.put("/appointments/:appointmentID", async (req, res) => {
   const { appointmentID } = req.params;
   const {
@@ -285,7 +302,7 @@ router.put("/appointments/:appointmentID", async (req, res) => {
   }
 });
 
-// 🔧 FIXED: DELETE /api/medical/appointments/:appointmentID
+// DELETE /api/medical/appointments/:appointmentID
 router.delete("/appointments/:appointmentID", async (req, res) => {
   const { appointmentID } = req.params;
 
@@ -320,14 +337,14 @@ router.delete("/appointments/:appointmentID", async (req, res) => {
 // CLIENT ALLERGIES ROUTES
 // ===================================================================
 
-// 🔧 FIXED: GET /api/medical/allergies/:clientID
+// GET /api/medical/allergies/:clientID
 router.get("/allergies/:clientID", async (req, res) => {
   const { clientID } = req.params;
   
   try {
     const pool = await connectToAzureSQL();
     
-    // Try to get from AllergyOptions table first
+    // Try to get from allergy_options table first
     const result = await pool
       .request()
       .query(`
@@ -335,7 +352,7 @@ router.get("/allergies/:clientID", async (req, res) => {
           allergyCode as value,
           allergyName as label,
           allergyDescription
-        FROM AllergyOptions 
+        FROM allergy_options 
         WHERE isActive = 1
         ORDER BY allergyName
       `);
@@ -365,7 +382,7 @@ router.get("/allergies/:clientID", async (req, res) => {
     
   } catch (err) {
     // If table doesn't exist, return static options
-    console.log("⚠️ AllergyOptions table not found, returning static options");
+    console.log("⚠️ allergy_options table not found, returning static options");
     const defaultAllergies = [
       { value: 'penicillin', label: 'Penicillin' },
       { value: 'shellfish', label: 'Shellfish' },
@@ -380,7 +397,7 @@ router.get("/allergies/:clientID", async (req, res) => {
   }
 });
 
-// 🔧 FIXED: POST /api/medical/allergies/:clientID
+// POST /api/medical/allergies/:clientID
 router.post("/allergies/:clientID", async (req, res) => {
   const { clientID } = req.params;
   const { allergies } = req.body;
@@ -394,7 +411,7 @@ router.post("/allergies/:clientID", async (req, res) => {
       .input("allergies", sql.NVarChar(sql.MAX), JSON.stringify(allergies || []))
       .input("updatedAt", sql.DateTime, new Date())
       .query(`
-        UPDATE MedicalInfo 
+        UPDATE medical_face_sheet 
         SET clientAllergies = @allergies,
             updatedAt = @updatedAt
         WHERE clientID = @clientID
@@ -421,7 +438,7 @@ router.post("/allergies/:clientID", async (req, res) => {
 // STATISTICS AND REPORTING ROUTES
 // ===================================================================
 
-// 🔧 FIXED: GET /api/medical/stats/:clientID
+// GET /api/medical/stats/:clientID
 router.get("/stats/:clientID", async (req, res) => {
   const { clientID } = req.params;
   
@@ -437,7 +454,7 @@ router.get("/stats/:clientID", async (req, res) => {
           (SELECT COUNT(*) FROM medical_appointments WHERE clientID = @clientID AND medApptDate < GETDATE()) as pastAppointments,
           (SELECT COUNT(*) FROM medical_appointments WHERE clientID = @clientID AND medApptTranport = 'Yes') as appointmentsNeedingTransport,
           (SELECT TOP 1 medApptDate FROM medical_appointments WHERE clientID = @clientID AND medApptDate >= GETDATE() ORDER BY medApptDate ASC) as nextAppointmentDate,
-          (SELECT COUNT(*) FROM MedicalInfo WHERE clientID = @clientID AND clientAllergies != '[]' AND clientAllergies IS NOT NULL) as hasAllergies
+          (SELECT COUNT(*) FROM medical_face_sheet WHERE clientID = @clientID AND clientAllergies != '[]' AND clientAllergies IS NOT NULL) as hasAllergies
       `);
     
     console.log(`✅ Retrieved medical stats for client ${clientID}`);
