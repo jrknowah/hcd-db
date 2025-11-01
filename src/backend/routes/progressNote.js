@@ -1,632 +1,548 @@
 const express = require('express');
 const router = express.Router();
 const sql = require('mssql');
-const { connectToAzureSQL } = require('../store/azureSql');
+const { getConnection } = require('../store/azureSql');
 
-// Utility function to handle database errors
-const handleDatabaseError = (error, res, operation) => {
-  console.error(`Database error during ${operation}:`, error);
-  res.status(500).json({
-    error: 'Database operation failed',
-    message: error.message,
-    operation: operation
-  });
-};
+/**
+ * Progress Notes Routes
+ * Handles nursing progress notes for clients with CRUD operations
+ */
 
-// Utility function to validate required fields
-const validateProgressNote = (noteData) => {
-  const required = ['nurseNoteDate', 'nurseNoteSite', 'nurseNote'];
-  const missing = required.filter(field => !noteData[field]);
-  
-  if (missing.length > 0) {
-    return { valid: false, message: `Missing required fields: ${missing.join(', ')}` };
-  }
-  
-  // Validate date format
-  if (noteData.nurseNoteDate && isNaN(Date.parse(noteData.nurseNoteDate))) {
-    return { valid: false, message: 'Invalid date format for nurseNoteDate' };
-  }
-  
-  // Validate follow-up date if provided
-  if (noteData.followUpDate && isNaN(Date.parse(noteData.followUpDate))) {
-    return { valid: false, message: 'Invalid date format for followUpDate' };
-  }
-  
-  return { valid: true };
-};
+// ============================================================================
+// GET ROUTES
+// ============================================================================
 
-// ===== CRITICAL: SPECIFIC ROUTES MUST COME BEFORE PARAMETERIZED ROUTES =====
-// This prevents Express from matching /summary as a :clientID parameter
-
-// GET /api/progress-notes/:clientID/summary - Get notes summary and statistics
+/**
+ * @route   GET /api/progress-notes/:clientID/summary
+ * @desc    Get summary of progress notes for a client (count, latest date, etc.)
+ * @access  Private
+ */
 router.get('/progress-notes/:clientID/summary', async (req, res) => {
   try {
     const { clientID } = req.params;
-    
-    console.log(`📊 Fetching summary for client: ${clientID}`);
-    
-    if (!clientID) {
-      return res.status(400).json({ error: 'Client ID is required' });
-    }
-    
-    const pool = await connectToAzureSQL();
-    
-    // Get comprehensive summary using SQL analytics
-    const summaryQuery = `
-      WITH NoteCounts AS (
+
+    console.log(`${new Date().toISOString()} - GET /api/progress-notes/${clientID}/summary`);
+
+    const pool = await getConnection();
+    const result = await pool.request()
+      .input('clientID', sql.VarChar(50), clientID)
+      .query(`
         SELECT 
           COUNT(*) as totalNotes,
-          COUNT(CASE WHEN noteStatus = 'Active' THEN 1 END) as activeNotes,
-          COUNT(CASE WHEN requiresFollowUp = 1 THEN 1 END) as followUpRequired,
-          COUNT(CASE WHEN createdAt >= DATEADD(day, -30, GETDATE()) THEN 1 END) as recentActivity
-        FROM progress_notes 
-        WHERE clientID = @clientID AND noteStatus != 'Deleted'
-      ),
-      SiteCounts AS (
-        SELECT 
-          nurseNoteSite,
-          COUNT(*) as count
-        FROM progress_notes 
-        WHERE clientID = @clientID AND noteStatus != 'Deleted'
-        GROUP BY nurseNoteSite
-      ),
-      PriorityCounts AS (
-        SELECT 
-          notePriority,
-          COUNT(*) as count
-        FROM progress_notes 
-        WHERE clientID = @clientID AND noteStatus != 'Deleted'
-        GROUP BY notePriority
-      ),
-      CategoryCounts AS (
-        SELECT 
-          noteCategory,
-          COUNT(*) as count
-        FROM progress_notes 
-        WHERE clientID = @clientID AND noteStatus != 'Deleted'
-        GROUP BY noteCategory
-      )
-      SELECT 
-        (SELECT totalNotes FROM NoteCounts) as totalNotes,
-        (SELECT activeNotes FROM NoteCounts) as activeNotes,
-        (SELECT followUpRequired FROM NoteCounts) as followUpRequired,
-        (SELECT recentActivity FROM NoteCounts) as recentActivity,
-        (
-          SELECT nurseNoteSite, count 
-          FROM SiteCounts 
-          FOR JSON PATH
-        ) as notesBySite,
-        (
-          SELECT notePriority, count 
-          FROM PriorityCounts 
-          FOR JSON PATH
-        ) as notesByPriority,
-        (
-          SELECT noteCategory, count 
-          FROM CategoryCounts 
-          FOR JSON PATH
-        ) as notesByCategory
-    `;
-    
-    const result = await pool.request()
-      .input('clientID', sql.NVarChar, clientID)
-      .query(summaryQuery);
-    
-    if (result.recordset.length > 0) {
-      const summary = result.recordset[0];
-      
-      // Parse JSON fields and convert to objects with NULL safety
-      const notesBySite = {};
-      const notesByPriority = {};
-      const notesByCategory = {};
-      
-      if (summary.notesBySite) {
-        try {
-          JSON.parse(summary.notesBySite).forEach(item => {
-            notesBySite[item.nurseNoteSite] = item.count;
-          });
-        } catch (e) {
-          console.warn('⚠️ Failed to parse notesBySite JSON:', e);
-        }
-      }
-      
-      if (summary.notesByPriority) {
-        try {
-          JSON.parse(summary.notesByPriority).forEach(item => {
-            notesByPriority[item.notePriority] = item.count;
-          });
-        } catch (e) {
-          console.warn('⚠️ Failed to parse notesByPriority JSON:', e);
-        }
-      }
-      
-      if (summary.notesByCategory) {
-        try {
-          JSON.parse(summary.notesByCategory).forEach(item => {
-            notesByCategory[item.noteCategory] = item.count;
-          });
-        } catch (e) {
-          console.warn('⚠️ Failed to parse notesByCategory JSON:', e);
-        }
-      }
-      
-      console.log(`✅ Retrieved summary for client ${clientID}`);
-      res.json({
-        totalNotes: summary.totalNotes || 0,
-        activeNotes: summary.activeNotes || 0,
-        followUpRequired: summary.followUpRequired || 0,
-        recentActivity: summary.recentActivity || 0,
-        notesBySite,
-        notesByPriority,
-        notesByCategory
-      });
-    } else {
-      res.json({
-        totalNotes: 0,
-        activeNotes: 0,
-        followUpRequired: 0,
-        recentActivity: 0,
-        notesBySite: {},
-        notesByPriority: {},
-        notesByCategory: {}
-      });
-    }
-    
+          MAX(nurseNoteDate) as lastNoteDate,
+          SUM(CASE WHEN requiresFollowUp = 1 AND noteStatus != 'Completed' THEN 1 ELSE 0 END) as pendingFollowUps,
+          SUM(CASE WHEN noteStatus = 'Active' THEN 1 ELSE 0 END) as activeNotes
+        FROM dbo.progress_notes
+        WHERE clientID = @clientID
+      `);
+
+    const summary = result.recordset[0] || {
+      totalNotes: 0,
+      lastNoteDate: null,
+      pendingFollowUps: 0,
+      activeNotes: 0
+    };
+
+    console.log('✅ Progress notes summary retrieved:', summary);
+    res.json({
+      success: true,
+      data: summary
+    });
+
   } catch (error) {
-    console.error('❌ Error in /summary route:', error);
-    handleDatabaseError(error, res, 'fetching notes summary');
+    console.error('❌ Error fetching progress notes summary:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching progress notes summary',
+      error: error.message
+    });
   }
 });
 
-// GET /api/progress-notes/:clientID/recent - Get recent notes (last 30 days)
-router.get('/progress-notes/:clientID/recent', async (req, res) => {
-  try {
-    const { clientID } = req.params;
-    const { days = 30 } = req.query;
-    
-    if (!clientID) {
-      return res.status(400).json({ error: 'Client ID is required' });
-    }
-    
-    const pool = await connectToAzureSQL();
-    
-    const query = `
-      SELECT 
-        noteID as _id,
-        clientID,
-        nurseNoteDate,
-        nurseNoteSite,
-        nurseNote,
-        noteCategory,
-        notePriority,
-        requiresFollowUp,
-        followUpDate,
-        createdBy,
-        createdAt
-      FROM progress_notes 
-      WHERE clientID = @clientID 
-        AND noteStatus != 'Deleted'
-        AND createdAt >= DATEADD(day, -@days, GETDATE())
-      ORDER BY createdAt DESC
-    `;
-    
-    const result = await pool.request()
-      .input('clientID', sql.NVarChar, clientID)
-      .input('days', sql.Int, parseInt(days))
-      .query(query);
-    
-    console.log(`✅ Retrieved ${result.recordset.length} recent notes for client ${clientID}`);
-    res.json(result.recordset);
-    
-  } catch (error) {
-    handleDatabaseError(error, res, 'fetching recent notes');
-  }
-});
-
-// GET /api/progress-notes/:clientID/follow-ups - Get notes requiring follow-up
-router.get('/progress-notes/:clientID/follow-ups', async (req, res) => {
-  try {
-    const { clientID } = req.params;
-    
-    if (!clientID) {
-      return res.status(400).json({ error: 'Client ID is required' });
-    }
-    
-    const pool = await connectToAzureSQL();
-    
-    const query = `
-      SELECT 
-        noteID as _id,
-        clientID,
-        nurseNoteDate,
-        nurseNoteSite,
-        nurseNote,
-        noteCategory,
-        notePriority,
-        followUpDate,
-        createdBy,
-        createdAt,
-        CASE 
-          WHEN followUpDate < GETDATE() THEN 'Overdue'
-          WHEN followUpDate = CAST(GETDATE() AS DATE) THEN 'Due Today'
-          WHEN followUpDate <= DATEADD(day, 7, GETDATE()) THEN 'Due Soon'
-          ELSE 'Scheduled'
-        END as followUpStatus
-      FROM progress_notes 
-      WHERE clientID = @clientID 
-        AND requiresFollowUp = 1
-        AND noteStatus = 'Active'
-      ORDER BY followUpDate ASC, createdAt DESC
-    `;
-    
-    const result = await pool.request()
-      .input('clientID', sql.NVarChar, clientID)
-      .query(query);
-    
-    console.log(`✅ Retrieved ${result.recordset.length} follow-up notes for client ${clientID}`);
-    res.json(result.recordset);
-    
-  } catch (error) {
-    handleDatabaseError(error, res, 'fetching follow-up notes');
-  }
-});
-
-// GET /api/progress-notes/site/:siteID - Get notes by site
-router.get('/progress-notes/site/:siteID', async (req, res) => {
-  try {
-    const { siteID } = req.params;
-    const { limit = 100, offset = 0 } = req.query;
-    
-    if (!siteID) {
-      return res.status(400).json({ error: 'Site ID is required' });
-    }
-    
-    const pool = await connectToAzureSQL();
-    
-    const query = `
-      SELECT 
-        noteID as _id,
-        clientID,
-        nurseNoteDate,
-        nurseNoteSite,
-        nurseNote,
-        noteCategory,
-        notePriority,
-        requiresFollowUp,
-        followUpDate,
-        createdBy,
-        createdAt
-      FROM progress_notes 
-      WHERE nurseNoteSite = @siteID 
-        AND noteStatus != 'Deleted'
-      ORDER BY nurseNoteDate DESC, createdAt DESC
-      OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
-    `;
-    
-    const result = await pool.request()
-      .input('siteID', sql.NVarChar, decodeURIComponent(siteID))
-      .input('limit', sql.Int, parseInt(limit))
-      .input('offset', sql.Int, parseInt(offset))
-      .query(query);
-    
-    console.log(`✅ Retrieved ${result.recordset.length} notes for site ${siteID}`);
-    res.json(result.recordset);
-    
-  } catch (error) {
-    handleDatabaseError(error, res, 'fetching notes by site');
-  }
-});
-
-// ===== GENERAL PARAMETERIZED ROUTES (MUST COME AFTER SPECIFIC ROUTES) =====
-
-// GET /api/progress-notes/:clientID - Get all progress notes for a client
+/**
+ * @route   GET /api/progress-notes/:clientID
+ * @desc    Get all progress notes for a specific client
+ * @access  Private
+ * @query   limit - Number of records to return (default: 100)
+ * @query   offset - Number of records to skip (default: 0)
+ * @query   category - Filter by note category
+ * @query   priority - Filter by note priority
+ * @query   status - Filter by note status
+ */
 router.get('/progress-notes/:clientID', async (req, res) => {
   try {
     const { clientID } = req.params;
-    const { limit = 100, offset = 0, site, category, priority, startDate, endDate } = req.query;
-    
-    console.log(`📋 Fetching progress notes for client: ${clientID}`);
-    
-    if (!clientID) {
-      return res.status(400).json({ error: 'Client ID is required' });
-    }
+    const { 
+      limit = 100, 
+      offset = 0, 
+      category, 
+      priority, 
+      status 
+    } = req.query;
 
-    const pool = await connectToAzureSQL();
-    
-    let query = `
-      SELECT 
-        noteID as _id,
-        clientID,
-        nurseNoteDate,
-        nurseNoteSite,
-        nurseNote,
-        noteCategory,
-        notePriority,
-        requiresFollowUp,
-        followUpDate,
-        noteStatus,
-        createdBy,
-        createdAt,
-        updatedBy,
-        updatedAt,
-        lastViewedBy,
-        lastViewedAt
-      FROM progress_notes 
-      WHERE clientID = @clientID
-    `;
-    
-    const request = pool.request();
-    request.input('clientID', sql.NVarChar, clientID);
-    
-    // Add optional filters
-    if (site) {
-      query += ' AND nurseNoteSite = @site';
-      request.input('site', sql.NVarChar, site);
-    }
+    console.log(`${new Date().toISOString()} - GET /api/progress-notes/${clientID}`);
+    console.log('Query params:', { limit, offset, category, priority, status });
+
+    const pool = await getConnection();
+    const request = pool.request()
+      .input('clientID', sql.VarChar(50), clientID)
+      .input('limit', sql.Int, parseInt(limit))
+      .input('offset', sql.Int, parseInt(offset));
+
+    // Build dynamic WHERE clause
+    let whereClause = 'WHERE clientID = @clientID';
     
     if (category) {
-      query += ' AND noteCategory = @category';
-      request.input('category', sql.NVarChar, category);
+      request.input('category', sql.VarChar(100), category);
+      whereClause += ' AND noteCategory = @category';
     }
     
     if (priority) {
-      query += ' AND notePriority = @priority';
-      request.input('priority', sql.NVarChar, priority);
+      request.input('priority', sql.VarChar(50), priority);
+      whereClause += ' AND notePriority = @priority';
     }
     
-    if (startDate) {
-      query += ' AND nurseNoteDate >= @startDate';
-      request.input('startDate', sql.Date, startDate);
+    if (status) {
+      request.input('status', sql.VarChar(50), status);
+      whereClause += ' AND noteStatus = @status';
     }
-    
-    if (endDate) {
-      query += ' AND nurseNoteDate <= @endDate';
-      request.input('endDate', sql.Date, endDate);
-    }
-    
-    query += ' ORDER BY nurseNoteDate DESC, createdAt DESC';
-    query += ' OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY';
-    
-    request.input('limit', sql.Int, parseInt(limit));
-    request.input('offset', sql.Int, parseInt(offset));
-    
-    const result = await request.query(query);
-    
-    // Update last viewed timestamp for audit
-    await pool.request()
-      .input('clientID', sql.NVarChar, clientID)
-      .input('viewedBy', sql.NVarChar, 'system')
-      .input('viewedAt', sql.DateTime2, new Date())
-      .query(`
-        UPDATE progress_notes 
-        SET lastViewedBy = @viewedBy, lastViewedAt = @viewedAt 
-        WHERE clientID = @clientID
-      `);
-    
-    console.log(`✅ Retrieved ${result.recordset.length} progress notes for client ${clientID}`);
-    res.json(result.recordset);
-    
+
+    const result = await request.query(`
+      SELECT *
+      FROM dbo.progress_notes
+      ${whereClause}
+      ORDER BY nurseNoteDate DESC, createdAt DESC
+      OFFSET @offset ROWS 
+      FETCH NEXT @limit ROWS ONLY
+    `);
+
+    console.log(`✅ Retrieved ${result.recordset.length} progress notes`);
+    res.json({
+      success: true,
+      data: result.recordset,
+      count: result.recordset.length
+    });
+
   } catch (error) {
-    console.error('❌ Error in GET /:clientID route:', error);
-    handleDatabaseError(error, res, 'fetching progress notes');
+    console.error('❌ Error fetching progress notes:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching progress notes',
+      error: error.message
+    });
   }
 });
 
-// POST /api/progress-notes/:clientID - Create new progress note
-router.post('/progress-notes/:clientID', async (req, res) => {
+/**
+ * @route   GET /api/progress-notes/:clientID/:noteID
+ * @desc    Get a specific progress note by ID
+ * @access  Private
+ */
+router.get('/progress-notes/:clientID/:noteID', async (req, res) => {
   try {
-    const { clientID } = req.params;
-    const noteData = req.body;
-    
-    if (!clientID) {
-      return res.status(400).json({ error: 'Client ID is required' });
+    const { clientID, noteID } = req.params;
+
+    console.log(`${new Date().toISOString()} - GET /api/progress-notes/${clientID}/${noteID}`);
+
+    const pool = await getConnection();
+    const result = await pool.request()
+      .input('clientID', sql.VarChar(50), clientID)
+      .input('noteID', sql.Int, parseInt(noteID))
+      .query(`
+        SELECT *
+        FROM dbo.progress_notes
+        WHERE clientID = @clientID AND id = @noteID
+      `);
+
+    if (result.recordset.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Progress note not found'
+      });
     }
-    
-    // Validate required fields
-    const validation = validateProgressNote(noteData);
-    if (!validation.valid) {
-      return res.status(400).json({ error: validation.message });
-    }
-    
-    const pool = await connectToAzureSQL();
-    const request = pool.request();
-    
-    // Insert new progress note
-    const insertQuery = `
-      INSERT INTO progress_notes (
-        clientID, nurseNoteDate, nurseNoteSite, nurseNote,
-        noteCategory, notePriority, requiresFollowUp, followUpDate,
-        noteStatus, createdBy, createdAt
-      )
-      OUTPUT INSERTED.noteID as _id, INSERTED.*
-      VALUES (
-        @clientID, @nurseNoteDate, @nurseNoteSite, @nurseNote,
-        @noteCategory, @notePriority, @requiresFollowUp, @followUpDate,
-        @noteStatus, @createdBy, @createdAt
-      )
-    `;
-    
-    request.input('clientID', sql.NVarChar, clientID);
-    request.input('nurseNoteDate', sql.Date, noteData.nurseNoteDate);
-    request.input('nurseNoteSite', sql.NVarChar, noteData.nurseNoteSite);
-    request.input('nurseNote', sql.NVarChar(sql.MAX), noteData.nurseNote);
-    request.input('noteCategory', sql.NVarChar, noteData.noteCategory || 'General');
-    request.input('notePriority', sql.NVarChar, noteData.notePriority || 'Medium');
-    request.input('requiresFollowUp', sql.Bit, noteData.requiresFollowUp || false);
-    request.input('followUpDate', sql.Date, noteData.followUpDate || null);
-    request.input('noteStatus', sql.NVarChar, noteData.noteStatus || 'Active');
-    request.input('createdBy', sql.NVarChar, noteData.createdBy || 'system');
-    request.input('createdAt', sql.DateTime2, new Date());
-    
-    const result = await request.query(insertQuery);
-    
-    if (result.recordset.length > 0) {
-      console.log(`✅ Created progress note for client ${clientID}`);
-      res.status(201).json(result.recordset[0]);
-    } else {
-      res.status(500).json({ error: 'Failed to create progress note' });
-    }
-    
+
+    console.log('✅ Progress note retrieved');
+    res.json({
+      success: true,
+      data: result.recordset[0]
+    });
+
   } catch (error) {
-    handleDatabaseError(error, res, 'creating progress note');
+    console.error('❌ Error fetching progress note:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching progress note',
+      error: error.message
+    });
   }
 });
 
-// PUT /api/progress-notes/:noteID - Update specific progress note
+// ============================================================================
+// POST ROUTES
+// ============================================================================
+
+/**
+ * @route   POST /api/progress-notes
+ * @desc    Create a new progress note
+ * @access  Private
+ * @body    {
+ *   clientID: string (required),
+ *   nurseNoteDate: date (required),
+ *   nurseNoteSite: string (optional),
+ *   nurseNote: string (required),
+ *   noteCategory: string (optional),
+ *   notePriority: string (optional),
+ *   requiresFollowUp: boolean (optional),
+ *   followUpDate: date (optional),
+ *   noteStatus: string (optional),
+ *   createdBy: string (required)
+ * }
+ */
+router.post('/progress-notes', async (req, res) => {
+  try {
+    const {
+      clientID,
+      nurseNoteDate,
+      nurseNoteSite = '',
+      nurseNote,
+      noteCategory = 'General',
+      notePriority = 'Normal',
+      requiresFollowUp = false,
+      followUpDate = null,
+      noteStatus = 'Active',
+      createdBy
+    } = req.body;
+
+    console.log(`${new Date().toISOString()} - POST /api/progress-notes`);
+    console.log('📤 Request body:', req.body);
+
+    // Validation
+    if (!clientID || !nurseNoteDate || !nurseNote || !createdBy) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required fields: clientID, nurseNoteDate, nurseNote, createdBy'
+      });
+    }
+
+    const pool = await getConnection();
+    const result = await pool.request()
+      .input('clientID', sql.VarChar(50), clientID)
+      .input('nurseNoteDate', sql.Date, new Date(nurseNoteDate))
+      .input('nurseNoteSite', sql.VarChar(200), nurseNoteSite)
+      .input('nurseNote', sql.Text, nurseNote)
+      .input('noteCategory', sql.VarChar(100), noteCategory)
+      .input('notePriority', sql.VarChar(50), notePriority)
+      .input('requiresFollowUp', sql.Bit, requiresFollowUp)
+      .input('followUpDate', sql.Date, followUpDate)
+      .input('noteStatus', sql.VarChar(50), noteStatus)
+      .input('createdBy', sql.VarChar(200), createdBy)
+      .query(`
+        INSERT INTO dbo.progress_notes (
+          clientID, nurseNoteDate, nurseNoteSite, nurseNote,
+          noteCategory, notePriority, requiresFollowUp, followUpDate,
+          noteStatus, createdBy, createdAt
+        )
+        OUTPUT INSERTED.*
+        VALUES (
+          @clientID, @nurseNoteDate, @nurseNoteSite, @nurseNote,
+          @noteCategory, @notePriority, @requiresFollowUp, @followUpDate,
+          @noteStatus, @createdBy, GETDATE()
+        )
+      `);
+
+    console.log('✅ Progress note created:', result.recordset[0].id);
+    res.status(201).json({
+      success: true,
+      message: 'Progress note created successfully',
+      data: result.recordset[0]
+    });
+
+  } catch (error) {
+    console.error('❌ Error creating progress note:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error creating progress note',
+      error: error.message
+    });
+  }
+});
+
+// ============================================================================
+// PUT ROUTES
+// ============================================================================
+
+/**
+ * @route   PUT /api/progress-notes/:noteID
+ * @desc    Update an existing progress note
+ * @access  Private
+ * @body    {
+ *   nurseNoteDate: date (optional),
+ *   nurseNoteSite: string (optional),
+ *   nurseNote: string (optional),
+ *   noteCategory: string (optional),
+ *   notePriority: string (optional),
+ *   requiresFollowUp: boolean (optional),
+ *   followUpDate: date (optional),
+ *   noteStatus: string (optional),
+ *   updatedBy: string (required)
+ * }
+ */
 router.put('/progress-notes/:noteID', async (req, res) => {
   try {
     const { noteID } = req.params;
-    const updateData = req.body;
-    
-    if (!noteID) {
-      return res.status(400).json({ error: 'Note ID is required' });
+    const {
+      nurseNoteDate,
+      nurseNoteSite,
+      nurseNote,
+      noteCategory,
+      notePriority,
+      requiresFollowUp,
+      followUpDate,
+      noteStatus,
+      updatedBy
+    } = req.body;
+
+    console.log(`${new Date().toISOString()} - PUT /api/progress-notes/${noteID}`);
+    console.log('📤 Request body:', req.body);
+
+    // Validation
+    if (!updatedBy) {
+      return res.status(400).json({
+        success: false,
+        message: 'updatedBy is required'
+      });
     }
-    
-    // Validate fields if they're being updated
-    if (updateData.nurseNoteDate || updateData.nurseNoteSite || updateData.nurseNote) {
-      const validation = validateProgressNote(updateData);
-      if (!validation.valid) {
-        return res.status(400).json({ error: validation.message });
-      }
-    }
-    
-    const pool = await connectToAzureSQL();
+
+    const pool = await getConnection();
     
     // Check if note exists
     const checkResult = await pool.request()
-      .input('noteID', sql.Int, noteID)
-      .query('SELECT noteID FROM progress_notes WHERE noteID = @noteID');
-    
+      .input('noteID', sql.Int, parseInt(noteID))
+      .query('SELECT id FROM dbo.progress_notes WHERE id = @noteID');
+
     if (checkResult.recordset.length === 0) {
-      return res.status(404).json({ error: 'Progress note not found' });
+      return res.status(404).json({
+        success: false,
+        message: 'Progress note not found'
+      });
     }
-    
-    // Build dynamic update query
-    const updateFields = [];
-    const request = pool.request();
-    request.input('noteID', sql.Int, noteID);
-    request.input('updatedBy', sql.NVarChar, updateData.updatedBy || 'system');
-    request.input('updatedAt', sql.DateTime2, new Date());
-    
-    if (updateData.nurseNoteDate) {
-      updateFields.push('nurseNoteDate = @nurseNoteDate');
-      request.input('nurseNoteDate', sql.Date, updateData.nurseNoteDate);
+
+    // Build dynamic UPDATE query
+    const updates = [];
+    const request = pool.request().input('noteID', sql.Int, parseInt(noteID));
+
+    if (nurseNoteDate !== undefined) {
+      updates.push('nurseNoteDate = @nurseNoteDate');
+      request.input('nurseNoteDate', sql.Date, new Date(nurseNoteDate));
     }
-    
-    if (updateData.nurseNoteSite) {
-      updateFields.push('nurseNoteSite = @nurseNoteSite');
-      request.input('nurseNoteSite', sql.NVarChar, updateData.nurseNoteSite);
+    if (nurseNoteSite !== undefined) {
+      updates.push('nurseNoteSite = @nurseNoteSite');
+      request.input('nurseNoteSite', sql.VarChar(200), nurseNoteSite);
     }
-    
-    if (updateData.nurseNote) {
-      updateFields.push('nurseNote = @nurseNote');
-      request.input('nurseNote', sql.NVarChar(sql.MAX), updateData.nurseNote);
+    if (nurseNote !== undefined) {
+      updates.push('nurseNote = @nurseNote');
+      request.input('nurseNote', sql.Text, nurseNote);
     }
-    
-    if (updateData.noteCategory) {
-      updateFields.push('noteCategory = @noteCategory');
-      request.input('noteCategory', sql.NVarChar, updateData.noteCategory);
+    if (noteCategory !== undefined) {
+      updates.push('noteCategory = @noteCategory');
+      request.input('noteCategory', sql.VarChar(100), noteCategory);
     }
-    
-    if (updateData.notePriority) {
-      updateFields.push('notePriority = @notePriority');
-      request.input('notePriority', sql.NVarChar, updateData.notePriority);
+    if (notePriority !== undefined) {
+      updates.push('notePriority = @notePriority');
+      request.input('notePriority', sql.VarChar(50), notePriority);
     }
-    
-    if (updateData.hasOwnProperty('requiresFollowUp')) {
-      updateFields.push('requiresFollowUp = @requiresFollowUp');
-      request.input('requiresFollowUp', sql.Bit, updateData.requiresFollowUp);
+    if (requiresFollowUp !== undefined) {
+      updates.push('requiresFollowUp = @requiresFollowUp');
+      request.input('requiresFollowUp', sql.Bit, requiresFollowUp);
     }
-    
-    if (updateData.followUpDate !== undefined) {
-      updateFields.push('followUpDate = @followUpDate');
-      request.input('followUpDate', sql.Date, updateData.followUpDate);
+    if (followUpDate !== undefined) {
+      updates.push('followUpDate = @followUpDate');
+      request.input('followUpDate', sql.Date, followUpDate);
     }
-    
-    if (updateData.noteStatus) {
-      updateFields.push('noteStatus = @noteStatus');
-      request.input('noteStatus', sql.NVarChar, updateData.noteStatus);
+    if (noteStatus !== undefined) {
+      updates.push('noteStatus = @noteStatus');
+      request.input('noteStatus', sql.VarChar(50), noteStatus);
     }
-    
-    if (updateFields.length === 0) {
-      return res.status(400).json({ error: 'No valid fields provided for update' });
-    }
-    
-    const updateQuery = `
-      UPDATE progress_notes 
-      SET ${updateFields.join(', ')}, updatedBy = @updatedBy, updatedAt = @updatedAt
-      OUTPUT INSERTED.noteID as _id, INSERTED.*
-      WHERE noteID = @noteID
-    `;
-    
-    const result = await request.query(updateQuery);
-    
-    if (result.recordset.length > 0) {
-      console.log(`✅ Updated progress note ${noteID}`);
-      res.json(result.recordset[0]);
-    } else {
-      res.status(500).json({ error: 'Failed to update progress note' });
-    }
-    
+
+    updates.push('updatedBy = @updatedBy');
+    updates.push('updatedAt = GETDATE()');
+    request.input('updatedBy', sql.VarChar(200), updatedBy);
+
+    const result = await request.query(`
+      UPDATE dbo.progress_notes
+      SET ${updates.join(', ')}
+      OUTPUT INSERTED.*
+      WHERE id = @noteID
+    `);
+
+    console.log('✅ Progress note updated');
+    res.json({
+      success: true,
+      message: 'Progress note updated successfully',
+      data: result.recordset[0]
+    });
+
   } catch (error) {
-    handleDatabaseError(error, res, 'updating progress note');
+    console.error('❌ Error updating progress note:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error updating progress note',
+      error: error.message
+    });
   }
 });
 
-// DELETE /api/progress-notes/:noteID - Delete progress note
+// ============================================================================
+// DELETE ROUTES
+// ============================================================================
+
+/**
+ * @route   DELETE /api/progress-notes/:noteID
+ * @desc    Delete a progress note (soft delete by setting status to 'Archived')
+ * @access  Private
+ * @query   permanent - Set to 'true' for hard delete (optional)
+ */
 router.delete('/progress-notes/:noteID', async (req, res) => {
   try {
     const { noteID } = req.params;
-    
-    if (!noteID) {
-      return res.status(400).json({ error: 'Note ID is required' });
-    }
-    
-    const pool = await connectToAzureSQL();
-    
-    // Check if note exists
-    const checkResult = await pool.request()
-      .input('noteID', sql.Int, noteID)
-      .query('SELECT noteID, clientID FROM progress_notes WHERE noteID = @noteID');
-    
-    if (checkResult.recordset.length === 0) {
-      return res.status(404).json({ error: 'Progress note not found' });
-    }
-    
-    // Soft delete by updating status (recommended) or hard delete
-    const deleteQuery = `
-      UPDATE progress_notes 
-      SET noteStatus = 'Deleted', 
-          updatedBy = @deletedBy, 
-          updatedAt = @deletedAt
-      WHERE noteID = @noteID
-    `;
-    
-    const result = await pool.request()
-      .input('noteID', sql.Int, noteID)
-      .input('deletedBy', sql.NVarChar, 'system')
-      .input('deletedAt', sql.DateTime2, new Date())
-      .query(deleteQuery);
-    
-    if (result.rowsAffected[0] > 0) {
-      console.log(`✅ Deleted progress note ${noteID}`);
-      res.json({ message: 'Progress note deleted successfully', noteID });
+    const { permanent = 'false' } = req.query;
+
+    console.log(`${new Date().toISOString()} - DELETE /api/progress-notes/${noteID}`);
+    console.log('Permanent delete:', permanent === 'true');
+
+    const pool = await getConnection();
+
+    if (permanent === 'true') {
+      // Hard delete
+      const result = await pool.request()
+        .input('noteID', sql.Int, parseInt(noteID))
+        .query(`
+          DELETE FROM dbo.progress_notes
+          WHERE id = @noteID
+        `);
+
+      if (result.rowsAffected[0] === 0) {
+        return res.status(404).json({
+          success: false,
+          message: 'Progress note not found'
+        });
+      }
+
+      console.log('✅ Progress note permanently deleted');
+      res.json({
+        success: true,
+        message: 'Progress note permanently deleted'
+      });
+
     } else {
-      res.status(500).json({ error: 'Failed to delete progress note' });
+      // Soft delete - archive the note
+      const result = await pool.request()
+        .input('noteID', sql.Int, parseInt(noteID))
+        .query(`
+          UPDATE dbo.progress_notes
+          SET noteStatus = 'Archived', updatedAt = GETDATE()
+          OUTPUT INSERTED.*
+          WHERE id = @noteID
+        `);
+
+      if (result.recordset.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: 'Progress note not found'
+        });
+      }
+
+      console.log('✅ Progress note archived');
+      res.json({
+        success: true,
+        message: 'Progress note archived successfully',
+        data: result.recordset[0]
+      });
     }
-    
+
   } catch (error) {
-    handleDatabaseError(error, res, 'deleting progress note');
+    console.error('❌ Error deleting progress note:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error deleting progress note',
+      error: error.message
+    });
   }
 });
 
-// Error handling middleware
-router.use((error, req, res, next) => {
-  console.error("❌ Progress Notes Route Error:", error);
-  res.status(500).json({
-    error: "Internal server error in progress notes routes",
-    details: error.message
-  });
+// ============================================================================
+// UTILITY ROUTES
+// ============================================================================
+
+/**
+ * @route   GET /api/progress-notes/:clientID/categories
+ * @desc    Get all unique categories used for this client
+ * @access  Private
+ */
+router.get('/progress-notes/:clientID/categories', async (req, res) => {
+  try {
+    const { clientID } = req.params;
+
+    const pool = await getConnection();
+    const result = await pool.request()
+      .input('clientID', sql.VarChar(50), clientID)
+      .query(`
+        SELECT DISTINCT noteCategory
+        FROM dbo.progress_notes
+        WHERE clientID = @clientID AND noteCategory IS NOT NULL
+        ORDER BY noteCategory
+      `);
+
+    res.json({
+      success: true,
+      data: result.recordset.map(r => r.noteCategory)
+    });
+
+  } catch (error) {
+    console.error('❌ Error fetching categories:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching categories',
+      error: error.message
+    });
+  }
+});
+
+/**
+ * @route   GET /api/progress-notes/:clientID/follow-ups
+ * @desc    Get all notes requiring follow-up for this client
+ * @access  Private
+ */
+router.get('/progress-notes/:clientID/follow-ups', async (req, res) => {
+  try {
+    const { clientID } = req.params;
+
+    const pool = await getConnection();
+    const result = await pool.request()
+      .input('clientID', sql.VarChar(50), clientID)
+      .query(`
+        SELECT *
+        FROM dbo.progress_notes
+        WHERE clientID = @clientID 
+          AND requiresFollowUp = 1 
+          AND noteStatus != 'Completed'
+        ORDER BY followUpDate ASC, nurseNoteDate DESC
+      `);
+
+    res.json({
+      success: true,
+      data: result.recordset,
+      count: result.recordset.length
+    });
+
+  } catch (error) {
+    console.error('❌ Error fetching follow-ups:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching follow-ups',
+      error: error.message
+    });
+  }
 });
 
 module.exports = router;

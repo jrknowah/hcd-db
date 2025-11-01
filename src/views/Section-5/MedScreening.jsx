@@ -52,6 +52,30 @@ import {
   medCond4, medCond5, medicationData
 } from "../../data/arrayList";
 
+// ✅ Helper function to format dates for HTML date inputs
+const formatDateForInput = (dateValue) => {
+  if (!dateValue || dateValue === '' || dateValue === 'null' || dateValue === 'undefined') {
+    return '';
+  }
+  
+  try {
+    const date = new Date(dateValue);
+    if (isNaN(date.getTime())) {
+      return '';
+    }
+    
+    // Format as YYYY-MM-DD
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    
+    return `${year}-${month}-${day}`;
+  } catch (e) {
+    console.warn('⚠️ Error formatting date for input:', dateValue);
+    return '';
+  }
+};
+
 // Custom styles for react-select to match Material-UI theme
 const customSelectStyles = {
   control: (provided, state) => ({
@@ -219,7 +243,6 @@ const MedScreening = ({ clientID }) => {
       // String fields with fallbacks
       clientAlcoholRisk: data.clientAlcoholRisk || "",
       clientAlcoholRiskMed: data.clientAlcoholRiskMed || "",
-      clientLastTBTest: data.clientLastTBTest || "",
       clientLastTBTestResults: data.clientLastTBTestResults || "",
       clientLastTBTestResultsTreatment: data.clientLastTBTestResultsTreatment || "",
       clientLastTBTestResultsTreatmentOutcome: data.clientLastTBTestResultsTreatmentOutcome || "",
@@ -230,17 +253,20 @@ const MedScreening = ({ clientID }) => {
       clientWeightLoss: data.clientWeightLoss || "",
       clientBC: data.clientBC || "",
       clientBCName: data.clientBCName || "",
-      clientBCDate: data.clientBCDate || "",
       clientBCLoc: data.clientBCLoc || "",
       clientBCPreg: data.clientBCPreg || "",
-      clientBCPregDate: data.clientBCPregDate || "",
-      clientBCPap: data.clientBCPap || "",
-      clientBCMam: data.clientBCMam || "",
       clientSexLastYear: data.clientSexLastYear || "",
       clientSexLastMonth: data.clientSexLastMonth || "",
-      clientLastSexDate: data.clientLastSexDate || "",
       clientSexRelations: data.clientSexRelations || "",
-      clientSTDDate: data.clientSTDDate || "",
+      
+      // ✅ FIXED: Format all date fields for HTML date inputs
+      clientLastTBTest: formatDateForInput(data.clientLastTBTest),
+      clientBCDate: formatDateForInput(data.clientBCDate),
+      clientBCPregDate: formatDateForInput(data.clientBCPregDate),
+      clientBCPap: formatDateForInput(data.clientBCPap),
+      clientBCMam: formatDateForInput(data.clientBCMam),
+      clientLastSexDate: formatDateForInput(data.clientLastSexDate),
+      clientSTDDate: formatDateForInput(data.clientSTDDate),
     });
   }, [savedMedData, justSaved]);
 
@@ -269,103 +295,160 @@ const MedScreening = ({ clientID }) => {
     });
   };
 
-  // ✅ FIXED: Handle Form Submission with proper data structure
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    
-    isSaving.current = true;
-    setJustSaved(true);
-    
-    console.log('💾 Saving medical screening data...');
-    console.log('📤 Form data being saved:', formData);
-    
-    if (!clientID) {
-      console.error('❌ No clientID provided');
-      isSaving.current = false;
-      return;
-    }
-    
-    if (shouldUseMockData) {
-      console.log('🔧 Mock mode - data saved locally');
-      setSaveSuccess(true);
-      setTimeout(() => {
-        setSaveSuccess(false);
-        isSaving.current = false;
-      }, 3000);
-      return;
-    }
-
-    console.log('📤 Dispatching save to backend...');
-    
-    dispatch(saveMedScreening({ ...formData, clientID }))
-      .unwrap()
-      .then((result) => {
-        console.log('✅ Save completed successfully:', result);
-        setSaveSuccess(true);
-        
-        // ✅ Re-fetch data to ensure we have the latest from database
-        setTimeout(() => {
-          dispatch(fetchMedScreening(clientID));
-          setSaveSuccess(false);
-          isSaving.current = false;
-        }, 1500);
-      })
-      .catch((error) => {
-        console.error('❌ Save failed:', error);
-        isSaving.current = false;
-        setJustSaved(false);
-      });
-  };
-
   const handleSaveMeds = () => {
-    console.log('💊 Adding medication');
-    const newMed = {
-      clientMedName: formData.clientMedName,
-      clientMedDose: formData.clientMedDose,
-      clientMedSideEffects: formData.clientMedSideEffects,
-      clientMedTaking: formData.clientMedTaking,
-    };
-    const updatedMeds = [...(formData.clientMedications || []), newMed];
+  console.log('💊 === ADDING MEDICATION START ===');
+  console.log('💊 Medication Name:', formData.clientMedName);
+  console.log('💊 Medication Dose:', formData.clientMedDose);
+  
+  const newMed = {
+    clientMedName: formData.clientMedName,
+    clientMedDose: formData.clientMedDose,
+    clientMedSideEffects: formData.clientMedSideEffects,
+    clientMedTaking: formData.clientMedTaking,
+  };
+  
+  console.log('💊 New medication object:', newMed);
+  
+  // ✅ CRITICAL FIX: Use functional state update
+  // This ensures we're working with the most current state
+  setFormData((prevData) => {
+    const currentMeds = Array.isArray(prevData.clientMedications) 
+      ? prevData.clientMedications 
+      : [];
+    
+    const updatedMeds = [...currentMeds, newMed];
+    
+    console.log('💊 Previous medications:', currentMeds);
     console.log('💊 Updated medications:', updatedMeds);
-    setFormData({ 
-      ...formData, 
+    console.log('💊 Medications count:', updatedMeds.length);
+    
+    return {
+      ...prevData,
       clientMedications: updatedMeds,
       clientMedName: "",
       clientMedDose: "",
       clientMedSideEffects: "",
       clientMedTaking: ""
-    });
-    toggleMeds();
-  };
-
-  const handleSaveSurgeries = () => {
-    console.log('🏥 Adding surgery/hospitalization');
-    const newSurgery = {
-      clientSurgeryType: formData.clientSurgeryType,
-      clientSurgeryDate: formData.clientSurgeryDate,
     };
-    const updatedSurgeries = [...(formData.clientSurgeries || []), newSurgery];
+  });
+  
+  console.log('💊 === ADDING MEDICATION END ===');
+  toggleMeds();
+};
+
+// ✅ FIXED: handleSaveSurgeries - Use functional state update
+const handleSaveSurgeries = () => {
+  console.log('🏥 === ADDING SURGERY START ===');
+  console.log('🏥 Surgery Type:', formData.clientSurgeryType);
+  console.log('🏥 Surgery Date:', formData.clientSurgeryDate);
+  
+  const newSurgery = {
+    clientSurgeryType: formData.clientSurgeryType,
+    clientSurgeryDate: formData.clientSurgeryDate,
+  };
+  
+  console.log('🏥 New surgery object:', newSurgery);
+  
+  // ✅ CRITICAL FIX: Use functional state update
+  // This ensures we're working with the most current state
+  setFormData((prevData) => {
+    const currentSurgeries = Array.isArray(prevData.clientSurgeries) 
+      ? prevData.clientSurgeries 
+      : [];
+    
+    const updatedSurgeries = [...currentSurgeries, newSurgery];
+    
+    console.log('🏥 Previous surgeries:', currentSurgeries);
     console.log('🏥 Updated surgeries:', updatedSurgeries);
-    setFormData({ 
-      ...formData, 
+    console.log('🏥 Surgeries count:', updatedSurgeries.length);
+    
+    return {
+      ...prevData,
       clientSurgeries: updatedSurgeries,
       clientSurgeryType: "",
       clientSurgeryDate: ""
+    };
+  });
+  
+  console.log('🏥 === ADDING SURGERY END ===');
+  toggleSurgery();
+};
+
+const handleDeleteMed = (index) => {
+  console.log('🗑️ Deleting medication at index:', index);
+  setFormData((prevData) => {
+    const updatedMeds = prevData.clientMedications.filter((_, i) => i !== index);
+    return { ...prevData, clientMedications: updatedMeds };
+  });
+};
+
+const handleDeleteSurgery = (index) => {
+  console.log('🗑️ Deleting surgery at index:', index);
+  setFormData((prevData) => {
+    const updatedSurgeries = prevData.clientSurgeries.filter((_, i) => i !== index);
+    return { ...prevData, clientSurgeries: updatedSurgeries };
+  });
+};
+
+// ✅ ENHANCED: handleSubmit - Add verification logging
+const handleSubmit = (e) => {
+  e.preventDefault();
+  
+  console.log('💾 === FORM SUBMIT START ===');
+  console.log('💾 Full formData:', formData);
+  console.log('💾 clientMedications:', formData.clientMedications);
+  console.log('💾 clientMedications count:', formData.clientMedications?.length || 0);
+  console.log('💾 clientSurgeries:', formData.clientSurgeries);
+  console.log('💾 clientSurgeries count:', formData.clientSurgeries?.length || 0);
+  
+  isSaving.current = true;
+  setJustSaved(true);
+  
+  if (!clientID) {
+    console.error('❌ No clientID provided');
+    isSaving.current = false;
+    return;
+  }
+  
+  if (shouldUseMockData) {
+    console.log('🔧 Mock mode - data saved locally');
+    setSaveSuccess(true);
+    setTimeout(() => {
+      setSaveSuccess(false);
+      isSaving.current = false;
+    }, 3000);
+    return;
+  }
+
+  console.log('💾 Dispatching save to backend...');
+  console.log('💾 Data being sent:', { ...formData, clientID });
+  console.log('💾 === FORM SUBMIT END ===');
+  
+  dispatch(saveMedScreening({ ...formData, clientID }))
+    .unwrap()
+    .then((result) => {
+      console.log('✅ === SAVE RESPONSE START ===');
+      console.log('✅ Full result:', result);
+      console.log('✅ result.data:', result.data);
+      console.log('✅ result.data.clientMedications:', result.data?.clientMedications);
+      console.log('✅ result.data.clientSurgeries:', result.data?.clientSurgeries);
+      console.log('✅ === SAVE RESPONSE END ===');
+      
+      setSaveSuccess(true);
+      
+      // Re-fetch data to ensure we have the latest from database
+      setTimeout(() => {
+        dispatch(fetchMedScreening(clientID));
+        setSaveSuccess(false);
+        isSaving.current = false;
+      }, 1500);
+    })
+    .catch((error) => {
+      console.error('❌ Save failed:', error);
+      isSaving.current = false;
+      setJustSaved(false);
     });
-    toggleSurgery();
-  };
-
-  const handleDeleteMed = (index) => {
-    console.log('🗑️ Deleting medication at index:', index);
-    const updatedMeds = formData.clientMedications.filter((_, i) => i !== index);
-    setFormData({ ...formData, clientMedications: updatedMeds });
-  };
-
-  const handleDeleteSurgery = (index) => {
-    console.log('🗑️ Deleting surgery at index:', index);
-    const updatedSurgeries = formData.clientSurgeries.filter((_, i) => i !== index);
-    setFormData({ ...formData, clientSurgeries: updatedSurgeries });
-  };
+};
 
   return (
     <Box sx={{ p: 2 }}>
