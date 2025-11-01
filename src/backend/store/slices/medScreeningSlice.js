@@ -84,6 +84,8 @@ const MOCK_MEDICAL_SCREENING = {
 export const fetchMedScreening = createAsyncThunk(
   "medScreening/fetchMedScreening",
   async (clientID, thunkAPI) => {
+    console.log('📥 fetchMedScreening called for clientID:', clientID);
+    
     // ✅ PROTECTION: Return mock data for mock clients
     if (shouldUseMockData(clientID)) {
       console.log("🔧 Mock mode: Returning mock medical screening for", clientID);
@@ -91,7 +93,9 @@ export const fetchMedScreening = createAsyncThunk(
     }
 
     try {
+      console.log(`📡 Fetching from: ${API_URL}/api/medical-screening/${clientID}`);
       const response = await axios.get(`${API_URL}/api/medical-screening/${clientID}`);
+      console.log('✅ Fetch response:', response.data);
       return response.data;
     } catch (error) {
       console.error("❌ Error fetching medical screening:", error);
@@ -106,22 +110,33 @@ export const saveMedScreening = createAsyncThunk(
   async (screeningData, thunkAPI) => {
     const { clientID, ...data } = screeningData;
     
+    console.log('💾 saveMedScreening called');
+    console.log('📤 ClientID:', clientID);
+    console.log('📤 Data to save:', data);
+    
     // ✅ PROTECTION: Return mock success for mock clients
     if (shouldUseMockData(clientID)) {
       console.log("🔧 Mock mode: Simulating medical screening save for", clientID);
       return {
-        ...data,
-        clientID,
-        id: Date.now(),
-        updatedAt: new Date().toISOString()
+        success: true,
+        message: 'Medical screening saved successfully (MOCK)',
+        data: {
+          ...data,
+          clientID,
+          id: Date.now(),
+          updatedAt: new Date().toISOString()
+        }
       };
     }
 
     try {
+      console.log(`📡 Posting to: ${API_URL}/api/medical-screening/${clientID}`);
       const response = await axios.post(`${API_URL}/api/medical-screening/${clientID}`, data);
+      console.log('✅ Save response:', response.data);
       return response.data;
     } catch (error) {
       console.error("❌ Error saving medical screening:", error);
+      console.error("❌ Error details:", error.response?.data);
       return thunkAPI.rejectWithValue(error.response?.data || "Save failed");
     }
   }
@@ -131,18 +146,25 @@ export const saveMedScreening = createAsyncThunk(
 export const updateMedScreening = createAsyncThunk(
   "medScreening/updateMedScreening",
   async ({ screeningID, screeningData }, thunkAPI) => {
+    console.log('🔄 updateMedScreening called:', screeningID);
+    
     // ✅ PROTECTION: Return mock success for mock clients
     if (shouldUseMockData(screeningData.clientID)) {
       console.log("🔧 Mock mode: Simulating medical screening update for", screeningID);
       return {
-        ...screeningData,
-        id: screeningID,
-        updatedAt: new Date().toISOString()
+        success: true,
+        message: 'Medical screening updated successfully (MOCK)',
+        data: {
+          ...screeningData,
+          id: screeningID,
+          updatedAt: new Date().toISOString()
+        }
       };
     }
 
     try {
       const response = await axios.put(`${API_URL}/api/medical-screening/${screeningID}`, screeningData);
+      console.log('✅ Update response:', response.data);
       return response.data;
     } catch (error) {
       console.error("❌ Error updating medical screening:", error);
@@ -265,37 +287,50 @@ const medScreeningSlice = createSlice({
     builder
       // Fetch medical screening
       .addCase(fetchMedScreening.pending, (state) => {
+        console.log('📥 fetchMedScreening.pending');
         state.loading = true;
         state.error = null;
       })
       .addCase(fetchMedScreening.fulfilled, (state, action) => {
+        console.log('✅ fetchMedScreening.fulfilled:', action.payload);
         state.loading = false;
         state.data = action.payload;
         state.error = null;
       })
       .addCase(fetchMedScreening.rejected, (state, action) => {
+        console.log('❌ fetchMedScreening.rejected:', action.payload);
         state.loading = false;
         state.error = action.payload;
       })
       
       // Save medical screening
       .addCase(saveMedScreening.pending, (state) => {
+        console.log('💾 saveMedScreening.pending');
         state.saving = true;
         state.saveError = null;
         state.saveSuccess = false;
       })
       .addCase(saveMedScreening.fulfilled, (state, action) => {
+        console.log('✅ saveMedScreening.fulfilled:', action.payload);
         state.saving = false;
         state.saveSuccess = true;
         state.saveError = null;
+        
+        // ✅ FIXED: Extract data from response structure {success, message, data}
+        // Backend returns: { success: true, message: '...', data: {...} }
+        // We need to extract the 'data' field if it exists
+        const savedData = action.payload?.data || action.payload;
+        console.log('💾 Extracted saved data:', savedData);
+        
         // Update the data array
         if (state.data.length > 0) {
-          state.data[0] = action.payload;
+          state.data[0] = savedData;
         } else {
-          state.data = [action.payload];
+          state.data = [savedData];
         }
       })
       .addCase(saveMedScreening.rejected, (state, action) => {
+        console.log('❌ saveMedScreening.rejected:', action.payload);
         state.saving = false;
         state.saveError = action.payload;
         state.saveSuccess = false;
@@ -303,20 +338,27 @@ const medScreeningSlice = createSlice({
       
       // Update medical screening
       .addCase(updateMedScreening.pending, (state) => {
+        console.log('🔄 updateMedScreening.pending');
         state.saving = true;
         state.saveError = null;
       })
       .addCase(updateMedScreening.fulfilled, (state, action) => {
+        console.log('✅ updateMedScreening.fulfilled:', action.payload);
         state.saving = false;
         state.saveSuccess = true;
         state.saveError = null;
+        
+        // ✅ FIXED: Extract data from response structure
+        const updatedData = action.payload?.data || action.payload;
+        
         // Update the data array
-        const index = state.data.findIndex(item => item.id === action.payload.id);
+        const index = state.data.findIndex(item => item.id === updatedData.id);
         if (index !== -1) {
-          state.data[index] = action.payload;
+          state.data[index] = updatedData;
         }
       })
       .addCase(updateMedScreening.rejected, (state, action) => {
+        console.log('❌ updateMedScreening.rejected:', action.payload);
         state.saving = false;
         state.saveError = action.payload;
       })

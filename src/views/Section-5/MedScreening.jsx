@@ -100,6 +100,7 @@ const MedScreening = ({ clientID }) => {
   // ✅ Fetch Data from Redux Store
   useEffect(() => {
     if (clientID && !shouldUseMockData) {
+      console.log('📥 Fetching medical screening data for client:', clientID);
       dispatch(fetchMedScreening(clientID));
     }
   }, [clientID, dispatch, shouldUseMockData]);
@@ -144,87 +145,105 @@ const MedScreening = ({ clientID }) => {
     clientSurgeries: [],
   });
   const isSaving = useRef(false);
-  // 1. ADD STATE to track if we just saved
   const [justSaved, setJustSaved] = useState(false);
 
-  // 2. MODIFY useEffect - Don't reset form if we just saved
+  // ✅ FIXED: Load saved data into form with proper parsing
   useEffect(() => {
     if (isSaving.current) {
       console.log('⏭️ Blocked - currently saving');
       return;
     }
-    // ✅ Don't reset form right after saving
+    
     if (justSaved) {
       console.log('⏭️ Skipping form reset - just saved data');
       setJustSaved(false);
       return;
     }
 
-    if (!savedMedData || savedMedData.length === 0) return;
-
-    if (savedMedData.length > 0) {
-      const data = savedMedData[0];
-      
-      // ✅ FIXED: Helper function to safely parse JSON
-      const safeJsonParse = (value, fallback = []) => {
-        if (!value || value === '' || value === 'null' || value === 'undefined') {
-          return fallback;
-        }
-        
-        if (Array.isArray(value)) {
-          return value;
-        }
-        
-        try {
-          const parsed = JSON.parse(value);
-          return Array.isArray(parsed) ? parsed : fallback;
-        } catch (e) {
-          console.warn('⚠️ Failed to parse JSON field:', value, e);
-          return fallback;
-        }
-      };
-      
-      console.log('📥 Loading saved data into form');
-      setFormData({
-        ...data,
-        id: data.id || "",
-        
-        // ✅ FIXED: Safe JSON parsing for all array fields
-        clientMedConditions: safeJsonParse(data.clientMedConditions, []),
-        clientHepAB: safeJsonParse(data.clientHepAB, []),
-        clientRiskFactors: safeJsonParse(data.clientRiskFactors, []),
-        clientSTDStatus: safeJsonParse(data.clientSTDStatus, []),
-        clientMedications: safeJsonParse(data.clientMedications, []),
-        clientSurgeries: safeJsonParse(data.clientSurgeries, []),
-        
-        // String fields with fallbacks
-        clientAlcoholRisk: data.clientAlcoholRisk || "",
-        clientAlcoholRiskMed: data.clientAlcoholRiskMed || "",
-        clientLastTBTest: data.clientLastTBTest || "",
-        clientLastTBTestResults: data.clientLastTBTestResults || "",
-        clientLastTBTestResultsTreatment: data.clientLastTBTestResultsTreatment || "",
-        clientLastTBTestResultsTreatmentOutcome: data.clientLastTBTestResultsTreatmentOutcome || "",
-        tbCough: data.tbCough || "",
-        tbCoughBlood: data.tbCoughBlood || "",
-        medSweat: data.medSweat || "",
-        clientFever: data.clientFever || "",
-        clientWeightLoss: data.clientWeightLoss || "",
-        clientBC: data.clientBC || "",
-        clientBCName: data.clientBCName || "",
-        clientBCDate: data.clientBCDate || "",
-        clientBCLoc: data.clientBCLoc || "",
-        clientBCPreg: data.clientBCPreg || "",
-        clientBCPregDate: data.clientBCPregDate || "",
-        clientBCPap: data.clientBCPap || "",
-        clientBCMam: data.clientBCMam || "",
-        clientSexLastYear: data.clientSexLastYear || "",
-        clientSexLastMonth: data.clientSexLastMonth || "",
-        clientLastSexDate: data.clientLastSexDate || "",
-        clientSexRelations: data.clientSexRelations || "",
-        clientSTDDate: data.clientSTDDate || "",
-      });
+    if (!savedMedData || savedMedData.length === 0) {
+      console.log('⏭️ No saved data to load');
+      return;
     }
-  }, [savedMedData, justSaved]); // ✅ Add justSaved to dependencies
+
+    const data = savedMedData[0];
+    console.log('📥 Loading saved data into form:', data);
+    
+    // ✅ FIXED: Helper function to safely parse JSON
+    const safeJsonParse = (value, fallback = []) => {
+      if (!value || value === '' || value === 'null' || value === 'undefined') {
+        return fallback;
+      }
+      
+      if (Array.isArray(value)) {
+        return value;
+      }
+      
+      try {
+        const parsed = JSON.parse(value);
+        return Array.isArray(parsed) ? parsed : fallback;
+      } catch (e) {
+        console.warn('⚠️ Failed to parse JSON field:', value, e);
+        return fallback;
+      }
+    };
+    
+    // ✅ FIXED: Parse all JSON array fields
+    const parsedMedConditions = safeJsonParse(data.clientMedConditions, []);
+    const parsedHepAB = safeJsonParse(data.clientHepAB, []);
+    const parsedRiskFactors = safeJsonParse(data.clientRiskFactors, []);
+    const parsedSTDStatus = safeJsonParse(data.clientSTDStatus, []);
+    const parsedMedications = safeJsonParse(data.clientMedications, []);
+    const parsedSurgeries = safeJsonParse(data.clientSurgeries, []);
+    
+    console.log('✅ Parsed data:', {
+      medConditions: parsedMedConditions,
+      hepAB: parsedHepAB,
+      riskFactors: parsedRiskFactors,
+      stdStatus: parsedSTDStatus,
+      medications: parsedMedications,
+      surgeries: parsedSurgeries
+    });
+    
+    setFormData({
+      ...data,
+      id: data.id || "",
+      
+      // ✅ FIXED: Use parsed arrays
+      clientMedConditions: parsedMedConditions,
+      clientHepAB: parsedHepAB,
+      clientRiskFactors: parsedRiskFactors,
+      clientSTDStatus: parsedSTDStatus,
+      clientMedications: parsedMedications,
+      clientSurgeries: parsedSurgeries,
+      
+      // String fields with fallbacks
+      clientAlcoholRisk: data.clientAlcoholRisk || "",
+      clientAlcoholRiskMed: data.clientAlcoholRiskMed || "",
+      clientLastTBTest: data.clientLastTBTest || "",
+      clientLastTBTestResults: data.clientLastTBTestResults || "",
+      clientLastTBTestResultsTreatment: data.clientLastTBTestResultsTreatment || "",
+      clientLastTBTestResultsTreatmentOutcome: data.clientLastTBTestResultsTreatmentOutcome || "",
+      tbCough: data.tbCough || "",
+      tbCoughBlood: data.tbCoughBlood || "",
+      medSweat: data.medSweat || "",
+      clientFever: data.clientFever || "",
+      clientWeightLoss: data.clientWeightLoss || "",
+      clientBC: data.clientBC || "",
+      clientBCName: data.clientBCName || "",
+      clientBCDate: data.clientBCDate || "",
+      clientBCLoc: data.clientBCLoc || "",
+      clientBCPreg: data.clientBCPreg || "",
+      clientBCPregDate: data.clientBCPregDate || "",
+      clientBCPap: data.clientBCPap || "",
+      clientBCMam: data.clientBCMam || "",
+      clientSexLastYear: data.clientSexLastYear || "",
+      clientSexLastMonth: data.clientSexLastMonth || "",
+      clientLastSexDate: data.clientLastSexDate || "",
+      clientSexRelations: data.clientSexRelations || "",
+      clientSTDDate: data.clientSTDDate || "",
+    });
+  }, [savedMedData, justSaved]);
+
   if (loading) {
     return (
       <Box sx={{ p: 3 }}>
@@ -239,27 +258,30 @@ const MedScreening = ({ clientID }) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  // ✅ Handle Multi-Select Inputs
+  // ✅ Handle Multi-Select Inputs - converts array of objects to array of values
   const handleMultiSelectChange = (name, selectedOptions) => {
+    console.log(`📝 Multi-select change for ${name}:`, selectedOptions);
+    const values = selectedOptions ? selectedOptions.map(option => option.value) : [];
+    console.log(`📝 Setting ${name} to:`, values);
     setFormData({
       ...formData,
-      [name]: selectedOptions ? selectedOptions.map(option => option.value) : []
+      [name]: values
     });
   };
 
-  // ✅ Handle Form Submission
-  // 3. MODIFY handleSubmit - Set flag to prevent form reset
+  // ✅ FIXED: Handle Form Submission with proper data structure
   const handleSubmit = (e) => {
     e.preventDefault();
     
-    // ✅ Set blocking flag BEFORE any async operations
     isSaving.current = true;
+    setJustSaved(true);
     
     console.log('💾 Saving medical screening data...');
+    console.log('📤 Form data being saved:', formData);
     
     if (!clientID) {
       console.error('❌ No clientID provided');
-      isSaving.current = false; // Reset flag on error
+      isSaving.current = false;
       return;
     }
     
@@ -268,7 +290,6 @@ const MedScreening = ({ clientID }) => {
       setSaveSuccess(true);
       setTimeout(() => {
         setSaveSuccess(false);
-        // ✅ Reset flag after UI feedback completes
         isSaving.current = false;
       }, 3000);
       return;
@@ -276,26 +297,28 @@ const MedScreening = ({ clientID }) => {
 
     console.log('📤 Dispatching save to backend...');
     
-    // ✅ Use .unwrap() to handle promise properly
     dispatch(saveMedScreening({ ...formData, clientID }))
       .unwrap()
-      .then(() => {
-        console.log('✅ Save completed successfully');
+      .then((result) => {
+        console.log('✅ Save completed successfully:', result);
         setSaveSuccess(true);
+        
+        // ✅ Re-fetch data to ensure we have the latest from database
         setTimeout(() => {
+          dispatch(fetchMedScreening(clientID));
           setSaveSuccess(false);
-          // ✅ Reset flag after UI feedback completes
           isSaving.current = false;
-        }, 3000);
+        }, 1500);
       })
       .catch((error) => {
         console.error('❌ Save failed:', error);
-        // ✅ Reset flag even on error
         isSaving.current = false;
+        setJustSaved(false);
       });
   };
 
   const handleSaveMeds = () => {
+    console.log('💊 Adding medication');
     const newMed = {
       clientMedName: formData.clientMedName,
       clientMedDose: formData.clientMedDose,
@@ -303,6 +326,7 @@ const MedScreening = ({ clientID }) => {
       clientMedTaking: formData.clientMedTaking,
     };
     const updatedMeds = [...(formData.clientMedications || []), newMed];
+    console.log('💊 Updated medications:', updatedMeds);
     setFormData({ 
       ...formData, 
       clientMedications: updatedMeds,
@@ -315,11 +339,13 @@ const MedScreening = ({ clientID }) => {
   };
 
   const handleSaveSurgeries = () => {
+    console.log('🏥 Adding surgery/hospitalization');
     const newSurgery = {
       clientSurgeryType: formData.clientSurgeryType,
       clientSurgeryDate: formData.clientSurgeryDate,
     };
     const updatedSurgeries = [...(formData.clientSurgeries || []), newSurgery];
+    console.log('🏥 Updated surgeries:', updatedSurgeries);
     setFormData({ 
       ...formData, 
       clientSurgeries: updatedSurgeries,
@@ -330,11 +356,13 @@ const MedScreening = ({ clientID }) => {
   };
 
   const handleDeleteMed = (index) => {
+    console.log('🗑️ Deleting medication at index:', index);
     const updatedMeds = formData.clientMedications.filter((_, i) => i !== index);
     setFormData({ ...formData, clientMedications: updatedMeds });
   };
 
   const handleDeleteSurgery = (index) => {
+    console.log('🗑️ Deleting surgery at index:', index);
     const updatedSurgeries = formData.clientSurgeries.filter((_, i) => i !== index);
     setFormData({ ...formData, clientSurgeries: updatedSurgeries });
   };
@@ -380,7 +408,7 @@ const MedScreening = ({ clientID }) => {
                 <Select
                   isMulti
                   options={medCond2}
-                  value={medCond2.filter(option => formData.clientMedConditions.includes(option.value))}
+                  value={medCond2.filter(option => formData.clientMedConditions?.includes(option.value))}
                   onChange={(selected) => handleMultiSelectChange("clientMedConditions", selected)}
                   placeholder="Select assistance needed..."
                   styles={customSelectStyles}
@@ -393,7 +421,7 @@ const MedScreening = ({ clientID }) => {
                 <Select
                   isMulti
                   options={medCond3}
-                  value={medCond3.filter(option => formData.clientHepAB.includes(option.value))}
+                  value={medCond3.filter(option => formData.clientHepAB?.includes(option.value))}
                   onChange={(selected) => handleMultiSelectChange("clientHepAB", selected)}
                   placeholder="Select diagnoses..."
                   styles={customSelectStyles}
@@ -591,7 +619,7 @@ const MedScreening = ({ clientID }) => {
           <AccordionSummary expandIcon={<ExpandMoreIcon />}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
               <MedicationIcon color="primary" />
-              <Typography variant="h6">Medication</Typography>
+              <Typography variant="h6">Medication ({formData.clientMedications?.length || 0} medications)</Typography>
             </Box>
           </AccordionSummary>
           <AccordionDetails>
@@ -618,7 +646,7 @@ const MedScreening = ({ clientID }) => {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {formData.clientMedications?.length === 0 ? (
+                  {!formData.clientMedications || formData.clientMedications?.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={5} align="center">
                         <Alert severity="info">No medications added yet.</Alert>
@@ -654,7 +682,7 @@ const MedScreening = ({ clientID }) => {
           <AccordionSummary expandIcon={<ExpandMoreIcon />}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
               <HospitalIcon color="primary" />
-              <Typography variant="h6">Surgical / Hospitalization History</Typography>
+              <Typography variant="h6">Surgical / Hospitalization History ({formData.clientSurgeries?.length || 0} records)</Typography>
             </Box>
           </AccordionSummary>
           <AccordionDetails>
@@ -679,7 +707,7 @@ const MedScreening = ({ clientID }) => {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {formData.clientSurgeries?.length === 0 ? (
+                  {!formData.clientSurgeries || formData.clientSurgeries?.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={3} align="center">
                         <Alert severity="info">No surgeries/hospitalizations added yet.</Alert>
@@ -898,10 +926,11 @@ const MedScreening = ({ clientID }) => {
                 <Typography variant="body1" sx={{ mb: 1 }}>
                   Risk factors (Check all that applies)
                 </Typography>
+                {/* ✅ FIXED: Properly filter array values to objects */}
                 <Select
                   isMulti
                   options={medCond5}
-                  value={formData.clientRiskFactors}
+                  value={medCond5.filter(option => formData.clientRiskFactors?.includes(option.value))}
                   onChange={(selected) => handleMultiSelectChange("clientRiskFactors", selected)}
                   placeholder="Select risk factors..."
                   styles={customSelectStyles}
@@ -923,10 +952,11 @@ const MedScreening = ({ clientID }) => {
                 <Typography variant="body1" sx={{ mb: 1 }}>
                   Ever had a STD/STI? (Check all that apply)
                 </Typography>
+                {/* ✅ FIXED: Properly filter array values to objects */}
                 <Select
                   isMulti
                   options={medCond4}
-                  value={formData.clientSTDStatus}
+                  value={medCond4.filter(option => formData.clientSTDStatus?.includes(option.value))}
                   onChange={(selected) => handleMultiSelectChange("clientSTDStatus", selected)}
                   placeholder="Select STD/STI history..."
                   styles={customSelectStyles}
@@ -944,6 +974,7 @@ const MedScreening = ({ clientID }) => {
             size="large"
             startIcon={<SaveIcon />}
             sx={{ minWidth: 200, py: 1.5 }}
+            disabled={loading}
           >
             Save Medical Screening
           </Button>
