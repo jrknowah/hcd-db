@@ -12,17 +12,12 @@ const logUserAction = (action, details) => {
     console.log(`[${new Date().toISOString()}] ${action}:`, JSON.stringify(details, null, 2));
 };
 
-// ✅ Validation Rules - FIXED to allow empty strings
+// ✅ Validation Rules - Minimal validation, only check critical fields
 const reassessmentValidation = [
-    body('dateFullAssess').optional({ checkFalsy: true }).isISO8601().withMessage('Invalid baseline assessment date'),
-    body('dateLastReAssess').optional({ checkFalsy: true }).isISO8601().withMessage('Invalid re-assessment date'),
-    body('reassessmentSources').optional().isString().isLength({ max: 1000 }),
-    body('culturalCons').optional().isString().isLength({ max: 500 }),
-    body('physicalChall').optional().isString().isLength({ max: 500 }),
-    body('accessIssues').optional().isString().isLength({ max: 500 }),
-    body('currentSymp').optional().isString().isLength({ max: 2000 }),
-    body('columbiaSRComp').optional({ checkFalsy: true }).isIn(['Yes', 'No']).withMessage('Must be Yes or No'),
-    body('updatedBy').optional().notEmpty().withMessage('updatedBy should be provided'),
+    body('dateFullAssess').optional({ nullable: true, checkFalsy: true }).isISO8601().withMessage('Invalid baseline assessment date'),
+    body('dateLastReAssess').optional({ nullable: true, checkFalsy: true }).isISO8601().withMessage('Invalid re-assessment date'),
+    body('columbiaSRComp').optional({ nullable: true, checkFalsy: true }).isIn(['Yes', 'No', '']).withMessage('Must be Yes, No, or empty'),
+    // All other fields are optional with no validation
 ];
 
 // ===== ROUTES =====
@@ -107,12 +102,6 @@ router.post('/reassessment/:clientID',
             const { clientID } = req.params;
             const reassessmentData = req.body;
 
-            // ✅ FIXED: Clean empty strings from data before validation
-            const cleanedData = Object.entries(reassessmentData).reduce((acc, [key, value]) => {
-                acc[key] = value === '' ? null : value;
-                return acc;
-            }, {});
-
             logUserAction('CREATE_REASSESSMENT_RECORD', {
                 clientID,
                 timestamp: new Date().toISOString()
@@ -124,8 +113,8 @@ router.post('/reassessment/:clientID',
                 // ✅ If exists, update instead of creating
                 console.log(`Reassessment exists for ${clientID}, updating instead`);
                 const updatedRecord = await ReassessmentService.update(clientID, {
-                    ...cleanedData,
-                    updatedBy: cleanedData.updatedBy || "system",
+                    ...reassessmentData,
+                    updatedBy: reassessmentData.updatedBy || "system",
                     updatedAt: new Date()
                 });
                 
@@ -135,8 +124,8 @@ router.post('/reassessment/:clientID',
             // Create new record
             const newRecord = await ReassessmentService.create({
                 clientID,
-                ...cleanedData,
-                createdBy: cleanedData.createdBy || cleanedData.updatedBy || 'system',
+                ...reassessmentData,
+                createdBy: reassessmentData.createdBy || reassessmentData.updatedBy || 'system',
                 createdAt: new Date()
             });
 
@@ -171,20 +160,14 @@ router.put('/reassessment/:clientID',
             const { clientID } = req.params;
             const updateData = req.body;
 
-            // ✅ Clean empty strings
-            const cleanedData = Object.entries(updateData).reduce((acc, [key, value]) => {
-                acc[key] = value === '' ? null : value;
-                return acc;
-            }, {});
-
             logUserAction('UPDATE_REASSESSMENT_RECORD', {
                 clientID,
                 timestamp: new Date().toISOString()
             });
 
             const updatedRecord = await ReassessmentService.update(clientID, {
-                ...cleanedData,
-                updatedBy: cleanedData.updatedBy || 'system',
+                ...updateData,
+                updatedBy: updateData.updatedBy || 'system',
                 updatedAt: new Date()
             });
 
@@ -212,20 +195,14 @@ router.put('/reassessment/record/:reassessmentID',
             const { reassessmentID } = req.params;
             const updateData = req.body;
 
-            // ✅ Clean empty strings
-            const cleanedData = Object.entries(updateData).reduce((acc, [key, value]) => {
-                acc[key] = value === '' ? null : value;
-                return acc;
-            }, {});
-
             logUserAction('UPDATE_REASSESSMENT_BY_ID', {
                 reassessmentID,
                 timestamp: new Date().toISOString()
             });
 
             const updatedRecord = await ReassessmentService.updateById(reassessmentID, {
-                ...cleanedData,
-                updatedBy: cleanedData.updatedBy || 'system',
+                ...updateData,
+                updatedBy: updateData.updatedBy || 'system',
                 updatedAt: new Date()
             });
 

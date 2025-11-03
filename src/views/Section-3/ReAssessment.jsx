@@ -116,13 +116,18 @@ const ReAssessment = () => {
             return;
         }
 
-        // ✅ FIXED: Clean data before sending - remove empty strings for optional fields
+        // ✅ FIXED: Remove null/empty fields entirely from payload
         const cleanedData = Object.entries(formData).reduce((acc, [key, value]) => {
-            // Keep non-empty values, convert empty strings to null for optional fields
-            if (value === '' || value === null || value === undefined) {
-                acc[key] = null;
-            } else {
-                acc[key] = value;
+            // Only include fields that have actual values
+            if (value !== '' && value !== null && value !== undefined) {
+                // For arrays, only include if they have items
+                if (Array.isArray(value)) {
+                    if (value.length > 0) {
+                        acc[key] = value;
+                    }
+                } else {
+                    acc[key] = value;
+                }
             }
             return acc;
         }, {});
