@@ -116,11 +116,22 @@ const ReAssessment = () => {
             return;
         }
 
+        // ✅ FIXED: Clean data before sending - remove empty strings for optional fields
+        const cleanedData = Object.entries(formData).reduce((acc, [key, value]) => {
+            // Keep non-empty values, convert empty strings to null for optional fields
+            if (value === '' || value === null || value === undefined) {
+                acc[key] = null;
+            } else {
+                acc[key] = value;
+            }
+            return acc;
+        }, {});
+
         try {
             await dispatch(saveReassessmentData({
                 clientID: clientID,
                 reassessmentData: {
-                    ...formData,
+                    ...cleanedData,
                     updatedBy: user?.email || "system",
                     updatedAt: new Date().toISOString(),
                 }
@@ -415,8 +426,11 @@ const ReAssessment = () => {
                                             value={formData.reasonForRef || ''}
                                             onChange={(e) => handleSelectChange('reasonForRef', e.target.value)}
                                             label="Precipitating Event/Reason for Referral"
+                                            displayEmpty
                                         >
-                                            <MenuItem value="">Select...</MenuItem>
+                                            <MenuItem value="" disabled>
+                                                <em>Select an option...</em>
+                                            </MenuItem>
                                             <MenuItem value="Annual – same as Full Assessment">Annual – same as Full Assessment</MenuItem>
                                             <MenuItem value="Returning to Treatment – updates include the following: (describe below)">Returning to Treatment – updates include the following: (describe below)</MenuItem>
                                         </Select>
@@ -442,8 +456,11 @@ const ReAssessment = () => {
                                             value={formData.suicHomiThou || ''}
                                             onChange={(e) => handleSelectChange('suicHomiThou', e.target.value)}
                                             label="Suicidal/Homicidal Thoughts/Attempts"
+                                            displayEmpty
                                         >
-                                            <MenuItem value="">Select...</MenuItem>
+                                            <MenuItem value="" disabled>
+                                                <em>Select an option...</em>
+                                            </MenuItem>
                                             <MenuItem value="No Updates">No Updates</MenuItem>
                                             <MenuItem value="Updates include the following: (describe below)">Updates include the following: (describe below)</MenuItem>
                                         </Select>
@@ -457,8 +474,11 @@ const ReAssessment = () => {
                                             value={formData.columbiaSRComp || ''}
                                             onChange={(e) => handleSelectChange('columbiaSRComp', e.target.value)}
                                             label="Columbia Suicide Risk Scale Completed?"
+                                            displayEmpty
                                         >
-                                            <MenuItem value="">Select...</MenuItem>
+                                            <MenuItem value="" disabled>
+                                                <em>Select an option...</em>
+                                            </MenuItem>
                                             <MenuItem value="Yes">Yes</MenuItem>
                                             <MenuItem value="No">No</MenuItem>
                                         </Select>
@@ -608,8 +628,11 @@ const ReAssessment = () => {
                                             value={formData.diagDescriptCodeChoice || ''}
                                             onChange={(e) => handleSelectChange('diagDescriptCodeChoice', e.target.value)}
                                             label="ICD Diagnosis Code Type"
+                                            displayEmpty
                                         >
-                                            <MenuItem value="">Select...</MenuItem>
+                                            <MenuItem value="" disabled>
+                                                <em>Select an option...</em>
+                                            </MenuItem>
                                             <MenuItem value="Primary">Primary</MenuItem>
                                             <MenuItem value="Sec">Secondary</MenuItem>
                                         </Select>
