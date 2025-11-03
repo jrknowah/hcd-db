@@ -1,12 +1,11 @@
 // ====================================================================
-// REASSESSMENT ROUTES - Using Existing Service Layer
+// REASSESSMENT ROUTES - Updated to Match MentalHealth Pattern
 // ====================================================================
 
 const express = require('express');
 const router = express.Router();
 const { body, validationResult } = require('express-validator');
 const ReassessmentService = require('../services/reassessmentService');
-const authMiddleware = require('../middleware/auth');
 
 // ✅ Simple logging helper (backend-compatible version)
 const logUserAction = (action, details) => {
@@ -30,7 +29,6 @@ const reassessmentValidation = [
 
 // ✅ GET /api/reassessment/:clientID - Fetch reassessment data for a client
 router.get('/reassessment/:clientID', 
-    authMiddleware, 
     async (req, res) => {
         try {
             const { clientID } = req.params;
@@ -41,7 +39,7 @@ router.get('/reassessment/:clientID',
 
             logUserAction('GET_REASSESSMENT_DATA', {
                 clientID,
-                user: req.user?.email
+                timestamp: new Date().toISOString()
             });
 
             const reassessmentData = await ReassessmentService.getByClientId(clientID);
@@ -64,14 +62,13 @@ router.get('/reassessment/:clientID',
 
 // ✅ GET /api/reassessment/assessment/:assessmentID - Fetch by assessment ID
 router.get('/reassessment/assessment/:assessmentID',
-    authMiddleware,
     async (req, res) => {
         try {
             const { assessmentID } = req.params;
             
             logUserAction('GET_REASSESSMENT_BY_ASSESSMENT', {
                 assessmentID,
-                user: req.user?.email
+                timestamp: new Date().toISOString()
             });
 
             const reassessmentData = await ReassessmentService.getByAssessmentId(assessmentID);
@@ -90,7 +87,6 @@ router.get('/reassessment/assessment/:assessmentID',
 
 // ✅ POST /api/reassessment/:clientID - Create new reassessment record
 router.post('/reassessment/:clientID', 
-    authMiddleware, 
     reassessmentValidation,
     async (req, res) => {
         try {
@@ -107,7 +103,7 @@ router.post('/reassessment/:clientID',
 
             logUserAction('CREATE_REASSESSMENT_RECORD', {
                 clientID,
-                user: req.user?.email
+                timestamp: new Date().toISOString()
             });
 
             // Check if record already exists
@@ -122,7 +118,7 @@ router.post('/reassessment/:clientID',
             const newRecord = await ReassessmentService.create({
                 clientID,
                 ...reassessmentData,
-                createdBy: req.user.email,
+                createdBy: reassessmentData.createdBy || reassessmentData.updatedBy || 'system',
                 createdAt: new Date()
             });
 
@@ -143,7 +139,6 @@ router.post('/reassessment/:clientID',
 
 // ✅ PUT /api/reassessment/:clientID - Update existing reassessment record
 router.put('/reassessment/:clientID', 
-    authMiddleware, 
     reassessmentValidation,
     async (req, res) => {
         try {
@@ -160,12 +155,12 @@ router.put('/reassessment/:clientID',
 
             logUserAction('UPDATE_REASSESSMENT_RECORD', {
                 clientID,
-                user: req.user?.email
+                timestamp: new Date().toISOString()
             });
 
             const updatedRecord = await ReassessmentService.update(clientID, {
                 ...updateData,
-                updatedBy: req.user.email,
+                updatedBy: updateData.updatedBy || 'system',
                 updatedAt: new Date()
             });
 
@@ -187,7 +182,6 @@ router.put('/reassessment/:clientID',
 
 // ✅ PUT /api/reassessment/record/:reassessmentID - Update by reassessment ID
 router.put('/reassessment/record/:reassessmentID',
-    authMiddleware,
     reassessmentValidation,
     async (req, res) => {
         try {
@@ -196,12 +190,12 @@ router.put('/reassessment/record/:reassessmentID',
 
             logUserAction('UPDATE_REASSESSMENT_BY_ID', {
                 reassessmentID,
-                user: req.user?.email
+                timestamp: new Date().toISOString()
             });
 
             const updatedRecord = await ReassessmentService.updateById(reassessmentID, {
                 ...updateData,
-                updatedBy: req.user.email,
+                updatedBy: updateData.updatedBy || 'system',
                 updatedAt: new Date()
             });
 
@@ -219,7 +213,6 @@ router.put('/reassessment/record/:reassessmentID',
 
 // ✅ PUT /api/reassessment/:clientID/complete - Complete reassessment
 router.put('/reassessment/:clientID/complete',
-    authMiddleware,
     async (req, res) => {
         try {
             const { clientID } = req.params;
@@ -227,12 +220,12 @@ router.put('/reassessment/:clientID/complete',
 
             logUserAction('COMPLETE_REASSESSMENT', {
                 clientID,
-                user: req.user?.email
+                timestamp: new Date().toISOString()
             });
 
             const completedRecord = await ReassessmentService.complete(clientID, {
                 ...completionData,
-                completedBy: req.user.email,
+                completedBy: completionData.completedBy || completionData.updatedBy || 'system',
                 completedAt: new Date(),
                 completionStatus: 'Complete',
                 completionPercentage: 100
@@ -252,14 +245,13 @@ router.put('/reassessment/:clientID/complete',
 
 // ✅ DELETE /api/reassessment/:clientID - Delete reassessment record
 router.delete('/reassessment/:clientID', 
-    authMiddleware, 
     async (req, res) => {
         try {
             const { clientID } = req.params;
 
             logUserAction('DELETE_REASSESSMENT_RECORD', {
                 clientID,
-                user: req.user?.email
+                timestamp: new Date().toISOString()
             });
 
             const deleted = await ReassessmentService.delete(clientID);
@@ -276,18 +268,12 @@ router.delete('/reassessment/:clientID',
     }
 );
 
-// ✅ GET /api/reassessment/all - Get all reassessment records (admin only)
+// ✅ GET /api/reassessment/all - Get all reassessment records
 router.get('/reassessment/all', 
-    authMiddleware,
     async (req, res) => {
         try {
-            // Check if user has admin privileges
-            if (!req.user.isAdmin) {
-                return res.status(403).json({ message: 'Admin access required' });
-            }
-
             logUserAction('GET_ALL_REASSESSMENTS', {
-                user: req.user?.email
+                timestamp: new Date().toISOString()
             });
 
             const allRecords = await ReassessmentService.getAll();
@@ -301,14 +287,13 @@ router.get('/reassessment/all',
 
 // ✅ GET /api/reassessment/search - Search reassessment records
 router.get('/reassessment/search', 
-    authMiddleware,
     async (req, res) => {
         try {
             const { query, startDate, endDate, riskLevel, completionStatus } = req.query;
             
             logUserAction('SEARCH_REASSESSMENTS', {
                 query,
-                user: req.user?.email
+                timestamp: new Date().toISOString()
             });
 
             const searchResults = await ReassessmentService.search({
@@ -329,14 +314,13 @@ router.get('/reassessment/search',
 
 // ✅ GET /api/reassessment/:clientID/summary - Generate assessment summary
 router.get('/reassessment/:clientID/summary',
-    authMiddleware,
     async (req, res) => {
         try {
             const { clientID } = req.params;
             
             logUserAction('GENERATE_REASSESSMENT_SUMMARY', {
                 clientID,
-                user: req.user?.email
+                timestamp: new Date().toISOString()
             });
 
             const summary = await ReassessmentService.generateSummary(clientID);
