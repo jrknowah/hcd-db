@@ -2,7 +2,7 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
 // ✅ Helper function to check if we should use mock data
 const shouldUseMockData = (clientID) => {
@@ -16,9 +16,9 @@ const shouldUseMockData = (clientID) => {
 // Mock arrest data for development
 const MOCK_ARREST_DATA = [
   {
-    id: 1,
+    arrestID: 1,
     clientID: 'mock-123',
-    date: '2019-05-20',
+    arrestDate: '2019-05-20',
     charge: 'Public intoxication',
     misdemeanorOrFelony: 'M',
     location: 'Los Angeles, CA',
@@ -27,9 +27,9 @@ const MOCK_ARREST_DATA = [
     createdAt: '2024-03-01T10:00:00Z' 
   },
   {
-    id: 2,
+    arrestID: 2,
     clientID: 'mock-123',
-    date: '2018-03-15',
+    arrestDate: '2018-03-15',
     charge: 'Trespassing',
     misdemeanorOrFelony: 'M',
     location: 'Los Angeles, CA',
@@ -43,44 +43,46 @@ const MOCK_ARREST_DATA = [
 export const fetchArrestData = createAsyncThunk(
   "arrests/fetchArrestData",
   async (clientID, thunkAPI) => {
-    // ✅ PROTECTION: Return mock data for mock clients
     if (shouldUseMockData(clientID)) {
       console.log("🔧 Mock mode: Returning mock arrest data for", clientID);
       return MOCK_ARREST_DATA;
     }
 
     try {
-      const response = await axios.get(`${API_URL}/api/arrests/${clientID}`);
-      return response.data;
+      // ✅ FIX: Use correct backend route
+      const response = await axios.get(`${API_URL}/api/mental-health/${clientID}/arrests`);
+      return response.data || [];
     } catch (error) {
       console.error("❌ Error fetching arrest data:", error);
+      // Return empty array instead of rejecting on 404
+      if (error.response?.status === 404) {
+        console.log("📝 No arrest records found for client, returning empty array");
+        return [];
+      }
       return thunkAPI.rejectWithValue(error.response?.data || "Fetch failed");
     }
   }
 );
 
-// 💾 Async thunk to save arrest data (single record)
+// 💾 Async thunk to save/add arrest record
 export const saveArrestData = createAsyncThunk(
   "arrests/saveArrestData",
   async (arrestData, thunkAPI) => {
-    const { clientId, ...data } = arrestData;
+    const { clientID, ...data } = arrestData;
     
-    // ✅ PROTECTION: Return mock success for mock clients
-    if (shouldUseMockData(clientId)) {
-      console.log("🔧 Mock mode: Simulating arrest data save for", clientId);
+    if (shouldUseMockData(clientID)) {
+      console.log("🔧 Mock mode: Simulating arrest data save for", clientID);
       return { 
         ...data, 
-        id: Date.now(), 
-        clientID: clientId,
+        arrestID: Date.now(), 
+        clientID: clientID,
         createdAt: new Date().toISOString()
       };
     }
 
     try {
-      const response = await axios.post(`${API_URL}/api/mental-health/${clientId}/arrests`, {
-        ...data,
-        createdAt: new Date().toISOString(),
-      });
+      // ✅ FIX: Use correct backend route
+      const response = await axios.post(`${API_URL}/api/mental-health/${clientID}/arrests`, data);
       return response.data;
     } catch (error) {
       console.error("❌ Error saving arrest data:", error);
@@ -89,61 +91,19 @@ export const saveArrestData = createAsyncThunk(
   }
 );
 
-// 🔄 Async thunk to add new arrest record
-export const addArrestRecord = createAsyncThunk(
-  "arrests/addArrestRecord",
-  async ({ clientId, arrestRecord }, thunkAPI) => {
-    if (shouldUseMockData(clientId)) {
-      console.log("🔧 Mock mode: Adding arrest record for", clientId);
-      return { 
-        ...arrestRecord, 
-        id: Date.now(), 
-        clientID: clientId,
-        createdAt: new Date().toISOString()
-      };
-    }
-
-    try {
-      const response = await axios.post(`${API_URL}/api/arrests/${clientId}/records`, arrestRecord);
-      return response.data;
-    } catch (error) {
-      console.error("❌ Error adding arrest record:", error);
-      return thunkAPI.rejectWithValue(error.response?.data || "Add arrest record failed");
-    }
-  }
-);
-
-// 🔄 Async thunk to update arrest record
-export const updateArrestRecord = createAsyncThunk(
-  "arrests/updateArrestRecord",
-  async ({ clientId, arrestId, updateData }, thunkAPI) => {
-    if (shouldUseMockData(clientId)) {
-      console.log("🔧 Mock mode: Updating arrest record for", clientId);
-      return { id: arrestId, ...updateData };
-    }
-
-    try {
-      const response = await axios.put(`${API_URL}/api/arrests/${clientId}/records/${arrestId}`, updateData);
-      return response.data;
-    } catch (error) {
-      console.error("❌ Error updating arrest record:", error);
-      return thunkAPI.rejectWithValue(error.response?.data || "Update arrest record failed");
-    }
-  }
-);
-
 // 🔄 Async thunk to delete arrest record
 export const deleteArrestRecord = createAsyncThunk(
   "arrests/deleteArrestRecord",
-  async ({ clientId, arrestId }, thunkAPI) => {
-    if (shouldUseMockData(clientId)) {
-      console.log("🔧 Mock mode: Deleting arrest record for", clientId);
-      return arrestId;
+  async ({ clientID, arrestID }, thunkAPI) => {
+    if (shouldUseMockData(clientID)) {
+      console.log("🔧 Mock mode: Deleting arrest record for", clientID);
+      return arrestID;
     }
 
     try {
-      await axios.delete(`${API_URL}/api/arrests/${clientId}/records/${arrestId}`);
-      return arrestId;
+      // ✅ FIX: Use correct backend route
+      await axios.delete(`${API_URL}/api/mental-health/${clientID}/arrests/${arrestID}`);
+      return arrestID;
     } catch (error) {
       console.error("❌ Error deleting arrest record:", error);
       return thunkAPI.rejectWithValue(error.response?.data || "Delete arrest record failed");
@@ -153,7 +113,7 @@ export const deleteArrestRecord = createAsyncThunk(
 
 const initialState = {
   arrests: [],
-  status: "idle", // idle | loading | succeeded | failed
+  status: "idle",
   error: null,
 };
 
@@ -167,23 +127,23 @@ const arrestSlice = createSlice({
       state.error = null;
     },
     setArrestData(state, action) {
-      state.arrests = action.payload;
+      state.arrests = action.payload || [];
     },
     addArrestLocal(state, action) {
       state.arrests.push({
         ...action.payload,
-        id: Date.now(),
-        createdAt: new Date().toISOString()
+        arrestID: action.payload.arrestID || Date.now(),
+        createdAt: action.payload.createdAt || new Date().toISOString()
       });
     },
     updateArrestLocal(state, action) {
-      const index = state.arrests.findIndex(arrest => arrest.id === action.payload.id);
+      const index = state.arrests.findIndex(arrest => arrest.arrestID === action.payload.arrestID);
       if (index !== -1) {
         state.arrests[index] = action.payload;
       }
     },
     removeArrestLocal(state, action) {
-      state.arrests = state.arrests.filter(arrest => arrest.id !== action.payload);
+      state.arrests = state.arrests.filter(arrest => arrest.arrestID !== action.payload);
     },
   },
   extraReducers: (builder) => {
@@ -195,12 +155,13 @@ const arrestSlice = createSlice({
       })
       .addCase(fetchArrestData.fulfilled, (state, action) => {
         state.status = "succeeded";
-        state.arrests = action.payload;
+        state.arrests = action.payload || [];
         state.error = null;
       })
       .addCase(fetchArrestData.rejected, (state, action) => {
         state.status = "failed";
         state.error = action.payload;
+        state.arrests = [];
       })
       // Save arrest data
       .addCase(saveArrestData.pending, (state) => {
@@ -208,8 +169,7 @@ const arrestSlice = createSlice({
       })
       .addCase(saveArrestData.fulfilled, (state, action) => {
         state.status = "succeeded";
-        // Add to arrests array if not already present
-        const existingIndex = state.arrests.findIndex(arrest => arrest.id === action.payload.id);
+        const existingIndex = state.arrests.findIndex(arrest => arrest.arrestID === action.payload.arrestID);
         if (existingIndex === -1) {
           state.arrests.push(action.payload);
         } else {
@@ -221,20 +181,9 @@ const arrestSlice = createSlice({
         state.status = "failed";
         state.error = action.payload;
       })
-      // Add arrest record
-      .addCase(addArrestRecord.fulfilled, (state, action) => {
-        state.arrests.push(action.payload);
-      })
-      // Update arrest record
-      .addCase(updateArrestRecord.fulfilled, (state, action) => {
-        const index = state.arrests.findIndex(arrest => arrest.id === action.payload.id);
-        if (index !== -1) {
-          state.arrests[index] = action.payload;
-        }
-      })
       // Delete arrest record
       .addCase(deleteArrestRecord.fulfilled, (state, action) => {
-        state.arrests = state.arrests.filter(arrest => arrest.id !== action.payload);
+        state.arrests = state.arrests.filter(arrest => arrest.arrestID !== action.payload);
       });
   },
 });
@@ -247,5 +196,4 @@ export const {
   removeArrestLocal,
 } = arrestSlice.actions;
 
-// ✅ DEFAULT EXPORT - This is what was missing!
 export default arrestSlice.reducer;

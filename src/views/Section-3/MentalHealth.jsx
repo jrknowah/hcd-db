@@ -32,6 +32,21 @@ import {
   substanceAbuseUse, substanceList, traumaList, needsCol1, riskList
 } from "../../data/arrayList";
 
+// ✅ Helper function to convert plain values to react-select format
+const convertToSelectFormat = (value) => {
+  if (!value) return null;
+  if (typeof value === 'object' && value.value) return value; // Already in correct format
+  return { value: value, label: value };
+};
+
+const convertArrayToSelectFormat = (array) => {
+  if (!Array.isArray(array)) return [];
+  return array.map(item => {
+    if (typeof item === 'object' && item.value) return item;
+    return { value: item, label: item };
+  });
+};
+
 // ✅ Static mock data outside component
 const MOCK_CLIENT = {
   clientID: 'mock-123',
@@ -242,6 +257,17 @@ const MentalHealth = ({ exportMode }) => {
   // Substance abuse tracking
   const [substanceData, setSubstanceData] = useState({});
 
+  const convertedSubstanceData = {};
+  Object.entries(substanceData).forEach(([substance, data]) => {
+    convertedSubstanceData[substance] = {
+      use: data.use?.value || data.use || '',
+      frequency: data.frequency?.value || data.frequency || '',
+      method: data.method || '',
+      yearStarted: data.yearStarted || '',
+      yearQuit: data.yearQuit || ''
+    };
+  });
+
   // ✅ Load data when client changes
   useEffect(() => {
     if (!currentClient?.clientID) return;
@@ -275,12 +301,98 @@ const MentalHealth = ({ exportMode }) => {
     }
   }, [currentClient?.clientID, shouldUseMockData, dispatch]);
 
-  // ✅ Update form data when Redux data changes
-  useEffect(() => {
-    if (mentalHealthData && !shouldUseMockData) {
-      setFormData(prev => ({ ...prev, ...mentalHealthData }));
-    }
-  }, [mentalHealthData, shouldUseMockData]);
+  // ✅ UPDATE: Transform backend data to react-select format when loading
+useEffect(() => {
+  if (mentalHealthData && Object.keys(mentalHealthData).length > 0 && !shouldUseMockData) {
+    console.log('🔄 Converting backend data to react-select format...');
+    
+    const transformedData = {
+      // Single select fields - convert to {value, label} format
+      mentalHealthHistory: convertToSelectFormat(mentalHealthData.mentalHealthHistory),
+      mentalHealthTreatment: convertToSelectFormat(mentalHealthData.mentalHealthTreatment),
+      mentalHealthCurrentTreatment: convertToSelectFormat(mentalHealthData.mentalHealthCurrentTreatment),
+      mhSad: convertToSelectFormat(mentalHealthData.mhSad),
+      mhAnxious: convertToSelectFormat(mentalHealthData.mhAnxious),
+      mhSleepPattern: convertToSelectFormat(mentalHealthData.mhSleepPattern),
+      mhEnergyLevel: convertToSelectFormat(mentalHealthData.mhEnergyLevel),
+      mhConcentrate: convertToSelectFormat(mentalHealthData.mhConcentrate),
+      mhThoughts: convertToSelectFormat(mentalHealthData.mhThoughts),
+      mhMindRead: convertToSelectFormat(mentalHealthData.mhMindRead),
+      mhVoices: convertToSelectFormat(mentalHealthData.mhVoices),
+      mhFollowing: convertToSelectFormat(mentalHealthData.mhFollowing),
+      mhFamHistory: convertToSelectFormat(mentalHealthData.mhFamHistory),
+      mhSelfHarm: convertToSelectFormat(mentalHealthData.mhSelfHarm),
+      mhSuicide: convertToSelectFormat(mentalHealthData.mhSuicide),
+      mhSubAbuseHelp: convertToSelectFormat(mentalHealthData.mhSubAbuseHelp),
+      arrestMeth: convertToSelectFormat(mentalHealthData.arrestMeth),
+      arrestDrugAlcohol: convertToSelectFormat(mentalHealthData.arrestDrugAlcohol),
+      arrestViolent: convertToSelectFormat(mentalHealthData.arrestViolent),
+      arrestArson: convertToSelectFormat(mentalHealthData.arrestArson),
+      arrestSexCrime: convertToSelectFormat(mentalHealthData.arrestSexCrime),
+      regSexOffender: convertToSelectFormat(mentalHealthData.regSexOffender),
+      arrestCrime: convertToSelectFormat(mentalHealthData.arrestCrime),
+      
+      // Multi-select fields - convert arrays to [{value, label}, ...]
+      mentalHealthDiagnosis: convertArrayToSelectFormat(mentalHealthData.mentalHealthDiagnosis),
+      mhAbuse: convertArrayToSelectFormat(mentalHealthData.mhAbuse),
+      clientRisk: convertArrayToSelectFormat(mentalHealthData.clientRisk),
+      clientLegalIssues: convertArrayToSelectFormat(mentalHealthData.clientLegalIssues),
+      clientPatFamNeeds: convertArrayToSelectFormat(mentalHealthData.clientPatFamNeeds),
+      cmOb1: convertArrayToSelectFormat(mentalHealthData.cmOb1),
+      cmOb2: convertArrayToSelectFormat(mentalHealthData.cmOb2),
+      cmOb3: convertArrayToSelectFormat(mentalHealthData.cmOb3),
+      cmOb4: convertArrayToSelectFormat(mentalHealthData.cmOb4),
+      cmOb5: convertArrayToSelectFormat(mentalHealthData.cmOb5),
+      cmOb6: convertArrayToSelectFormat(mentalHealthData.cmOb6),
+      cmOb7: convertArrayToSelectFormat(mentalHealthData.cmOb7),
+      cmOb8: convertArrayToSelectFormat(mentalHealthData.cmOb8),
+      cmOb9: convertArrayToSelectFormat(mentalHealthData.cmOb9),
+      cmOb10: convertArrayToSelectFormat(mentalHealthData.cmOb10),
+      cmOb11: convertArrayToSelectFormat(mentalHealthData.cmOb11),
+      cmObNone: convertArrayToSelectFormat(mentalHealthData.cmObNone),
+      
+      // Text fields - keep as is
+      mhVoicesSay: mentalHealthData.mhVoicesSay || '',
+      mhSomeone: mentalHealthData.mhSomeone || '',
+      mhSummary: mentalHealthData.mhSummary || '',
+      mhSelfHarmOccurrence: mentalHealthData.mhSelfHarmOccurrence || '',
+      mhSuicideLast: mentalHealthData.mhSuicideLast || '',
+      mhRiskSummary: mentalHealthData.mhRiskSummary || '',
+      mhSubAbSum: mentalHealthData.mhSubAbSum || '',
+      clientLegalProbation: mentalHealthData.clientLegalProbation || '',
+      clientLegalParole: mentalHealthData.clientLegalParole || '',
+      clientLegalArrests: mentalHealthData.clientLegalArrests || '',
+      clientLegalOther: mentalHealthData.clientLegalOther || '',
+      mhLegalSum: mentalHealthData.mhLegalSum || '',
+      mhNeedsSum: mentalHealthData.mhNeedsSum || '',
+      cmObvSum: mentalHealthData.cmObvSum || '',
+      
+      // Keep clientID
+      clientID: mentalHealthData.clientID
+    };
+    
+    setFormData(prev => ({ ...prev, ...transformedData }));
+    console.log('✅ Data transformation complete');
+  }
+}, [mentalHealthData, shouldUseMockData]);
+
+  // ✅ ADD: Convert loaded substanceData to react-select format
+useEffect(() => {
+  if (mentalHealthData?.substanceData && Object.keys(mentalHealthData.substanceData).length > 0) {
+    const convertedSubstanceData = {};
+    Object.entries(mentalHealthData.substanceData).forEach(([substance, data]) => {
+      convertedSubstanceData[substance] = {
+        use: convertToSelectFormat(data.use),
+        frequency: convertToSelectFormat(data.frequency),
+        method: data.method || '',
+        yearStarted: data.yearStarted || '',
+        yearQuit: data.yearQuit || ''
+      };
+    });
+    setSubstanceData(convertedSubstanceData);
+    console.log('✅ Substance data loaded and converted');
+  }
+}, [mentalHealthData?.substanceData]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -471,16 +583,19 @@ const MentalHealth = ({ exportMode }) => {
         return;
       }
 
-      // Convert react-select value to simple value for backend
+      // ✅ FIX: Convert react-select value to simple value for backend
       const arrestToSave = {
-        ...newArrest,
-        mhaMF: newArrest.mhaMF?.value || newArrest.mhaMF
+        mhaDate: newArrest.mhaDate,
+        mhaCharge: newArrest.mhaCharge,
+        mhaMF: newArrest.mhaMF?.value || newArrest.mhaMF || '', // Extract value
+        mhaLoc: newArrest.mhaLoc,
+        mhaTime: newArrest.mhaTime,
+        mhaResult: newArrest.mhaResult,
+        clientID: currentClient.clientID,
+        createdBy: currentUser?.email || 'unknown'
       };
 
-      await dispatch(saveArrestData({
-        clientId: currentClient.clientID,
-        ...arrestToSave
-      }));
+      await dispatch(saveArrestData({ clientId: currentClient.clientID, ...arrestToSave }));
       alert("✅ Arrest record saved!");
       
       if (currentUser) {
@@ -542,7 +657,7 @@ const MentalHealth = ({ exportMode }) => {
           clientId: currentClient.clientID,
           formData: {
             ...formDataToSave,
-            substanceData,
+            substanceData: convertedSubstanceData,
             updatedBy: currentUser?.email || "unknown",
             updatedAt: new Date().toISOString(),
           },
