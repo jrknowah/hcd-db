@@ -1,109 +1,12 @@
 // ====================================================================
-// 1. REDUX SLICE - store/slices/reassessmentSlice.js
+// PRODUCTION REASSESSMENT SLICE - No Mock Data
 // ====================================================================
 
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import axios from 'axios';
 
-// Base API URL - adjust according to your setup
+// Base API URL
 const HCD_API = `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}`;
-
-// Mock data for development
-const mockReassessmentData = {
-    reassessmentID: "RA-001",
-    clientID: "CLIENT-123",
-    assessmentID: "ACP-2025-0717-001",
-    
-    // Assessment Timeline
-    dateFullAssess: "2025-01-15",
-    dateLastReAssess: "2025-07-15",
-    reassessmentSources: "Client interview, family input, medical records review",
-    culturalCons: "Spanish-speaking client, prefers female providers",
-    physicalChall: "Mobility limitations due to arthritis",
-    accessIssues: "Transportation challenges, relies on public transit",
-    
-    // Reason for Referral
-    reasonForRef: "Returning to Treatment – updates include the following: (describe below)",
-    currentSymp: "Client reports increased anxiety and depression following recent housing instability. Symptoms include sleep disturbances, difficulty concentrating, and social withdrawal. Duration: 3 months. Frequency: daily episodes of anxiety lasting 2-3 hours.",
-    suicHomiThou: "Updates include the following: (describe below)",
-    columbiaSR: "Client denies current suicidal ideation but reports passive thoughts of death when feeling overwhelmed. No specific plan or intent. Last active ideation was 6 months ago during previous housing crisis.",
-    columbiaSRComp: "Yes",
-    
-    // Self Harm & Medical History
-    selfHarm: "No Updates",
-    selfHarmSummary: "",
-    psyHosp: "Updates include the following: (describe below)",
-    psyHospSummary: "Brief hospitalization (3 days) in March 2025 due to severe anxiety episode. Discharged with medication adjustment and outpatient follow-up.",
-    outPatSummart: "Currently receiving weekly therapy with Dr. Smith and monthly psychiatric medication management with Dr. Johnson. Good compliance with appointments.",
-    traumaExp: "No Updates",
-    traumaExpSummary: "",
-    
-    // Medications & Substance Use
-    medReAssess: "Updates include the following: (describe below)",
-    medReAssessSummary: "Current medications: Sertraline 100mg daily (increased from 50mg), Lorazepam 0.5mg as needed for anxiety. Reports good tolerance with minimal side effects.",
-    subAbuseReAssess: "No Updates",
-    subAbuseReAssessDate: null,
-    subAbuseReAssessSummary: "",
-    
-    // Medical History
-    medHistReAssess: "Updates include the following: (describe below)",
-    medHistReAssessDate: "2025-06-01",
-    medHistReAssessSummary: "Recent physical exam shows well-controlled diabetes and hypertension. New diagnosis of osteoarthritis affecting mobility.",
-    
-    // Education & Employment
-    eduHistoryReAssess: "No Updates",
-    eduHistoryReAssessSummary: "",
-    empHistReAssess: "Updates include the following: (describe below)",
-    empHistReAssessSummary: "Lost part-time retail job in May 2025 due to attendance issues related to anxiety. Currently seeking employment with flexible schedule.",
-    
-    // Legal & Living Situation
-    legalReAssess: "No Updates",
-    legalReAssessSummary: "",
-    livingArrReAssess: "Updates include the following: (describe below)",
-    livingArrReAssessSummary: "Recently moved to transitional housing after eviction from previous apartment. Currently in supportive housing program with case management services.",
-    homelessReAssess: "No",
-    homelessReAssessDate: null,
-    
-    // Dependent Care & Family
-    depCareReAssess: "No Updates",
-    depCareReAssessSummary: "",
-    famReAssess: "Updates include the following: (describe below)",
-    famReAssessSummary: "Increased family support from sister who moved closer. Regular contact with adult children who provide emotional support.",
-    
-    // Mental Status Exam (arrays of selected options)
-    cmOb1: [{ label: "Well-groomed", value: "well_groomed" }], // Grooming & Hygiene
-    cmOb2: [{ label: "Appropriate", value: "appropriate" }], // Eye Contact
-    cmOb3: [{ label: "Normal", value: "normal" }], // Motor Activity
-    cmOb4: [{ label: "Clear", value: "clear" }], // Speech
-    cmOb5: [{ label: "Cooperative", value: "cooperative" }], // Interaction Style
-    cmOb6: [{ label: "Anxious", value: "anxious" }], // Mood
-    cmOb7: [{ label: "Congruent", value: "congruent" }], // Affect
-    cmOb8: [{ label: "Goal-directed", value: "goal_directed" }], // Associations
-    cmOb9: [{ label: "Impaired", value: "impaired" }], // Concentration
-    cmOb10: [], // Behavioral Disturbances
-    cmOb11: [], // Passive
-    cmObNone: [],
-    cmObvSum: "Client appears well-groomed and cooperative during interview. Speech is clear and goal-directed. Mood is anxious with congruent affect. Some impairment in concentration noted, likely related to current stressors. No behavioral disturbances observed.",
-    
-    // Clinical Summary
-    clientStrengthReAssessSummary: "Client demonstrates good insight into mental health needs and strong motivation for treatment. Has supportive family relationships and history of medication compliance. Shows resilience in coping with housing challenges.",
-    clientFormReAssessSummary: "Client presents with recurrent major depressive disorder with anxiety features, currently in partial remission but experiencing symptom exacerbation due to psychosocial stressors. Housing instability has significantly impacted functioning in work and social domains. Impairments include difficulty maintaining employment, sleep disturbances, and social withdrawal. Risk factors include history of trauma and ongoing housing instability. Strengths include strong family support, medication compliance, and engagement in treatment. Recommend continued individual therapy, medication management, and intensive case management for housing stabilization.",
-    
-    // Diagnosis
-    diagDescript: "Major Depressive Disorder, recurrent, moderate; Generalized Anxiety Disorder",
-    diagDescriptCodeChoice: "Primary",
-    diagDescriptCode: "F33.1, F41.1",
-    
-    // Completion Status
-    completionStatus: "Complete",
-    completionPercentage: 95,
-    
-    // Audit fields
-    createdBy: "therapist@example.com",
-    createdAt: "2025-07-15T09:00:00Z",
-    updatedBy: "therapist@example.com", 
-    updatedAt: "2025-07-15T14:30:00Z"
-};
 
 // ✅ Async Thunks for API calls
 export const fetchReassessmentData = createAsyncThunk(
@@ -211,7 +114,7 @@ export const searchReassessments = createAsyncThunk(
     }
 );
 
-// ✅ Initial State
+// ✅ Initial State - Production Ready
 const initialState = {
     // Main reassessment data
     data: {},
@@ -329,9 +232,6 @@ const initialState = {
         diagDescriptCode: ""
     },
 
-    // Development settings
-    useMockData: import.meta.env.DEV || false,
-
     // Cache management
     lastFetched: null,
     cacheValid: false,
@@ -345,7 +245,7 @@ const reassessmentSlice = createSlice({
     reducers: {
         // Reset state
         resetReassessmentState: (state) => {
-            return { ...initialState, useMockData: state.useMockData };
+            return initialState;
         },
 
         // Clear errors
@@ -356,11 +256,6 @@ const reassessmentSlice = createSlice({
             state.searchError = null;
             state.saveError = null;
             state.updateError = null;
-        },
-
-        // Set mock data mode
-        setMockDataMode: (state, action) => {
-            state.useMockData = action.payload;
         },
 
         // Update form data
@@ -426,12 +321,12 @@ const reassessmentSlice = createSlice({
             })
             .addCase(fetchReassessmentData.fulfilled, (state, action) => {
                 state.loading = false;
-                state.data = state.useMockData ? mockReassessmentData : action.payload;
+                state.data = action.payload;
                 state.lastFetched = new Date().toISOString();
                 state.cacheValid = true;
                 
-                // Load data into form
-                if (state.data) {
+                // Load data into form if available
+                if (state.data && Object.keys(state.data).length > 0) {
                     reassessmentSlice.caseReducers.loadDataIntoForm(state, { payload: state.data });
                     reassessmentSlice.caseReducers.calculateCompletionPercentage(state);
                 }
@@ -439,11 +334,7 @@ const reassessmentSlice = createSlice({
             .addCase(fetchReassessmentData.rejected, (state, action) => {
                 state.loading = false;
                 state.error = action.payload;
-                // Use mock data on error in development
-                if (state.useMockData) {
-                    state.data = mockReassessmentData;
-                    reassessmentSlice.caseReducers.loadDataIntoForm(state, { payload: mockReassessmentData });
-                }
+                console.error('Failed to fetch reassessment data:', action.payload);
             })
 
         // ✅ Save Reassessment Data
@@ -551,7 +442,6 @@ const reassessmentSlice = createSlice({
 export const {
     resetReassessmentState,
     clearErrors,
-    setMockDataMode,
     updateFormData,
     updateFormField,
     updateArrayField,
