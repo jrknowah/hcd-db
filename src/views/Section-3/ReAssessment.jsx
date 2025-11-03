@@ -1,5 +1,5 @@
 // ====================================================================
-// FIXED ReAssessment Component - Safe Client Selection
+// PRODUCTION-READY ReAssessment Component
 // ====================================================================
 
 import React, { useState, useEffect } from "react";
@@ -29,27 +29,20 @@ import {
     ExpandMore as ExpandMoreIcon,
     Assessment as AssessmentIcon,
     Psychology as PsychologyIcon,
-    MedicalServices as MedicalIcon,
-    School as EducationIcon,
-    Work as WorkIcon,
-    Gavel as LegalIcon,
-    Home as HomeIcon,
-    FamilyRestroom as FamilyIcon,
-    Save as SaveIcon,
-    CheckCircle as CheckCircleIcon,
     Warning as WarningIcon,
     Person as PersonIcon,
     Schedule as ScheduleIcon,
-    BugReport as BugIcon,
-    Label
+    CheckCircle as CheckCircleIcon,
+    Save as SaveIcon
 } from '@mui/icons-material';
 import { useSelector, useDispatch } from "react-redux";
+import { useClientPersistence } from "../../hooks/useClientPersistence";
 import logUserAction from "../../backend/config/logAction";
 import {
     cmOb1, cmOb2, cmOb3, cmOb4, cmOb5, cmOb6, cmOb7, cmOb8, cmOb9, cmOb10, cmOb11, cmObNone
 } from "../../data/arrayList";
 
-// ✅ Import your reassessment actions (adjust path as needed)
+// ✅ Import your reassessment actions
 import {
     fetchReassessmentData, 
     saveReassessmentData,
@@ -65,73 +58,30 @@ import {
 const ReAssessment = () => {
     const dispatch = useDispatch();
     
-    // 🔍 DEBUG: Let's see what's in the Redux state
-    const entireState = useSelector((state) => state);
-    const [debugMode, setDebugMode] = useState(false);
-    
-    // ✅ SAFE SELECTORS - Try multiple possible locations for selectedClient
-    const selectedClient = useSelector((state) => {
-        return state.clients?.selectedClient || 
-               state.auth?.selectedClient || 
-               state.user?.selectedClient || 
-               state.app?.selectedClient ||
-               null;
-    });
+    // ✅ PRODUCTION: Use real client persistence hook
+    const { clientID, client, hasClient, loading } = useClientPersistence();
     
     const user = useSelector((state) => state.auth?.user || {});
     
-    // ✅ Local state for mock client as backup
-    const [localMockClient, setLocalMockClient] = useState(null);
-    
-    // ✅ Use selectedClient or local mock client
-    const currentClient = selectedClient || localMockClient;
-    
-    // ✅ Use reassessment selectors with fallbacks
+    // ✅ Use reassessment selectors
     const formData = useSelector(selectFormData) || {};
-    const completionStatus = useSelector(selectCompletionStatus) || { percentage: 0, status: 'Not Started', isCompleted: false };
+    const completionStatus = useSelector(selectCompletionStatus) || { 
+        percentage: 0, 
+        status: 'Not Started', 
+        isCompleted: false 
+    };
     const isLoading = useSelector(selectIsLoading) || false;
     const isSaving = useSelector(selectIsSaving) || false;
     
     const [saveStatus, setSaveStatus] = useState(null);
 
-    // 🔍 Console log for debugging
-    console.log('🔍 ReAssessment Debug Info:', {
-        entireState: Object.keys(entireState),
-        selectedClient,
-        localMockClient,
-        currentClient,
-        hasClientsSlice: !!entireState.clients,
-        hasReassessmentSlice: !!entireState.reassessment,
-        formDataKeys: Object.keys(formData)
-    });
-
-    // ✅ Load mock client function
-    const loadMockClient = () => {
-        const mockClient = {
-            clientID: "CLIENT-123",
-            clientName: "John Doe (Mock)",
-            clientEmail: "john.doe@example.com",
-            dateOfBirth: "1985-03-15",
-            phoneNumber: "(555) 123-4567",
-            caseManager: "Sarah Wilson",
-            status: "Active"
-        };
-        
-        console.log('🎯 Loading mock client for ReAssessment:', mockClient);
-        setLocalMockClient(mockClient);
-        setSaveStatus({ 
-            type: 'info', 
-            message: `Mock client "${mockClient.clientName}" loaded successfully!` 
-        });
-    };
-
     // ✅ Fetch reassessment data when client is available
     useEffect(() => {
-        if (currentClient?.clientID) {
-            console.log('🔄 Fetching reassessment data for:', currentClient.clientID);
-            dispatch(fetchReassessmentData(currentClient.clientID));
+        if (clientID) {
+            console.log('🔄 Fetching reassessment data for:', clientID);
+            dispatch(fetchReassessmentData(clientID));
         }
-    }, [currentClient, dispatch]);
+    }, [clientID, dispatch]);
 
     // ✅ Update completion percentage when form data changes
     useEffect(() => {
@@ -158,27 +108,33 @@ const ReAssessment = () => {
     const handleSubmit = async (e) => {
         e.preventDefault();
         
-        if (!currentClient?.clientID) {
-            setSaveStatus({ type: 'error', message: "Please select a client before saving." });
+        if (!clientID) {
+            setSaveStatus({ 
+                type: 'error', 
+                message: "❌ No client selected. Please select a client from the dashboard." 
+            });
             return;
         }
 
         try {
             await dispatch(saveReassessmentData({
-                clientID: currentClient.clientID,
+                clientID: clientID,
                 reassessmentData: {
                     ...formData,
-                    updatedBy: user?.email || "unknown",
+                    updatedBy: user?.email || "system",
                     updatedAt: new Date().toISOString(),
                 }
             })).unwrap();
             
-            setSaveStatus({ type: 'success', message: "✅ ReAssessment data saved successfully." });
+            setSaveStatus({ 
+                type: 'success', 
+                message: "✅ ReAssessment data saved successfully." 
+            });
 
             // Optional: log to your logging service
             if (user) {
                 await logUserAction(user, "SAVE_REASSESSMENT_DATA", {
-                    clientId: currentClient.clientID,
+                    clientId: clientID,
                     section: "ReAssessment",
                     updatedAt: new Date().toISOString(),
                 });
@@ -186,76 +142,75 @@ const ReAssessment = () => {
 
         } catch (error) {
             console.error("❌ Error saving ReAssessment data:", error);
-            setSaveStatus({ type: 'error', message: "⚠️ Failed to save data. Please try again." });
+            
+            // Better error messaging
+            let errorMessage = "⚠️ Failed to save data. ";
+            if (error?.message?.includes('FOREIGN KEY')) {
+                errorMessage += "Client not found in database. Please ensure the client exists.";
+            } else if (error?.message) {
+                errorMessage += error.message;
+            } else {
+                errorMessage += "Please try again.";
+            }
+            
+            setSaveStatus({ type: 'error', message: errorMessage });
         }
     };
 
-    // ✅ Show loading state
-    if (isLoading) {
+    // ✅ Show loading state while checking for client
+    if (loading) {
         return (
             <Box display="flex" justifyContent="center" py={4}>
                 <CircularProgress />
-                <Typography sx={{ ml: 2 }}>Loading reassessment data...</Typography>
+                <Typography sx={{ ml: 2 }}>Loading client data...</Typography>
             </Box>
         );
     }
 
-    // ✅ Show enhanced no client screen
-    if (!currentClient) {
+    // ✅ Show clear message when no client is selected
+    if (!hasClient || !clientID) {
         return (
             <Box sx={{ p: 3 }}>
                 <Alert severity="warning" sx={{ mb: 3 }}>
                     <Typography variant="h6">No Client Selected</Typography>
                     <Typography>
-                        Please select a client to view the Mental Health Re-Assessment.
+                        Please select a client from the dashboard to view the Mental Health Re-Assessment.
                     </Typography>
                 </Alert>
                 
                 <Card>
                     <CardContent>
-                        <Typography variant="h6" gutterBottom>Quick Start Options</Typography>
+                        <Typography variant="h6" gutterBottom>How to Get Started</Typography>
+                        <Typography variant="body2" color="text.secondary" paragraph>
+                            1. Go to the Dashboard
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary" paragraph>
+                            2. Select a client from your client list
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary" paragraph>
+                            3. Return to this section to complete the reassessment
+                        </Typography>
                         
-                        <Grid container spacing={2}>
-                            <Grid item>
-                                <Button 
-                                    variant="contained" 
-                                    startIcon={<PersonIcon />}
-                                    onClick={loadMockClient}
-                                    color="primary"
-                                >
-                                    Load Mock Client
-                                </Button>
-                            </Grid>
-                            <Grid item>
-                                <Button 
-                                    variant="outlined" 
-                                    startIcon={<BugIcon />}
-                                    onClick={() => setDebugMode(!debugMode)}
-                                >
-                                    {debugMode ? 'Hide Debug' : 'Show Debug Info'}
-                                </Button>
-                            </Grid>
-                        </Grid>
-
-                        {/* ✅ Debug Information */}
-                        {debugMode && (
-                            <Box sx={{ mt: 3, p: 2, bgcolor: 'grey.100', borderRadius: 1 }}>
-                                <Typography variant="subtitle2" gutterBottom>Debug Information:</Typography>
-                                <pre style={{ fontSize: '12px', overflow: 'auto' }}>
-                                    {JSON.stringify({
-                                        'Redux Slices Available': Object.keys(entireState),
-                                        'Has clients slice': !!entireState.clients,
-                                        'Has reassessment slice': !!entireState.reassessment,
-                                        'Current selectedClient': selectedClient,
-                                        'Local mock client': localMockClient,
-                                        'Form data keys': Object.keys(formData),
-                                        'Environment': import.meta.env.DEV ? 'development' : 'production'
-                                    }, null, 2)}
-                                </pre>
-                            </Box>
-                        )}
+                        <Button 
+                            variant="contained" 
+                            startIcon={<PersonIcon />}
+                            onClick={() => window.location.href = '/dashboard'}
+                            sx={{ mt: 2 }}
+                        >
+                            Go to Dashboard
+                        </Button>
                     </CardContent>
                 </Card>
+            </Box>
+        );
+    }
+
+    // ✅ Show loading state while fetching reassessment data
+    if (isLoading) {
+        return (
+            <Box display="flex" justifyContent="center" py={4}>
+                <CircularProgress />
+                <Typography sx={{ ml: 2 }}>Loading reassessment data...</Typography>
             </Box>
         );
     }
@@ -269,7 +224,7 @@ const ReAssessment = () => {
         }));
     };
 
-    // Mental Status Exam options (adjust based on your data structure)
+    // Mental Status Exam options
     const mentalStatusOptions = {
         cmOb1: convertToMUIOptions(cmOb1),
         cmOb2: convertToMUIOptions(cmOb2),
@@ -294,7 +249,7 @@ const ReAssessment = () => {
                     Mental Health Re-Assessment
                 </Typography>
                 <Typography variant="subtitle1" color="textSecondary" gutterBottom>
-                    Comprehensive mental health re-evaluation for {currentClient.clientName} ({currentClient.clientID})
+                    Comprehensive mental health re-evaluation for {client?.clientName || 'Selected Client'} ({clientID})
                 </Typography>
                 
                 {/* Progress Overview */}
@@ -304,13 +259,19 @@ const ReAssessment = () => {
                             <Grid item xs={12} md={4}>
                                 <Box textAlign="center">
                                     <Typography variant="body2" color="textSecondary">Assessment Progress</Typography>
-                                    <Typography variant="h6" color={completionStatus.percentage >= 80 ? 'success.main' : completionStatus.percentage >= 60 ? 'warning.main' : 'error.main'}>
+                                    <Typography variant="h6" color={
+                                        completionStatus.percentage >= 80 ? 'success.main' : 
+                                        completionStatus.percentage >= 60 ? 'warning.main' : 'error.main'
+                                    }>
                                         {completionStatus.percentage}%
                                     </Typography>
                                     <LinearProgress 
                                         variant="determinate" 
                                         value={completionStatus.percentage}
-                                        color={completionStatus.percentage >= 80 ? 'success' : completionStatus.percentage >= 60 ? 'warning' : 'error'}
+                                        color={
+                                            completionStatus.percentage >= 80 ? 'success' : 
+                                            completionStatus.percentage >= 60 ? 'warning' : 'error'
+                                        }
                                         sx={{ mt: 1 }}
                                     />
                                 </Box>
@@ -319,7 +280,7 @@ const ReAssessment = () => {
                                 <Box textAlign="center">
                                     <Typography variant="body2" color="textSecondary">Client</Typography>
                                     <Chip 
-                                        label={currentClient.clientName} 
+                                        label={client?.clientName || clientID} 
                                         color="success"
                                         icon={<PersonIcon />}
                                     />
@@ -368,10 +329,9 @@ const ReAssessment = () => {
                         <AccordionDetails>
                             <Grid container spacing={3}>
                                 <Grid item xs={12} md={6}>
-                                    <Typography>Date of Baseline Assessment</Typography>
                                     <TextField
                                         fullWidth
-                                        label=""
+                                        label="Date of Baseline Assessment"
                                         type="date"
                                         name="dateFullAssess"
                                         value={formData.dateFullAssess || ''}
@@ -380,9 +340,9 @@ const ReAssessment = () => {
                                     />
                                 </Grid>
                                 <Grid item xs={12} md={6}>
-                                    <Typography>Date of Last Re-Assessment</Typography>
                                     <TextField
                                         fullWidth
+                                        label="Date of Last Re-Assessment"
                                         type="date"
                                         name="dateLastReAssess"
                                         value={formData.dateLastReAssess || ''}
@@ -390,46 +350,39 @@ const ReAssessment = () => {
                                         InputLabelProps={{ shrink: true }}
                                     />
                                 </Grid>
-                            </Grid>
-                            <Grid container spacing={3} sx={{ mt: 2 }}>
                                 <Grid item xs={12}>
-                                    <Typography>Sources for Re-Assessment</Typography>
                                     <TextField
                                         fullWidth
+                                        label="Sources for Re-Assessment"
                                         name="reassessmentSources"
                                         value={formData.reassessmentSources || ''}
                                         onChange={handleInputChange}
                                         multiline
                                         rows={4}
-                                        columns={6}
                                     />
                                 </Grid>
                                 <Grid item xs={12} md={4}>
-                                    <Typography>Cultural Considerations"</Typography>
                                     <TextField
                                         fullWidth
+                                        label="Cultural Considerations"
                                         name="culturalCons"
                                         value={formData.culturalCons || ''}
                                         onChange={handleInputChange}
                                     />
                                 </Grid>
-                            </Grid>
-                            <Grid container spacing={3} sx={{ mt: 2 }}>
                                 <Grid item xs={12} md={4}>
-                                    <Typography>Physical Challenges</Typography> 
                                     <TextField
                                         fullWidth
-                                        label=""
+                                        label="Physical Challenges"
                                         name="physicalChall"
                                         value={formData.physicalChall || ''}
                                         onChange={handleInputChange}
                                     />
                                 </Grid>
                                 <Grid item xs={12} md={4}>
-                                    <Typography>Access Issues</Typography>
                                     <TextField
                                         fullWidth
-                                        label=""
+                                        label="Access Issues"
                                         name="accessIssues"
                                         value={formData.accessIssues || ''}
                                         onChange={handleInputChange}
@@ -455,8 +408,8 @@ const ReAssessment = () => {
                         <AccordionDetails>
                             <Grid container spacing={3}>
                                 <Grid item xs={12} md={6}>
-                                    <Typography>Precipitating Event/Reason for Referral</Typography>
                                     <FormControl fullWidth>
+                                        <InputLabel>Precipitating Event/Reason for Referral</InputLabel>
                                         <Select
                                             name="reasonForRef"
                                             value={formData.reasonForRef || ''}
@@ -470,10 +423,9 @@ const ReAssessment = () => {
                                     </FormControl>
                                 </Grid>
                                 <Grid item xs={12}>
-                                    <Typography>Current Symptoms/Behaviors and Impairments</Typography>
                                     <TextField
                                         fullWidth
-                                        label=""
+                                        label="Current Symptoms/Behaviors and Impairments"
                                         name="currentSymp"
                                         value={formData.currentSymp || ''}
                                         onChange={handleInputChange}
@@ -482,11 +434,9 @@ const ReAssessment = () => {
                                         helperText="Include intensity, duration, frequency, and perspective of client and others"
                                     />
                                 </Grid>
-                            </Grid> 
-                            <Grid container spacing={3} sx={{ mt: 2 }}>
                                 <Grid item xs={12} md={6}>
-                                    <Typography>Suicidal/Homicidal Thoughts/Attempts</Typography>
                                     <FormControl fullWidth>
+                                        <InputLabel>Suicidal/Homicidal Thoughts/Attempts</InputLabel>
                                         <Select
                                             name="suicHomiThou"
                                             value={formData.suicHomiThou || ''}
@@ -500,14 +450,13 @@ const ReAssessment = () => {
                                     </FormControl>
                                 </Grid>
                                 <Grid item xs={12} md={6}>
-                                    <Typography>Columbia Suicide Risk Scale Completed?</Typography>
                                     <FormControl fullWidth>
-                                        <InputLabel></InputLabel>
+                                        <InputLabel>Columbia Suicide Risk Scale Completed?</InputLabel>
                                         <Select
                                             name="columbiaSRComp"
                                             value={formData.columbiaSRComp || ''}
                                             onChange={(e) => handleSelectChange('columbiaSRComp', e.target.value)}
-                                            label=""
+                                            label="Columbia Suicide Risk Scale Completed?"
                                         >
                                             <MenuItem value="">Select...</MenuItem>
                                             <MenuItem value="Yes">Yes</MenuItem>
@@ -515,13 +464,10 @@ const ReAssessment = () => {
                                         </Select>
                                     </FormControl>
                                 </Grid>
-                            </Grid>
-                            <Grid container spacing={3} sx={{ mt: 2 }}>
-                                <Grid item xs={12}> 
-                                    <Typography>If Columbia Scale NOT completed, describe details</Typography>
+                                <Grid item xs={12}>
                                     <TextField
                                         fullWidth
-                                        label=""
+                                        label="If Columbia Scale NOT completed, describe details"
                                         name="columbiaSR"
                                         value={formData.columbiaSR || ''}
                                         onChange={handleInputChange}
@@ -562,7 +508,6 @@ const ReAssessment = () => {
 
                                     return (
                                         <Grid item xs={12} md={4} key={field}>
-                                            <Typography>{labels[field]}</Typography>
                                             <Autocomplete
                                                 multiple
                                                 options={options}
@@ -570,7 +515,7 @@ const ReAssessment = () => {
                                                 value={formData[field] || []}
                                                 onChange={(event, newValue) => handleMultiSelectChange(field, newValue)}
                                                 renderInput={(params) => (
-                                                    <TextField {...params} />
+                                                    <TextField {...params} label={labels[field]} />
                                                 )}
                                                 renderTags={(value, getTagProps) =>
                                                     value.map((option, index) => (
@@ -592,9 +537,9 @@ const ReAssessment = () => {
                                     );
                                 })}
                                 <Grid item xs={12}>
-                                    <Typography>Other Observations</Typography>
                                     <TextField
                                         fullWidth
+                                        label="Other Observations"
                                         name="cmObvSum"
                                         value={formData.cmObvSum || ''}
                                         onChange={handleInputChange}
@@ -622,10 +567,9 @@ const ReAssessment = () => {
                         <AccordionDetails>
                             <Grid container spacing={3}>
                                 <Grid item xs={12}>
-                                    <Typography>Client Strengths</Typography>
                                     <TextField
                                         fullWidth
-                                        label=""
+                                        label="Client Strengths"
                                         name="clientStrengthReAssessSummary"
                                         value={formData.clientStrengthReAssessSummary || ''}
                                         onChange={handleInputChange}
@@ -634,10 +578,9 @@ const ReAssessment = () => {
                                     />
                                 </Grid>
                                 <Grid item xs={12}>
-                                    <Typography>Clinical Formulation and Diagnostic Justification</Typography>
                                     <TextField
                                         fullWidth
-                                        label=""
+                                        label="Clinical Formulation and Diagnostic Justification"
                                         name="clientFormReAssessSummary"
                                         value={formData.clientFormReAssessSummary || ''}
                                         onChange={handleInputChange}
@@ -647,10 +590,9 @@ const ReAssessment = () => {
                                     />
                                 </Grid>
                                 <Grid item xs={12} md={4}>
-                                    <Typography>Diagnostic Descriptor</Typography>
                                     <TextField
                                         fullWidth
-                                        label=""
+                                        label="Diagnostic Descriptor"
                                         name="diagDescript"
                                         value={formData.diagDescript || ''}
                                         onChange={handleInputChange}
@@ -659,8 +601,8 @@ const ReAssessment = () => {
                                     />
                                 </Grid>
                                 <Grid item xs={12} md={4}>
-                                    <Typography>ICD Diagnosis Code Type</Typography>
                                     <FormControl fullWidth>
+                                        <InputLabel>ICD Diagnosis Code Type</InputLabel>
                                         <Select
                                             name="diagDescriptCodeChoice"
                                             value={formData.diagDescriptCodeChoice || ''}
@@ -674,10 +616,9 @@ const ReAssessment = () => {
                                     </FormControl>
                                 </Grid>
                                 <Grid item xs={12} md={4}>
-                                    <Typography>ICD Code</Typography>
                                     <TextField
                                         fullWidth
-                                        label=""
+                                        label="ICD Code"
                                         name="diagDescriptCode"
                                         value={formData.diagDescriptCode || ''}
                                         onChange={handleInputChange}
@@ -694,7 +635,7 @@ const ReAssessment = () => {
                             variant="contained"
                             size="large"
                             startIcon={isSaving ? <CircularProgress size={20} color="inherit" /> : <SaveIcon />}
-                            disabled={isSaving || !currentClient}
+                            disabled={isSaving || !clientID}
                             sx={{ minWidth: 200, py: 1.5 }}
                         >
                             {isSaving ? 'Saving...' : 'Save Assessment'}
