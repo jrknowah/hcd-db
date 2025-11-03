@@ -10,6 +10,13 @@ import Select from 'react-select';
 import { 
   fetchMentalHealthData, 
   saveMentalHealthData,
+  addProvider,
+  removeProvider,
+  addHospitalization,
+  removeHospitalization,
+  addMedication,
+  removeMedication,
+  // Keep local actions as fallback for mock mode
   addProviderLocal,
   removeProviderLocal,
   addHospitalizationLocal,
@@ -320,43 +327,131 @@ const MentalHealth = ({ exportMode }) => {
     }
   };
 
-  const addProvider = () => {
-    const newProvider = {
-      agency: modalFormData.mhpCurrentAgency,
-      worker: modalFormData.mhpCurrentWorker,
-      phone: modalFormData.mhpCurrentPhone,
-      lastAppointment: modalFormData.mhpCurrentLastApptDate,
-      nextAppointment: modalFormData.mhpCurrentNextApptDate,
-    };
-    dispatch(addProviderLocal(newProvider));
-    toggleModal('addProvider');
+  const addProviderHandler = async () => {
+  if (!currentClient?.clientID) {
+    alert("⚠️ No client selected.");
+    return;
+  }
+
+  const newProvider = {
+    agency: modalFormData.mhpCurrentAgency,
+    worker: modalFormData.mhpCurrentWorker,
+    phone: modalFormData.mhpCurrentPhone,
+    lastAppointment: modalFormData.mhpCurrentLastApptDate,
+    nextAppointment: modalFormData.mhpCurrentNextApptDate,
   };
 
-  const addHospitalization = () => {
+  try {
+    if (shouldUseMockData) {
+      dispatch(addProviderLocal(newProvider));
+    } else {
+      await dispatch(addProvider({
+        clientID: currentClient.clientID,
+        providerData: newProvider,
+        createdBy: currentUser?.email || 'unknown'
+      }));
+    }
+    alert("✅ Provider added successfully!");
+    toggleModal('addProvider');
+  } catch (error) {
+    console.error("❌ Error adding provider:", error);
+    alert("❌ Failed to add provider.");
+  }
+};
+
+
+  const addHospitalizationHandler = async () => {
+    if (!currentClient?.clientID) {
+      alert("⚠️ No client selected.");
+      return;
+    }
+
     const newHospitalization = {
       location: modalFormData.mhhLocation,
       reasons: modalFormData.mhhReasons,
       date: modalFormData.mhhDate,
     };
-    dispatch(addHospitalizationLocal(newHospitalization));
-    toggleModal('addHospitalization');
+
+    try {
+      if (shouldUseMockData) {
+        dispatch(addHospitalizationLocal(newHospitalization));
+      } else {
+        await dispatch(addHospitalization({
+          clientID: currentClient.clientID,
+          hospitalizationData: newHospitalization,
+          createdBy: currentUser?.email || 'unknown'
+        }));
+      }
+      alert("✅ Hospitalization added successfully!");
+      toggleModal('addHospitalization');
+    } catch (error) {
+      console.error("❌ Error adding hospitalization:", error);
+      alert("❌ Failed to add hospitalization.");
+    }
   };
 
-  const addMedication = () => {
+  const addMedicationHandler = async () => {
+    if (!currentClient?.clientID) {
+      alert("⚠️ No client selected.");
+      return;
+    }
+
     const newMedication = {
       name: modalFormData.mhmName,
       dose: modalFormData.mhmDose,
       sideEffects: modalFormData.mhmSide,
     };
-    dispatch(addMedicationLocal(newMedication));
-    toggleModal('addMedication');
+
+    try {
+      if (shouldUseMockData) {
+        dispatch(addMedicationLocal(newMedication));
+      } else {
+        await dispatch(addMedication({
+          clientID: currentClient.clientID,
+          medicationData: newMedication,
+          createdBy: currentUser?.email || 'unknown'
+        }));
+      }
+      alert("✅ Medication added successfully!");
+      toggleModal('addMedication');
+    } catch (error) {
+      console.error("❌ Error adding medication:", error);
+      alert("❌ Failed to add medication.");
+    }
   };
 
-  const removeItem = (arrayName, index) => {
-    switch (arrayName) {
-      case 'currentProvider': dispatch(removeProviderLocal(index)); break;
-      case 'hospitalizations': dispatch(removeHospitalizationLocal(index)); break;
-      case 'medications': dispatch(removeMedicationLocal(index)); break;
+  const removeItem = async (arrayName, itemId, index) => {
+    if (!currentClient?.clientID) {
+      alert("⚠️ No client selected.");
+      return;
+    }
+
+    try {
+      if (shouldUseMockData) {
+        // Use local actions for mock mode
+        switch (arrayName) {
+          case 'currentProvider': dispatch(removeProviderLocal(index)); break;
+          case 'hospitalizations': dispatch(removeHospitalizationLocal(index)); break;
+          case 'medications': dispatch(removeMedicationLocal(index)); break;
+        }
+      } else {
+        // Use async thunks for real mode
+        switch (arrayName) {
+          case 'currentProvider':
+            await dispatch(removeProvider({ clientID: currentClient.clientID, providerID: itemId }));
+            break;
+          case 'hospitalizations':
+            await dispatch(removeHospitalization({ clientID: currentClient.clientID, hospitalizationID: itemId }));
+            break;
+          case 'medications':
+            await dispatch(removeMedication({ clientID: currentClient.clientID, medicationID: itemId }));
+            break;
+        }
+      }
+      alert("✅ Item removed successfully!");
+    } catch (error) {
+      console.error("❌ Error removing item:", error);
+      alert("❌ Failed to remove item.");
     }
   };
 
@@ -382,7 +477,10 @@ const MentalHealth = ({ exportMode }) => {
         mhaMF: newArrest.mhaMF?.value || newArrest.mhaMF
       };
 
-      await dispatch(saveArrestData(currentClient.clientID, arrestToSave));
+      await dispatch(saveArrestData({
+        clientId: currentClient.clientID,
+        ...arrestToSave
+      }));
       alert("✅ Arrest record saved!");
       
       if (currentUser) {
@@ -445,9 +543,6 @@ const MentalHealth = ({ exportMode }) => {
           formData: {
             ...formDataToSave,
             substanceData,
-            currentProvider: mentalHealthData.currentProvider || [],
-            hospitalizations: mentalHealthData.hospitalizations || [],
-            medications: mentalHealthData.medications || [],
             updatedBy: currentUser?.email || "unknown",
             updatedAt: new Date().toISOString(),
           },
@@ -618,7 +713,7 @@ const MentalHealth = ({ exportMode }) => {
                       <TableCell>{item.lastAppointment}</TableCell>
                       <TableCell>{item.nextAppointment}</TableCell>
                       <TableCell>
-                        <IconButton onClick={() => removeItem('currentProvider', idx)} color="error" size="small">
+                        <IconButton onClick={() => removeItem('currentProvider', item.providerID, idx)} color="error" size="small">
                           <DeleteIcon />
                         </IconButton>
                       </TableCell>
@@ -664,7 +759,7 @@ const MentalHealth = ({ exportMode }) => {
                       <TableCell>{item.reasons}</TableCell>
                       <TableCell>{item.date}</TableCell>
                       <TableCell>
-                        <IconButton onClick={() => removeItem('hospitalizations', idx)} color="error" size="small">
+                        <IconButton onClick={() => removeItem('hospitalizations', item.hospitalizationID, idx)} color="error" size="small">
                           <DeleteIcon />
                         </IconButton>
                       </TableCell>
@@ -703,7 +798,7 @@ const MentalHealth = ({ exportMode }) => {
                       <TableCell>{item.dose}</TableCell>
                       <TableCell>{item.sideEffects}</TableCell>
                       <TableCell>
-                        <IconButton onClick={() => removeItem('medications', idx)} color="error" size="small">
+                        <IconButton onClick={() => removeItem('medications', item.medicationID, idx)} color="error" size="small">
                           <DeleteIcon />
                         </IconButton>
                       </TableCell>
@@ -1377,7 +1472,7 @@ const MentalHealth = ({ exportMode }) => {
             </Grid>
           </DialogContent>
           <DialogActions>
-            <Button onClick={addProvider} variant="contained" color="primary">Add Provider</Button>
+            <Button onClick={addProviderHandler} variant="contained" color="primary">Add Provider</Button>
             <Button onClick={() => toggleModal('addProvider')}>Cancel</Button>
           </DialogActions>
         </Dialog>
@@ -1421,7 +1516,7 @@ const MentalHealth = ({ exportMode }) => {
             </Grid>
           </DialogContent>
           <DialogActions>
-            <Button onClick={addHospitalization} variant="contained" color="primary">Add Hospitalization</Button>
+            <Button onClick={addHospitalizationHandler} variant="contained" color="primary">Add Hospitalization</Button>
             <Button onClick={() => toggleModal('addHospitalization')}>Cancel</Button>
           </DialogActions>
         </Dialog>
@@ -1463,7 +1558,7 @@ const MentalHealth = ({ exportMode }) => {
             </Grid>
           </DialogContent>
           <DialogActions>
-            <Button onClick={addMedication} variant="contained" color="primary">Add Medication</Button>
+            <Button onClick={addMedicationHandler} variant="contained" color="primary">Add Medication</Button>
             <Button onClick={() => toggleModal('addMedication')}>Cancel</Button>
           </DialogActions>
         </Dialog>

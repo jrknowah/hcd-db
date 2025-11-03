@@ -1,8 +1,8 @@
-// src/store/apps/notes/mentalHealthSlice.js
+// src/backend/store/slices/MentalHealthSlice.js
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
 
-const API_URL = import.meta.env.VITE_API_URL;
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
 // ✅ Helper function to check if we should use mock data
 const shouldUseMockData = (clientID) => {
@@ -13,100 +13,13 @@ const shouldUseMockData = (clientID) => {
   return isDevelopment && isMockClient && !forceRealData;
 };
 
-// Mock data for development
-const MOCK_MENTAL_HEALTH_DATA = {
-  id: 1,
-  clientID: 'mock-123',
-  mentalHealthHistory: 'Yes',
-  mentalHealthDiagnosis: ['Depression', 'Anxiety'],
-  mentalHealthTreatment: 'Yes',
-  mentalHealthCurrentTreatment: 'Yes',
-  mhSad: 'Several Days',
-  mhAnxious: 'Over Half the Days',
-  mhSleepPattern: 'Sleep too little',
-  mhEnergyLevel: 'Low',
-  mhConcentrate: 'Yes',
-  mhThoughts: 'No',
-  mhVoices: 'No',
-  mhVoicesSay: '',
-  mhFollowing: 'No',
-  mhSomeone: '',
-  mhFamHistory: 'Yes',
-  mhSummary: 'Client shows signs of depression and anxiety, manageable with current treatment.',
-  mhAbuse: ['History of physical/sexual/emotional abuse'],
-  clientRisk: ['Denies thoughts'],
-  mhSelfHarm: 'No',
-  mhSelfHarmOccurrence: '',
-  mhSuicide: 'No',
-  mhSuicideLast: '',
-  mhRiskSummary: 'Low risk assessment, no immediate concerns.',
-  mhSubAbuseHelp: 'No',
-  mhSubAbSum: 'No current substance abuse issues.',
-  clientLegalIssues: [],
-  clientLegalProbation: '',
-  clientLegalParole: '',
-  arrestMeth: 'No',
-  arrestDrugAlcohol: 'No',
-  arrestViolent: 'No',
-  arrestArson: 'No',
-  arrestSexCrime: 'No',
-  regSexOffender: 'No',
-  arrestCrime: 'Yes',
-  mhLegalSum: 'Previous minor infractions, no current legal issues.',
-  clientPatFamNeeds: ['Mental Health', 'Housing'],
-  mhNeedsSum: 'Client requires ongoing mental health support and stable housing.',
-  cmOb1: ['Well Groomed'],
-  cmOb2: ['Normal for culture'],
-  cmOb3: ['Calm'],
-  cmOb4: ['Unimpaired'],
-  cmOb5: ['Cooperative'],
-  cmOb6: ['Unhappy'],
-  cmOb7: ['Appropriate'],
-  cmOb8: ['Unimpaired'],
-  cmOb9: [],
-  cmOb10: ['None'],
-  cmOb11: [],
-  cmObNone: [],
-  cmObvSum: 'Client appears stable but shows signs of underlying depression. Cooperative during assessment.',
-  currentProvider: [
-    {
-      id: 1,
-      agency: 'Community Mental Health Center',
-      worker: 'Dr. Sarah Johnson',
-      phone: '(555) 123-4567',
-      lastAppointment: '2024-03-10',
-      nextAppointment: '2024-03-17'
-    }
-  ],
-  hospitalizations: [
-    {
-      id: 1,
-      location: 'UCLA Medical Center',
-      reasons: 'Severe depression, suicidal ideation',
-      date: '2020-06-15'
-    }
-  ],
-  medications: [
-    {
-      id: 1,
-      name: 'Sertraline',
-      dose: '50mg daily',
-      sideEffects: 'Mild nausea, effective for depression'
-    }
-  ],
-  substanceData: {
-    'Alcohol': { use: 'past', frequency: '', method: 'Drinking', yearStarted: '2015', yearQuit: '2020' },
-    'Tobacco': { use: 'no', frequency: '', method: '', yearStarted: '', yearQuit: '' }
-  }
-};
-
 // 🔄 Async thunk to fetch mental health data
 export const fetchMentalHealthData = createAsyncThunk(
   "mentalHealth/fetchMentalHealthData",
   async (clientID, thunkAPI) => {
     if (shouldUseMockData(clientID)) {
-      console.log("🔧 Mock mode: Returning mock mental health data for", clientID);
-      return MOCK_MENTAL_HEALTH_DATA;
+      console.log("🔧 Mock mode: Returning mock mental health data");
+      return {}; // Return mock data if needed
     }
 
     try {
@@ -124,16 +37,12 @@ export const saveMentalHealthData = createAsyncThunk(
   "mentalHealth/saveMentalHealthData",
   async ({ clientId, formData, user }, thunkAPI) => {
     if (shouldUseMockData(clientId)) {
-      console.log("🔧 Mock mode: Simulating mental health data save for", clientId);
-      return { ...formData, id: Date.now() };
+      console.log("🔧 Mock mode: Simulating save");
+      return { success: true, message: "Mock save successful" };
     }
 
     try {
-      const response = await axios.post(`${API_URL}/api/mental-health/${clientId}`, {
-        ...formData,
-        updatedBy: user?.email || "unknown",
-        updatedAt: new Date().toISOString(),
-      });
+      const response = await axios.post(`${API_URL}/api/mental-health/${clientId}`, formData);
       return response.data;
     } catch (error) {
       console.error("❌ Error saving mental health data:", error);
@@ -142,80 +51,135 @@ export const saveMentalHealthData = createAsyncThunk(
   }
 );
 
-// Provider actions
-export const addMentalHealthProvider = createAsyncThunk(
+// 🔄 Async thunk to add provider
+export const addProvider = createAsyncThunk(
   "mentalHealth/addProvider",
-  async ({ clientId, providerData }, thunkAPI) => {
-    if (shouldUseMockData(clientId)) {
-      return { ...providerData, id: Date.now() };
+  async ({ clientID, providerData, createdBy }, thunkAPI) => {
+    if (shouldUseMockData(clientID)) {
+      console.log("🔧 Mock mode: Adding provider locally");
+      return { ...providerData, providerID: Date.now(), createdAt: new Date().toISOString() };
     }
 
     try {
-      const response = await axios.post(`${API_URL}/api/mental-health/${clientId}/providers`, providerData);
+      const response = await axios.post(`${API_URL}/api/mental-health/${clientID}/providers`, {
+        ...providerData,
+        createdBy: createdBy || 'unknown'
+      });
       return response.data;
     } catch (error) {
+      console.error("❌ Error adding provider:", error);
       return thunkAPI.rejectWithValue(error.response?.data || "Add provider failed");
     }
   }
 );
 
-export const removeMentalHealthProvider = createAsyncThunk(
+// 🗑️ Async thunk to remove provider
+export const removeProvider = createAsyncThunk(
   "mentalHealth/removeProvider",
-  async ({ clientId, providerId }, thunkAPI) => {
-    if (shouldUseMockData(clientId)) {
-      return providerId;
+  async ({ clientID, providerID }, thunkAPI) => {
+    if (shouldUseMockData(clientID)) {
+      console.log("🔧 Mock mode: Removing provider locally");
+      return providerID;
     }
 
     try {
-      await axios.delete(`${API_URL}/api/mental-health/${clientId}/providers/${providerId}`);
-      return providerId;
+      await axios.delete(`${API_URL}/api/mental-health/${clientID}/providers/${providerID}`);
+      return providerID;
     } catch (error) {
+      console.error("❌ Error removing provider:", error);
       return thunkAPI.rejectWithValue(error.response?.data || "Remove provider failed");
     }
   }
 );
 
-// Hospitalization actions
+// 🔄 Async thunk to add hospitalization
 export const addHospitalization = createAsyncThunk(
   "mentalHealth/addHospitalization",
-  async ({ clientId, hospitalizationData }, thunkAPI) => {
-    if (shouldUseMockData(clientId)) {
-      return { ...hospitalizationData, id: Date.now() };
+  async ({ clientID, hospitalizationData, createdBy }, thunkAPI) => {
+    if (shouldUseMockData(clientID)) {
+      console.log("🔧 Mock mode: Adding hospitalization locally");
+      return { ...hospitalizationData, hospitalizationID: Date.now(), createdAt: new Date().toISOString() };
     }
 
     try {
-      const response = await axios.post(`${API_URL}/api/mental-health/${clientId}/hospitalizations`, hospitalizationData);
+      const response = await axios.post(`${API_URL}/api/mental-health/${clientID}/hospitalizations`, {
+        ...hospitalizationData,
+        createdBy: createdBy || 'unknown'
+      });
       return response.data;
     } catch (error) {
+      console.error("❌ Error adding hospitalization:", error);
       return thunkAPI.rejectWithValue(error.response?.data || "Add hospitalization failed");
     }
   }
 );
 
-// Medication actions
-export const addMedication = createAsyncThunk(
-  "mentalHealth/addMedication",
-  async ({ clientId, medicationData }, thunkAPI) => {
-    if (shouldUseMockData(clientId)) {
-      return { ...medicationData, id: Date.now() };
+// 🗑️ Async thunk to remove hospitalization
+export const removeHospitalization = createAsyncThunk(
+  "mentalHealth/removeHospitalization",
+  async ({ clientID, hospitalizationID }, thunkAPI) => {
+    if (shouldUseMockData(clientID)) {
+      console.log("🔧 Mock mode: Removing hospitalization locally");
+      return hospitalizationID;
     }
 
     try {
-      const response = await axios.post(`${API_URL}/api/mental-health/${clientId}/medications`, medicationData);
+      await axios.delete(`${API_URL}/api/mental-health/${clientID}/hospitalizations/${hospitalizationID}`);
+      return hospitalizationID;
+    } catch (error) {
+      console.error("❌ Error removing hospitalization:", error);
+      return thunkAPI.rejectWithValue(error.response?.data || "Remove hospitalization failed");
+    }
+  }
+);
+
+// 🔄 Async thunk to add medication
+export const addMedication = createAsyncThunk(
+  "mentalHealth/addMedication",
+  async ({ clientID, medicationData, createdBy }, thunkAPI) => {
+    if (shouldUseMockData(clientID)) {
+      console.log("🔧 Mock mode: Adding medication locally");
+      return { ...medicationData, medicationID: Date.now(), createdAt: new Date().toISOString() };
+    }
+
+    try {
+      const response = await axios.post(`${API_URL}/api/mental-health/${clientID}/medications`, {
+        ...medicationData,
+        createdBy: createdBy || 'unknown'
+      });
       return response.data;
     } catch (error) {
+      console.error("❌ Error adding medication:", error);
       return thunkAPI.rejectWithValue(error.response?.data || "Add medication failed");
+    }
+  }
+);
+
+// 🗑️ Async thunk to remove medication
+export const removeMedication = createAsyncThunk(
+  "mentalHealth/removeMedication",
+  async ({ clientID, medicationID }, thunkAPI) => {
+    if (shouldUseMockData(clientID)) {
+      console.log("🔧 Mock mode: Removing medication locally");
+      return medicationID;
+    }
+
+    try {
+      await axios.delete(`${API_URL}/api/mental-health/${clientID}/medications/${medicationID}`);
+      return medicationID;
+    } catch (error) {
+      console.error("❌ Error removing medication:", error);
+      return thunkAPI.rejectWithValue(error.response?.data || "Remove medication failed");
     }
   }
 );
 
 const initialState = {
   data: {},
-  providers: [],
-  hospitalizations: [],
-  medications: [],
   status: "idle",
   error: null,
+  saveStatus: "idle",
+  saveError: null,
 };
 
 const mentalHealthSlice = createSlice({
@@ -224,46 +188,41 @@ const mentalHealthSlice = createSlice({
   reducers: {
     clearMentalHealthData(state) {
       state.data = {};
-      state.providers = [];
-      state.hospitalizations = [];
-      state.medications = [];
       state.status = "idle";
       state.error = null;
     },
-    setMentalHealthData(state, action) {
-      state.data = action.payload;
-    },
+    // Keep local actions for backwards compatibility but mark as deprecated
     addProviderLocal(state, action) {
-      if (!state.data.currentProvider) {
-        state.data.currentProvider = [];
-      }
-      state.data.currentProvider.push({ ...action.payload, id: Date.now() });
+      console.warn("⚠️ addProviderLocal is deprecated - use addProvider thunk instead");
+      if (!state.data.currentProvider) state.data.currentProvider = [];
+      state.data.currentProvider.push(action.payload);
     },
     removeProviderLocal(state, action) {
+      console.warn("⚠️ removeProviderLocal is deprecated - use removeProvider thunk instead");
       if (state.data.currentProvider) {
-        state.data.currentProvider.splice(action.payload, 1);
+        state.data.currentProvider = state.data.currentProvider.filter((_, idx) => idx !== action.payload);
       }
     },
     addHospitalizationLocal(state, action) {
-      if (!state.data.hospitalizations) {
-        state.data.hospitalizations = [];
-      }
-      state.data.hospitalizations.push({ ...action.payload, id: Date.now() });
+      console.warn("⚠️ addHospitalizationLocal is deprecated - use addHospitalization thunk instead");
+      if (!state.data.hospitalizations) state.data.hospitalizations = [];
+      state.data.hospitalizations.push(action.payload);
     },
     removeHospitalizationLocal(state, action) {
+      console.warn("⚠️ removeHospitalizationLocal is deprecated - use removeHospitalization thunk instead");
       if (state.data.hospitalizations) {
-        state.data.hospitalizations.splice(action.payload, 1);
+        state.data.hospitalizations = state.data.hospitalizations.filter((_, idx) => idx !== action.payload);
       }
     },
     addMedicationLocal(state, action) {
-      if (!state.data.medications) {
-        state.data.medications = [];
-      }
-      state.data.medications.push({ ...action.payload, id: Date.now() });
+      console.warn("⚠️ addMedicationLocal is deprecated - use addMedication thunk instead");
+      if (!state.data.medications) state.data.medications = [];
+      state.data.medications.push(action.payload);
     },
     removeMedicationLocal(state, action) {
+      console.warn("⚠️ removeMedicationLocal is deprecated - use removeMedication thunk instead");
       if (state.data.medications) {
-        state.data.medications.splice(action.payload, 1);
+        state.data.medications = state.data.medications.filter((_, idx) => idx !== action.payload);
       }
     },
   },
@@ -285,49 +244,61 @@ const mentalHealthSlice = createSlice({
       })
       // Save mental health data
       .addCase(saveMentalHealthData.pending, (state) => {
-        state.status = "loading";
+        state.saveStatus = "loading";
+        state.saveError = null;
       })
       .addCase(saveMentalHealthData.fulfilled, (state, action) => {
-        state.status = "succeeded";
-        state.data = { ...state.data, ...action.payload };
-        state.error = null;
+        state.saveStatus = "succeeded";
+        state.saveError = null;
       })
       .addCase(saveMentalHealthData.rejected, (state, action) => {
-        state.status = "failed";
-        state.error = action.payload;
+        state.saveStatus = "failed";
+        state.saveError = action.payload;
       })
-      // Provider actions
-      .addCase(addMentalHealthProvider.fulfilled, (state, action) => {
-        if (!state.data.currentProvider) {
-          state.data.currentProvider = [];
-        }
+      // Add provider
+      .addCase(addProvider.fulfilled, (state, action) => {
+        if (!state.data.currentProvider) state.data.currentProvider = [];
         state.data.currentProvider.push(action.payload);
       })
-      .addCase(removeMentalHealthProvider.fulfilled, (state, action) => {
+      // Remove provider
+      .addCase(removeProvider.fulfilled, (state, action) => {
         if (state.data.currentProvider) {
-          state.data.currentProvider = state.data.currentProvider.filter(p => p.id !== action.payload);
+          state.data.currentProvider = state.data.currentProvider.filter(
+            p => p.providerID !== action.payload
+          );
         }
       })
-      // Hospitalization actions
+      // Add hospitalization
       .addCase(addHospitalization.fulfilled, (state, action) => {
-        if (!state.data.hospitalizations) {
-          state.data.hospitalizations = [];
-        }
+        if (!state.data.hospitalizations) state.data.hospitalizations = [];
         state.data.hospitalizations.push(action.payload);
       })
-      // Medication actions
-      .addCase(addMedication.fulfilled, (state, action) => {
-        if (!state.data.medications) {
-          state.data.medications = [];
+      // Remove hospitalization
+      .addCase(removeHospitalization.fulfilled, (state, action) => {
+        if (state.data.hospitalizations) {
+          state.data.hospitalizations = state.data.hospitalizations.filter(
+            h => h.hospitalizationID !== action.payload
+          );
         }
+      })
+      // Add medication
+      .addCase(addMedication.fulfilled, (state, action) => {
+        if (!state.data.medications) state.data.medications = [];
         state.data.medications.push(action.payload);
+      })
+      // Remove medication
+      .addCase(removeMedication.fulfilled, (state, action) => {
+        if (state.data.medications) {
+          state.data.medications = state.data.medications.filter(
+            m => m.medicationID !== action.payload
+          );
+        }
       });
   },
 });
 
 export const {
   clearMentalHealthData,
-  setMentalHealthData,
   addProviderLocal,
   removeProviderLocal,
   addHospitalizationLocal,

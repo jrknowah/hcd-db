@@ -77,7 +77,7 @@ export const saveArrestData = createAsyncThunk(
     }
 
     try {
-      const response = await axios.post(`${API_URL}/api/arrests/${clientId}`, {
+      const response = await axios.post(`${API_URL}/api/mental-health/${clientId}/arrests`, {
         ...data,
         createdAt: new Date().toISOString(),
       });
