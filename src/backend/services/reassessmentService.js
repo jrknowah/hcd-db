@@ -58,7 +58,7 @@ const getByClientId = async (clientID) => {
       .input('clientID', sql.VarChar, clientID)
       .query(`
         SELECT TOP 1 * 
-        FROM Reassessments 
+        FROM ReassessmentData 
         WHERE clientID = @clientID 
         ORDER BY createdAt DESC
       `);
@@ -104,7 +104,7 @@ const getByAssessmentId = async (assessmentID) => {
     const result = await pool.request()
       .input('assessmentID', sql.VarChar, assessmentID)
       .query(`
-        SELECT * FROM Reassessments 
+        SELECT * FROM ReassessmentData 
         WHERE assessmentID = @assessmentID
       `);
 
@@ -173,7 +173,7 @@ const create = async (reassessmentData) => {
       .input('completionPercentage', sql.Decimal, reassessmentData.completionPercentage || 0)
       .input('createdBy', sql.VarChar, reassessmentData.createdBy || 'system')
       .query(`
-        INSERT INTO Reassessments (
+        INSERT INTO ReassessmentData (
           reassessmentID, clientID, assessmentID, dateFullAssess, dateLastReAssess,
           reassessmentSources, culturalCons, physicalChall, accessIssues,
           reasonForRef, currentSymp, suicHomiThou, columbiaSR, columbiaSRComp,
@@ -248,7 +248,7 @@ const update = async (clientID, updateData) => {
       .input('completionPercentage', sql.Decimal, updateData.completionPercentage || 0)
       .input('updatedBy', sql.VarChar, updateData.updatedBy || 'system')
       .query(`
-        UPDATE Reassessments SET
+        UPDATE ReassessmentData SET
           dateFullAssess = @dateFullAssess,
           dateLastReAssess = @dateLastReAssess,
           reassessmentSources = @reassessmentSources,
@@ -332,7 +332,7 @@ const deleteReassessment = async (clientID) => {
     
     await pool.request()
       .input('clientID', sql.VarChar, clientID)
-      .query('DELETE FROM Reassessments WHERE clientID = @clientID');
+      .query('DELETE FROM ReassessmentData WHERE clientID = @clientID');
     
     return true;
   } catch (error) {
@@ -347,7 +347,7 @@ const getAll = async () => {
     const pool = await getPool();
     
     const result = await pool.request()
-      .query('SELECT * FROM Reassessments ORDER BY createdAt DESC');
+      .query('SELECT * FROM ReassessmentData ORDER BY createdAt DESC');
     
     return result.recordset;
   } catch (error) {
