@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const sql = require('mssql');
-const { getPool } = require('../store/azureSql');
+const { getPool } = require('../store/azureSql'); // ✅ FIXED: Changed from getConnection
 
 /**
  * Progress Notes Routes
@@ -23,7 +23,7 @@ router.get('/progress-notes/:clientID/summary', async (req, res) => {
 
     console.log(`${new Date().toISOString()} - GET /api/progress-notes/${clientID}/summary`);
 
-    const pool = await getPool();
+    const pool = await getPool(); // ✅ FIXED: Changed from getConnection()
     const result = await pool.request()
       .input('clientID', sql.VarChar(50), clientID)
       .query(`
@@ -83,7 +83,7 @@ router.get('/progress-notes/:clientID', async (req, res) => {
     console.log(`${new Date().toISOString()} - GET /api/progress-notes/${clientID}`);
     console.log('Query params:', { limit, offset, category, priority, status });
 
-    const pool = await getPool();
+    const pool = await getPool(); // ✅ FIXED: Changed from getConnection()
     const request = pool.request()
       .input('clientID', sql.VarChar(50), clientID)
       .input('limit', sql.Int, parseInt(limit))
@@ -144,7 +144,7 @@ router.get('/progress-notes/:clientID/:noteID', async (req, res) => {
 
     console.log(`${new Date().toISOString()} - GET /api/progress-notes/${clientID}/${noteID}`);
 
-    const pool = await getPool();
+    const pool = await getPool(); // ✅ FIXED: Changed from getConnection()
     const result = await pool.request()
       .input('clientID', sql.VarChar(50), clientID)
       .input('noteID', sql.Int, parseInt(noteID))
@@ -224,7 +224,7 @@ router.post('/progress-notes', async (req, res) => {
       });
     }
 
-    const pool = await getPool();
+    const pool = await getPool(); // ✅ FIXED: Changed from getConnection()
     const result = await pool.request()
       .input('clientID', sql.VarChar(50), clientID)
       .input('nurseNoteDate', sql.Date, new Date(nurseNoteDate))
@@ -313,7 +313,7 @@ router.put('/progress-notes/:noteID', async (req, res) => {
       });
     }
 
-    const pool = await getPool();
+    const pool = await getPool(); // ✅ FIXED: Changed from getConnection()
     
     // Check if note exists
     const checkResult = await pool.request()
@@ -410,7 +410,7 @@ router.delete('/progress-notes/:noteID', async (req, res) => {
     console.log(`${new Date().toISOString()} - DELETE /api/progress-notes/${noteID}`);
     console.log('Permanent delete:', permanent === 'true');
 
-    const pool = await getPool();
+    const pool = await getPool(); // ✅ FIXED: Changed from getConnection()
 
     if (permanent === 'true') {
       // Hard delete
@@ -483,7 +483,7 @@ router.get('/progress-notes/:clientID/categories', async (req, res) => {
   try {
     const { clientID } = req.params;
 
-    const pool = await getPool();
+    const pool = await getPool(); // ✅ FIXED: Changed from getConnection()
     const result = await pool.request()
       .input('clientID', sql.VarChar(50), clientID)
       .query(`
@@ -517,7 +517,7 @@ router.get('/progress-notes/:clientID/follow-ups', async (req, res) => {
   try {
     const { clientID } = req.params;
 
-    const pool = await getPool();
+    const pool = await getPool(); // ✅ FIXED: Changed from getConnection()
     const result = await pool.request()
       .input('clientID', sql.VarChar(50), clientID)
       .query(`
