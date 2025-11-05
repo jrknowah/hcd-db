@@ -463,7 +463,8 @@ const progressNoteSlice = createSlice({
       })
       .addCase(fetchProgressNotes.fulfilled, (state, action) => {
         state.loading = false;
-        state.data = action.payload;
+        // ✅ Extract data array from response wrapper {success, data, count}
+        state.data = action.payload?.data || action.payload || [];
         state.error = null;
       })
       .addCase(fetchProgressNotes.rejected, (state, action) => {
@@ -479,7 +480,9 @@ const progressNoteSlice = createSlice({
       })
       .addCase(addProgressNote.fulfilled, (state, action) => {
         state.saving = false;
-        state.data.unshift(action.payload);
+        // ✅ Extract the created note from response wrapper
+        const newNote = action.payload?.data || action.payload;
+        state.data.unshift(newNote);
         state.saveSuccess = true;
         state.saveError = null;
       })
@@ -537,7 +540,8 @@ const progressNoteSlice = createSlice({
       })
       .addCase(fetchNotesSummary.fulfilled, (state, action) => {
         state.summaryLoading = false;
-        state.summary = action.payload;
+        // ✅ Extract data from response wrapper
+        state.summary = action.payload?.data || action.payload || {};
         state.summaryError = null;
       })
       .addCase(fetchNotesSummary.rejected, (state, action) => {
@@ -552,7 +556,8 @@ const progressNoteSlice = createSlice({
       })
       .addCase(fetchRecentNotes.fulfilled, (state, action) => {
         state.recentLoading = false;
-        state.recentNotes = action.payload;
+        // ✅ Extract data array from response wrapper
+        state.recentNotes = action.payload?.data || action.payload || [];
         state.recentError = null;
       })
       .addCase(fetchRecentNotes.rejected, (state, action) => {
@@ -567,7 +572,8 @@ const progressNoteSlice = createSlice({
       })
       .addCase(fetchNotesBySite.fulfilled, (state, action) => {
         state.loading = false;
-        state.data = action.payload;
+        // ✅ Extract data array from response wrapper
+        state.data = action.payload?.data || action.payload || [];
         state.error = null;
       })
       .addCase(fetchNotesBySite.rejected, (state, action) => {
