@@ -100,7 +100,15 @@ router.post('/reassessment/:clientID',
             }
 
             const { clientID } = req.params;
-            const reassessmentData = req.body;
+            let reassessmentData = req.body;
+
+            // ✅ Filter out constraint fields if they're empty/null to avoid CHECK constraint errors
+            const constraintFields = ['diagDescriptCodeChoice', 'columbiaSRComp', 'reasonForRef', 'suicHomiThou', 'homelessReAssess'];
+            constraintFields.forEach(field => {
+                if (!reassessmentData[field] || reassessmentData[field] === '') {
+                    delete reassessmentData[field];
+                }
+            });
 
             logUserAction('CREATE_REASSESSMENT_RECORD', {
                 clientID,

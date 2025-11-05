@@ -167,7 +167,7 @@ const create = async (reassessmentData) => {
       .input('clientStrengthReAssessSummary', sql.NVarChar, reassessmentData.clientStrengthReAssessSummary || null)
       .input('clientFormReAssessSummary', sql.NVarChar, reassessmentData.clientFormReAssessSummary || null)
       .input('diagDescript', sql.NVarChar, reassessmentData.diagDescript || null)
-      .input('diagDescriptCodeChoice', sql.VarChar, reassessmentData.diagDescriptCodeChoice || null)
+      .input('diagDescriptCodeChoice', sql.VarChar, reassessmentData.diagDescriptCodeChoice || null)  // ✅ NULL now allowed
       .input('diagDescriptCode', sql.VarChar, reassessmentData.diagDescriptCode || null)
       .input('completionStatus', sql.VarChar, reassessmentData.completionStatus || 'In Progress')
       .input('completionPercentage', sql.Decimal, reassessmentData.completionPercentage || 0)
@@ -242,7 +242,7 @@ const update = async (clientID, updateData) => {
       .input('clientStrengthReAssessSummary', sql.NVarChar, updateData.clientStrengthReAssessSummary || null)
       .input('clientFormReAssessSummary', sql.NVarChar, updateData.clientFormReAssessSummary || null)
       .input('diagDescript', sql.NVarChar, updateData.diagDescript || null)
-      .input('diagDescriptCodeChoice', sql.VarChar, updateData.diagDescriptCodeChoice || null)
+      .input('diagDescriptCodeChoice', sql.VarChar, updateData.diagDescriptCodeChoice || null)  // ✅ NULL now allowed
       .input('diagDescriptCode', sql.VarChar, updateData.diagDescriptCode || null)
       .input('completionStatus', sql.VarChar, updateData.completionStatus || 'In Progress')
       .input('completionPercentage', sql.Decimal, updateData.completionPercentage || 0)

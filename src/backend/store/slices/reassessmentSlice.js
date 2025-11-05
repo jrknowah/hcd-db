@@ -228,7 +228,7 @@ const initialState = {
         clientStrengthReAssessSummary: "",
         clientFormReAssessSummary: "",
         diagDescript: "",
-        diagDescriptCodeChoice: "",
+        diagDescriptCodeChoice: "",  // Empty = NULL in database (now allowed by constraint)
         diagDescriptCode: ""
     },
 

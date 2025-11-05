@@ -116,8 +116,22 @@ const ReAssessment = () => {
             return;
         }
 
-        // ✅ FIXED: Remove null/empty fields entirely from payload
+        // ✅ Fields that might have CHECK constraints - exclude if empty
+        const constraintFields = [
+            'diagDescriptCodeChoice',
+            'columbiaSRComp', 
+            'reasonForRef',
+            'suicHomiThou',
+            'homelessReAssess'
+        ];
+
+        // ✅ Remove null/empty fields entirely from payload
         const cleanedData = Object.entries(formData).reduce((acc, [key, value]) => {
+            // Skip constraint fields if empty (to avoid CHECK constraint errors)
+            if (constraintFields.includes(key) && (!value || value === '')) {
+                return acc;
+            }
+            
             // Only include fields that have actual values
             if (value !== '' && value !== null && value !== undefined) {
                 // For arrays, only include if they have items
@@ -635,8 +649,8 @@ const ReAssessment = () => {
                                             label="ICD Diagnosis Code Type"
                                             displayEmpty
                                         >
-                                            <MenuItem value="" disabled>
-                                                <em>Select an option...</em>
+                                            <MenuItem value="">
+                                                <em>Not specified</em>
                                             </MenuItem>
                                             <MenuItem value="Primary">Primary</MenuItem>
                                             <MenuItem value="Sec">Secondary</MenuItem>
