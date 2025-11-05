@@ -49,6 +49,8 @@ import {
     updateFormField,
     updateArrayField,
     calculateCompletionPercentage,
+    loadDataIntoForm,
+    selectReassessmentData,
     selectFormData,
     selectCompletionStatus,
     selectIsLoading,
@@ -64,6 +66,7 @@ const ReAssessment = () => {
     const user = useSelector((state) => state.auth?.user || {});
     
     // ✅ Use reassessment selectors
+    const reassessmentData = useSelector(selectReassessmentData) || {};
     const formData = useSelector(selectFormData) || {};
     const completionStatus = useSelector(selectCompletionStatus) || { 
         percentage: 0, 
@@ -82,6 +85,35 @@ const ReAssessment = () => {
             dispatch(fetchReassessmentData(clientID));
         }
     }, [clientID, dispatch]);
+
+    // ✅ Load fetched data into form fields when data changes
+    useEffect(() => {
+        if (reassessmentData && Object.keys(reassessmentData).length > 0) {
+            console.log('📝 Loading data into form:', reassessmentData);
+            
+            // Format dates for date inputs (YYYY-MM-DD)
+            const formattedData = {
+                ...reassessmentData,
+                dateFullAssess: reassessmentData.dateFullAssess 
+                    ? new Date(reassessmentData.dateFullAssess).toISOString().split('T')[0] 
+                    : '',
+                dateLastReAssess: reassessmentData.dateLastReAssess 
+                    ? new Date(reassessmentData.dateLastReAssess).toISOString().split('T')[0] 
+                    : '',
+                subAbuseReAssessDate: reassessmentData.subAbuseReAssessDate 
+                    ? new Date(reassessmentData.subAbuseReAssessDate).toISOString().split('T')[0] 
+                    : '',
+                medHistReAssessDate: reassessmentData.medHistReAssessDate 
+                    ? new Date(reassessmentData.medHistReAssessDate).toISOString().split('T')[0] 
+                    : '',
+                homelessReAssessDate: reassessmentData.homelessReAssessDate 
+                    ? new Date(reassessmentData.homelessReAssessDate).toISOString().split('T')[0] 
+                    : '',
+            };
+            
+            dispatch(loadDataIntoForm(formattedData));
+        }
+    }, [reassessmentData, dispatch]);
 
     // ✅ Update completion percentage when form data changes
     useEffect(() => {
