@@ -4,7 +4,6 @@ const sql = require('mssql');
 const { logUserAction } = require('../config/logAction');
 
 // ✅ Database connection configuration
-// Update this to match your Azure SQL configuration
 const dbConfig = {
     user: process.env.DB_USER,
     password: process.env.DB_PASSWORD,
@@ -40,10 +39,6 @@ const validateIDTData = (data) => {
     
     if (data.idtPatientClearDate && !isValidDate(data.idtPatientClearDate)) {
         errors.idtPatientClearDate = 'Invalid clearance date format';
-    }
-    
-    if (data.idtDischargeTarget && !isValidDate(data.idtDischargeTarget)) {
-        errors.idtDischargeTarget = 'Invalid target discharge date format';
     }
     
     // Numeric validations
@@ -93,8 +88,7 @@ const sanitizeIDTData = (data) => {
     const textFields = [
         'idtDiag', 'idtProblems', 'idtPriority', 'idtFunctionalStatus',
         'idtConsults', 'idtNoConsults', 'idtPlans', 'idtDischarge',
-        'idtPatientClearNotes', 'idtGoals', 'idtInterventions', 'idtOutcomes',
-        'idtFollowUpNeeded', 'idtMonitoringPlan'
+        'idtGoals', 'idtInterventions', 'idtOutcomes'
     ];
     
     textFields.forEach(field => {
@@ -104,7 +98,7 @@ const sanitizeIDTData = (data) => {
     });
     
     // Date fields
-    const dateFields = ['idtAdmitDate', 'idtPatientClearDate', 'idtDischargeTarget', 'idtNextReview'];
+    const dateFields = ['idtAdmitDate', 'idtPatientClearDate'];
     dateFields.forEach(field => {
         if (data[field] && isValidDate(data[field])) {
             sanitized[field] = new Date(data[field]).toISOString().split('T')[0];
@@ -127,47 +121,85 @@ const sanitizeIDTData = (data) => {
     return sanitized;
 };
 
-// ✅ GET /api/idt-provider/:clientID - Get IDT provider data for client
+// ✅ GET /api/idt-provider/:clientID - Get ALL IDT provider notes for client
 router.get('/idt-provider/:clientID', async (req, res) => {
     try {
         const { clientID } = req.params;
+        const { limit = 100, offset = 0 } = req.query;
+        
+        console.log(`📡 Fetching IDT provider notes for client: ${clientID}`);
         
         const pool = await sql.connect(dbConfig);
         const result = await pool.request()
             .input('clientID', sql.VarChar(50), clientID)
+            .input('limit', sql.Int, parseInt(limit))
+            .input('offset', sql.Int, parseInt(offset))
             .query(`
-                SELECT TOP 1 *
-                FROM dbo.IDTProviderNote 
+                SELECT *
+                FROM dbo.idt_provider_notes 
                 WHERE clientID = @clientID 
                 ORDER BY createdAt DESC
+                OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
             `);
         
-        if (result.recordset.length === 0) {
-            return res.status(404).json({ 
-                message: 'No IDT provider data found for this client',
-                clientID: clientID 
-            });
-        }
+        console.log(`✅ Found ${result.recordset.length} IDT provider notes`);
         
         // Log user action
-        await logUserAction(req, 'GET', 'IDTProviderNote', clientID);
+        await logUserAction(req, 'GET', 'idt_provider_notes', clientID);
         
-        res.json(result.recordset[0]);
+        res.json(result.recordset);
         
     } catch (error) {
-        console.error('Error fetching IDT provider data:', error);
+        console.error('❌ Error fetching IDT provider notes:', error);
         res.status(500).json({ 
-            message: 'Failed to fetch IDT provider data', 
+            message: 'Failed to fetch IDT provider notes', 
             error: error.message 
         });
     }
 });
 
-// ✅ POST /api/idt-provider/:clientID - Save/update IDT provider data
+// ✅ GET /api/idt-provider/note/:id - Get specific IDT provider note
+router.get('/idt-provider/note/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        console.log(`📡 Fetching IDT provider note: ${id}`);
+        
+        const pool = await sql.connect(dbConfig);
+        const result = await pool.request()
+            .input('id', sql.Int, id)
+            .query(`
+                SELECT *
+                FROM dbo.idt_provider_notes 
+                WHERE id = @id
+            `);
+        
+        if (result.recordset.length === 0) {
+            console.log(`⚠️ IDT provider note not found: ${id}`);
+            return res.status(404).json({ 
+                message: 'IDT provider note not found'
+            });
+        }
+        
+        console.log(`✅ IDT provider note found: ${id}`);
+        res.json(result.recordset[0]);
+        
+    } catch (error) {
+        console.error('❌ Error fetching IDT provider note:', error);
+        res.status(500).json({ 
+            message: 'Failed to fetch IDT provider note', 
+            error: error.message 
+        });
+    }
+});
+
+// ✅ POST /api/idt-provider/:clientID - Create new IDT provider note (always INSERT)
 router.post('/idt-provider/:clientID', async (req, res) => {
     try {
         const { clientID } = req.params;
         const rawData = req.body;
+        
+        console.log(`📡 Creating IDT provider note for client: ${clientID}`);
         
         // Validate input data
         const validationErrors = validateIDTData(rawData);
@@ -183,160 +215,209 @@ router.post('/idt-provider/:clientID', async (req, res) => {
         
         const pool = await sql.connect(dbConfig);
         
-        // Check if record exists
-        const existingRecord = await pool.request()
+        // Insert new record
+        const result = await pool.request()
             .input('clientID', sql.VarChar(50), clientID)
-            .query('SELECT idtID FROM dbo.IDTProviderNote WHERE clientID = @clientID');
-        
-        let result;
-        
-        if (existingRecord.recordset.length > 0) {
-            // Update existing record
-            const idtID = existingRecord.recordset[0].idtID;
+            .input('idtHospital', sql.NVarChar(200), data.idtHospital)
+            .input('idtAdmitDate', sql.Date, data.idtAdmitDate)
+            .input('idtProviderName', sql.NVarChar(100), data.idtProviderName)
+            .input('idtProviderRole', sql.NVarChar(50), data.idtProviderRole)
+            .input('idtDiag', sql.NVarChar(sql.MAX), data.idtDiag)
+            .input('idtProblems', sql.NVarChar(sql.MAX), data.idtProblems)
+            .input('idtPriority', sql.NVarChar(sql.MAX), data.idtPriority)
+            .input('idtFunctionalStatus', sql.NVarChar(sql.MAX), data.idtFunctionalStatus)
+            .input('idtConsults', sql.NVarChar(sql.MAX), data.idtConsults)
+            .input('idtNoConsults', sql.NVarChar(sql.MAX), data.idtNoConsults)
+            .input('idtPlans', sql.NVarChar(sql.MAX), data.idtPlans)
+            .input('idtDischarge', sql.NVarChar(sql.MAX), data.idtDischarge)
+            .input('idtPatientClear', sql.NVarChar(20), data.idtPatientClear)
+            .input('idtPatientClearDate', sql.Date, data.idtPatientClearDate)
+            .input('idtPatientClearBy', sql.NVarChar(100), data.idtPatientClearBy)
+            .input('idtDischargeReadiness', sql.NVarChar(50), data.idtDischargeReadiness)
+            .input('idtComplexityScore', sql.Int, data.idtComplexityScore)
+            .input('idtRiskLevel', sql.NVarChar(20), data.idtRiskLevel)
+            .input('idtLengthOfStay', sql.Int, data.idtLengthOfStay)
+            .input('idtTargetLOS', sql.Int, data.idtTargetLOS)
+            .input('idtGoals', sql.NVarChar(sql.MAX), data.idtGoals)
+            .input('idtInterventions', sql.NVarChar(sql.MAX), data.idtInterventions)
+            .input('idtOutcomes', sql.NVarChar(sql.MAX), data.idtOutcomes)
+            .input('createdBy', sql.NVarChar(100), rawData.userName || 'System')
+            .query(`
+                INSERT INTO dbo.idt_provider_notes (
+                    clientID, idtHospital, idtAdmitDate, idtProviderName, idtProviderRole,
+                    idtDiag, idtProblems, idtPriority, idtFunctionalStatus,
+                    idtConsults, idtNoConsults, idtPlans, idtDischarge,
+                    idtPatientClear, idtPatientClearDate, idtPatientClearBy,
+                    idtDischargeReadiness, idtComplexityScore, idtRiskLevel,
+                    idtLengthOfStay, idtTargetLOS,
+                    idtGoals, idtInterventions, idtOutcomes,
+                    createdBy, createdAt, updatedBy, updatedAt
+                )
+                OUTPUT INSERTED.*
+                VALUES (
+                    @clientID, @idtHospital, @idtAdmitDate, @idtProviderName, @idtProviderRole,
+                    @idtDiag, @idtProblems, @idtPriority, @idtFunctionalStatus,
+                    @idtConsults, @idtNoConsults, @idtPlans, @idtDischarge,
+                    @idtPatientClear, @idtPatientClearDate, @idtPatientClearBy,
+                    @idtDischargeReadiness, @idtComplexityScore, @idtRiskLevel,
+                    @idtLengthOfStay, @idtTargetLOS,
+                    @idtGoals, @idtInterventions, @idtOutcomes,
+                    @createdBy, GETDATE(), @createdBy, GETDATE()
+                )
+            `);
             
-            result = await pool.request()
-                .input('idtID', sql.Int, idtID)
-                .input('idtHospital', sql.NVarChar(200), data.idtHospital)
-                .input('idtAdmitDate', sql.Date, data.idtAdmitDate)
-                .input('idtProviderName', sql.NVarChar(100), data.idtProviderName)
-                .input('idtProviderRole', sql.NVarChar(50), data.idtProviderRole)
-                .input('idtDiag', sql.NVarChar(sql.MAX), data.idtDiag)
-                .input('idtProblems', sql.NVarChar(sql.MAX), data.idtProblems)
-                .input('idtPriority', sql.NVarChar(sql.MAX), data.idtPriority)
-                .input('idtFunctionalStatus', sql.NVarChar(sql.MAX), data.idtFunctionalStatus)
-                .input('idtConsults', sql.NVarChar(sql.MAX), data.idtConsults)
-                .input('idtNoConsults', sql.NVarChar(sql.MAX), data.idtNoConsults)
-                .input('idtPlans', sql.NVarChar(sql.MAX), data.idtPlans)
-                .input('idtDischarge', sql.NVarChar(sql.MAX), data.idtDischarge)
-                .input('idtDischargeTarget', sql.Date, data.idtDischargeTarget)
-                .input('idtDischargeReadiness', sql.NVarChar(50), data.idtDischargeReadiness)
-                .input('idtPatientClear', sql.NVarChar(20), data.idtPatientClear)
-                .input('idtPatientClearDate', sql.Date, data.idtPatientClearDate)
-                .input('idtPatientClearBy', sql.NVarChar(100), data.idtPatientClearBy)
-                .input('idtPatientClearNotes', sql.NVarChar(sql.MAX), data.idtPatientClearNotes)
-                .input('idtGoals', sql.NVarChar(sql.MAX), data.idtGoals)
-                .input('idtInterventions', sql.NVarChar(sql.MAX), data.idtInterventions)
-                .input('idtOutcomes', sql.NVarChar(sql.MAX), data.idtOutcomes)
-                .input('idtLengthOfStay', sql.Int, data.idtLengthOfStay)
-                .input('idtTargetLOS', sql.Int, data.idtTargetLOS)
-                .input('idtComplexityScore', sql.Int, data.idtComplexityScore)
-                .input('idtRiskLevel', sql.NVarChar(20), data.idtRiskLevel)
-                .input('idtNextReview', sql.Date, data.idtNextReview)
-                .input('idtFollowUpNeeded', sql.NVarChar(sql.MAX), data.idtFollowUpNeeded)
-                .input('idtMonitoringPlan', sql.NVarChar(sql.MAX), data.idtMonitoringPlan)
-                .input('updatedBy', sql.NVarChar(100), rawData.userName || 'System')
-                .input('updatedAt', sql.DateTime2, new Date())
-                .query(`
-                    UPDATE dbo.IDTProviderNote SET
-                        idtHospital = @idtHospital,
-                        idtAdmitDate = @idtAdmitDate,
-                        idtProviderName = @idtProviderName,
-                        idtProviderRole = @idtProviderRole,
-                        idtDiag = @idtDiag,
-                        idtProblems = @idtProblems,
-                        idtPriority = @idtPriority,
-                        idtFunctionalStatus = @idtFunctionalStatus,
-                        idtConsults = @idtConsults,
-                        idtNoConsults = @idtNoConsults,
-                        idtPlans = @idtPlans,
-                        idtDischarge = @idtDischarge,
-                        idtDischargeTarget = @idtDischargeTarget,
-                        idtDischargeReadiness = @idtDischargeReadiness,
-                        idtPatientClear = @idtPatientClear,
-                        idtPatientClearDate = @idtPatientClearDate,
-                        idtPatientClearBy = @idtPatientClearBy,
-                        idtPatientClearNotes = @idtPatientClearNotes,
-                        idtGoals = @idtGoals,
-                        idtInterventions = @idtInterventions,
-                        idtOutcomes = @idtOutcomes,
-                        idtLengthOfStay = @idtLengthOfStay,
-                        idtTargetLOS = @idtTargetLOS,
-                        idtComplexityScore = @idtComplexityScore,
-                        idtRiskLevel = @idtRiskLevel,
-                        idtNextReview = @idtNextReview,
-                        idtFollowUpNeeded = @idtFollowUpNeeded,
-                        idtMonitoringPlan = @idtMonitoringPlan,
-                        updatedBy = @updatedBy,
-                        updatedAt = @updatedAt
-                    WHERE idtID = @idtID;
-                    
-                    SELECT * FROM dbo.IDTProviderNote WHERE idtID = @idtID;
-                `);
-                
-            await logUserAction(req, 'UPDATE', 'IDTProviderNote', clientID);
-            
-        } else {
-            // Insert new record
-            result = await pool.request()
-                .input('clientID', sql.VarChar(50), clientID)
-                .input('idtHospital', sql.NVarChar(200), data.idtHospital)
-                .input('idtAdmitDate', sql.Date, data.idtAdmitDate)
-                .input('idtProviderName', sql.NVarChar(100), data.idtProviderName)
-                .input('idtProviderRole', sql.NVarChar(50), data.idtProviderRole)
-                .input('idtDiag', sql.NVarChar(sql.MAX), data.idtDiag)
-                .input('idtProblems', sql.NVarChar(sql.MAX), data.idtProblems)
-                .input('idtPriority', sql.NVarChar(sql.MAX), data.idtPriority)
-                .input('idtFunctionalStatus', sql.NVarChar(sql.MAX), data.idtFunctionalStatus)
-                .input('idtConsults', sql.NVarChar(sql.MAX), data.idtConsults)
-                .input('idtNoConsults', sql.NVarChar(sql.MAX), data.idtNoConsults)
-                .input('idtPlans', sql.NVarChar(sql.MAX), data.idtPlans)
-                .input('idtDischarge', sql.NVarChar(sql.MAX), data.idtDischarge)
-                .input('idtDischargeTarget', sql.Date, data.idtDischargeTarget)
-                .input('idtDischargeReadiness', sql.NVarChar(50), data.idtDischargeReadiness)
-                .input('idtPatientClear', sql.NVarChar(20), data.idtPatientClear)
-                .input('idtPatientClearDate', sql.Date, data.idtPatientClearDate)
-                .input('idtPatientClearBy', sql.NVarChar(100), data.idtPatientClearBy)
-                .input('idtPatientClearNotes', sql.NVarChar(sql.MAX), data.idtPatientClearNotes)
-                .input('idtGoals', sql.NVarChar(sql.MAX), data.idtGoals)
-                .input('idtInterventions', sql.NVarChar(sql.MAX), data.idtInterventions)
-                .input('idtOutcomes', sql.NVarChar(sql.MAX), data.idtOutcomes)
-                .input('idtLengthOfStay', sql.Int, data.idtLengthOfStay)
-                .input('idtTargetLOS', sql.Int, data.idtTargetLOS)
-                .input('idtComplexityScore', sql.Int, data.idtComplexityScore)
-                .input('idtRiskLevel', sql.NVarChar(20), data.idtRiskLevel)
-                .input('idtNextReview', sql.Date, data.idtNextReview)
-                .input('idtFollowUpNeeded', sql.NVarChar(sql.MAX), data.idtFollowUpNeeded)
-                .input('idtMonitoringPlan', sql.NVarChar(sql.MAX), data.idtMonitoringPlan)
-                .input('createdBy', sql.NVarChar(100), rawData.userName || 'System')
-                .input('createdAt', sql.DateTime2, new Date())
-                .query(`
-                    INSERT INTO dbo.IDTProviderNote (
-                        clientID, idtHospital, idtAdmitDate, idtProviderName, idtProviderRole,
-                        idtDiag, idtProblems, idtPriority, idtFunctionalStatus,
-                        idtConsults, idtNoConsults, idtPlans, idtDischarge,
-                        idtDischargeTarget, idtDischargeReadiness,
-                        idtPatientClear, idtPatientClearDate, idtPatientClearBy, idtPatientClearNotes,
-                        idtGoals, idtInterventions, idtOutcomes,
-                        idtLengthOfStay, idtTargetLOS, idtComplexityScore, idtRiskLevel,
-                        idtNextReview, idtFollowUpNeeded, idtMonitoringPlan,
-                        createdBy, createdAt, updatedBy, updatedAt
-                    ) VALUES (
-                        @clientID, @idtHospital, @idtAdmitDate, @idtProviderName, @idtProviderRole,
-                        @idtDiag, @idtProblems, @idtPriority, @idtFunctionalStatus,
-                        @idtConsults, @idtNoConsults, @idtPlans, @idtDischarge,
-                        @idtDischargeTarget, @idtDischargeReadiness,
-                        @idtPatientClear, @idtPatientClearDate, @idtPatientClearBy, @idtPatientClearNotes,
-                        @idtGoals, @idtInterventions, @idtOutcomes,
-                        @idtLengthOfStay, @idtTargetLOS, @idtComplexityScore, @idtRiskLevel,
-                        @idtNextReview, @idtFollowUpNeeded, @idtMonitoringPlan,
-                        @createdBy, @createdAt, @createdBy, @createdAt
-                    );
-                    
-                    SELECT * FROM dbo.IDTProviderNote WHERE idtID = SCOPE_IDENTITY();
-                `);
-                
-            await logUserAction(req, 'INSERT', 'IDTProviderNote', clientID);
+        await logUserAction(req, 'INSERT', 'idt_provider_notes', clientID);
+        
+        console.log(`✅ IDT provider note created successfully: ${result.recordset[0].id}`);
+        res.status(201).json(result.recordset[0]);
+        
+    } catch (error) {
+        console.error('❌ Error creating IDT provider note:', error);
+        res.status(500).json({ 
+            message: 'Failed to create IDT provider note', 
+            error: error.message 
+        });
+    }
+});
+
+// ✅ PUT /api/idt-provider/note/:id - Update existing IDT provider note
+router.put('/idt-provider/note/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const rawData = req.body;
+        
+        console.log(`📡 Updating IDT provider note: ${id}`);
+        
+        // Validate input data
+        const validationErrors = validateIDTData(rawData);
+        if (validationErrors) {
+            return res.status(400).json({
+                message: 'Validation failed',
+                errors: validationErrors
+            });
         }
         
-        res.json({
-            message: 'IDT Provider Note saved successfully',
-            data: result.recordset[0]
+        // Sanitize input data
+        const data = sanitizeIDTData(rawData);
+        
+        const pool = await sql.connect(dbConfig);
+        const result = await pool.request()
+            .input('id', sql.Int, id)
+            .input('idtHospital', sql.NVarChar(200), data.idtHospital)
+            .input('idtAdmitDate', sql.Date, data.idtAdmitDate)
+            .input('idtProviderName', sql.NVarChar(100), data.idtProviderName)
+            .input('idtProviderRole', sql.NVarChar(50), data.idtProviderRole)
+            .input('idtDiag', sql.NVarChar(sql.MAX), data.idtDiag)
+            .input('idtProblems', sql.NVarChar(sql.MAX), data.idtProblems)
+            .input('idtPriority', sql.NVarChar(sql.MAX), data.idtPriority)
+            .input('idtFunctionalStatus', sql.NVarChar(sql.MAX), data.idtFunctionalStatus)
+            .input('idtConsults', sql.NVarChar(sql.MAX), data.idtConsults)
+            .input('idtNoConsults', sql.NVarChar(sql.MAX), data.idtNoConsults)
+            .input('idtPlans', sql.NVarChar(sql.MAX), data.idtPlans)
+            .input('idtDischarge', sql.NVarChar(sql.MAX), data.idtDischarge)
+            .input('idtPatientClear', sql.NVarChar(20), data.idtPatientClear)
+            .input('idtPatientClearDate', sql.Date, data.idtPatientClearDate)
+            .input('idtPatientClearBy', sql.NVarChar(100), data.idtPatientClearBy)
+            .input('idtDischargeReadiness', sql.NVarChar(50), data.idtDischargeReadiness)
+            .input('idtComplexityScore', sql.Int, data.idtComplexityScore)
+            .input('idtRiskLevel', sql.NVarChar(20), data.idtRiskLevel)
+            .input('idtLengthOfStay', sql.Int, data.idtLengthOfStay)
+            .input('idtTargetLOS', sql.Int, data.idtTargetLOS)
+            .input('idtGoals', sql.NVarChar(sql.MAX), data.idtGoals)
+            .input('idtInterventions', sql.NVarChar(sql.MAX), data.idtInterventions)
+            .input('idtOutcomes', sql.NVarChar(sql.MAX), data.idtOutcomes)
+            .input('updatedBy', sql.NVarChar(100), rawData.userName || 'System')
+            .query(`
+                UPDATE dbo.idt_provider_notes SET
+                    idtHospital = @idtHospital,
+                    idtAdmitDate = @idtAdmitDate,
+                    idtProviderName = @idtProviderName,
+                    idtProviderRole = @idtProviderRole,
+                    idtDiag = @idtDiag,
+                    idtProblems = @idtProblems,
+                    idtPriority = @idtPriority,
+                    idtFunctionalStatus = @idtFunctionalStatus,
+                    idtConsults = @idtConsults,
+                    idtNoConsults = @idtNoConsults,
+                    idtPlans = @idtPlans,
+                    idtDischarge = @idtDischarge,
+                    idtPatientClear = @idtPatientClear,
+                    idtPatientClearDate = @idtPatientClearDate,
+                    idtPatientClearBy = @idtPatientClearBy,
+                    idtDischargeReadiness = @idtDischargeReadiness,
+                    idtComplexityScore = @idtComplexityScore,
+                    idtRiskLevel = @idtRiskLevel,
+                    idtLengthOfStay = @idtLengthOfStay,
+                    idtTargetLOS = @idtTargetLOS,
+                    idtGoals = @idtGoals,
+                    idtInterventions = @idtInterventions,
+                    idtOutcomes = @idtOutcomes,
+                    updatedBy = @updatedBy,
+                    updatedAt = GETDATE()
+                OUTPUT INSERTED.*
+                WHERE id = @id
+            `);
+            
+        if (result.recordset.length === 0) {
+            console.log(`⚠️ IDT provider note not found: ${id}`);
+            return res.status(404).json({ 
+                message: 'IDT provider note not found'
+            });
+        }
+        
+        await logUserAction(req, 'UPDATE', 'idt_provider_notes', result.recordset[0].clientID);
+        
+        console.log(`✅ IDT provider note updated successfully: ${id}`);
+        res.json(result.recordset[0]);
+        
+    } catch (error) {
+        console.error('❌ Error updating IDT provider note:', error);
+        res.status(500).json({ 
+            message: 'Failed to update IDT provider note', 
+            error: error.message 
+        });
+    }
+});
+
+// ✅ DELETE /api/idt-provider/note/:id - Delete specific IDT provider note
+router.delete('/idt-provider/note/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        console.log(`📡 Deleting IDT provider note: ${id}`);
+        
+        const pool = await sql.connect(dbConfig);
+        
+        // First check if record exists
+        const existingRecord = await pool.request()
+            .input('id', sql.Int, id)
+            .query('SELECT clientID FROM dbo.idt_provider_notes WHERE id = @id');
+        
+        if (existingRecord.recordset.length === 0) {
+            return res.status(404).json({ 
+                message: 'IDT provider note not found' 
+            });
+        }
+        
+        const clientID = existingRecord.recordset[0].clientID;
+        
+        // Delete the record
+        await pool.request()
+            .input('id', sql.Int, id)
+            .query('DELETE FROM dbo.idt_provider_notes WHERE id = @id');
+        
+        await logUserAction(req, 'DELETE', 'idt_provider_notes', clientID);
+        
+        console.log(`✅ IDT provider note deleted successfully: ${id}`);
+        res.json({ 
+            message: 'IDT provider note deleted successfully',
+            id: parseInt(id)
         });
         
     } catch (error) {
-        console.error('Error saving IDT provider data:', error);
+        console.error('❌ Error deleting IDT provider note:', error);
         res.status(500).json({ 
-            message: 'Failed to save IDT provider data', 
+            message: 'Failed to delete IDT provider note', 
             error: error.message 
         });
     }
@@ -356,13 +437,13 @@ router.get('/idt-provider/:clientID/summary', async (req, res) => {
                     AVG(CAST(idtComplexityScore as FLOAT)) as averageComplexity,
                     AVG(CAST(idtLengthOfStay as FLOAT)) as averageLOS,
                     MAX(createdAt) as lastUpdate,
-                    (SELECT TOP 1 idtDischargeReadiness FROM dbo.IDTProviderNote 
+                    (SELECT TOP 1 idtDischargeReadiness FROM dbo.idt_provider_notes 
                      WHERE clientID = @clientID ORDER BY createdAt DESC) as dischargePlanningStatus
-                FROM dbo.IDTProviderNote 
+                FROM dbo.idt_provider_notes 
                 WHERE clientID = @clientID
             `);
         
-        await logUserAction(req, 'GET', 'IDTProviderNote_Summary', clientID);
+        await logUserAction(req, 'GET', 'idt_provider_notes_summary', clientID);
         
         res.json(result.recordset[0]);
         
@@ -370,82 +451,6 @@ router.get('/idt-provider/:clientID/summary', async (req, res) => {
         console.error('Error fetching IDT summary:', error);
         res.status(500).json({ 
             message: 'Failed to fetch IDT summary data', 
-            error: error.message 
-        });
-    }
-});
-
-// ✅ GET /api/idt-provider/:clientID/consultations - Get consultation data only
-router.get('/idt-provider/:clientID/consultations', async (req, res) => {
-    try {
-        const { clientID } = req.params;
-        
-        const pool = await sql.connect(dbConfig);
-        const result = await pool.request()
-            .input('clientID', sql.VarChar(50), clientID)
-            .query(`
-                SELECT 
-                    idtConsults,
-                    idtNoConsults,
-                    createdAt
-                FROM dbo.IDTProviderNote 
-                WHERE clientID = @clientID 
-                ORDER BY createdAt DESC
-            `);
-        
-        await logUserAction(req, 'GET', 'IDTProviderNote_Consultations', clientID);
-        
-        res.json({
-            activeConsultations: result.recordset[0]?.idtConsults || '',
-            alternativeConsultations: result.recordset[0]?.idtNoConsults || '',
-            lastUpdate: result.recordset[0]?.createdAt
-        });
-        
-    } catch (error) {
-        console.error('Error fetching consultation data:', error);
-        res.status(500).json({ 
-            message: 'Failed to fetch consultation data', 
-            error: error.message 
-        });
-    }
-});
-
-// ✅ GET /api/idt-provider/:clientID/discharge-planning - Get discharge planning data
-router.get('/idt-provider/:clientID/discharge-planning', async (req, res) => {
-    try {
-        const { clientID } = req.params;
-        
-        const pool = await sql.connect(dbConfig);
-        const result = await pool.request()
-            .input('clientID', sql.VarChar(50), clientID)
-            .query(`
-                SELECT TOP 1
-                    idtDischargeReadiness,
-                    idtDischargeTarget,
-                    idtDischarge,
-                    idtPlans,
-                    idtPatientClear,
-                    idtPatientClearDate,
-                    idtPatientClearBy
-                FROM dbo.IDTProviderNote 
-                WHERE clientID = @clientID 
-                ORDER BY createdAt DESC
-            `);
-        
-        await logUserAction(req, 'GET', 'IDTProviderNote_DischargePlanning', clientID);
-        
-        if (result.recordset.length === 0) {
-            return res.status(404).json({ 
-                message: 'No discharge planning data found' 
-            });
-        }
-        
-        res.json(result.recordset[0]);
-        
-    } catch (error) {
-        console.error('Error fetching discharge planning data:', error);
-        res.status(500).json({ 
-            message: 'Failed to fetch discharge planning data', 
             error: error.message 
         });
     }
@@ -461,19 +466,19 @@ router.get('/idt-provider/:clientID/history', async (req, res) => {
             .input('clientID', sql.VarChar(50), clientID)
             .query(`
                 SELECT 
-                    idtID,
+                    id,
                     idtProviderName,
                     idtProviderRole,
                     idtComplexityScore,
                     idtRiskLevel,
                     createdAt,
                     LEFT(idtDiag, 100) + '...' as summary
-                FROM dbo.IDTProviderNote 
+                FROM dbo.idt_provider_notes 
                 WHERE clientID = @clientID 
                 ORDER BY createdAt DESC
             `);
         
-        await logUserAction(req, 'GET', 'IDTProviderNote_History', clientID);
+        await logUserAction(req, 'GET', 'idt_provider_notes_history', clientID);
         
         res.json(result.recordset);
         
@@ -481,47 +486,6 @@ router.get('/idt-provider/:clientID/history', async (req, res) => {
         console.error('Error fetching IDT history:', error);
         res.status(500).json({ 
             message: 'Failed to fetch IDT history data', 
-            error: error.message 
-        });
-    }
-});
-
-// ✅ DELETE /api/idt-provider/:idtID - Delete specific IDT record
-router.delete('/idt-provider/:idtID', async (req, res) => {
-    try {
-        const { idtID } = req.params;
-        
-        const pool = await sql.connect(dbConfig);
-        
-        // First check if record exists
-        const existingRecord = await pool.request()
-            .input('idtID', sql.Int, idtID)
-            .query('SELECT clientID FROM dbo.IDTProviderNote WHERE idtID = @idtID');
-        
-        if (existingRecord.recordset.length === 0) {
-            return res.status(404).json({ 
-                message: 'IDT record not found' 
-            });
-        }
-        
-        const clientID = existingRecord.recordset[0].clientID;
-        
-        // Delete the record
-        await pool.request()
-            .input('idtID', sql.Int, idtID)
-            .query('DELETE FROM dbo.IDTProviderNote WHERE idtID = @idtID');
-        
-        await logUserAction(req, 'DELETE', 'IDTProviderNote', clientID);
-        
-        res.json({ 
-            message: 'IDT Provider Note deleted successfully',
-            idtID: idtID 
-        });
-        
-    } catch (error) {
-        console.error('Error deleting IDT record:', error);
-        res.status(500).json({ 
-            message: 'Failed to delete IDT record', 
             error: error.message 
         });
     }
