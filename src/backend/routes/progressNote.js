@@ -198,10 +198,10 @@ router.get('/progress-notes/:clientID/:noteID', async (req, res) => {
  *   createdBy: string (required)
  * }
  */
-router.post('/progress-notes', async (req, res) => {
+router.post('/progress-notes/:clientID', async (req, res) => {
   try {
+    const { clientID } = req.params;  // ✅ Get from URL
     const {
-      clientID,
       nurseNoteDate,
       nurseNoteSite = '',
       nurseNote,
