@@ -386,7 +386,7 @@ export const cmNoteType = [
     { value: 'Intake', label: 'Intake' },
     { value: 'Dicharge', label: 'Dicharge' },
     { value: 'Crisis', label: 'Crisis' },
-    { value: 'Consult', label: 'Consult' },
+    { value: 'Case Conference', label: 'Case Conference' },
     { value: 'MHA', label: 'MHA' },
     { value: 'Care Plan', label: 'Care Plan' },
     { value: 'Group', label: 'Group' },

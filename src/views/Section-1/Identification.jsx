@@ -19,7 +19,7 @@ import { useClientPersistence } from '../../hooks/useClientPersistence';
 import logUserAction from '../../backend/config/logAction';
 import ClientFace from './ClientFace';
 import Referrals from './Referrals';
-import Discharge from './Discharge';
+// ❌ REMOVED: import Discharge from './Discharge';
 
 const DOC_TYPES = [
   "Identification Card", "Driver's License", "Social Security Card", "Permanent Resident Alien Card",
@@ -46,25 +46,11 @@ const MOCK_FILES = [
 const Identification = () => {
   const API_URL = import.meta.env.VITE_APP_API_URL;
   
-  // ✅ USE THE HOOK - Replaces all client management logic
+  // ✅ FIXED: Get client data from hook FIRST
   const { clientID, client, hasClient, user, shouldUseMockData, isDevelopment } = useClientPersistence();
   
-  // ✅ CRITICAL FIX: Add loading guard at component level
-  if (!hasClient || !client) {
-    return (
-      <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '400px', p: 4 }}>
-        <CircularProgress sx={{ mb: 2 }} />
-        <Typography variant="h6" color="text.secondary">
-          Loading client data...
-        </Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-          Please wait while we retrieve the client information
-        </Typography>
-      </Box>
-    );
-  }
-  
-  // State management
+  // ✅✅✅ CRITICAL FIX: ALL HOOKS MUST BE DECLARED BEFORE ANY CONDITIONAL RETURNS ✅✅✅
+  // State management - MOVED BEFORE THE LOADING GUARD
   const [forceMockData, setForceMockData] = useState(false);
   const [tabIndex, setTabIndex] = useState(0);
   const [files, setFiles] = useState([]);
@@ -84,10 +70,11 @@ const Identification = () => {
   const [filePreview, setFilePreview] = useState(null);
   const [previewOpen, setPreviewOpen] = useState(false);
 
+  // Refs
+  const exportRef = useRef();
+
   // ✅ Allow local override of mock data for testing
   const effectiveMockData = forceMockData || shouldUseMockData;
-
-  const exportRef = useRef();
 
   // Load files when client changes
   useEffect(() => {
@@ -140,6 +127,21 @@ const Identification = () => {
       return () => clearTimeout(timer);
     }
   }, [successMessage]);
+
+  // ✅✅✅ NOW WE CAN DO THE LOADING GUARD - AFTER ALL HOOKS ARE DECLARED ✅✅✅
+  if (!hasClient || !client) {
+    return (
+      <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '400px', p: 4 }}>
+        <CircularProgress sx={{ mb: 2 }} />
+        <Typography variant="h6" color="text.secondary">
+          Loading client data...
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+          Please wait while we retrieve the client information
+        </Typography>
+      </Box>
+    );
+  }
 
   const handleTabChange = (event, newValue) => setTabIndex(newValue);
 
@@ -401,7 +403,6 @@ const Identification = () => {
         Client Identification & Documents
       </Typography>
       <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-        {/* ✅ FIXED: Added safe null checks */}
         Viewing documents for: <strong>{client?.clientFirstName || 'Unknown'} {client?.clientLastName || 'Client'}</strong>
         {clientID && ` (ID: ${clientID})`}
       </Typography>
@@ -432,11 +433,11 @@ const Identification = () => {
         </Alert>
       )}
 
+      {/* ✅ UPDATED: Removed Discharge tab - now only 4 tabs */}
       <Tabs value={tabIndex} onChange={handleTabChange} sx={{ mb: 3 }}>
         <Tab label="Client Face Sheet" />
         <Tab label="Documents & Uploads" />
         <Tab label="Referrals" />
-        <Tab label="Discharge" />
         <Tab label="Export Complete Chart" />
       </Tabs>
 
@@ -588,9 +589,9 @@ const Identification = () => {
       )}
       
       {tabIndex === 2 && <Box p={3}><Referrals /></Box>}
-      {tabIndex === 3 && <Box p={3}><Discharge /></Box>}
       
-      {tabIndex === 4 && (
+      {/* ✅ UPDATED: Export is now tab index 3 instead of 4 */}
+      {tabIndex === 3 && (
         <Box p={3}>
           <Typography variant="h5" gutterBottom>
             Export Complete Client Chart
@@ -610,11 +611,10 @@ const Identification = () => {
             {isExporting ? `Exporting... ${exportProgress}%` : "Export Complete Chart to PDF"}
           </Button>
 
-          {/* Hidden export content */}
+          {/* ✅ UPDATED: Removed Discharge from export content */}
           <div ref={exportRef} style={{ display: "none" }}>
             <div style={{ padding: '20px', fontFamily: 'Arial, sans-serif' }}>
               <div style={{ textAlign: 'center', marginBottom: '30px', borderBottom: '2px solid #333', paddingBottom: '20px' }}>
-                {/* ✅ FIXED: Added safe null checks with optional chaining */}
                 <h1>Client Chart - {client?.clientFirstName || 'Unknown'} {client?.clientLastName || 'Client'}</h1>
                 <p>Generated on: {new Date().toLocaleDateString()}</p>
               </div>
@@ -624,14 +624,9 @@ const Identification = () => {
                 <ClientFace exportMode />
               </div>
               
-              <div style={{ pageBreakAfter: 'always' }}>
+              <div>
                 <h2>Referrals</h2>
                 <Referrals exportMode />
-              </div>
-              
-              <div>
-                <h2>Discharge Summary</h2>
-                <Discharge exportMode />
               </div>
             </div>
           </div>

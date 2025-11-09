@@ -27,7 +27,8 @@ import {
   Notes as NotesIcon,
   Groups as IDTIcon,
   Archive as ArchiveIcon,
-  Timeline as TimelineIcon
+  Timeline as TimelineIcon,
+  ExitToApp as DischargeIcon
 } from '@mui/icons-material';
 import { section5List } from "../../data/arrayList";
 import MedFaceSheet from "./MedFaceSheet";
@@ -37,6 +38,7 @@ import ProgressNote from "./ProgressNote";
 import IDTNoteNursing from './IDTNoteNursing';
 import IDTNoteProvider from './IDTNoteProvider';
 import NursingArchive from './NursingArchive';
+import Discharge from '../Section-1/Discharge';
 
 const Medical = () => {
   // ✅ ALIGNED: Match Identification.jsx pattern exactly
@@ -123,12 +125,12 @@ const Medical = () => {
             <Tab icon={<NotesIcon />} label="Progress Notes" iconPosition="start" />
             <Tab icon={<IDTIcon />} label="Nursing IDT" iconPosition="start" />
             <Tab icon={<IDTIcon />} label="Provider IDT" iconPosition="start" />
+            <Tab icon={<DischargeIcon />} label="Discharge" iconPosition="start" />
             <Tab icon={<ArchiveIcon />} label="Nursing Archive" iconPosition="start" />
           </Tabs>
 
           {/* Tab Content */}
           <Box sx={{ p: 3 }}>
-            {/* Main/Timeline Tab */}
             {/* Main/Timeline Tab */}
             {activeTab === 0 && (
               <Box>
@@ -140,37 +142,46 @@ const Medical = () => {
                 <Paper sx={{ p: 3, mt: 2 }}>
                   <List>
                     {timelineItems.map((item, index) => (
-                      <ListItemText
-                        primary={
-                          <Typography 
-                            variant="subtitle1" 
-                            sx={{ 
-                              fontWeight: 'medium',
-                              color: item.section5Date ? 'success.main' : 'text.secondary' 
-                            }}
-                          >
-                            {item.section5Title}
-                          </Typography>
-                        }
-                        secondary={
-                          <span style={{ display: 'inline-block', marginTop: '4px' }}>
-                            {item.section5Date ? (
-                              <Chip
-                                label={`Completed: ${new Date(item.section5Date).toLocaleDateString()}`}
-                                color="success"
-                                size="small"
-                              />
-                            ) : (
-                              <Chip
-                                label="Pending"
-                                color="default"
-                                variant="outlined"
-                                size="small"
-                              />
-                            )}
-                          </span>
-                        }
-                      />
+                      <ListItem key={index}>
+                        <ListItemIcon>
+                          {item.section5Date ? (
+                            <CheckCircleIcon color="success" />
+                          ) : (
+                            <UncheckedIcon color="disabled" />
+                          )}
+                        </ListItemIcon>
+                        <ListItemText
+                          primary={
+                            <Typography 
+                              variant="subtitle1" 
+                              sx={{ 
+                                fontWeight: 'medium',
+                                color: item.section5Date ? 'success.main' : 'text.secondary' 
+                              }}
+                            >
+                              {item.section5Title}
+                            </Typography>
+                          }
+                          secondary={
+                            <span style={{ display: 'inline-block', marginTop: '4px' }}>
+                              {item.section5Date ? (
+                                <Chip
+                                  label={`Completed: ${new Date(item.section5Date).toLocaleDateString()}`}
+                                  color="success"
+                                  size="small"
+                                />
+                              ) : (
+                                <Chip
+                                  label="Pending"
+                                  color="default"
+                                  variant="outlined"
+                                  size="small"
+                                />
+                              )}
+                            </span>
+                          }
+                        />
+                      </ListItem>
                     ))}
                   </List>
                 </Paper>
@@ -201,7 +212,7 @@ const Medical = () => {
               </Box>
             )}
 
-            {/* Face Sheet Tab - ✅ FIXED: Pass clientID prop */}
+            {/* Face Sheet Tab */}
             {activeTab === 1 && (
               <Box>
                 <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -267,8 +278,19 @@ const Medical = () => {
               </Box>
             )}
 
-            {/* Nursing Archive Tab */}
+            {/* ✅ NEW: Discharge Tab */}
             {activeTab === 7 && (
+              <Box>
+                <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <DischargeIcon color="primary" />
+                  Client Discharge Summary
+                </Typography>
+                <Discharge />
+              </Box>
+            )}
+
+            {/* Nursing Archive Tab */}
+            {activeTab === 8 && (
               <Box>
                 <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                   <ArchiveIcon color="primary" />
