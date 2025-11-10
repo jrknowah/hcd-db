@@ -141,6 +141,7 @@ let mentalHealthRouterLoaded = false;
 let reassessmentRouterLoaded = false;
 let mentalArchiveRouterLoaded = false;
 
+
 // ✅ NEW: Try to load your actual routes first
 try {
   const clientsRouter = require('./routes/clients.js');
@@ -904,6 +905,30 @@ if (!routerLoaded) {
 
 console.log('✅ Section 5 Medical Routes Loading Complete');
 console.log('   medFaceSheetRouterLoaded:', medFaceSheetRouterLoaded);
+
+//Section 6: Case Management================================================================
+
+let idtCaseManagerRouterLoaded = false;
+
+console.log('📋 Loading Section 6 Case Management Routes...');
+
+// IDT CASE MANAGER
+try {
+  const idtCaseManagerRouter = require('./routes/idtNoteCm.js');
+  app.use('/api', idtCaseManagerRouter);
+  console.log('✅ IDT Case Manager router loaded from ./routes/idtNoteCm.js');
+  idtCaseManagerRouterLoaded = true;
+} catch (err) {
+  console.log('⚠️  Could not load ./routes/idtNoteCm.js:', err.message);
+  console.error('   Error details:', err);
+}
+
+console.log('✅ Section 6 Case Management Routes Loading Complete');
+//End Section 6: Case Management ===========================================================
+
+
+console.log('  📋 Section 6 - Case Management:');
+console.log(`    IDTCaseManager: ${idtCaseManagerRouterLoaded ? '✅ Real Azure SQL' : '⚠️  Mock fallback'}`);
 
 // MEDICAL SCREENING
 try {
