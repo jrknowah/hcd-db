@@ -141,24 +141,24 @@ const ClientFace = ({ exportMode = false }) => {
 
   // Calculate form completion percentage
   const getCompletionPercentage = () => {
-    const requiredFields = ['clientContactNum', 'clientEmail', 'clientMedInsType'];
-    const optionalFields = ['clientContactAltNum', 'clientEmgContactName', 'clientEmgContactNum', 
-                           'clientEmgContactRel', 'clientEmgContactAddress', 'clientMedCarrier', 
-                           'clientMedInsNum', 'clientAllergyComments'];
-    
-    const totalFields = requiredFields.length + optionalFields.length;
-    const completedRequired = requiredFields.filter(field => 
-      formData[field] && formData[field].trim() !== ''
-    ).length;
-    const completedOptional = optionalFields.filter(field => 
-      formData[field] && formData[field].trim() !== ''
-    ).length;
-    
-    const score = (completedRequired * 2) + completedOptional;
-    const maxScore = (requiredFields.length * 2) + optionalFields.length;
-    
-    return Math.round((score / maxScore) * 100);
-  };
+  const requiredFields = ['clientContactNum', 'clientEmail', 'clientMedInsType'];
+  const optionalFields = ['clientContactAltNum', 'clientEmgContactName', 'clientEmgContactNum', 
+                         'clientEmgContactRel', 'clientEmgContactAddress', 'clientMedCarrier', 
+                         'clientMedInsNum']; // ✅ Removed 'clientAllergyComments'
+  
+  const totalFields = requiredFields.length + optionalFields.length;
+  const completedRequired = requiredFields.filter(field => 
+    formData[field] && formData[field].trim() !== ''
+  ).length;
+  const completedOptional = optionalFields.filter(field => 
+    formData[field] && formData[field].trim() !== ''
+  ).length;
+  
+  const score = (completedRequired * 2) + completedOptional;
+  const maxScore = (requiredFields.length * 2) + optionalFields.length;
+  
+  return Math.round((score / maxScore) * 100);
+};
 
   // Format phone number
   const formatPhoneNumber = (value) => {

@@ -1,23 +1,37 @@
-// ✅ SIMPLIFIED IDTNoteCM.jsx - No external error handling needed
 import React, { useState, useEffect } from "react";
 import {
-  Accordion,
-  AccordionSummary,
-  AccordionDetails,
+  Card,
+  CardContent,
   Typography,
-  TextField,
-  Grid,
   Button,
-  Alert,
+  TextField,
   FormControl,
   InputLabel,
   Select,
   MenuItem,
-  Chip,
   Box,
-  LinearProgress,
+  Grid,
+  Alert,
+  CircularProgress,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
+  Chip,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
   Paper,
-  CircularProgress
+  IconButton,
+  Tooltip,
+  Checkbox,
+  FormControlLabel
 } from "@mui/material";
 import {
   ExpandMore as ExpandMoreIcon,
@@ -25,36 +39,25 @@ import {
   AttachMoney as MoneyIcon,
   Assignment as AssignmentIcon,
   School as SchoolIcon,
-  Save as SaveIcon
+  Save as SaveIcon,
+  Add as AddIcon,
+  Edit as EditIcon,
+  Delete as DeleteIcon,
+  Search as SearchIcon
 } from "@mui/icons-material";
+import PropTypes from 'prop-types';
 import { useDispatch, useSelector } from "react-redux";
-import PropTypes from "prop-types";
+import {
+  fetchIDTCaseManagerNotes,
+  addIDTCaseManagerNote,
+  editIDTCaseManagerNote,
+  deleteIDTCaseManagerNote,
+  clearErrors,
+  clearSaveSuccess
+} from "../../backend/store/slices/idtNoteCMSlice";
+import logUserAction from "../../backend/config/logAction";
 
-// ✅ SIMPLE: Direct imports - slice handles all error cases
-import { 
-  fetchIDTCaseManager,
-  saveIDTCaseManager,
-  clearError,
-  clearSaveSuccess,
-  selectIDTData,
-  selectIDTLoading,
-  selectIDTError,
-  selectIDTSaving,
-  selectIDTSaveSuccess,
-  selectAPIConnected
-} from "../../backend/store/slices/idtNoteCmSlice";
-
-// ✅ SIMPLE: Inline data - no external dependencies
-const identityList = [
-  { value: 'state_id', label: 'State ID' },
-  { value: 'drivers_license', label: 'Driver\'s License' },
-  { value: 'passport', label: 'Passport' },
-  { value: 'ssn_card', label: 'Social Security Card' },
-  { value: 'birth_certificate', label: 'Birth Certificate' },
-  { value: 'medical_card', label: 'Medical Insurance Card' }
-];
-
-const highestEdu = [
+const EDUCATION_LEVELS = [
   'No Formal Education',
   'Elementary School',
   'Middle School',
@@ -68,412 +71,669 @@ const highestEdu = [
   'Doctoral Degree'
 ];
 
+const GOVERNMENT_ID_TYPES = [
+  'State ID',
+  'Driver\'s License',
+  'Passport',
+  'Social Security Card',
+  'Birth Certificate',
+  'Medical Insurance Card'
+];
+
+const initialFormState = {
+  idtMemberSituation: "",
+  idtMemberSupport: "",
+  idtIncomeSource: "",
+  clientGovIssued: [],
+  idtResources: "",
+  idtHfhCM: "",
+  idtRecommend: "",
+  clientHighEnd: "",
+  idtGoals: "",
+  clientPayeeBarriers: "",
+  clientPayeeAssistance: "",
+  updatedBy: ""
+};
+
 const IDTNoteCM = ({ clientID }) => {
   const dispatch = useDispatch();
-  
-  // ✅ SIMPLE: Safe selectors from slice - no destructuring errors
-  const data = useSelector(selectIDTData);
-  const loading = useSelector(selectIDTLoading);
-  const error = useSelector(selectIDTError);
-  const saving = useSelector(selectIDTSaving);
-  const saveSuccess = useSelector(selectIDTSaveSuccess);
-  const apiConnected = useSelector(selectAPIConnected);
-  
-  const user = useSelector((state) => state.auth?.user || null);
-  
-  const [formData, setFormData] = useState({
-    idtMemberSituation: "",
-    idtMemberSupport: "",
-    idtIncomeSource: "",
-    clientGovIssued: [],
-    idtResources: "",
-    idtHfhCM: "",
-    idtRecommend: "",
-    clientHighEnd: "",
-    idtGoals: "",
-    clientPayeeBarriers: "",
-    clientPayeeAssistance: ""
-  });
+  const user = useSelector((state) => state.auth.user);
+  const { notes, loading, error, saving, saveSuccess } = useSelector((state) => state.idtCaseManager);
 
-  const [expandedAccordion, setExpandedAccordion] = useState(0);
+  // Component state
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [viewDialogOpen, setViewDialogOpen] = useState(false);
+  const [selectedNote, setSelectedNote] = useState(null);
+  const [formData, setFormData] = useState(initialFormState);
+  const [searchTerm, setSearchTerm] = useState("");
 
-  // ✅ SIMPLE: Direct dispatch - slice handles all scenarios
+  // Load notes on mount
   useEffect(() => {
-    if (clientID) {
-      dispatch(fetchIDTCaseManager(clientID));
+    if (clientID && clientID !== 'mock-123') {
+      dispatch(fetchIDTCaseManagerNotes(clientID));
     }
-  }, [clientID, dispatch]);
+  }, [dispatch, clientID]);
 
-  // ✅ SIMPLE: Safe data loading
-  useEffect(() => {
-    if (data && Object.keys(data).length > 0) {
-      setFormData({
-        idtMemberSituation: data.idtMemberSituation || "",
-        idtMemberSupport: data.idtMemberSupport || "",
-        idtIncomeSource: data.idtIncomeSource || "",
-        clientGovIssued: Array.isArray(data.clientGovIssued) 
-          ? data.clientGovIssued.map(item => 
-              typeof item === 'string' ? { label: item, value: item } : item
-            )
-          : [],
-        idtResources: data.idtResources || "",
-        idtHfhCM: data.idtHfhCM || "",
-        idtRecommend: data.idtRecommend || "",
-        clientHighEnd: data.clientHighEnd || "",
-        idtGoals: data.idtGoals || "",
-        clientPayeeBarriers: data.clientPayeeBarriers || "",
-        clientPayeeAssistance: data.clientPayeeAssistance || ""
-      });
-    }
-  }, [data]);
-
-  // ✅ SIMPLE: Auto-clear success messages
+  // Clear success message after 3 seconds
   useEffect(() => {
     if (saveSuccess) {
-      const timer = setTimeout(() => {
+      setTimeout(() => {
         dispatch(clearSaveSuccess());
-      }, 5000);
-      return () => clearTimeout(timer);
+      }, 3000);
     }
   }, [saveSuccess, dispatch]);
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+  // Clear error after 5 seconds
+  useEffect(() => {
+    if (error) {
+      setTimeout(() => {
+        dispatch(clearErrors());
+      }, 5000);
+    }
+  }, [error, dispatch]);
+
+  // Handle input changes
+  const handleInputChange = (field, value) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
   };
 
-  const handleGovIssuedChange = (event) => {
-    const value = event.target.value;
-    setFormData((prev) => ({
-      ...prev,
-      clientGovIssued: typeof value === 'string' 
-        ? value.split(',').map(v => ({ label: v, value: v })) 
-        : value.map(v => ({ label: v, value: v }))
-    }));
+  // Handle government ID changes
+  const handleGovIdChange = (idType) => {
+    setFormData(prev => {
+      const currentIds = prev.clientGovIssued || [];
+      const isSelected = currentIds.includes(idType);
+      return {
+        ...prev,
+        clientGovIssued: isSelected
+          ? currentIds.filter((id) => id !== idType)
+          : [...currentIds, idType],
+      };
+    });
   };
 
-  const handleAccordionChange = (panel) => (event, isExpanded) => {
-    setExpandedAccordion(isExpanded ? panel : false);
+  // Open add dialog
+  const handleOpenDialog = () => {
+    setFormData({ ...initialFormState, clientID });
+    setDialogOpen(true);
   };
 
-  // ✅ SIMPLE: Direct save - slice handles all scenarios
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    
-    const payload = {
-      ...formData,
-      clientGovIssued: formData.clientGovIssued.map((option) => option.value),
-      clientID,
-      updatedBy: user?.email || "system"
-    };
-    
-    dispatch(saveIDTCaseManager(payload));
+  // Open edit dialog
+  const handleEditNote = (note) => {
+    setSelectedNote(note);
+    setFormData({
+      ...note,
+      clientGovIssued: Array.isArray(note.clientGovIssued) ? note.clientGovIssued : []
+    });
+    setEditDialogOpen(true);
   };
 
-  const getCompletionPercentage = () => {
-    const fields = [
-      'idtMemberSituation', 'idtMemberSupport', 'idtIncomeSource',
-      'idtResources', 'idtHfhCM', 'idtRecommend', 'clientHighEnd',
-      'idtGoals', 'clientPayeeBarriers', 'clientPayeeAssistance'
-    ];
-    const completed = fields.filter(field => formData[field] && formData[field].trim() !== '').length;
-    const govIdCompleted = formData.clientGovIssued && formData.clientGovIssued.length > 0 ? 1 : 0;
-    return Math.round(((completed + govIdCompleted) / (fields.length + 1)) * 100);
+  // Open view dialog
+  const handleViewNote = (note) => {
+    setSelectedNote(note);
+    setViewDialogOpen(true);
   };
 
-  const completionPercentage = getCompletionPercentage();
+  // Open delete confirmation
+  const handleDeleteClick = (note) => {
+    setSelectedNote(note);
+    setDeleteDialogOpen(true);
+  };
+
+  // Save new note
+  const handleSaveNote = async () => {
+    if (!clientID || clientID === 'mock-123') {
+      alert("⚠️ Please select a valid client before saving.");
+      return;
+    }
+
+    if (!formData.idtGoals?.trim()) {
+      alert("⚠️ Please enter the member's goals before saving.");
+      return;
+    }
+
+    try {
+      await dispatch(addIDTCaseManagerNote({
+        ...formData,
+        clientID,
+        createdBy: user?.email || "unknown"
+      })).unwrap();
+      
+      setDialogOpen(false);
+      setFormData(initialFormState);
+      dispatch(fetchIDTCaseManagerNotes(clientID));
+      await logUserAction(user, "ADD_IDT_CM_NOTE", { clientID });
+    } catch (err) {
+      console.error("Failed to save note:", err);
+    }
+  };
+
+  // Update existing note
+  const handleUpdateNote = async () => {
+    if (!selectedNote?.idtCMID) return;
+
+    if (!formData.idtGoals?.trim()) {
+      alert("⚠️ Please enter the member's goals before saving.");
+      return;
+    }
+
+    try {
+      await dispatch(editIDTCaseManagerNote({
+        idtCMID: selectedNote.idtCMID,
+        updates: formData
+      })).unwrap();
+      
+      setEditDialogOpen(false);
+      setFormData(initialFormState);
+      setSelectedNote(null);
+      dispatch(fetchIDTCaseManagerNotes(clientID));
+      await logUserAction(user, "EDIT_IDT_CM_NOTE", { clientID, idtCMID: selectedNote.idtCMID });
+    } catch (err) {
+      console.error("Failed to update note:", err);
+    }
+  };
+
+  // Delete note
+  const handleDeleteNote = async () => {
+    if (!selectedNote?.idtCMID) return;
+
+    try {
+      await dispatch(deleteIDTCaseManagerNote(selectedNote.idtCMID)).unwrap();
+      setDeleteDialogOpen(false);
+      setSelectedNote(null);
+      dispatch(fetchIDTCaseManagerNotes(clientID));
+      await logUserAction(user, "DELETE_IDT_CM_NOTE", { clientID, idtCMID: selectedNote.idtCMID });
+    } catch (err) {
+      console.error("Failed to delete note:", err);
+    }
+  };
+
+  // Filter notes by search term
+  const filteredNotes = notes?.filter(note => {
+    const searchLower = searchTerm.toLowerCase();
+    return (
+      note.idtGoals?.toLowerCase().includes(searchLower) ||
+      note.idtMemberSituation?.toLowerCase().includes(searchLower) ||
+      note.clientHighEnd?.toLowerCase().includes(searchLower)
+    );
+  }) || [];
+
+  // Format date
+  const formatDate = (dateString) => {
+    if (!dateString) return "N/A";
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    });
+  };
+
+  // Form Dialog Content
+  const renderForm = () => (
+    <Box sx={{ mt: 2 }}>
+      {/* 1. Member Assessment & Support System */}
+      <Accordion defaultExpanded>
+        <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+          <PsychologyIcon sx={{ mr: 2 }} />
+          <Typography variant="h6">Member Assessment & Support System</Typography>
+        </AccordionSummary>
+        <AccordionDetails>
+          <Grid container spacing={3}>
+            <Grid item xs={12} md={6}>
+              <TextField
+                fullWidth
+                multiline
+                rows={4}
+                label="Member Situation"
+                value={formData.idtMemberSituation}
+                onChange={(e) => handleInputChange('idtMemberSituation', e.target.value)}
+                placeholder="Describe the member's situation regarding mental health needs, living conditions, family, finances, transportation..."
+              />
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <TextField
+                fullWidth
+                multiline
+                rows={4}
+                label="Support System"
+                value={formData.idtMemberSupport}
+                onChange={(e) => handleInputChange('idtMemberSupport', e.target.value)}
+                placeholder="Describe the member's support system: family, significant others, friends, and dynamics..."
+              />
+            </Grid>
+          </Grid>
+        </AccordionDetails>
+      </Accordion>
+
+      {/* 2. Financial & Documentation Status */}
+      <Accordion defaultExpanded>
+        <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+          <MoneyIcon sx={{ mr: 2 }} />
+          <Typography variant="h6">Financial & Documentation Status</Typography>
+        </AccordionSummary>
+        <AccordionDetails>
+          <Grid container spacing={3}>
+            <Grid item xs={12} md={6}>
+              <TextField
+                fullWidth
+                label="Income Source"
+                value={formData.idtIncomeSource}
+                onChange={(e) => handleInputChange('idtIncomeSource', e.target.value)}
+                placeholder="e.g., SSI, Employment, Family Support"
+              />
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <TextField
+                fullWidth
+                multiline
+                rows={3}
+                label="Available Resources"
+                value={formData.idtResources}
+                onChange={(e) => handleInputChange('idtResources', e.target.value)}
+                placeholder="List available resources and services..."
+              />
+            </Grid>
+            <Grid item xs={12}>
+              <Typography variant="subtitle2" gutterBottom>
+                Government Issued IDs (Select all that apply)
+              </Typography>
+              <Grid container spacing={1}>
+                {GOVERNMENT_ID_TYPES.map((idType) => (
+                  <Grid item xs={12} sm={6} md={4} key={idType}>
+                    <FormControlLabel
+                      control={
+                        <Checkbox
+                          checked={formData.clientGovIssued?.includes(idType)}
+                          onChange={() => handleGovIdChange(idType)}
+                        />
+                      }
+                      label={idType}
+                    />
+                  </Grid>
+                ))}
+              </Grid>
+            </Grid>
+          </Grid>
+        </AccordionDetails>
+      </Accordion>
+
+      {/* 3. Case Management & Recommendations */}
+      <Accordion defaultExpanded>
+        <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+          <AssignmentIcon sx={{ mr: 2 }} />
+          <Typography variant="h6">Case Management & Recommendations</Typography>
+        </AccordionSummary>
+        <AccordionDetails>
+          <Grid container spacing={3}>
+            <Grid item xs={12} md={6}>
+              <TextField
+                fullWidth
+                label="HFH Case Manager"
+                value={formData.idtHfhCM}
+                onChange={(e) => handleInputChange('idtHfhCM', e.target.value)}
+                placeholder="Case manager name"
+              />
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <TextField
+                fullWidth
+                multiline
+                rows={3}
+                label="Recommendations"
+                value={formData.idtRecommend}
+                onChange={(e) => handleInputChange('idtRecommend', e.target.value)}
+                placeholder="Case management recommendations..."
+              />
+            </Grid>
+          </Grid>
+        </AccordionDetails>
+      </Accordion>
+
+      {/* 4. Education & Employment Readiness */}
+      <Accordion defaultExpanded>
+        <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+          <SchoolIcon sx={{ mr: 2 }} />
+          <Typography variant="h6">Education & Employment Readiness</Typography>
+        </AccordionSummary>
+        <AccordionDetails>
+          <Grid container spacing={3}>
+            <Grid item xs={12} md={6}>
+              <FormControl fullWidth>
+                <InputLabel>Highest Educational Level</InputLabel>
+                <Select
+                  value={formData.clientHighEnd}
+                  onChange={(e) => handleInputChange('clientHighEnd', e.target.value)}
+                  label="Highest Educational Level"
+                >
+                  <MenuItem value="">Select...</MenuItem>
+                  {EDUCATION_LEVELS.map((level) => (
+                    <MenuItem key={level} value={level}>
+                      {level}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <TextField
+                fullWidth
+                multiline
+                rows={3}
+                label="Work Goals *"
+                value={formData.idtGoals}
+                onChange={(e) => handleInputChange('idtGoals', e.target.value)}
+                placeholder="Member's employment and work goals..."
+                required
+                error={!formData.idtGoals?.trim()}
+              />
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <TextField
+                fullWidth
+                multiline
+                rows={3}
+                label="Employment Barriers"
+                value={formData.clientPayeeBarriers}
+                onChange={(e) => handleInputChange('clientPayeeBarriers', e.target.value)}
+                placeholder="Barriers to employment..."
+              />
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <TextField
+                fullWidth
+                multiline
+                rows={3}
+                label="Assistance Plan"
+                value={formData.clientPayeeAssistance}
+                onChange={(e) => handleInputChange('clientPayeeAssistance', e.target.value)}
+                placeholder="How we can assist with employment goals..."
+              />
+            </Grid>
+          </Grid>
+        </AccordionDetails>
+      </Accordion>
+    </Box>
+  );
 
   return (
-    <Box sx={{ maxWidth: 1200, mx: "auto", p: 3 }}>
-      {/* Header Section */}
-      <Paper elevation={2} sx={{ p: 3, mb: 3 }}>
-        <Typography variant="h4" gutterBottom>
-          IDT Case Manager Assessment
-        </Typography>
-        <Typography variant="body1" color="text.secondary" gutterBottom>
-          Comprehensive case management evaluation and goal setting
-        </Typography>
-        
-        {/* ✅ SIMPLE: Connection status indicator */}
-        {!apiConnected && (
-          <Alert severity="info" sx={{ mt: 2, mb: 2 }}>
-            🔧 Development Mode: Using demo data (API not connected)
-          </Alert>
-        )}
-        
-        {/* Progress Indicator */}
-        <Box sx={{ mt: 2 }}>
-          <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
-            <Typography variant="body2">Assessment Completion</Typography>
-            <Typography variant="body2">{completionPercentage}%</Typography>
-          </Box>
-          <LinearProgress 
-            variant="determinate" 
-            value={completionPercentage} 
-            sx={{ height: 8, borderRadius: 4 }}
-          />
-        </Box>
-      </Paper>
-
-      {/* ✅ SIMPLE: Error handling */}
-      {error && (
-        <Alert 
-          severity="error" 
-          sx={{ mb: 3 }} 
-          onClose={() => dispatch(clearError())}
-        >
-          {error}
-        </Alert>
-      )}
-
-      {saveSuccess && (
-        <Alert 
-          severity="success" 
-          sx={{ mb: 3 }} 
-          onClose={() => dispatch(clearSaveSuccess())}
-        >
-          ✅ Assessment saved successfully!
-        </Alert>
-      )}
-
-      {/* Loading Indicator */}
-      {loading && (
-        <Box display="flex" justifyContent="center" mb={3}>
-          <CircularProgress />
-        </Box>
-      )}
-
-      {/* Main Form */}
-      <form onSubmit={handleSubmit}>
-        {/* Accordion 1: Member Assessment & Support System */}
-        <Accordion 
-          expanded={expandedAccordion === 0} 
-          onChange={handleAccordionChange(0)}
-          sx={{ mb: 2 }}
-        >
-          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-            <PsychologyIcon sx={{ mr: 2, color: 'primary.main' }} />
-            <Typography variant="h6">Member Assessment & Support System</Typography>
-          </AccordionSummary>
-          <AccordionDetails>
-            <Grid container spacing={3}>
-              <Grid item xs={12} md={6}>
-                <TextField
-                  fullWidth
-                  multiline
-                  rows={4}
-                  label="Member Situation"
-                  name="idtMemberSituation"
-                  value={formData.idtMemberSituation}
-                  onChange={handleChange}
-                  helperText="What is the member situation in relation to his/her mental health needs, living conditions/family/finances, transportation issues?"
-                />
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <TextField
-                  fullWidth
-                  multiline
-                  rows={4}
-                  label="Support System"
-                  name="idtMemberSupport"
-                  value={formData.idtMemberSupport}
-                  onChange={handleChange}
-                  helperText="Who are the member's support system and dynamics of the support system? Family, significant other, friends?"
-                />
-              </Grid>
-            </Grid>
-          </AccordionDetails>
-        </Accordion>
-
-        {/* Accordion 2: Financial & Documentation Status */}
-        <Accordion 
-          expanded={expandedAccordion === 1} 
-          onChange={handleAccordionChange(1)}
-          sx={{ mb: 2 }}
-        >
-          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-            <MoneyIcon sx={{ mr: 2, color: 'primary.main' }} />
-            <Typography variant="h6">Financial & Documentation Status</Typography>
-          </AccordionSummary>
-          <AccordionDetails>
-            <Grid container spacing={3}>
-              <Grid item xs={12} md={4}>
-                <Typography>Income Source</Typography>
-                <TextField
-                  fullWidth
-                  label=""
-                  name="idtIncomeSource"
-                  value={formData.idtIncomeSource}
-                  onChange={handleChange}
-                />
-              </Grid>
-              <Grid item xs={12} md={4}>
-                <Typography>Government Issued ID</Typography>
-                <FormControl fullWidth>
-                  <Select
-                    multiple
-                    value={formData.clientGovIssued.map(item => item.value)}
-                    onChange={handleGovIssuedChange}
-                    renderValue={(selected) => (
-                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                        {selected.map((value) => (
-                          <Chip key={value} label={value} size="small" />
-                        ))}
-                      </Box>
-                    )}
-                  >
-                    {identityList.map((id) => (
-                      <MenuItem key={id.value} value={id.value}>
-                        {id.label}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Grid>
-              <Grid item xs={12} md={4}>
-                <Typography>Available Resources</Typography>
-                <TextField
-                  fullWidth
-                  multiline
-                  rows={3}
-                  label=""
-                  name="idtResources"
-                  value={formData.idtResources}
-                  onChange={handleChange}
-                />
-              </Grid>
-            </Grid>
-          </AccordionDetails>
-        </Accordion>
-
-        {/* Accordion 3: Case Management & Recommendations */}
-        <Accordion 
-          expanded={expandedAccordion === 2} 
-          onChange={handleAccordionChange(2)}
-          sx={{ mb: 2 }}
-        >
-          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-            <AssignmentIcon sx={{ mr: 2, color: 'primary.main' }} />
-            <Typography variant="h6">Case Management & Recommendations</Typography>
-          </AccordionSummary>
-          <AccordionDetails>
-            <Grid container spacing={3}>
-              <Grid item xs={12} md={6}>
-                <Typography>HFH Case Manager</Typography>
-                <TextField
-                  fullWidth
-                  label=""
-                  name="idtHfhCM"
-                  value={formData.idtHfhCM}
-                  onChange={handleChange}
-                />
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <Typography>Recommendations</Typography>
-                <TextField
-                  fullWidth
-                  multiline
-                  rows={3}
-                  label=""
-                  name="idtRecommend"
-                  value={formData.idtRecommend}
-                  onChange={handleChange} 
-                />
-              </Grid>
-            </Grid>
-          </AccordionDetails>
-        </Accordion>
-
-        {/* Accordion 4: Education & Employment Readiness */}
-        <Accordion 
-          expanded={expandedAccordion === 3} 
-          onChange={handleAccordionChange(3)}
-          sx={{ mb: 2 }}
-        >
-          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-            <SchoolIcon sx={{ mr: 2, color: 'primary.main' }} />
-            <Typography variant="h6">Education & Employment Readiness</Typography>
-          </AccordionSummary>
-          <AccordionDetails>
-            <Grid container spacing={3}>
-              <Grid item xs={12} md={4}>
-                <Typography>Highest Educational Level</Typography>
-                <FormControl fullWidth> 
-                  <Select
-                    name="clientHighEnd"
-                    value={formData.clientHighEnd}
-                    onChange={handleChange}
-                    label="Educational Level"
-                  >
-                    <MenuItem value="">Select Education</MenuItem>
-                    {highestEdu.map((hEdu) => (
-                      <MenuItem key={hEdu} value={hEdu}>
-                        {hEdu}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Grid>
-              <Grid item xs={12} md={4}>
-                <Typography>Work Goals</Typography>
-                <TextField
-                  fullWidth
-                  multiline
-                  rows={3}
-                  label=""
-                  name="idtGoals"
-                  value={formData.idtGoals}
-                  onChange={handleChange} 
-                />
-              </Grid>
-              <Grid item xs={12} md={4}>
-                <Typography>Employment Barriers</Typography>
-                <TextField
-                  fullWidth
-                  multiline
-                  rows={3}
-                  label=""
-                  name="clientPayeeBarriers"
-                  value={formData.clientPayeeBarriers}
-                  onChange={handleChange} 
-                />
-              </Grid>
-              <Grid item xs={12}>
-                <Typography>Assistance Plan</Typography>
-                <TextField
-                  fullWidth
-                  multiline
-                  rows={3}
-                  label=""
-                  name="clientPayeeAssistance"
-                  value={formData.clientPayeeAssistance}
-                  onChange={handleChange} 
-                />
-              </Grid>
-            </Grid>
-          </AccordionDetails>
-        </Accordion>
-
-        {/* Save Button */}
-        <Box sx={{ mt: 3, display: 'flex', justifyContent: 'flex-end' }}>
+    <Card>
+      <CardContent>
+        {/* Header */}
+        <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
+          <Typography variant="h4" component="h1">
+            📋 IDT Note - Case Manager
+          </Typography>
           <Button
-            type="submit"
             variant="contained"
-            size="large"
-            disabled={saving || loading}
-            startIcon={<SaveIcon />}
-            sx={{ minWidth: 150 }}
+            startIcon={<AddIcon />}
+            onClick={handleOpenDialog}
+            disabled={!clientID || clientID === 'mock-123'}
           >
-            {saving ? 'Saving...' : 'Save Assessment'}
+            Add New Note
           </Button>
         </Box>
-      </form>
-    </Box>
+
+        {/* Success/Error Alerts */}
+        {saveSuccess && (
+          <Alert severity="success" sx={{ mb: 2 }}>
+            Note saved successfully!
+          </Alert>
+        )}
+        {error && (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            {error}
+          </Alert>
+        )}
+
+        {/* Search */}
+        {notes?.length > 0 && (
+          <Box sx={{ mb: 2 }}>
+            <TextField
+              placeholder="Search notes by goals, situation, or education level..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              size="small"
+              fullWidth
+              InputProps={{
+                startAdornment: <SearchIcon sx={{ color: 'action.active', mr: 1 }} />
+              }}
+            />
+          </Box>
+        )}
+
+        {/* Notes Table */}
+        {loading ? (
+          <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+            <CircularProgress />
+          </Box>
+        ) : filteredNotes.length === 0 ? (
+          <Box sx={{ textAlign: 'center', p: 3 }}>
+            <Typography color="text.secondary">
+              {notes?.length === 0 
+                ? "No IDT case manager notes yet. Click 'Add New Note' to create one."
+                : "No notes match your search criteria."}
+            </Typography>
+          </Box>
+        ) : (
+          <TableContainer component={Paper}>
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableCell>Date</TableCell>
+                  <TableCell>Education Level</TableCell>
+                  <TableCell>Income Source</TableCell>
+                  <TableCell>Work Goals</TableCell>
+                  <TableCell>Case Manager</TableCell>
+                  <TableCell align="center">Actions</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {filteredNotes.map((note) => (
+                  <TableRow key={note.idtCMID} hover>
+                    <TableCell>{formatDate(note.createdAt)}</TableCell>
+                    <TableCell>
+                      <Chip 
+                        label={note.clientHighEnd || 'N/A'} 
+                        color="primary"
+                        size="small"
+                      />
+                    </TableCell>
+                    <TableCell>{note.idtIncomeSource || 'N/A'}</TableCell>
+                    <TableCell>
+                      {note.idtGoals?.substring(0, 60)}
+                      {note.idtGoals?.length > 60 ? '...' : ''}
+                    </TableCell>
+                    <TableCell>{note.idtHfhCM || 'N/A'}</TableCell>
+                    <TableCell align="center">
+                      <Tooltip title="View Details">
+                        <IconButton 
+                          size="small" 
+                          onClick={() => handleViewNote(note)}
+                          color="info"
+                        >
+                          <SearchIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title="Edit Note">
+                        <IconButton 
+                          size="small" 
+                          onClick={() => handleEditNote(note)}
+                          color="primary"
+                        >
+                          <EditIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title="Delete Note">
+                        <IconButton 
+                          size="small" 
+                          onClick={() => handleDeleteClick(note)}
+                          color="error"
+                        >
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        )}
+
+        {/* Add/Edit Dialog */}
+        <Dialog 
+          open={dialogOpen || editDialogOpen} 
+          onClose={() => {
+            setDialogOpen(false);
+            setEditDialogOpen(false);
+            setFormData(initialFormState);
+          }}
+          maxWidth="lg"
+          fullWidth
+        >
+          <DialogTitle>
+            {editDialogOpen ? 'Edit IDT Case Manager Note' : 'Add New IDT Case Manager Note'}
+          </DialogTitle>
+          <DialogContent>
+            {renderForm()}
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => {
+              setDialogOpen(false);
+              setEditDialogOpen(false);
+              setFormData(initialFormState);
+            }}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={editDialogOpen ? handleUpdateNote : handleSaveNote}
+              variant="contained" 
+              disabled={saving}
+              startIcon={saving ? <CircularProgress size={16} /> : <SaveIcon />}
+            >
+              {saving ? 'Saving...' : (editDialogOpen ? 'Update Note' : 'Save Note')}
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* View Dialog */}
+        <Dialog 
+          open={viewDialogOpen} 
+          onClose={() => setViewDialogOpen(false)}
+          maxWidth="md"
+          fullWidth
+        >
+          <DialogTitle>IDT Case Manager Note Details</DialogTitle>
+          <DialogContent>
+            {selectedNote && (
+              <Grid container spacing={2} sx={{ mt: 1 }}>
+                <Grid item xs={12}>
+                  <Typography variant="subtitle2" color="text.secondary">
+                    Created: {formatDate(selectedNote.createdAt)}
+                  </Typography>
+                  <Typography variant="subtitle2" color="text.secondary">
+                    Last Updated: {formatDate(selectedNote.updatedAt)}
+                  </Typography>
+                </Grid>
+
+                <Grid item xs={12}>
+                  <Typography variant="subtitle1" fontWeight="bold">Member Situation</Typography>
+                  <Typography>{selectedNote.idtMemberSituation || 'N/A'}</Typography>
+                </Grid>
+
+                <Grid item xs={12}>
+                  <Typography variant="subtitle1" fontWeight="bold">Support System</Typography>
+                  <Typography>{selectedNote.idtMemberSupport || 'N/A'}</Typography>
+                </Grid>
+
+                <Grid item xs={12} md={6}>
+                  <Typography variant="subtitle1" fontWeight="bold">Income Source</Typography>
+                  <Typography>{selectedNote.idtIncomeSource || 'N/A'}</Typography>
+                </Grid>
+
+                <Grid item xs={12} md={6}>
+                  <Typography variant="subtitle1" fontWeight="bold">Education Level</Typography>
+                  <Typography>{selectedNote.clientHighEnd || 'N/A'}</Typography>
+                </Grid>
+
+                <Grid item xs={12}>
+                  <Typography variant="subtitle1" fontWeight="bold">Government IDs</Typography>
+                  {selectedNote.clientGovIssued && selectedNote.clientGovIssued.length > 0 ? (
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 1 }}>
+                      {selectedNote.clientGovIssued.map((id, index) => (
+                        <Chip key={index} label={id} color="primary" size="small" />
+                      ))}
+                    </Box>
+                  ) : (
+                    <Typography>None recorded</Typography>
+                  )}
+                </Grid>
+
+                <Grid item xs={12}>
+                  <Typography variant="subtitle1" fontWeight="bold">Work Goals</Typography>
+                  <Typography>{selectedNote.idtGoals || 'N/A'}</Typography>
+                </Grid>
+
+                <Grid item xs={12}>
+                  <Typography variant="subtitle1" fontWeight="bold">Employment Barriers</Typography>
+                  <Typography>{selectedNote.clientPayeeBarriers || 'N/A'}</Typography>
+                </Grid>
+
+                <Grid item xs={12}>
+                  <Typography variant="subtitle1" fontWeight="bold">Assistance Plan</Typography>
+                  <Typography>{selectedNote.clientPayeeAssistance || 'N/A'}</Typography>
+                </Grid>
+
+                <Grid item xs={12} md={6}>
+                  <Typography variant="subtitle1" fontWeight="bold">Resources</Typography>
+                  <Typography>{selectedNote.idtResources || 'N/A'}</Typography>
+                </Grid>
+
+                <Grid item xs={12} md={6}>
+                  <Typography variant="subtitle1" fontWeight="bold">Recommendations</Typography>
+                  <Typography>{selectedNote.idtRecommend || 'N/A'}</Typography>
+                </Grid>
+
+                <Grid item xs={12}>
+                  <Typography variant="subtitle1" fontWeight="bold">Case Manager</Typography>
+                  <Typography>{selectedNote.idtHfhCM || 'N/A'}</Typography>
+                </Grid>
+              </Grid>
+            )}
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setViewDialogOpen(false)}>Close</Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* Delete Confirmation Dialog */}
+        <Dialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)}>
+          <DialogTitle>Confirm Delete</DialogTitle>
+          <DialogContent>
+            <Typography>
+              Are you sure you want to delete this IDT Case Manager note? This action cannot be undone.
+            </Typography>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setDeleteDialogOpen(false)}>Cancel</Button>
+            <Button 
+              onClick={handleDeleteNote} 
+              color="error" 
+              variant="contained"
+              disabled={saving}
+            >
+              {saving ? 'Deleting...' : 'Delete'}
+            </Button>
+          </DialogActions>
+        </Dialog>
+      </CardContent>
+    </Card>
   );
 };
 
 IDTNoteCM.propTypes = {
-  clientID: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired
+  clientID: PropTypes.string,
 };
 
 export default IDTNoteCM;

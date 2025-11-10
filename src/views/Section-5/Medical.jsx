@@ -28,6 +28,7 @@ import {
   Groups as IDTIcon,
   Archive as ArchiveIcon,
   Timeline as TimelineIcon,
+  Medication as MedicationIcon,
   ExitToApp as DischargeIcon
 } from '@mui/icons-material';
 import { section5List } from "../../data/arrayList";
@@ -38,6 +39,8 @@ import ProgressNote from "./ProgressNote";
 import IDTNoteNursing from './IDTNoteNursing';
 import IDTNoteProvider from './IDTNoteProvider';
 import NursingArchive from './NursingArchive';
+import MedicalObservationRecord from './MedicalObservationRecord';
+// ✅ ADDED: Discharge component from Section 1
 import Discharge from '../Section-1/Discharge';
 
 const Medical = () => {
@@ -55,9 +58,11 @@ const Medical = () => {
     { section5Title: 'Medical Face Sheet', section5Date: '2024-03-01' },
     { section5Title: 'Initial Nursing Screening', section5Date: '2024-03-02' },
     { section5Title: 'Nursing Assessment', section5Date: '2024-03-05' },
+    { section5Title: 'Medical Observation Record', section5Date: '' },
     { section5Title: 'First Progress Note', section5Date: '' },
     { section5Title: 'IDT Meeting - Nursing', section5Date: '' },
     { section5Title: 'IDT Meeting - Provider', section5Date: '' },
+    { section5Title: 'Discharge Planning', section5Date: '' }, // ✅ ADDED
   ];
 
   // ✅ ALIGNED: Same client check pattern as Identification.jsx
@@ -110,7 +115,7 @@ const Medical = () => {
       {/* Main Content Card */}
       <Card>
         <CardContent sx={{ p: 0 }}>
-          {/* Tabs Navigation */}
+          {/* ✅ UPDATED: Added Discharge tab - now 10 tabs total */}
           <Tabs 
             value={activeTab} 
             onChange={handleTabChange}
@@ -123,6 +128,7 @@ const Medical = () => {
             <Tab icon={<ScreeningIcon />} label="Nursing Screening" iconPosition="start" />
             <Tab icon={<AssessmentIcon />} label="Nursing Assessment" iconPosition="start" />
             <Tab icon={<NotesIcon />} label="Progress Notes" iconPosition="start" />
+            <Tab icon={<MedicationIcon />} label="Observation Record" iconPosition="start" />
             <Tab icon={<IDTIcon />} label="Nursing IDT" iconPosition="start" />
             <Tab icon={<IDTIcon />} label="Provider IDT" iconPosition="start" />
             <Tab icon={<DischargeIcon />} label="Discharge" iconPosition="start" />
@@ -256,8 +262,19 @@ const Medical = () => {
               </Box>
             )}
 
-            {/* Nursing IDT Tab */}
+            {/* Medical Observation Record Tab */}
             {activeTab === 5 && (
+              <Box>
+                <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <MedicationIcon color="primary" />
+                  Medical Observation Record
+                </Typography>
+                <MedicalObservationRecord clientID={clientID} />
+              </Box>
+            )}
+
+            {/* Nursing IDT Tab */}
+            {activeTab === 6 && (
               <Box>
                 <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                   <IDTIcon color="primary" />
@@ -268,7 +285,7 @@ const Medical = () => {
             )}
 
             {/* Provider IDT Tab */}
-            {activeTab === 6 && (
+            {activeTab === 7 && (
               <Box>
                 <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                   <IDTIcon color="primary" />
@@ -279,7 +296,7 @@ const Medical = () => {
             )}
 
             {/* ✅ NEW: Discharge Tab */}
-            {activeTab === 7 && (
+            {activeTab === 8 && (
               <Box>
                 <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                   <DischargeIcon color="primary" />
@@ -290,7 +307,7 @@ const Medical = () => {
             )}
 
             {/* Nursing Archive Tab */}
-            {activeTab === 8 && (
+            {activeTab === 9 && (
               <Box>
                 <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                   <ArchiveIcon color="primary" />

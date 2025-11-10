@@ -1,359 +1,259 @@
-// store/slices/idtNoteCmSlice.js - ROBUST VERSION with built-in error handling
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 
-// ✅ FIXED: Vite-compatible environment configuration
-const getApiBaseUrl = () => {
-  // Use Vite environment variables (import.meta.env)
-  return import.meta?.env?.VITE_API_URL || 
-         import.meta?.env?.VITE_API_BASE_URL || 
-         (import.meta?.env?.DEV ? 'http://localhost:5000' : '');
-};
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
 
-const API_BASE_URL = getApiBaseUrl();
-
-// ✅ FIXED: Vite-compatible development detection
-const shouldUseMockData = (clientID) => {
-  const isDevelopment = import.meta?.env?.DEV || false;
-  const isMockClient = clientID === 'mock-123' || clientID?.toString().startsWith('mock-');
-  const forceMock = import.meta?.env?.VITE_USE_MOCK_DATA === 'true';
-  
-  return isDevelopment && (isMockClient || forceMock || !API_BASE_URL);
-};
-
-// ✅ ROBUST: Built-in mock data - no external dependencies
-const getMockIDTData = (clientID) => ({
-  idtCMID: 1,
-  clientID: clientID,
-  idtMemberSituation: "Client demonstrates stable mental health with some anxiety regarding housing. Living with supportive family temporarily. Limited transportation but has bus pass. Receives SSI benefits which covers basic needs.",
-  idtMemberSupport: "Strong family support system with mother and sister actively involved. Has a supportive boyfriend who visits regularly. Limited friend network but quality relationships with case workers from previous programs.",
-  idtIncomeSource: "SSI Disability Benefits - $943/month",
-  clientGovIssued: ["state_id", "ssn_card", "medical_card"],
-  idtResources: "Can provide housing voucher assistance, transportation vouchers, mental health counseling referrals, job training programs, and benefits advocacy support.",
-  idtHfhCM: "Sarah Johnson, LCSW",
-  idtRecommend: "Continue mental health services, assist with permanent housing placement, provide vocational assessment for possible part-time employment opportunities.",
-  clientHighEnd: "High School Diploma",
-  idtGoals: "Part-time employment goal feasible within 6-8 months after housing stability achieved. Client interested in customer service or clerical work.",
-  clientPayeeBarriers: "Anxiety and depression symptoms may interfere with work performance. No significant physical barriers identified.",
-  clientPayeeAssistance: "Will provide job coaching, interview preparation, workplace accommodation assistance, and ongoing mental health support to maintain employment stability.",
-  assessmentScore: 75.5,
-  riskLevel: "Medium",
-  readinessLevel: "Moderate",
-  supportStrength: "Strong",
-  goalsCompleted: 2,
-  goalsInProgress: 3,
-  goalsPending: 1,
-  lastAssessmentDate: "2025-07-15",
-  nextFollowUpDate: "2025-08-15",
-  documentationComplete: true,
-  createdBy: "test@example.com",
-  createdAt: "2025-07-10T10:00:00Z",
-  updatedBy: "test@example.com",
-  updatedAt: "2025-07-15T14:30:00Z"
-});
-
-// ✅ ROBUST: Safe fetch with automatic fallback
-const safeFetch = async (url, options = {}) => {
-  try {
-    const response = await fetch(url, {
-      ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        ...options.headers,
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-    }
-
-    return await response.json();
-  } catch (error) {
-    console.warn(`🔄 Fetch failed for ${url}, error:`, error.message);
-    throw error;
-  }
-};
-
-// ✅ ROBUST: Async Thunks with built-in error handling and fallbacks
-
-export const fetchIDTCaseManager = createAsyncThunk(
-  'idtCaseManager/fetchIDTCaseManager',
+// Fetch all IDT Case Manager notes for a client
+export const fetchIDTCaseManagerNotes = createAsyncThunk(
+  'idtCaseManager/fetchNotes',
   async (clientID, { rejectWithValue }) => {
-    // ✅ Immediate mock data return for development
-    if (shouldUseMockData(clientID)) {
-      console.log("🔧 IDT Slice: Using mock data for", clientID);
-      // Simulate network delay
-      await new Promise(resolve => setTimeout(resolve, 800));
-      return getMockIDTData(clientID);
-    }
-
     try {
-      const data = await safeFetch(`${API_BASE_URL}/api/section6/idt-case-manager/${clientID}`);
+      console.log(`📡 Fetching IDT Case Manager notes for client: ${clientID}`);
+      
+      const response = await fetch(`${API_BASE_URL}/api/idt-case-manager/${clientID}`);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      console.log("✅ IDT Case Manager notes fetched successfully:", data);
       return data;
     } catch (error) {
-      console.warn('🔄 IDT API failed, falling back to mock data:', error.message);
-      // ✅ Automatic fallback to mock data on API failure
-      return getMockIDTData(clientID);
+      console.error("❌ Error fetching IDT Case Manager notes:", error);
+      return rejectWithValue(error.message);
     }
   }
 );
 
-export const saveIDTCaseManager = createAsyncThunk(
-  'idtCaseManager/saveIDTCaseManager',
-  async (idtData, { rejectWithValue }) => {
-    // ✅ Mock save for development
-    if (shouldUseMockData(idtData.clientID)) {
-      console.log("🔧 IDT Slice: Mock saving data for", idtData.clientID);
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      return { 
-        ...getMockIDTData(idtData.clientID),
-        ...idtData, 
-        updatedAt: new Date().toISOString(),
-        idtCMID: Date.now() // Simulate new ID
-      };
-    }
-
+// Fetch a specific IDT Case Manager note
+export const fetchSingleIDTCaseManagerNote = createAsyncThunk(
+  'idtCaseManager/fetchSingleNote',
+  async (idtCMID, { rejectWithValue }) => {
     try {
-      const data = await safeFetch(`${API_BASE_URL}/api/section6/idt-case-manager/${idtData.clientID}`, {
-        method: 'POST',
-        body: JSON.stringify(idtData),
+      console.log(`📡 Fetching IDT Case Manager note: ${idtCMID}`);
+      
+      const response = await fetch(`${API_BASE_URL}/api/idt-case-manager/note/${idtCMID}`);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      console.log("✅ IDT Case Manager note fetched successfully:", data);
+      return data;
+    } catch (error) {
+      console.error("❌ Error fetching IDT Case Manager note:", error);
+      return rejectWithValue(error.message);
+    }
+  }
+);
+
+// Add new IDT Case Manager note
+export const addIDTCaseManagerNote = createAsyncThunk(
+  'idtCaseManager/addNote',
+  async (noteData, { rejectWithValue }) => {
+    try {
+      console.log("📡 Adding IDT Case Manager note:", noteData);
+      
+      const response = await fetch(`${API_BASE_URL}/api/idt-case-manager/${noteData.clientID}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(noteData),
       });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log("✅ IDT Case Manager note added successfully:", data);
       return data;
     } catch (error) {
-      console.warn('🔄 IDT Save API failed, using mock response:', error.message);
-      // ✅ Fallback to mock save on API failure
-      return { 
-        ...getMockIDTData(idtData.clientID),
-        ...idtData, 
-        updatedAt: new Date().toISOString()
-      };
+      console.error("❌ Error adding IDT Case Manager note:", error);
+      return rejectWithValue(error.message);
     }
   }
 );
 
-export const fetchIDTSummary = createAsyncThunk(
-  'idtCaseManager/fetchIDTSummary',
-  async (clientID, { rejectWithValue }) => {
-    if (shouldUseMockData(clientID)) {
-      console.log("🔧 IDT Slice: Using mock summary for", clientID);
-      await new Promise(resolve => setTimeout(resolve, 500));
-      return {
-        riskLevel: "Medium",
-        readinessLevel: "Moderate", 
-        supportStrength: "Strong",
-        assessmentScore: 75.5,
-        goalsCompleted: 2,
-        goalsInProgress: 3,
-        goalsPending: 1,
-        completionPercentage: 85,
-        lastUpdated: "2025-07-15"
-      };
-    }
-
+// Edit existing IDT Case Manager note
+export const editIDTCaseManagerNote = createAsyncThunk(
+  'idtCaseManager/editNote',
+  async ({ idtCMID, updates }, { rejectWithValue }) => {
     try {
-      const data = await safeFetch(`${API_BASE_URL}/api/section6/idt-case-manager/${clientID}/summary`);
+      console.log(`📡 Updating IDT Case Manager note ${idtCMID}:`, updates);
+      
+      const response = await fetch(`${API_BASE_URL}/api/idt-case-manager/${idtCMID}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(updates),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log("✅ IDT Case Manager note updated successfully:", data);
       return data;
     } catch (error) {
-      // ✅ Return mock summary on failure
-      return {
-        riskLevel: "Unknown",
-        readinessLevel: "Unknown", 
-        supportStrength: "Unknown",
-        assessmentScore: 0,
-        goalsCompleted: 0,
-        goalsInProgress: 0,
-        goalsPending: 0,
-        completionPercentage: 0,
-        lastUpdated: new Date().toISOString().split('T')[0]
-      };
+      console.error("❌ Error updating IDT Case Manager note:", error);
+      return rejectWithValue(error.message);
     }
   }
 );
 
-// ✅ ROBUST: Initial state with comprehensive defaults
+// Delete IDT Case Manager note
+export const deleteIDTCaseManagerNote = createAsyncThunk(
+  'idtCaseManager/deleteNote',
+  async (idtCMID, { rejectWithValue }) => {
+    try {
+      console.log(`📡 Deleting IDT Case Manager note: ${idtCMID}`);
+      
+      const response = await fetch(`${API_BASE_URL}/api/idt-case-manager/${idtCMID}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log("✅ IDT Case Manager note deleted successfully");
+      return { idtCMID, ...data };
+    } catch (error) {
+      console.error("❌ Error deleting IDT Case Manager note:", error);
+      return rejectWithValue(error.message);
+    }
+  }
+);
+
 const initialState = {
-  // Main IDT data - always initialized to prevent undefined errors
-  data: {},
+  notes: [],
+  currentNote: null,
   loading: false,
   error: null,
-  
-  // Summary data
-  summary: {
-    riskLevel: "Unknown",
-    readinessLevel: "Unknown", 
-    supportStrength: "Unknown",
-    assessmentScore: 0,
-    goalsCompleted: 0,
-    goalsInProgress: 0,
-    goalsPending: 0,
-    completionPercentage: 0,
-    lastUpdated: null
-  },
-  summaryLoading: false,
-  summaryError: null,
-  
-  // Goals data
-  goals: [],
-  goalsLoading: false,
-  goalsError: null,
-  
-  // Barriers data
-  barriers: {
-    barriers: [],
-    overallRisk: "Unknown"
-  },
-  barriersLoading: false,
-  barriersError: null,
-  
-  // Save states
   saving: false,
-  saveError: null,
   saveSuccess: false,
-  
-  // UI states with safe defaults
-  activeAccordion: 0,
-  expandedAccordions: [0],
-  
-  // Configuration - ✅ FIXED: Vite-compatible
-  useMockData: import.meta?.env?.DEV || false,
-  apiConnected: false,
-  lastAttemptedConnection: null,
 };
 
-// ✅ ROBUST: Slice with comprehensive error handling
 const idtCaseManagerSlice = createSlice({
-  name: 'idtCaseManager',
+  name: "idtCaseManager",
   initialState,
   reducers: {
-    // ✅ Safe error clearing
-    clearError: (state) => {
+    clearErrors: (state) => {
       state.error = null;
-      state.saveError = null;
-      state.summaryError = null;
-      state.goalsError = null;
-      state.barriersError = null;
     },
-    
-    // ✅ Safe success clearing
     clearSaveSuccess: (state) => {
       state.saveSuccess = false;
     },
-    
-    // ✅ UI state management
-    setActiveAccordion: (state, action) => {
-      state.activeAccordion = action.payload;
+    setCurrentNote: (state, action) => {
+      state.currentNote = action.payload;
     },
-    
-    toggleAccordion: (state, action) => {
-      const accordion = action.payload;
-      if (state.expandedAccordions.includes(accordion)) {
-        state.expandedAccordions = state.expandedAccordions.filter(a => a !== accordion);
-      } else {
-        state.expandedAccordions.push(accordion);
-      }
+    clearCurrentNote: (state) => {
+      state.currentNote = null;
     },
-    
-    // ✅ Configuration management
-    setMockDataFlag: (state, action) => {
-      state.useMockData = action.payload;
-    },
-    
-    // ✅ Connection status tracking
-    setApiConnected: (state, action) => {
-      state.apiConnected = action.payload;
-      state.lastAttemptedConnection = new Date().toISOString();
-    },
-    
-    // ✅ Safe state reset
-    resetState: (state) => {
-      return { 
-        ...initialState, 
-        useMockData: state.useMockData,
-        apiConnected: state.apiConnected
-      };
-    }
   },
   extraReducers: (builder) => {
     builder
-      // ✅ Fetch IDT Case Manager - comprehensive state handling
-      .addCase(fetchIDTCaseManager.pending, (state) => {
+      // Fetch all notes
+      .addCase(fetchIDTCaseManagerNotes.pending, (state) => {
         state.loading = true;
         state.error = null;
       })
-      .addCase(fetchIDTCaseManager.fulfilled, (state, action) => {
+      .addCase(fetchIDTCaseManagerNotes.fulfilled, (state, action) => {
         state.loading = false;
-        state.data = action.payload || {};
+        state.notes = action.payload;
         state.error = null;
-        state.apiConnected = true;
       })
-      .addCase(fetchIDTCaseManager.rejected, (state, action) => {
+      .addCase(fetchIDTCaseManagerNotes.rejected, (state, action) => {
         state.loading = false;
-        // ✅ Graceful error handling - don't break the UI
-        state.error = action.payload || 'Unable to load assessment data';
-        state.apiConnected = false;
-        // ✅ Ensure data is still usable
-        if (!state.data || Object.keys(state.data).length === 0) {
-          state.data = {};
-        }
+        state.error = action.payload || "Failed to fetch IDT Case Manager notes";
       })
       
-      // ✅ Save IDT Case Manager
-      .addCase(saveIDTCaseManager.pending, (state) => {
+      // Fetch single note
+      .addCase(fetchSingleIDTCaseManagerNote.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(fetchSingleIDTCaseManagerNote.fulfilled, (state, action) => {
+        state.loading = false;
+        state.currentNote = action.payload;
+        state.error = null;
+      })
+      .addCase(fetchSingleIDTCaseManagerNote.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload || "Failed to fetch IDT Case Manager note";
+      })
+      
+      // Add note
+      .addCase(addIDTCaseManagerNote.pending, (state) => {
         state.saving = true;
-        state.saveError = null;
+        state.error = null;
         state.saveSuccess = false;
       })
-      .addCase(saveIDTCaseManager.fulfilled, (state, action) => {
+      .addCase(addIDTCaseManagerNote.fulfilled, (state, action) => {
         state.saving = false;
-        state.data = action.payload || state.data;
+        state.notes.unshift(action.payload);
         state.saveSuccess = true;
-        state.saveError = null;
-        state.apiConnected = true;
+        state.error = null;
       })
-      .addCase(saveIDTCaseManager.rejected, (state, action) => {
+      .addCase(addIDTCaseManagerNote.rejected, (state, action) => {
         state.saving = false;
-        state.saveError = action.payload || 'Unable to save assessment data';
+        state.error = action.payload || "Failed to add IDT Case Manager note";
         state.saveSuccess = false;
-        // ✅ Don't change apiConnected on save failure - might be temporary
       })
       
-      // ✅ Fetch IDT Summary
-      .addCase(fetchIDTSummary.pending, (state) => {
-        state.summaryLoading = true;
-        state.summaryError = null;
+      // Edit note
+      .addCase(editIDTCaseManagerNote.pending, (state) => {
+        state.saving = true;
+        state.error = null;
+        state.saveSuccess = false;
       })
-      .addCase(fetchIDTSummary.fulfilled, (state, action) => {
-        state.summaryLoading = false;
-        state.summary = { ...state.summary, ...action.payload };
-        state.summaryError = null;
+      .addCase(editIDTCaseManagerNote.fulfilled, (state, action) => {
+        state.saving = false;
+        const index = state.notes.findIndex(
+          (note) => note.idtCMID === action.payload.idtCMID
+        );
+        if (index !== -1) {
+          state.notes[index] = action.payload;
+        }
+        if (state.currentNote?.idtCMID === action.payload.idtCMID) {
+          state.currentNote = action.payload;
+        }
+        state.saveSuccess = true;
+        state.error = null;
       })
-      .addCase(fetchIDTSummary.rejected, (state, action) => {
-        state.summaryLoading = false;
-        state.summaryError = action.payload || 'Unable to load summary data';
-        // ✅ Keep existing summary data on failure
+      .addCase(editIDTCaseManagerNote.rejected, (state, action) => {
+        state.saving = false;
+        state.error = action.payload || "Failed to update IDT Case Manager note";
+        state.saveSuccess = false;
+      })
+      
+      // Delete note
+      .addCase(deleteIDTCaseManagerNote.pending, (state) => {
+        state.saving = true;
+        state.error = null;
+      })
+      .addCase(deleteIDTCaseManagerNote.fulfilled, (state, action) => {
+        state.saving = false;
+        state.notes = state.notes.filter(
+          (note) => note.idtCMID !== action.payload.idtCMID
+        );
+        if (state.currentNote?.idtCMID === action.payload.idtCMID) {
+          state.currentNote = null;
+        }
+        state.error = null;
+      })
+      .addCase(deleteIDTCaseManagerNote.rejected, (state, action) => {
+        state.saving = false;
+        state.error = action.payload || "Failed to delete IDT Case Manager note";
       });
   },
 });
 
-// ✅ Export actions
-export const {
-  clearError,
-  clearSaveSuccess,
-  setActiveAccordion,
-  toggleAccordion,
-  setMockDataFlag,
-  setApiConnected,
-  resetState
-} = idtCaseManagerSlice.actions;
-
-// ✅ ROBUST: Safe selectors with fallbacks
-export const selectIDTData = (state) => state.idtCaseManager?.data || {};
-export const selectIDTLoading = (state) => state.idtCaseManager?.loading || false;
-export const selectIDTError = (state) => state.idtCaseManager?.error || null;
-export const selectIDTSaving = (state) => state.idtCaseManager?.saving || false;
-export const selectIDTSaveSuccess = (state) => state.idtCaseManager?.saveSuccess || false;
-export const selectIDTSummary = (state) => state.idtCaseManager?.summary || initialState.summary;
-export const selectAPIConnected = (state) => state.idtCaseManager?.apiConnected || false;
-export const selectUseMockData = (state) => state.idtCaseManager?.useMockData || false;
-
-// ✅ Export reducer
+export const { clearErrors, clearSaveSuccess, setCurrentNote, clearCurrentNote } = idtCaseManagerSlice.actions;
 export default idtCaseManagerSlice.reducer;
