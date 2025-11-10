@@ -480,11 +480,13 @@ const ClientGrievances = forwardRef(({
   } = useFormAccordion(GRIEVANCE_SECTIONS);
   
   // ✅ EXPOSE getFormData VIA REF
+  // ✅ EXPOSE getFormData VIA REF
   useImperativeHandle(ref, () => ({
     getFormData: () => ({
       ...formData,
       sectionsRead: Array.from(visitedSections),
       readingProgress,
+      completionPercentage, // ✅ ADD THIS LINE
       clientID,
       formType
     })
