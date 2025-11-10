@@ -595,6 +595,30 @@ try {
 } catch (err) {
   console.log('⚠️  Could not load noteArchive.js:', err.message);
 }
+
+let miscDocRouterLoaded = false;
+let personalInventoryRouterLoaded = false;
+
+// MISC DOCUMENTS
+try {
+  const miscDocRouter = require('./routes/MiscDoc.js');
+  app.use('/api', miscDocRouter);
+  console.log('✅ Misc Documents router loaded');
+  miscDocRouterLoaded = true;
+} catch (err) {
+  console.log('⚠️  Could not load MiscDoc.js:', err.message);
+}
+
+// PERSONAL INVENTORY
+try {
+  const personalInventoryRouter = require('./routes/PersonalInventory.js');
+  app.use('/api', personalInventoryRouter);
+  console.log('✅ Personal Inventory router loaded');
+  personalInventoryRouterLoaded = true;
+} catch (err) {
+  console.log('⚠️  Could not load PersonalInventory.js:', err.message);
+}
+
 // Health check endpoint
 app.get('/api/health', (req, res) => {
   res.json({ 
@@ -633,7 +657,12 @@ app.get('/api/health', (req, res) => {
       // File Management
       files: filesRouterLoaded ? 'Real Azure Blob router' : 'Fallback mock router',
       referrals: referralsRouterLoaded ? 'Real Azure SQL router' : 'Fallback mock router',
-      discharge: dischargeRouterLoaded ? 'Real Azure SQL router' : 'Fallback mock router'
+      discharge: dischargeRouterLoaded ? 'Real Azure SQL router' : 'Fallback mock router',
+
+      // In the health check routes object, add:
+      miscDoc: miscDocRouterLoaded ? 'Real Azure SQL router' : 'Not loaded',
+      personalInventory: personalInventoryRouterLoaded ? 'Real Azure SQL router' : 'Not loaded',
+
     },
     section3Endpoints: {
       bioSocial: [

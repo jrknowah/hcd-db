@@ -1,207 +1,275 @@
-import React, { useState, useEffect } from "react";
-import PropTypes from "prop-types";
+import React, { useState, useEffect } from 'react';
 import {
   Box,
-  Paper,
-  Typography,
   Button,
-  Alert,
-  CircularProgress,
-  Grid,
   Card,
   CardContent,
-  Divider,
+  Grid,
+  Typography,
+  Alert,
   LinearProgress,
-  Chip,
   IconButton,
-  TextField,
+  Chip,
   Table,
   TableBody,
   TableCell,
   TableContainer,
   TableHead,
   TableRow,
-  TablePagination,
-  Tooltip,
-  Menu,
+  Paper,
+  TextField,
+  Select,
   MenuItem,
   FormControl,
   InputLabel,
-  Select
-} from "@mui/material";
+  Tooltip,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Snackbar,
+  TablePagination
+} from '@mui/material';
 import {
-  CloudUpload as CloudUploadIcon,
-  AttachFile as AttachFileIcon,
-  CheckCircle as CheckCircleIcon,
-  Error as ErrorIcon,
+  CloudUpload,
   Delete as DeleteIcon,
-  Visibility as VisibilityIcon,
-  Description as DescriptionIcon,
   GetApp as DownloadIcon,
-  Edit as EditIcon,
-  MoreVert as MoreVertIcon,
-  FilterList as FilterIcon,
-  Search as SearchIcon
-} from "@mui/icons-material";
-import { styled } from "@mui/material/styles";
-import { useDispatch, useSelector } from "react-redux";
-import { 
-  fetchPersonalInventory, 
-  uploadInventoryFile, 
-  deleteInventoryItem,
-  addInventoryItem,
-  fetchInventorySummary,
-  fetchInventoryCategories,
-  setCategoryFilter,
-  setStatusFilter,
-  setSearchQuery
-} from "../../backend/store/slices/personalInventorySlice";
+  Description as FileIcon,
+  Visibility as ViewIcon,
+  AttachFile as AttachFileIcon,
+  Inventory as InventoryIcon
+} from '@mui/icons-material';
+import { useClientPersistence } from '../../hooks/useClientPersistence';
+import { azureBlobService } from '../../backend/services/azureBlobService';
+import axios from 'axios';
 
-// Styled components for file upload
-const VisuallyHiddenInput = styled('input')({
-  clip: 'rect(0 0 0 0)',
-  clipPath: 'inset(50%)',
-  height: 1,
-  overflow: 'hidden',
-  position: 'absolute',
-  bottom: 0,
-  left: 0,
-  whiteSpace: 'nowrap',
-  width: 1,
-});
+const API_BASE_URL = import.meta.env.VITE_API_URL || '';
 
-const UploadArea = styled(Box)(({ theme, isDragActive }) => ({
-  border: `2px dashed ${isDragActive ? theme.palette.primary.main : theme.palette.divider}`,
-  borderRadius: theme.shape.borderRadius,
-  padding: theme.spacing(4),
-  textAlign: 'center',
-  cursor: 'pointer',
-  transition: 'border-color 0.2s ease-in-out',
-  backgroundColor: isDragActive ? theme.palette.action.hover : 'transparent',
-  '&:hover': {
-    borderColor: theme.palette.primary.main,
-    backgroundColor: theme.palette.action.hover,
-  },
-}));
+// Inventory categories
+const INVENTORY_CATEGORIES = [
+  'Electronics',
+  'Jewelry',
+  'Furniture',
+  'Appliances',
+  'Clothing',
+  'Documents',
+  'Medical Equipment',
+  'Personal Items',
+  'Other'
+];
 
-const PersonalInventory = ({ clientID }) => {
-  const dispatch = useDispatch();
-  const { 
-    items, 
-    itemsLoading, 
-    itemsError, 
-    uploading, 
-    uploadError, 
-    uploadSuccess,
-    summary,
-    categories,
-    categoryFilter,
-    statusFilter,
-    searchQuery
-  } = useSelector((state) => state.personalInventory || {});
-
+const PersonalInventory = () => {
+  const { clientID } = useClientPersistence();
+  
+  // State management
+  const [inventoryItems, setInventoryItems] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState(null);
+  
+  // Form state
+  const [category, setCategory] = useState('');
   const [selectedFile, setSelectedFile] = useState(null);
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [dragActive, setDragActive] = useState(false);
-  const [fileDescription, setFileDescription] = useState("");
-  const [anchorEl, setAnchorEl] = useState(null);
-  const [selectedItem, setSelectedItem] = useState(null);
+  
+  // Dialog states
+  const [viewDialog, setViewDialog] = useState({ open: false, item: null });
+  const [deleteDialog, setDeleteDialog] = useState({ open: false, item: null });
+  
+  // Snackbar state
+  const [snackbar, setSnackbar] = useState({
+    open: false,
+    message: '',
+    severity: 'success'
+  });
+  
+  // Pagination
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
 
+  // Fetch inventory items
   useEffect(() => {
     if (clientID) {
-      dispatch(fetchPersonalInventory(clientID));
-      dispatch(fetchInventorySummary(clientID));
-      dispatch(fetchInventoryCategories(clientID));
+      fetchInventoryItems();
     }
-  }, [clientID, dispatch]);
+  }, [clientID]);
 
-  const handleFileChange = (e) => {
-    const file = e.target.files[0];
+  const fetchInventoryItems = async () => {
+    if (!clientID) {
+      setError('No client selected');
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const response = await axios.get(
+        `${API_BASE_URL}/api/personal-inventory/${clientID}`
+      );
+      setInventoryItems(response.data || []);
+    } catch (err) {
+      console.error('Error fetching inventory items:', err);
+      setError(err.response?.data?.message || 'Failed to load inventory items');
+      setInventoryItems([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleFileSelect = (event) => {
+    const file = event.target.files[0];
     if (file) {
+      // Validate file size (100MB limit)
+      if (file.size > 100 * 1024 * 1024) {
+        showSnackbar('File size must be less than 100MB', 'error');
+        return;
+      }
       setSelectedFile(file);
     }
   };
 
-  const handleDrag = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (e.type === "dragenter" || e.type === "dragover") {
-      setDragActive(true);
-    } else if (e.type === "dragleave") {
-      setDragActive(false);
-    }
-  };
-
-  const handleDrop = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setDragActive(false);
-    
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      setSelectedFile(e.dataTransfer.files[0]);
-    }
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-
+  const handleUpload = async () => {
     if (!clientID) {
+      showSnackbar('Please select a client first', 'error');
       return;
     }
 
     if (!selectedFile) {
+      showSnackbar('Please select a file to upload', 'error');
       return;
     }
 
-    const formData = new FormData();
-    formData.append("file", selectedFile);
-    formData.append("clientID", clientID);
-    formData.append("description", fileDescription);
+    if (!category) {
+      showSnackbar('Please select a category', 'error');
+      return;
+    }
 
-    dispatch(uploadInventoryFile({ clientID, formData })).then((result) => {
-      if (!result.error) {
-        setSelectedFile(null);
-        setFileDescription("");
-        // Refresh inventory list
-        dispatch(fetchPersonalInventory(clientID));
-      }
-    });
+    setUploading(true);
+    setError(null);
+
+    try {
+      // Upload file to Azure Blob Storage
+      const containerName = 'personal-inventory';
+      const blobName = `${clientID}/${Date.now()}-${selectedFile.name}`;
+      
+      const photoDocsUrl = await azureBlobService.uploadFile(
+        containerName,
+        blobName,
+        selectedFile
+      );
+
+      // Save inventory item to database
+      const inventoryData = {
+        clientID,
+        itemDescription: selectedFile.name, // Use filename as description
+        category,
+        photoDocs: photoDocsUrl
+      };
+
+      await axios.post(
+        `${API_BASE_URL}/api/personal-inventory`,
+        inventoryData
+      );
+
+      showSnackbar('File uploaded successfully', 'success');
+      
+      // Reset form
+      setCategory('');
+      setSelectedFile(null);
+      
+      // Reset file input
+      const fileInput = document.getElementById('file-upload');
+      if (fileInput) fileInput.value = '';
+      
+      // Refresh list
+      await fetchInventoryItems();
+    } catch (err) {
+      console.error('Error uploading file:', err);
+      showSnackbar(
+        err.response?.data?.message || 'Failed to upload file',
+        'error'
+      );
+    } finally {
+      setUploading(false);
+    }
   };
 
-  const removeSelectedFile = () => {
-    setSelectedFile(null);
-    setFileDescription("");
+  const handleDownload = async (item) => {
+    if (!item.photoDocs) {
+      showSnackbar('No files attached to this item', 'warning');
+      return;
+    }
+
+    try {
+      // Extract blob name from URL
+      const url = new URL(item.photoDocs);
+      const pathParts = url.pathname.split('/');
+      const containerName = pathParts[1];
+      const blobName = pathParts.slice(2).join('/');
+
+      await azureBlobService.downloadFile(containerName, blobName);
+      showSnackbar('File downloaded successfully', 'success');
+    } catch (err) {
+      console.error('Error downloading file:', err);
+      showSnackbar('Failed to download file', 'error');
+    }
   };
 
-  const handleMenuClick = (event, item) => {
-    setAnchorEl(event.currentTarget);
-    setSelectedItem(item);
+  const handleDeleteClick = (item) => {
+    setDeleteDialog({ open: true, item });
   };
 
-  const handleMenuClose = () => {
-    setAnchorEl(null);
-    setSelectedItem(null);
-  };
+  const handleDeleteConfirm = async () => {
+    const item = deleteDialog.item;
+    setDeleteDialog({ open: false, item: null });
 
-  const handleDelete = () => {
-    if (selectedItem) {
-      dispatch(deleteInventoryItem(selectedItem.inventoryID)).then((result) => {
-        if (!result.error) {
-          dispatch(fetchPersonalInventory(clientID));
+    try {
+      // Delete file from Azure Blob Storage if exists
+      if (item.photoDocs) {
+        try {
+          const url = new URL(item.photoDocs);
+          const pathParts = url.pathname.split('/');
+          const containerName = pathParts[1];
+          const blobName = pathParts.slice(2).join('/');
+          
+          await azureBlobService.deleteFile(containerName, blobName);
+        } catch (blobErr) {
+          console.error('Error deleting blob:', blobErr);
+          // Continue with database deletion even if blob deletion fails
         }
-      });
+      }
+
+      // Delete from database
+      await axios.delete(
+        `${API_BASE_URL}/api/personal-inventory/${item.inventoryID}`
+      );
+
+      showSnackbar('Inventory item deleted successfully', 'success');
+      await fetchInventoryItems();
+    } catch (err) {
+      console.error('Error deleting inventory item:', err);
+      showSnackbar(
+        err.response?.data?.message || 'Failed to delete inventory item',
+        'error'
+      );
     }
-    handleMenuClose();
   };
 
-  const handleDownload = (item) => {
-    // Implement download functionality
-    if (item.photoDocs) {
-      window.open(`/uploads/personal-inventory/${item.photoDocs}`, '_blank');
-    }
-    handleMenuClose();
+  const handleViewClick = (item) => {
+    setViewDialog({ open: true, item });
+  };
+
+  const showSnackbar = (message, severity = 'success') => {
+    setSnackbar({ open: true, message, severity });
+  };
+
+  const handleSnackbarClose = () => {
+    setSnackbar({ ...snackbar, open: false });
+  };
+
+  const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
+    return new Date(dateString).toLocaleDateString();
   };
 
   const handleChangePage = (event, newPage) => {
@@ -213,423 +281,355 @@ const PersonalInventory = ({ clientID }) => {
     setPage(0);
   };
 
-  const formatFileSize = (bytes) => {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-  };
-
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'In Possession':
-        return 'success';
-      case 'Stored':
-        return 'info';
-      case 'Returned':
-        return 'default';
-      case 'Missing':
-        return 'error';
-      default:
-        return 'default';
-    }
-  };
-
-  const getConditionColor = (condition) => {
-    switch (condition) {
-      case 'Excellent':
-        return 'success';
-      case 'Good':
-        return 'info';
-      case 'Fair':
-        return 'warning';
-      case 'Poor':
-        return 'error';
-      default:
-        return 'default';
-    }
-  };
-
-  // Filter items based on search and filters
-  const filteredItems = items.filter(item => {
-    const matchesSearch = !searchQuery || 
-      item.itemName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.itemDescription?.toLowerCase().includes(searchQuery.toLowerCase());
-    
-    const matchesCategory = !categoryFilter || item.itemCategory === categoryFilter;
-    const matchesStatus = !statusFilter || item.itemStatus === statusFilter;
-    
-    return matchesSearch && matchesCategory && matchesStatus;
-  });
-
-  // Paginate filtered items
-  const paginatedItems = filteredItems.slice(
-    page * rowsPerPage,
-    page * rowsPerPage + rowsPerPage
-  );
+  if (!clientID) {
+    return (
+      <Box sx={{ p: 3 }}>
+        <Alert severity="warning">
+          Please select a client from Section 1: Identification to manage their personal inventory.
+        </Alert>
+      </Box>
+    );
+  }
 
   return (
-    <Box sx={{ maxWidth: 1200, mx: "auto", p: 3 }}>
-      {/* Header Section */}
-      <Paper elevation={2} sx={{ p: 3, mb: 3 }}>
-        <Typography variant="h4" gutterBottom>
-          Personal Inventory Management
-        </Typography>
-        <Typography variant="body1" color="text.secondary">
-          Upload and manage client personal inventory documents
-        </Typography>
-      </Paper>
+    <Box sx={{ p: 3 }}>
+      <Typography variant="h4" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+        <InventoryIcon /> Personal Inventory
+      </Typography>
 
-      {/* Upload Section */}
-      <Paper elevation={1} sx={{ p: 3, mb: 3 }}>
-        <Typography variant="h6" gutterBottom>
-          Upload New Document
-        </Typography>
-        
-        <form onSubmit={handleSubmit}>
-          <Grid container spacing={3}>
+      {error && (
+        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
+          {error}
+        </Alert>
+      )}
+
+      {/* Upload Form */}
+      <Card sx={{ mb: 3 }}>
+        <CardContent>
+          <Typography variant="h6" gutterBottom>
+            Upload File
+          </Typography>
+          
+          <Grid container spacing={2}>
+            <Grid item xs={12} md={6}>
+              <FormControl fullWidth required disabled={uploading}>
+                <InputLabel>Category</InputLabel>
+                <Select
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value)}
+                  label="Category"
+                >
+                  {INVENTORY_CATEGORIES.map((cat) => (
+                    <MenuItem key={cat} value={cat}>
+                      {cat}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+
+            <Grid item xs={12} md={6}>
+              <input
+                accept="image/*,.pdf,.doc,.docx"
+                style={{ display: 'none' }}
+                id="file-upload"
+                type="file"
+                onChange={handleFileSelect}
+                disabled={uploading}
+              />
+              <label htmlFor="file-upload">
+                <Button
+                  variant="outlined"
+                  component="span"
+                  startIcon={<AttachFileIcon />}
+                  disabled={uploading}
+                  fullWidth
+                  sx={{ height: '56px' }}
+                >
+                  {selectedFile ? selectedFile.name : 'Select File *'}
+                </Button>
+              </label>
+            </Grid>
+
             <Grid item xs={12}>
-              <UploadArea
-                isDragActive={dragActive}
-                onDragEnter={handleDrag}
-                onDragLeave={handleDrag}
-                onDragOver={handleDrag}
-                onDrop={handleDrop}
-                onClick={() => document.getElementById('file-input').click()}
+              <Button
+                variant="contained"
+                color="primary"
+                onClick={handleUpload}
+                disabled={uploading || !selectedFile || !category}
+                startIcon={<CloudUpload />}
+                fullWidth
               >
-                <VisuallyHiddenInput
-                  id="file-input"
-                  type="file"
-                  onChange={handleFileChange}
-                  accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.gif"
-                />
+                {uploading ? 'Uploading...' : 'Upload File'}
+              </Button>
+            </Grid>
+          </Grid>
+
+          {uploading && (
+            <Box sx={{ mt: 2 }}>
+              <LinearProgress />
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                Uploading file...
+              </Typography>
+            </Box>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Inventory Items List */}
+      <Card>
+        <CardContent>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+            <Typography variant="h6">
+              Uploaded Files ({inventoryItems.length})
+            </Typography>
+            <Button
+              variant="outlined"
+              onClick={fetchInventoryItems}
+              disabled={loading}
+            >
+              Refresh
+            </Button>
+          </Box>
+
+          {loading ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+              <LinearProgress sx={{ width: '100%' }} />
+            </Box>
+          ) : inventoryItems.length === 0 ? (
+            <Alert severity="info">
+              No files uploaded for this client. Upload files using the form above.
+            </Alert>
+          ) : (
+            <>
+              <TableContainer component={Paper} variant="outlined">
+                <Table>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell><strong>File Name</strong></TableCell>
+                      <TableCell><strong>Category</strong></TableCell>
+                      <TableCell><strong>Date Uploaded</strong></TableCell>
+                      <TableCell align="center"><strong>Actions</strong></TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {inventoryItems
+                      .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
+                      .map((item) => (
+                        <TableRow key={item.inventoryID} hover>
+                          <TableCell>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                              <FileIcon color="primary" />
+                              <Typography variant="body2" fontWeight="medium">
+                                {item.itemDescription}
+                              </Typography>
+                            </Box>
+                          </TableCell>
+                          <TableCell>
+                            <Chip 
+                              label={item.category} 
+                              size="small" 
+                              color="primary" 
+                              variant="outlined"
+                            />
+                          </TableCell>
+                          <TableCell>{formatDate(item.createdAt)}</TableCell>
+                          <TableCell align="center">
+                            <Tooltip title="View Details">
+                              <IconButton
+                                size="small"
+                                color="primary"
+                                onClick={() => handleViewClick(item)}
+                              >
+                                <ViewIcon />
+                              </IconButton>
+                            </Tooltip>
+                            {item.photoDocs && (
+                              <Tooltip title="Download File">
+                                <IconButton
+                                  size="small"
+                                  color="info"
+                                  onClick={() => handleDownload(item)}
+                                >
+                                  <DownloadIcon />
+                                </IconButton>
+                              </Tooltip>
+                            )}
+                            <Tooltip title="Delete">
+                              <IconButton
+                                size="small"
+                                color="error"
+                                onClick={() => handleDeleteClick(item)}
+                              >
+                                <DeleteIcon />
+                              </IconButton>
+                            </Tooltip>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+              
+              <TablePagination
+                rowsPerPageOptions={[5, 10, 25, 50]}
+                component="div"
+                count={inventoryItems.length}
+                rowsPerPage={rowsPerPage}
+                page={page}
+                onPageChange={handleChangePage}
+                onRowsPerPageChange={handleChangeRowsPerPage}
+              />
+            </>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* View Dialog */}
+      <Dialog
+        open={viewDialog.open}
+        onClose={() => setViewDialog({ open: false, item: null })}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>
+          File Details
+        </DialogTitle>
+        <DialogContent dividers>
+          {viewDialog.item && (
+            <Box>
+              <Grid container spacing={2}>
+                <Grid item xs={12}>
+                  <Typography variant="body2" color="text.secondary">
+                    <strong>File Name:</strong>
+                  </Typography>
+                  <Typography variant="body1" gutterBottom>
+                    {viewDialog.item.itemDescription}
+                  </Typography>
+                </Grid>
                 
-                {selectedFile ? (
-                  <Box>
-                    <CheckCircleIcon color="success" sx={{ fontSize: 48, mb: 1 }} />
-                    <Typography variant="h6" gutterBottom>
-                      File Selected
-                    </Typography>
-                    <Chip
-                      icon={<DescriptionIcon />}
-                      label={`${selectedFile.name} (${formatFileSize(selectedFile.size)})`}
-                      onDelete={removeSelectedFile}
-                      deleteIcon={<DeleteIcon />}
-                      variant="outlined"
-                      sx={{ mb: 2 }}
+                <Grid item xs={12}>
+                  <Typography variant="body2" color="text.secondary">
+                    <strong>Category:</strong>
+                  </Typography>
+                  <Box sx={{ mt: 0.5 }}>
+                    <Chip 
+                      label={viewDialog.item.category} 
+                      color="primary"
+                      size="small"
                     />
                   </Box>
-                ) : (
-                  <Box>
-                    <CloudUploadIcon sx={{ fontSize: 48, mb: 1, color: 'primary.main' }} />
-                    <Typography variant="h6" gutterBottom>
-                      Drag & Drop or Click to Select File
-                    </Typography>
+                </Grid>
+
+                <Grid item xs={12}>
+                  <Typography variant="body2" color="text.secondary">
+                    <strong>Date Uploaded:</strong>
+                  </Typography>
+                  <Typography variant="body1" gutterBottom>
+                    {formatDate(viewDialog.item.createdAt)}
+                  </Typography>
+                </Grid>
+
+                {viewDialog.item.updatedAt && viewDialog.item.updatedAt !== viewDialog.item.createdAt && (
+                  <Grid item xs={12}>
                     <Typography variant="body2" color="text.secondary">
-                      Supported formats: PDF, DOC, DOCX, JPG, PNG, GIF
+                      <strong>Last Updated:</strong>
                     </Typography>
-                  </Box>
+                    <Typography variant="body1" gutterBottom>
+                      {formatDate(viewDialog.item.updatedAt)}
+                    </Typography>
+                  </Grid>
                 )}
-              </UploadArea>
-            </Grid>
 
-            {selectedFile && (
-              <Grid item xs={12}>
-                <TextField
-                  fullWidth
-                  label="File Description (Optional)"
-                  value={fileDescription}
-                  onChange={(e) => setFileDescription(e.target.value)}
-                  placeholder="Add a description for this file..."
-                  multiline
-                  rows={2}
-                />
+                {viewDialog.item.photoDocs && (
+                  <Grid item xs={12}>
+                    <Alert severity="success" icon={<FileIcon />}>
+                      File is stored in Azure Blob Storage. Click Download to retrieve it.
+                    </Alert>
+                  </Grid>
+                )}
               </Grid>
-            )}
-
-            <Grid item xs={12}>
-              {(itemsError || uploadError) && (
-                <Alert severity="error" sx={{ mb: 2 }} icon={<ErrorIcon />}>
-                  {itemsError || uploadError}
-                </Alert>
-              )}
-              
-              {uploadSuccess && (
-                <Alert severity="success" sx={{ mb: 2 }} icon={<CheckCircleIcon />}>
-                  ✅ File uploaded successfully!
-                </Alert>
-              )}
-
-              {uploading && (
-                <Box sx={{ mb: 2 }}>
-                  <Typography variant="body2" color="text.secondary" gutterBottom>
-                    Uploading... {uploadProgress}%
-                  </Typography>
-                  <LinearProgress variant="determinate" value={uploadProgress} />
-                </Box>
-              )}
-            </Grid>
-
-            <Grid item xs={12}>
-              <Box sx={{ display: 'flex', justifyContent: 'center' }}>
-                <Button
-                  type="submit"
-                  variant="contained"
-                  size="large"
-                  disabled={uploading || !selectedFile}
-                  startIcon={uploading ? <CircularProgress size={20} /> : <CloudUploadIcon />}
-                  sx={{ minWidth: 150 }}
-                >
-                  {uploading ? 'Uploading...' : 'Upload File'}
-                </Button>
-              </Box>
-            </Grid>
-          </Grid>
-        </form>
-      </Paper>
-
-      {/* Personal Inventory Items Section */}
-      <Paper elevation={1} sx={{ p: 3 }}>
-        <Typography variant="h6" gutterBottom>
-          Personal Inventory Items
-        </Typography>
-        <Divider sx={{ mb: 2 }} />
-        
-        {/* Summary Cards */}
-        {summary && Object.keys(summary).length > 0 && (
-          <Grid container spacing={2} sx={{ mb: 3 }}>
-            <Grid item xs={12} sm={6} md={3}>
-              <Card>
-                <CardContent>
-                  <Typography color="text.secondary" gutterBottom>
-                    Total Items
-                  </Typography>
-                  <Typography variant="h6">
-                    {summary.totalItems || 0}
-                  </Typography>
-                </CardContent>
-              </Card>
-            </Grid>
-            <Grid item xs={12} sm={6} md={3}>
-              <Card>
-                <CardContent>
-                  <Typography color="text.secondary" gutterBottom>
-                    Total Value
-                  </Typography>
-                  <Typography variant="h6">
-                    ${(summary.totalValue || 0).toLocaleString()}
-                  </Typography>
-                </CardContent>
-              </Card>
-            </Grid>
-            <Grid item xs={12} sm={6} md={3}>
-              <Card>
-                <CardContent>
-                  <Typography color="text.secondary" gutterBottom>
-                    In Storage
-                  </Typography>
-                  <Typography variant="h6">
-                    {summary.itemsStored || 0}
-                  </Typography>
-                </CardContent>
-              </Card>
-            </Grid>
-            <Grid item xs={12} sm={6} md={3}>
-              <Card>
-                <CardContent>
-                  <Typography color="text.secondary" gutterBottom>
-                    Missing Items
-                  </Typography>
-                  <Typography variant="h6" color={summary.itemsMissing > 0 ? "error" : "inherit"}>
-                    {summary.itemsMissing || 0}
-                  </Typography>
-                </CardContent>
-              </Card>
-            </Grid>
-          </Grid>
-        )}
-
-        {/* Filters */}
-        <Grid container spacing={2} sx={{ mb: 2 }}>
-          <Grid item xs={12} sm={4}>
-            <TextField
-              fullWidth
-              placeholder="Search items..."
-              value={searchQuery}
-              onChange={(e) => dispatch(setSearchQuery(e.target.value))}
-              InputProps={{
-                startAdornment: <SearchIcon sx={{ mr: 1, color: 'text.secondary' }} />,
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setViewDialog({ open: false, item: null })}>
+            Close
+          </Button>
+          {viewDialog.item?.photoDocs && (
+            <Button
+              onClick={() => {
+                handleDownload(viewDialog.item);
+                setViewDialog({ open: false, item: null });
               }}
-            />
-          </Grid>
-          <Grid item xs={12} sm={4}>
-            <FormControl fullWidth>
-              <InputLabel>Category</InputLabel>
-              <Select
-                value={categoryFilter}
-                onChange={(e) => dispatch(setCategoryFilter(e.target.value))}
-                label="Category"
-              >
-                <MenuItem value="">All Categories</MenuItem>
-                {categories.map((cat) => (
-                  <MenuItem key={cat.category} value={cat.category}>
-                    {cat.category} ({cat.count})
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          </Grid>
-          <Grid item xs={12} sm={4}>
-            <FormControl fullWidth>
-              <InputLabel>Status</InputLabel>
-              <Select
-                value={statusFilter}
-                onChange={(e) => dispatch(setStatusFilter(e.target.value))}
-                label="Status"
-              >
-                <MenuItem value="">All Statuses</MenuItem>
-                <MenuItem value="In Possession">In Possession</MenuItem>
-                <MenuItem value="Stored">Stored</MenuItem>
-                <MenuItem value="Returned">Returned</MenuItem>
-                <MenuItem value="Missing">Missing</MenuItem>
-              </Select>
-            </FormControl>
-          </Grid>
-        </Grid>
-
-        {/* Inventory Table */}
-        {itemsLoading ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
-            <CircularProgress />
-          </Box>
-        ) : filteredItems.length === 0 ? (
-          <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 4 }}>
-            {items.length === 0 ? 'No inventory items found.' : 'No items match your search criteria.'}
-          </Typography>
-        ) : (
-          <>
-            <TableContainer>
-              <Table>
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Item Name</TableCell>
-                    <TableCell>Category</TableCell>
-                    <TableCell>Condition</TableCell>
-                    <TableCell>Status</TableCell>
-                    <TableCell align="right">Value</TableCell>
-                    <TableCell>Location</TableCell>
-                    <TableCell>Created</TableCell>
-                    <TableCell align="center">Actions</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {paginatedItems.map((item) => (
-                    <TableRow key={item.inventoryID} hover>
-                      <TableCell>
-                        <Box>
-                          <Typography variant="body2" fontWeight="medium">
-                            {item.itemName}
-                          </Typography>
-                          {item.itemDescription && (
-                            <Typography variant="caption" color="text.secondary">
-                              {item.itemDescription}
-                            </Typography>
-                          )}
-                        </Box>
-                      </TableCell>
-                      <TableCell>
-                        <Chip 
-                          label={item.itemCategory} 
-                          size="small" 
-                          variant="outlined"
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Chip 
-                          label={item.itemCondition} 
-                          size="small" 
-                          color={getConditionColor(item.itemCondition)}
-                          variant="outlined"
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Chip 
-                          label={item.itemStatus} 
-                          size="small" 
-                          color={getStatusColor(item.itemStatus)}
-                        />
-                      </TableCell>
-                      <TableCell align="right">
-                        <Typography variant="body2">
-                          ${(item.estimatedValue || 0).toLocaleString()}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="body2" color="text.secondary">
-                          {item.locationStored || 'Not specified'}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="body2" color="text.secondary">
-                          {new Date(item.createdAt).toLocaleDateString()}
-                        </Typography>
-                      </TableCell>
-                      <TableCell align="center">
-                        <Tooltip title="More actions">
-                          <IconButton 
-                            size="small"
-                            onClick={(e) => handleMenuClick(e, item)}
-                          >
-                            <MoreVertIcon />
-                          </IconButton>
-                        </Tooltip>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-
-            {/* Pagination */}
-            <TablePagination
-              rowsPerPageOptions={[5, 10, 25, 50]}
-              component="div"
-              count={filteredItems.length}
-              rowsPerPage={rowsPerPage}
-              page={page}
-              onPageChange={handleChangePage}
-              onRowsPerPageChange={handleChangeRowsPerPage}
-            />
-
-            {/* Action Menu */}
-            <Menu
-              anchorEl={anchorEl}
-              open={Boolean(anchorEl)}
-              onClose={handleMenuClose}
+              color="primary"
+              variant="contained"
+              startIcon={<DownloadIcon />}
             >
-              <MenuItem onClick={() => handleDownload(selectedItem)}>
-                <DownloadIcon sx={{ mr: 1 }} />
-                Download Files
-              </MenuItem>
-              <MenuItem onClick={handleMenuClose}>
-                <EditIcon sx={{ mr: 1 }} />
-                Edit Item
-              </MenuItem>
-              <MenuItem onClick={handleDelete} sx={{ color: 'error.main' }}>
-                <DeleteIcon sx={{ mr: 1 }} />
-                Delete Item
-              </MenuItem>
-            </Menu>
-          </>
-        )}
-      </Paper>
+              Download File
+            </Button>
+          )}
+        </DialogActions>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog
+        open={deleteDialog.open}
+        onClose={() => setDeleteDialog({ open: false, item: null })}
+      >
+        <DialogTitle>Confirm Delete</DialogTitle>
+        <DialogContent>
+          <Typography>
+            Are you sure you want to delete this file?
+          </Typography>
+          {deleteDialog.item && (
+            <Box sx={{ mt: 2, p: 2, bgcolor: 'grey.100', borderRadius: 1 }}>
+              <Typography variant="body2">
+                <strong>File:</strong> {deleteDialog.item.itemDescription}
+              </Typography>
+              <Typography variant="body2">
+                <strong>Category:</strong> {deleteDialog.item.category}
+              </Typography>
+              {deleteDialog.item.photoDocs && (
+                <Typography variant="body2" color="warning.main" sx={{ mt: 1 }}>
+                  Note: The file will be permanently deleted from Azure Blob Storage.
+                </Typography>
+              )}
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteDialog({ open: false, item: null })}>
+            Cancel
+          </Button>
+          <Button
+            onClick={handleDeleteConfirm}
+            color="error"
+            variant="contained"
+            startIcon={<DeleteIcon />}
+          >
+            Delete
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Snackbar for notifications */}
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={6000}
+        onClose={handleSnackbarClose}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+      >
+        <Alert
+          onClose={handleSnackbarClose}
+          severity={snackbar.severity}
+          sx={{ width: '100%' }}
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
-};
-
-PersonalInventory.propTypes = {
-  clientID: PropTypes.oneOfType([PropTypes.number, PropTypes.string]).isRequired,
 };
 
 export default PersonalInventory;
