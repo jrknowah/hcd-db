@@ -62,9 +62,6 @@ import {
   selectUnsavedChanges
 } from '../../backend/store/slices/authSigSlice';
 
-// Import custom hooks
-import { useFormAccordion } from '../../hooks/useFormManager';
-
 // Grievance policy sections
 const GRIEVANCE_SECTIONS = [
   {
@@ -447,21 +444,22 @@ const GrievanceSection = ({ section, expanded, onChange, completed }) => {
 const ClientGrievances = forwardRef(({ 
   clientID, 
   title = "Client Grievances Policy & Procedure", 
-  formType = "clientGrievances" 
+  formType = "grievances" 
 }, ref) => {
   const theme = useTheme();
   const dispatch = useDispatch();
   
-  // Redux selectors - using the formType parameter
-  const existingData = useSelector((state) => selectFormByType(state, formType));
+  // Redux selectors - FIXED to use correct pattern
+  const existingData = useSelector(selectFormByType(formType));
   const loading = useSelector(selectFormLoading);
   const saving = useSelector(selectSaving);
   const autoSaving = useSelector(selectAutoSaving);
   const saveSuccess = useSelector(selectSaveSuccess);
   const unsavedChanges = useSelector(selectUnsavedChanges);
   
-  // ✅ FIX: Add local loading state to prevent infinite loops
+  // Local loading state
   const [isInitialLoad, setIsInitialLoad] = useState(true);
+  const [hasRestoredSections, setHasRestoredSections] = useState(false);
   
   // Local state
   const [formData, setFormData] = useState({
@@ -470,23 +468,34 @@ const ClientGrievances = forwardRef(({
   const [localErrors, setLocalErrors] = useState([]);
   const [showSuccessSnackbar, setShowSuccessSnackbar] = useState(false);
   
-  // Accordion management
-  const {
-    expandedSection,
-    visitedSections,
-    completionPercentage: readingProgress,
-    handleAccordionChange,
-    isSectionVisited
-  } = useFormAccordion(GRIEVANCE_SECTIONS);
+  // ✅ FIXED: Manage accordion state directly (not using hook to avoid restoration issues)
+  const [expandedSection, setExpandedSection] = useState(null);
+  const [visitedSections, setVisitedSections] = useState(new Set());
   
-  // ✅ EXPOSE getFormData VIA REF
+  // Calculate reading progress
+  const readingProgress = useMemo(() => {
+    return Math.round((visitedSections.size / GRIEVANCE_SECTIONS.length) * 100);
+  }, [visitedSections]);
+  
+  // Handle accordion change
+  const handleAccordionChange = useCallback((sectionId) => (event, isExpanded) => {
+    setExpandedSection(isExpanded ? sectionId : null);
+    if (isExpanded) {
+      setVisitedSections(prev => new Set([...prev, sectionId]));
+    }
+  }, []);
+  
+  const isSectionVisited = useCallback((sectionId) => {
+    return visitedSections.has(sectionId);
+  }, [visitedSections]);
+  
   // ✅ EXPOSE getFormData VIA REF
   useImperativeHandle(ref, () => ({
     getFormData: () => ({
       ...formData,
       sectionsRead: Array.from(visitedSections),
       readingProgress,
-      completionPercentage, // ✅ ADD THIS LINE
+      completionPercentage,
       clientID,
       formType
     })
@@ -506,16 +515,16 @@ const ClientGrievances = forwardRef(({
            visitedSections.size >= GRIEVANCE_SECTIONS.length * 0.8;
   }, [clientID, formData.clientGrievanceSign, visitedSections.size]);
   
-  // ✅ FIX: Load form data with error handling
+  // Load form data with error handling
   useEffect(() => {
     if (clientID && formType) {
       dispatch(fetchFormData({ clientID, formType }))
         .unwrap()
         .then((data) => {
-          console.log('Form data loaded:', data);
+          console.log('✅ Form data loaded successfully:', data);
         })
         .catch((error) => {
-          console.warn('Failed to load form data (form will work with empty data):', error);
+          console.warn('⚠️ Failed to load form data (form will work with empty data):', error);
         })
         .finally(() => {
           setTimeout(() => setIsInitialLoad(false), 1000);
@@ -525,14 +534,36 @@ const ClientGrievances = forwardRef(({
     }
   }, [dispatch, clientID, formType]);
   
-  // Update local state when Redux form data changes
+  // ✅ FIXED: Restore ALL form state including visited sections
   useEffect(() => {
-    if (existingData && Object.keys(existingData).length > 0) {
+    if (existingData && Object.keys(existingData).length > 0 && !hasRestoredSections) {
+      console.log('📝 Restoring complete form state from Redux:', existingData);
+      
+      // Restore signature
       setFormData({
         clientGrievanceSign: existingData.clientGrievanceSign || ""
       });
+      
+      // ✅ CRITICAL FIX: Restore visited sections to maintain completion percentage
+      if (existingData.sectionsRead && Array.isArray(existingData.sectionsRead)) {
+        console.log('📖 Restoring visited sections:', existingData.sectionsRead);
+        console.log('   This should restore completion to:', existingData.completionPercentage || 'calculated');
+        setVisitedSections(new Set(existingData.sectionsRead));
+        setHasRestoredSections(true);
+      } else if (existingData.completionPercentage === 100) {
+        // Fallback: If form was completed but sectionsRead wasn't saved, mark all sections as visited
+        console.log('📖 Form marked as complete - marking all sections as visited');
+        setVisitedSections(new Set(GRIEVANCE_SECTIONS.map(s => s.id)));
+        setHasRestoredSections(true);
+      }
     }
-  }, [existingData]);
+  }, [existingData, hasRestoredSections]);
+  
+  // Reset restoration flag when client changes
+  useEffect(() => {
+    setHasRestoredSections(false);
+    setVisitedSections(new Set());
+  }, [clientID]);
   
   // Update unsaved changes in Redux
   useEffect(() => {
@@ -594,6 +625,8 @@ const ClientGrievances = forwardRef(({
       acknowledgedAt: new Date().toISOString()
     };
 
+    console.log('💾 Submitting grievances form with data:', submitData);
+
     try {
       await dispatch(saveFormData({ 
         clientID, 
@@ -601,9 +634,11 @@ const ClientGrievances = forwardRef(({
         formData: submitData 
       })).unwrap();
       
+      console.log('✅ Grievances policy saved successfully');
       setLocalErrors([]);
       setShowSuccessSnackbar(true);
     } catch (error) {
+      console.error('❌ Failed to save grievances policy:', error);
       setLocalErrors([error.message || 'Failed to save grievances policy acknowledgment']);
     }
   }, [dispatch, clientID, formData, visitedSections, readingProgress, formType]);
@@ -620,7 +655,7 @@ const ClientGrievances = forwardRef(({
     dispatch(clearErrors());
   }, [dispatch]);
 
-  // ✅ FIX: Improved loading state
+  // Improved loading state
   if (isInitialLoad && loading) {
     return (
       <Container maxWidth="lg">

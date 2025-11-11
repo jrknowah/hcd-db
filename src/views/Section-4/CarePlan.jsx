@@ -621,7 +621,7 @@ const CarePlan = ({ clientID, exportMode }) => {
                   <option value="Planning">Planning</option>
                   <option value="Active">Active</option>
                   <option value="In Progress">In Progress</option>
-                  <option value="On Hold">On Hold</option>
+                  {/* <option value="On Hold">On Hold</option> */}
                   <option value="Completed">Completed</option>
                 </TextField>
               </Grid>
