@@ -65,20 +65,20 @@ import {
 const AdvCareAck = forwardRef(({ 
   clientID, 
   title = "Acknowledgment of Advance Care Planning Discussion", 
-  formType = "advCareAck" 
+  formType = "advDirective" // ✅ FIXED: Changed from 'advCareAck' to match backend
 }, ref) => {
   const theme = useTheme();
   const dispatch = useDispatch();
   
-  // Redux selectors - using the formType parameter
-  const existingData = useSelector((state) => selectFormByType(state, formType));
+  // ✅ FIXED: Correct selector usage (same pattern as ClientOrientation)
+  const existingData = useSelector(selectFormByType(formType));
   const loading = useSelector(selectFormLoading);
   const saving = useSelector(selectSaving);
   const autoSaving = useSelector(selectAutoSaving);
   const saveSuccess = useSelector(selectSaveSuccess);
   const unsavedChanges = useSelector(selectUnsavedChanges);
   
-  // ✅ FIX: Add local loading state to prevent infinite loops
+  // Local loading state
   const [isInitialLoad, setIsInitialLoad] = useState(true);
   
   // Local state
@@ -95,6 +95,7 @@ const AdvCareAck = forwardRef(({
   useImperativeHandle(ref, () => ({
     getFormData: () => ({
       ...formData,
+      completionPercentage,
       clientID,
       formType
     })
@@ -122,16 +123,16 @@ const AdvCareAck = forwardRef(({
            (formData.factSheetGiven !== 'No' || formData.factSheetNotGivenReason.trim());
   }, [clientID, formData]);
   
-  // ✅ FIX: Load form data with error handling
+  // Load form data with error handling
   useEffect(() => {
     if (clientID && formType) {
       dispatch(fetchFormData({ clientID, formType }))
         .unwrap()
         .then((data) => {
-          console.log('Form data loaded:', data);
+          console.log('✅ Form data loaded successfully:', data);
         })
         .catch((error) => {
-          console.warn('Failed to load form data (form will work with empty data):', error);
+          console.warn('⚠️ Failed to load form data (form will work with empty data):', error);
         })
         .finally(() => {
           setTimeout(() => setIsInitialLoad(false), 1000);
@@ -141,9 +142,10 @@ const AdvCareAck = forwardRef(({
     }
   }, [dispatch, clientID, formType]);
   
-  // Update local state when Redux form data changes
+  // ✅ FIXED: Update local state when Redux form data changes
   useEffect(() => {
     if (existingData && Object.keys(existingData).length > 0) {
+      console.log('📝 Restoring form data from Redux:', existingData);
       setFormData({
         factSheetGiven: existingData.factSheetGiven || "",
         factSheetNotGivenReason: existingData.factSheetNotGivenReason || "",
@@ -217,6 +219,8 @@ const AdvCareAck = forwardRef(({
       acknowledgedAt: new Date().toISOString()
     };
 
+    console.log('💾 Submitting advance directive form with data:', submitData);
+
     try {
       await dispatch(saveFormData({ 
         clientID, 
@@ -224,9 +228,11 @@ const AdvCareAck = forwardRef(({
         formData: submitData 
       })).unwrap();
       
+      console.log('✅ Advance directive form saved successfully');
       setLocalErrors([]);
       setShowSuccessSnackbar(true);
     } catch (error) {
+      console.error('❌ Failed to save advance directive form:', error);
       setLocalErrors([error.message || 'Failed to save advance care acknowledgment']);
     }
   }, [dispatch, clientID, formData, formType]);
@@ -237,7 +243,13 @@ const AdvCareAck = forwardRef(({
     dispatch(clearSuccessFlags());
   }, [dispatch]);
 
-  // ✅ FIX: Improved loading state
+  // Clear errors
+  const handleClearErrors = useCallback(() => {
+    setLocalErrors([]);
+    dispatch(clearErrors());
+  }, [dispatch]);
+
+  // Improved loading state
   if (isInitialLoad && loading) {
     return (
       <Container maxWidth="lg">
@@ -295,11 +307,20 @@ const AdvCareAck = forwardRef(({
 
       {/* Error Messages */}
       {localErrors.length > 0 && (
-        <Alert severity="error" sx={{ mb: 3 }} onClose={() => setLocalErrors([])}>
-          {localErrors.map((error, index) => (
-            <Typography key={index} variant="body2">• {error}</Typography>
-          ))}
-        </Alert>
+        <Fade in>
+          <Alert severity="error" sx={{ mb: 3 }} onClose={handleClearErrors}>
+            <Box>
+              <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+                Please correct the following issues:
+              </Typography>
+              {localErrors.map((error, index) => (
+                <Typography key={index} variant="body2" sx={{ ml: 2 }}>
+                  • {error}
+                </Typography>
+              ))}
+            </Box>
+          </Alert>
+        </Fade>
       )}
 
       {/* Information Alert */}
