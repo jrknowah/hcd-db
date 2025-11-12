@@ -54,7 +54,7 @@ import {
   deleteIDTCaseManagerNote,
   clearErrors,
   clearSaveSuccess
-} from "../../backend/store/slices/idtNoteCMSlice";
+} from "../../backend/store/slices/idtNoteCmSlice";
 import logUserAction from "../../backend/config/logAction";
 
 const EDUCATION_LEVELS = [
