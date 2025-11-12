@@ -13,37 +13,66 @@ class AzureProfileService {
 // In azureProfileService.js
 // Update the getAccessToken method to handle token refresh:
 // In azureProfileService.js, replace the getAccessToken method:
+// In azureProfileService.js
+
 async getAccessToken() {
   try {
-    // Check if MSAL instance is available
+    // Always prioritize MSAL for fresh tokens
     if (window.msalInstance) {
       const accounts = window.msalInstance.getAllAccounts();
       
       if (accounts && accounts.length > 0) {
         try {
-          // Always try to get a fresh token silently
+          // Try silent token acquisition with fresh token
           const tokenResponse = await window.msalInstance.acquireTokenSilent({
-            scopes: ['User.Read'],
+            scopes: ['User.Read', 'User.ReadBasic.All'],
             account: accounts[0],
-            forceRefresh: false // Don't force, let MSAL handle caching
+            forceRefresh: false
           });
           
-          console.log('🔑 Got fresh token from MSAL');
+          console.log('🔑 Fresh token acquired from MSAL');
+          
+          // Store in Redux for other components
+          const store = window.__REDUX_STORE__;
+          if (store) {
+            store.dispatch({
+              type: 'auth/updateToken',
+              payload: tokenResponse.accessToken
+            });
+          }
+          
           return tokenResponse.accessToken;
           
         } catch (silentError) {
-          console.warn('⚠️ Silent token acquisition failed:', silentError);
+          console.warn('⚠️ Silent token failed:', silentError.errorCode);
           
-          // If silent fails, try popup
-          if (silentError.errorCode === 'interaction_required') {
+          // Handle specific error codes
+          if (silentError.errorCode === 'consent_required' || 
+              silentError.errorCode === 'interaction_required' ||
+              silentError.errorCode === 'login_required') {
+            
+            console.log('🔄 Attempting interactive token acquisition...');
+            
             try {
               const tokenResponse = await window.msalInstance.acquireTokenPopup({
-                scopes: ['User.Read']
+                scopes: ['User.Read', 'User.ReadBasic.All'],
+                prompt: 'none'
               });
+              
+              // Store new token
+              const store = window.__REDUX_STORE__;
+              if (store) {
+                store.dispatch({
+                  type: 'auth/updateToken',
+                  payload: tokenResponse.accessToken
+                });
+              }
+              
               return tokenResponse.accessToken;
+              
             } catch (popupError) {
-              console.error('❌ Popup token acquisition failed:', popupError);
-              throw new Error('Please log in again');
+              console.error('❌ Interactive token failed:', popupError);
+              throw new Error('Authentication required. Please log in again.');
             }
           }
           
@@ -52,33 +81,29 @@ async getAccessToken() {
       }
     }
     
-    // Fallback to stored token (probably expired)
-    const store = window.__REDUX_STORE__;
-    const token = store?.getState()?.auth?.azureToken;
+    throw new Error('No MSAL instance or accounts available');
     
-    if (token && token !== 'no-token') {
-      console.warn('⚠️ Using stored token (may be expired)');
-      return token;
+  } catch (error) {
+    console.error('❌ Token acquisition failed:', error);
+    
+    // Clear expired data and force re-login
+    this.clearCache();
+    
+    // Notify user they need to log in again
+    const store = window.__REDUX_STORE__;
+    if (store) {
+      store.dispatch({ type: 'auth/clearAuth' });
     }
     
-    throw new Error('No access token available');
-  } catch (error) {
-    console.error('❌ Error getting access token:', error);
-    throw error;
+    throw new Error('Session expired. Please log in again.');
   }
 }
 
-  /**
-   * Make authenticated request to Microsoft Graph API
-   */
-  async makeGraphRequest(endpoint, options = {}, retryCount = 0) {
+async makeGraphRequest(endpoint, options = {}) {
   try {
+    // Always get fresh token before making request
     const accessToken = await this.getAccessToken();
     
-    if (!accessToken) {
-      throw new Error('No Azure access token available');
-    }
-
     const response = await fetch(`${this.baseUrl}${endpoint}`, {
       headers: {
         'Authorization': `Bearer ${accessToken}`,
@@ -88,39 +113,31 @@ async getAccessToken() {
       ...options
     });
 
+    // Handle 401 specifically
+    if (response.status === 401) {
+      console.warn('⚠️ Got 401, clearing cache and throwing error');
+      this.clearCache();
+      throw new Error('Authentication failed. Please log in again.');
+    }
+
     if (!response.ok) {
-      if (response.status === 401 && retryCount === 0) {
-        // Token expired, clear cache and try once more with fresh token
-        this.clearCache();
-        console.log('🔄 Token expired, attempting refresh...');
-        
-        // Force token refresh
-        if (window.msalInstance) {
-          const accounts = window.msalInstance.getAllAccounts();
-          if (accounts?.length > 0) {
-            try {
-              const tokenResponse = await window.msalInstance.acquireTokenSilent({
-                scopes: ['User.Read'],
-                account: accounts[0],
-                forceRefresh: true // Force a fresh token
-              });
-              
-              // Retry the request with new token
-              return this.makeGraphRequest(endpoint, options, retryCount + 1);
-            } catch (refreshError) {
-              console.error('❌ Token refresh failed:', refreshError);
-            }
-          }
-        }
-        
-        throw new Error('Azure access token expired. Please log in again.');
-      }
       throw new Error(`Microsoft Graph API error: ${response.status} ${response.statusText}`);
     }
 
     return response;
+    
   } catch (error) {
     console.error('❌ Microsoft Graph request failed:', error);
+    
+    // If it's an auth error, clear everything
+    if (error.message.includes('Authentication') || error.message.includes('401')) {
+      this.clearCache();
+      const store = window.__REDUX_STORE__;
+      if (store) {
+        store.dispatch({ type: 'auth/clearAuth' });
+      }
+    }
+    
     throw error;
   }
 }
@@ -442,6 +459,8 @@ export const useAzureProfile = () => {
   const authToken = useSelector(state => state.auth.azureToken); // Changed from state.auth.token
   const authUser = useSelector(state => state.auth.user);
 
+  // In azureProfileService.js, update useAzureProfile:
+
   const loadProfile = async () => {
     if (!isAuthenticated || !authToken) {
       console.log('⚠️ User not authenticated, skipping profile load');
@@ -463,10 +482,25 @@ export const useAzureProfile = () => {
       
       if (context.errors.length > 0) {
         console.warn('⚠️ Some profile data failed to load:', context.errors);
+        
+        // If errors include auth failures, show message to user
+        const hasAuthError = context.errors.some(e => 
+          e.includes('token') || e.includes('Authentication') || e.includes('401')
+        );
+        
+        if (hasAuthError) {
+          setError('Your session has expired. Please refresh the page to log in again.');
+        }
       }
     } catch (err) {
-      setError(err.message);
       console.error('❌ Error in useAzureProfile:', err);
+      
+      // Check if it's an auth error
+      if (err.message.includes('token') || err.message.includes('Authentication')) {
+        setError('Session expired. Please refresh the page to log in again.');
+      } else {
+        setError(err.message);
+      }
       
       // ✅ Fallback to auth slice user data
       if (authUser) {

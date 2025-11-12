@@ -269,117 +269,123 @@ export const Profile = () => {
       </IconButton>
 
       {/* ✅ Enhanced Menu with Azure Profile Data */}
-      <StyledMenu
-        id="profile-menu"
-        MenuListProps={{
-          'aria-labelledby': 'profile-button',
-        }}
-        anchorEl={anchorEl}
-        open={open}
-        onClose={handleClose}
-      >
-        {/* User Info Header */}
-        {isAuthenticated && (
-          <>
-            <Box px={2} py={1} borderBottom="1px solid rgba(0,0,0,0.1)">
-              <Box display="flex" alignItems="center" gap={1}>
-                <Avatar 
-                  src={displayData.photo} 
-                  alt={displayData.name} 
-                  sx={{ width: 32, height: 32 }}
-                >
-                  {displayData.initials}
-                </Avatar>
-                <Box flex={1} minWidth={0}>
-                  <Typography fontSize="14px" fontWeight="600" noWrap>
-                    {displayData.name}
-                  </Typography>
-                  {displayData.email && (
-                    <Typography fontSize="12px" color="text.secondary" noWrap>
-                      {displayData.email}
-                    </Typography>
-                  )}
-                  {displayData.jobTitle && (
-                    <Typography fontSize="11px" color="text.secondary" noWrap>
-                      {displayData.jobTitle}
-                    </Typography>
-                  )}
-                  {displayData.officeLocation && (
-                    <Typography fontSize="11px" color="text.secondary" noWrap>
-                      📍 {displayData.officeLocation}
-                    </Typography>
-                  )}
-                  {/* Show roles if available */}
-                  {displayData.roles.length > 0 && (
-                    <Typography fontSize="10px" color="primary.main" noWrap>
-                      Roles: {displayData.roles.join(', ')}
-                    </Typography>
-                  )}
-                </Box>
-              </Box>
-            </Box>
+      // In Profile.jsx, update the StyledMenu section:
 
-            <MenuItem onClick={handleClose} disableRipple>
-              <Box color="primary.main" display="flex" alignItems="center">
-                <Icon icon="solar:user-circle-line-duotone" height={22} />
-              </Box>
-              <Typography fontSize="15px" ml={1}>
-                My Profile
+<StyledMenu
+  id="profile-menu"
+  MenuListProps={{
+    'aria-labelledby': 'profile-button',
+  }}
+  anchorEl={anchorEl}
+  open={open}
+  onClose={handleClose}
+>
+  {/* ✅ Wrap everything in a single Box instead of Fragment */}
+  {isAuthenticated ? (
+    <>
+      {/* User Info Header */}
+      <Box px={2} py={1} borderBottom="1px solid rgba(0,0,0,0.1)">
+        <Box display="flex" alignItems="center" gap={1}>
+          <Avatar 
+            src={displayData.photo} 
+            alt={displayData.name} 
+            sx={{ width: 32, height: 32 }}
+          >
+            {displayData.initials}
+          </Avatar>
+          <Box flex={1} minWidth={0}>
+            <Typography fontSize="14px" fontWeight="600" noWrap>
+              {displayData.name}
+            </Typography>
+            {displayData.email && (
+              <Typography fontSize="12px" color="text.secondary" noWrap>
+                {displayData.email}
               </Typography>
-            </MenuItem>
-            
-            <MenuItem onClick={handleClose} disableRipple>
-              <Box color="secondary.main" display="flex" alignItems="center">
-                <Icon icon="solar:notes-line-duotone" height={21} />
-              </Box>
-              <Typography fontSize="15px" ml={1}>
-                My Notes
+            )}
+            {displayData.jobTitle && (
+              <Typography fontSize="11px" color="text.secondary" noWrap>
+                {displayData.jobTitle}
               </Typography>
-            </MenuItem>
-            
-            <MenuItem onClick={handleClose} disableRipple>
-              <Box color="success.main" display="flex" alignItems="center">
-                <Icon icon="solar:inbox-line-line-duotone" height={21} />
-              </Box>
-              <Typography fontSize="15px" ml={1}>
-                Inbox
+            )}
+            {displayData.officeLocation && (
+              <Typography fontSize="11px" color="text.secondary" noWrap>
+                📍 {displayData.officeLocation}
               </Typography>
-            </MenuItem>
-            
-            <Divider />
-            
-            <MenuItem onClick={handleClose} disableRipple>
-              <Box color="warning.main" display="flex" alignItems="center">
-                <Icon icon="solar:settings-line-duotone" height={21} />
-              </Box>
-              <Typography fontSize="15px" ml={1}>
-                Account Setting
+            )}
+            {displayData.roles.length > 0 && (
+              <Typography fontSize="10px" color="primary.main" noWrap>
+                Roles: {displayData.roles.join(', ')}
               </Typography>
-            </MenuItem>
-            
-            <Divider />
-            
-            <MenuItem onClick={handleClose} disableRipple>
-              <Box color="error.main" display="flex" alignItems="center">
-                <Icon icon="solar:logout-2-line-duotone" height={21} />
-              </Box>
-              <Link to="/auth/auth1/login">
-                <Typography fontSize="15px" ml={1} color="textPrimary">
-                  Logout
-                </Typography>
-              </Link>
-            </MenuItem>
-            
-            <Divider />
-            
-            <Box px="12px" pb={1}>
-              <Button variant="contained" color="primary" fullWidth>
-                View Profile
-              </Button>
-            </Box>
-          </>
-        )}
-      </StyledMenu>
+            )}
+          </Box>
+        </Box>
+      </Box>
+
+      <MenuItem onClick={handleClose} disableRipple>
+        <Box color="primary.main" display="flex" alignItems="center">
+          <Icon icon="solar:user-circle-line-duotone" height={22} />
+        </Box>
+        <Typography fontSize="15px" ml={1}>
+          My Profile
+        </Typography>
+      </MenuItem>
+      
+      <MenuItem onClick={handleClose} disableRipple>
+        <Box color="secondary.main" display="flex" alignItems="center">
+          <Icon icon="solar:notes-line-duotone" height={21} />
+        </Box>
+        <Typography fontSize="15px" ml={1}>
+          My Notes
+        </Typography>
+      </MenuItem>
+      
+      <MenuItem onClick={handleClose} disableRipple>
+        <Box color="success.main" display="flex" alignItems="center">
+          <Icon icon="solar:inbox-line-line-duotone" height={21} />
+        </Box>
+        <Typography fontSize="15px" ml={1}>
+          Inbox
+        </Typography>
+      </MenuItem>
+      
+      <Divider />
+      
+      <MenuItem onClick={handleClose} disableRipple>
+        <Box color="warning.main" display="flex" alignItems="center">
+          <Icon icon="solar:settings-line-duotone" height={21} />
+        </Box>
+        <Typography fontSize="15px" ml={1}>
+          Account Setting
+        </Typography>
+      </MenuItem>
+      
+      <Divider />
+      
+      <MenuItem onClick={handleClose} disableRipple>
+        <Box color="error.main" display="flex" alignItems="center">
+          <Icon icon="solar:logout-2-line-duotone" height={21} />
+        </Box>
+        <Link to="/auth/auth1/login">
+          <Typography fontSize="15px" ml={1} color="textPrimary">
+            Logout
+          </Typography>
+        </Link>
+      </MenuItem>
+      
+      <Divider />
+      
+      <Box px="12px" pb={1}>
+        <Button variant="contained" color="primary" fullWidth>
+          View Profile
+        </Button>
+      </Box>
+    </>
+  ) : (
+    <MenuItem onClick={handleClose}>
+      <Typography>Please log in</Typography>
+    </MenuItem>
+  )}
+</StyledMenu>
 
       {/* ✅ Debug Info (only in development) */}
       {process.env.NODE_ENV === 'development' && (

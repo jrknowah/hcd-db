@@ -192,9 +192,20 @@ const authSlice = createSlice({
       const authData = { ...state };
       localStorage.setItem('authData', JSON.stringify(authData));
     },
+    // In authSlice.js, add to reducers:
+
     updateToken: (state, action) => {
       state.azureToken = action.payload;
-      localStorage.setItem('azureToken', action.payload);
+      if (action.payload && action.payload !== 'no-token') {
+        localStorage.setItem('azureToken', action.payload);
+        
+        // Update authData
+        const authData = {
+          ...state,
+          azureToken: action.payload
+        };
+        localStorage.setItem('authData', JSON.stringify(authData));
+      }
     },
   },
   extraReducers: (builder) => {
@@ -231,7 +242,8 @@ export const {
   clearAuth,
   restoreAuthFromLocalStorage,
   updateUserRoles,
-  updateUser 
+  updateUser, 
+  updateToken
 } = authSlice.actions;
 
 // Export selectors
