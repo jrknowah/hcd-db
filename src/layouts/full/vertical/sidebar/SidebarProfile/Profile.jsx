@@ -105,6 +105,20 @@ export const Profile = () => {
     email: profile?.mail || authUser?.email || 'N/A',
     roles: userRoles || []
   };
+  const [retrying, setRetrying] = useState(false);
+
+  const handleRetryConsent = async () => {
+    setRetrying(true);
+    try {
+      // Clear cache and reload profile
+      azureProfileService.clearCache();
+      await reload();
+    } catch (error) {
+      console.error('Retry failed:', error);
+    } finally {
+      setRetrying(false);
+    }
+  };
 
   // ✅ Helper function to truncate text
   const truncateText = (text, maxLength = 20) => {
@@ -267,6 +281,21 @@ export const Profile = () => {
           </Box>
         )}
       </IconButton>
+
+      {/* // Then in the Profile component JSX, after the user info, add: */}
+      {profileError && profileError.includes('permission') && (
+        <Box px={2} py={1}>
+          <Button 
+            size="small" 
+            variant="outlined" 
+            fullWidth
+            onClick={handleRetryConsent}
+            disabled={retrying}
+          >
+            {retrying ? 'Requesting...' : 'Grant Permission'}
+          </Button>
+        </Box>
+      )}
 
       {/* ✅ Enhanced Menu with Azure Profile Data */}
       // In Profile.jsx, update the StyledMenu section:

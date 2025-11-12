@@ -17,22 +17,61 @@ class AzureProfileService {
 
 async getAccessToken() {
   try {
-    // Always prioritize MSAL for fresh tokens
-    if (window.msalInstance) {
-      const accounts = window.msalInstance.getAllAccounts();
+    if (!window.msalInstance) {
+      throw new Error('MSAL not initialized');
+    }
+
+    const accounts = window.msalInstance.getAllAccounts();
+    
+    if (!accounts || accounts.length === 0) {
+      throw new Error('No accounts found. Please log in.');
+    }
+
+    const account = accounts[0];
+
+    try {
+      // Try silent token acquisition
+      const tokenResponse = await window.msalInstance.acquireTokenSilent({
+        scopes: ['User.Read', 'User.ReadBasic.All'],
+        account: account,
+        forceRefresh: false
+      });
       
-      if (accounts && accounts.length > 0) {
+      console.log('🔑 Token acquired successfully');
+      
+      // Store in Redux
+      const store = window.__REDUX_STORE__;
+      if (store) {
+        store.dispatch({
+          type: 'auth/updateToken',
+          payload: tokenResponse.accessToken
+        });
+      }
+      
+      return tokenResponse.accessToken;
+      
+    } catch (silentError) {
+      console.warn('⚠️ Silent token failed:', silentError.errorCode);
+      
+      // ✅ Handle consent-related errors
+      if (silentError.errorCode === 'consent_required' || 
+          silentError.errorCode === 'interaction_required' ||
+          silentError.errorCode === 'login_required' ||
+          silentError.message?.includes('AADSTS65001')) {
+        
+        console.log('🔐 Consent required - triggering interactive flow...');
+        
         try {
-          // Try silent token acquisition with fresh token
-          const tokenResponse = await window.msalInstance.acquireTokenSilent({
+          // ✅ Trigger popup for user consent
+          const tokenResponse = await window.msalInstance.acquireTokenPopup({
             scopes: ['User.Read', 'User.ReadBasic.All'],
-            account: accounts[0],
-            forceRefresh: false
+            account: account,
+            prompt: 'consent'  // Force consent screen
           });
           
-          console.log('🔑 Fresh token acquired from MSAL');
+          console.log('✅ Consent granted, token acquired');
           
-          // Store in Redux for other components
+          // Store new token
           const store = window.__REDUX_STORE__;
           if (store) {
             store.dispatch({
@@ -43,59 +82,32 @@ async getAccessToken() {
           
           return tokenResponse.accessToken;
           
-        } catch (silentError) {
-          console.warn('⚠️ Silent token failed:', silentError.errorCode);
+        } catch (popupError) {
+          console.error('❌ Consent popup failed:', popupError);
           
-          // Handle specific error codes
-          if (silentError.errorCode === 'consent_required' || 
-              silentError.errorCode === 'interaction_required' ||
-              silentError.errorCode === 'login_required') {
-            
-            console.log('🔄 Attempting interactive token acquisition...');
-            
-            try {
-              const tokenResponse = await window.msalInstance.acquireTokenPopup({
-                scopes: ['User.Read', 'User.ReadBasic.All'],
-                prompt: 'none'
-              });
-              
-              // Store new token
-              const store = window.__REDUX_STORE__;
-              if (store) {
-                store.dispatch({
-                  type: 'auth/updateToken',
-                  payload: tokenResponse.accessToken
-                });
-              }
-              
-              return tokenResponse.accessToken;
-              
-            } catch (popupError) {
-              console.error('❌ Interactive token failed:', popupError);
-              throw new Error('Authentication required. Please log in again.');
-            }
+          // User denied consent or closed popup
+          if (popupError.errorCode === 'user_cancelled') {
+            throw new Error('You need to grant permission to view your profile. Please try again and click "Accept" when prompted.');
           }
           
-          throw silentError;
+          throw new Error('Unable to get permission. Please contact your administrator.');
         }
       }
+      
+      // ✅ Handle token refresh errors
+      if (silentError.errorCode === 'invalid_grant') {
+        console.error('❌ Invalid grant - session may be expired');
+        this.clearCache();
+        throw new Error('Your session has expired. Please refresh the page to log in again.');
+      }
+      
+      throw silentError;
     }
-    
-    throw new Error('No MSAL instance or accounts available');
     
   } catch (error) {
     console.error('❌ Token acquisition failed:', error);
-    
-    // Clear expired data and force re-login
     this.clearCache();
-    
-    // Notify user they need to log in again
-    const store = window.__REDUX_STORE__;
-    if (store) {
-      store.dispatch({ type: 'auth/clearAuth' });
-    }
-    
-    throw new Error('Session expired. Please log in again.');
+    throw error;
   }
 }
 
@@ -461,64 +473,74 @@ export const useAzureProfile = () => {
 
   // In azureProfileService.js, update useAzureProfile:
 
-  const loadProfile = async () => {
-    if (!isAuthenticated || !authToken) {
-      console.log('⚠️ User not authenticated, skipping profile load');
-      setProfile(null);
-      setPhoto(null);
-      setLoading(false);
-      return;
-    }
+  // In azureProfileService.js, update the useAzureProfile hook:
 
-    try {
-      setLoading(true);
-      setError(null);
+const loadProfile = async () => {
+  if (!isAuthenticated || !authToken) {
+    console.log('⚠️ User not authenticated, skipping profile load');
+    setProfile(null);
+    setPhoto(null);
+    setLoading(false);
+    return;
+  }
+
+  try {
+    setLoading(true);
+    setError(null);
+    
+    console.log('🔄 Loading Azure profile for authenticated user...');
+    const context = await azureProfileService.getCompleteUserContext();
+    
+    setProfile(context.profile);
+    setPhoto(context.photo);
+    
+    if (context.errors.length > 0) {
+      console.warn('⚠️ Some profile data failed to load:', context.errors);
       
-      console.log('🔄 Loading Azure profile for authenticated user...');
-      const context = await azureProfileService.getCompleteUserContext();
+      // Check for consent errors
+      const hasConsentError = context.errors.some(e => 
+        e.includes('consent') || 
+        e.includes('AADSTS65001') ||
+        e.includes('grant permission')
+      );
       
-      setProfile(context.profile);
-      setPhoto(context.photo);
-      
-      if (context.errors.length > 0) {
-        console.warn('⚠️ Some profile data failed to load:', context.errors);
-        
-        // If errors include auth failures, show message to user
-        const hasAuthError = context.errors.some(e => 
-          e.includes('token') || e.includes('Authentication') || e.includes('401')
-        );
-        
-        if (hasAuthError) {
-          setError('Your session has expired. Please refresh the page to log in again.');
-        }
+      if (hasConsentError) {
+        setError('Permission needed to view profile. Click your name to grant access.');
       }
-    } catch (err) {
-      console.error('❌ Error in useAzureProfile:', err);
-      
-      // Check if it's an auth error
-      if (err.message.includes('token') || err.message.includes('Authentication')) {
-        setError('Session expired. Please refresh the page to log in again.');
-      } else {
-        setError(err.message);
-      }
-      
-      // ✅ Fallback to auth slice user data
-      if (authUser) {
-        console.log('📋 Using fallback user data from auth slice');
-        setProfile({
-          displayName: authUser.name,
-          mail: authUser.email,
-          jobTitle: authUser.jobTitle,
-          officeLocation: authUser.officeLocation,
-          department: authUser.department,
-          initials: azureProfileService.getInitials(authUser.name),
-          shortName: azureProfileService.getShortName(authUser.name)
-        });
-      }
-    } finally {
-      setLoading(false);
     }
-  };
+  } catch (err) {
+    console.error('❌ Error in useAzureProfile:', err);
+    
+    // Check error type
+    if (err.message.includes('consent') || 
+        err.message.includes('permission') ||
+        err.message.includes('AADSTS65001')) {
+      setError('Permission needed to view your profile information. Please grant access when prompted.');
+    } else if (err.message.includes('session') || 
+               err.message.includes('expired') ||
+               err.message.includes('log in again')) {
+      setError('Your session has expired. Please refresh the page.');
+    } else {
+      setError('Unable to load profile. Using basic information.');
+    }
+    
+    // Fallback to auth slice user data
+    if (authUser) {
+      console.log('📋 Using fallback user data from auth slice');
+      setProfile({
+        displayName: authUser.name,
+        mail: authUser.email,
+        jobTitle: authUser.jobTitle,
+        officeLocation: authUser.officeLocation,
+        department: authUser.department,
+        initials: azureProfileService.getInitials(authUser.name),
+        shortName: azureProfileService.getShortName(authUser.name)
+      });
+    }
+  } finally {
+    setLoading(false);
+  }
+};
 
   // Load profile when authentication changes
   useEffect(() => {

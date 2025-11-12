@@ -30,35 +30,41 @@ export const useAuth = () => {
 
   // Login function
   const login = async () => {
-    try {
-      dispatch(setLoading(true));
-      
-      // Trigger MSAL login
-      const loginResponse = await instance.loginPopup({
-        scopes: ['User.Read', 'openid', 'profile', 'email'],
-        prompt: 'select_account'
-      });
+  try {
+    dispatch(setLoading(true));
+    
+    // ✅ Request Graph API consent during login
+    const loginResponse = await instance.loginPopup({
+      scopes: [
+        'User.Read',           // Read user profile
+        'User.ReadBasic.All',  // Read other users (optional)
+        'openid',
+        'profile', 
+        'email'
+      ],
+      prompt: 'select_account'  // This ensures consent screen shows
+    });
 
-      if (loginResponse.account) {
-        instance.setActiveAccount(loginResponse.account);
-        
-        // Process with Redux
-        await dispatch(loginWithAzure({
-          azureAccount: loginResponse.account,
-          azureToken: loginResponse.accessToken,
-          msalInstance: instance
-        })).unwrap();
-        
-        return loginResponse.account;
-      }
-    } catch (error) {
-      console.error('Login failed:', error);
-      dispatch(setError(error.message));
-      throw error;
-    } finally {
-      dispatch(setLoading(false));
+    if (loginResponse.account) {
+      instance.setActiveAccount(loginResponse.account);
+      
+      // Process with Redux
+      await dispatch(loginWithAzure({
+        azureAccount: loginResponse.account,
+        azureToken: loginResponse.accessToken,
+        msalInstance: instance
+      })).unwrap();
+      
+      return loginResponse.account;
     }
-  };
+  } catch (error) {
+    console.error('Login failed:', error);
+    dispatch(setError(error.message));
+    throw error;
+  } finally {
+    dispatch(setLoading(false));
+  }
+};
 
   // Logout function (local function, not imported)
   const logoutUser = async () => {
