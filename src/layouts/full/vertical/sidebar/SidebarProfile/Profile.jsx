@@ -298,8 +298,6 @@ export const Profile = () => {
       )}
 
       {/* ✅ Enhanced Menu with Azure Profile Data */}
-      // In Profile.jsx, update the StyledMenu section:
-
 <StyledMenu
   id="profile-menu"
   MenuListProps={{
