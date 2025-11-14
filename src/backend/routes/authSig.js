@@ -151,47 +151,63 @@ function validateAcknowledged(acknowledged) {
 
 /**
  * Validate consentPhoto specific fields
+ * ✅ FIXED: Corrected validation logic for consentPhoto form
  */
 function validateConsentPhoto(data) {
   let errors = {};
   
-  // Validate arrays
+  // Validate arrays - ensure they exist and have at least one item
   Object.assign(errors, validateArrayField('clientReleaseItems', data.clientReleaseItems));
   Object.assign(errors, validateArrayField('clientReleasePurposes', data.clientReleasePurposes));
+  
+  // ✅ FIX #1: Validate signature field as STRING (NOT a date!)
+  if (!data.consentPhotoSign1 || typeof data.consentPhotoSign1 !== 'string' || data.consentPhotoSign1.trim().length < 2) {
+    errors.consentPhotoSign1 = 'Electronic signature must be at least 2 characters';
+  }
   
   // Validate dates (only if provided)
   if (data.consentPhotoEffectiveDate) {
     Object.assign(errors, validateDateFormat(data.consentPhotoEffectiveDate, 'consentPhotoEffectiveDate'));
   }
-  if (data.consentPhotoExpirationDate) {
-    Object.assign(errors, validateDateFormat(data.consentPhotoExpirationDate, 'consentPhotoExpirationDate'));
-  }
-  if (data.consentPhotoSign1) {
-    Object.assign(errors, validateDateFormat(data.consentPhotoSign1, 'consentPhotoSign1'));
+  
+  // ✅ FIX #2: Support both old and new field names for backwards compatibility
+  const expirationDate = data.consentPhotoExpirationDate || data.consentPhotoExpireDate;
+  if (expirationDate) {
+    Object.assign(errors, validateDateFormat(expirationDate, 'consentPhotoExpirationDate'));
   }
   
-  // Validate expiration after effective (only if both dates are valid)
-  if (data.consentPhotoEffectiveDate && data.consentPhotoExpirationDate) {
+  // Validate expiration after effective (only if both dates are valid and provided)
+  if (data.consentPhotoEffectiveDate && expirationDate) {
     const effectiveErrors = validateDateFormat(data.consentPhotoEffectiveDate, 'consentPhotoEffectiveDate');
-    const expirationErrors = validateDateFormat(data.consentPhotoExpirationDate, 'consentPhotoExpirationDate');
+    const expirationErrors = validateDateFormat(expirationDate, 'consentPhotoExpirationDate');
     
     // Only compare dates if both are valid
     if (Object.keys(effectiveErrors).length === 0 && Object.keys(expirationErrors).length === 0) {
-      const effective = new Date(data.consentPhotoEffectiveDate);
-      const expiration = new Date(data.consentPhotoExpirationDate);
+      // Use UTC to avoid timezone issues
+      const effective = new Date(data.consentPhotoEffectiveDate + 'T00:00:00Z');
+      const expiration = new Date(expirationDate + 'T00:00:00Z');
       if (expiration <= effective) {
         errors.consentPhotoExpirationDate = 'Expiration date must be after effective date';
       }
     }
   }
   
-  // Validate array items structure (only check for null, undefined, empty strings)
+  // ✅ FIX #3: Validate array items - must be valid strings
   if (Array.isArray(data.clientReleaseItems) && data.clientReleaseItems.length > 0) {
     const hasInvalidItems = data.clientReleaseItems.some(item => 
-      item === null || item === undefined || item === ''
+      item === null || item === undefined || item === '' || typeof item !== 'string'
     );
     if (hasInvalidItems) {
       errors.clientReleaseItems = 'All release items must be valid strings';
+    }
+  }
+  
+  if (Array.isArray(data.clientReleasePurposes) && data.clientReleasePurposes.length > 0) {
+    const hasInvalidItems = data.clientReleasePurposes.some(item => 
+      item === null || item === undefined || item === '' || typeof item !== 'string'
+    );
+    if (hasInvalidItems) {
+      errors.clientReleasePurposes = 'All release purpose items must be valid strings';
     }
   }
   
@@ -320,12 +336,14 @@ router.post('/:clientID/form/:formType', async (req, res) => {
       logUserAction(req, 'CREATE', 'AuthorizationForm');
     }
     
+    // ✅ FIX: Return flat structure with formData properties at root level
     res.json({ 
       message: existingForm.recordset.length > 0 ? 'Form updated successfully' : 'Form created successfully',
       clientID,
       formType,
       status: formData.status,
-      formData
+      ...formData,  // Spread formData properties at root level
+      lastSaved: new Date().toISOString()
     });
     
   } catch (err) {

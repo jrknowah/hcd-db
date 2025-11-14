@@ -659,25 +659,59 @@ const ResidencePolicy = forwardRef(({ clientID: propClientID, title, formType = 
   const [localErrors, setLocalErrors] = useState([]);
   const [showSuccessSnackbar, setShowSuccessSnackbar] = useState(false);
   const [showPrintDialog, setShowPrintDialog] = useState(false);
+  const [localVisitedSections, setLocalVisitedSections] = useState(new Set());
+  const [isInitialized, setIsInitialized] = useState(false);
   
   // Accordion management
   const {
     expandedSection,
-    visitedSections,
+    visitedSections: hookVisitedSections,
     completionPercentage: readingProgress,
-    handleAccordionChange,
-    isSectionVisited
+    handleAccordionChange: hookHandleAccordionChange,
+    isSectionVisited: hookIsSectionVisited
   } = useFormAccordion(RESIDENCE_RULES_SECTIONS);
+  
+  // Merge hook visited sections with local visited sections
+  const visitedSections = useMemo(() => {
+    const merged = new Set([...hookVisitedSections, ...localVisitedSections]);
+    return merged;
+  }, [hookVisitedSections, localVisitedSections]);
+  
+  // Create custom isSectionVisited that checks merged visitedSections
+  const isSectionVisited = useCallback((sectionId) => {
+    return visitedSections.has(sectionId);
+  }, [visitedSections]);
+  
+  // Wrap accordion change handler to also update local state
+  const handleAccordionChange = useCallback((sectionId) => (event, isExpanded) => {
+    hookHandleAccordionChange(sectionId)(event, isExpanded);
+    if (isExpanded || event === null) {
+      setLocalVisitedSections(prev => new Set([...prev, sectionId]));
+    }
+  }, [hookHandleAccordionChange]);
   
   // Get client ID from props or Redux
   const clientID = propClientID || selectedClient?.clientID;
   
   // Calculate overall completion percentage
   const completionPercentage = useMemo(() => {
-    const readingComplete = readingProgress > 90 ? 50 : (readingProgress * 0.5);
+    // Calculate reading progress based on actual visited sections
+    const actualReadingProgress = Math.round((visitedSections.size / RESIDENCE_RULES_SECTIONS.length) * 100);
+    const readingComplete = actualReadingProgress > 90 ? 50 : (actualReadingProgress * 0.5);
     const signatureComplete = resPolicySignature.trim() ? 50 : 0;
-    return Math.round(readingComplete + signatureComplete);
-  }, [readingProgress, resPolicySignature]);
+    const total = Math.round(readingComplete + signatureComplete);
+    
+    console.log('📊 Completion calculation:', {
+      visitedSections: visitedSections.size,
+      totalSections: RESIDENCE_RULES_SECTIONS.length,
+      actualReadingProgress,
+      readingComplete,
+      signatureComplete,
+      total
+    });
+    
+    return total;
+  }, [visitedSections.size, resPolicySignature]);
   
   // Form validation
   const isValid = useMemo(() => {
@@ -690,28 +724,31 @@ const ResidencePolicy = forwardRef(({ clientID: propClientID, title, formType = 
   const formData = useMemo(() => ({
     resPolicySignature,
     sectionsRead: Array.from(visitedSections),
-    readingProgress,
+    readingProgress: Math.round((visitedSections.size / RESIDENCE_RULES_SECTIONS.length) * 100),
     completionPercentage,
     lastModified: new Date().toISOString()
-  }), [resPolicySignature, visitedSections, readingProgress, completionPercentage]);
+  }), [resPolicySignature, visitedSections, completionPercentage]);
 
   // ✅ ADDED: Expose getFormData method to parent FormModal
   useImperativeHandle(ref, () => ({
-    getFormData: () => ({
-      resPolicySignature,
-      sectionsRead: Array.from(visitedSections),
-      readingProgress,
-      completionPercentage,
-      lastModified: new Date().toISOString(),
-      status: completionPercentage === 100 ? 'completed' : 'in_progress',
-      formData: {
-        acknowledgedAt: new Date().toISOString(),
-        rulesVersion: formConfig?.version || '2024-v1',
-        totalSections: RESIDENCE_RULES_SECTIONS.length,
-        sectionsVisited: visitedSections.size
-      }
-    })
-  }));
+    getFormData: () => {
+      const calculatedReadingProgress = Math.round((visitedSections.size / RESIDENCE_RULES_SECTIONS.length) * 100);
+      return {
+        resPolicySignature,
+        sectionsRead: Array.from(visitedSections),
+        readingProgress: calculatedReadingProgress,
+        completionPercentage,
+        lastModified: new Date().toISOString(),
+        status: completionPercentage === 100 ? 'completed' : 'in_progress',
+        formData: {
+          acknowledgedAt: new Date().toISOString(),
+          rulesVersion: formConfig?.version || '2024-v1',
+          totalSections: RESIDENCE_RULES_SECTIONS.length,
+          sectionsVisited: visitedSections.size
+        }
+      };
+    }
+  }), [resPolicySignature, visitedSections, completionPercentage, formConfig]);
   
   // Load form data when component mounts
   useEffect(() => {
@@ -720,12 +757,53 @@ const ResidencePolicy = forwardRef(({ clientID: propClientID, title, formType = 
     }
   }, [dispatch, clientID]);
   
+  // Sync accordion hook's visited sections with local state during user interaction
+  useEffect(() => {
+    if (isInitialized && hookVisitedSections.size > 0) {
+      setLocalVisitedSections(prev => {
+        const merged = new Set([...prev, ...hookVisitedSections]);
+        if (merged.size !== prev.size) {
+          console.log('🔄 Syncing visited sections:', Array.from(merged));
+        }
+        return merged;
+      });
+    }
+  }, [hookVisitedSections, isInitialized]);
+  
   // Update local state when Redux form data changes
   useEffect(() => {
-    if (residencePolicyForm && Object.keys(residencePolicyForm).length > 0) {
+    if (residencePolicyForm && Object.keys(residencePolicyForm).length > 0 && !isInitialized) {
+      console.log('📖 Loading saved residence policy data:', residencePolicyForm);
+      
       setResPolicySignature(residencePolicyForm.resPolicySignature || "");
+      
+      // ✅ CRITICAL FIX: Restore visited sections to local state
+      if (residencePolicyForm.sectionsRead && Array.isArray(residencePolicyForm.sectionsRead)) {
+        console.log('📖 Restoring visited sections:', residencePolicyForm.sectionsRead);
+        console.log('   Saved completion was:', residencePolicyForm.completionPercentage);
+        
+        const restoredSections = new Set(residencePolicyForm.sectionsRead);
+        setLocalVisitedSections(restoredSections);
+        
+      } else if (residencePolicyForm.completionPercentage === 100) {
+        // Fallback: If form was completed but sectionsRead wasn't saved, mark all sections as visited
+        console.log('📖 Form marked as complete - marking all sections as visited');
+        const allSectionIds = RESIDENCE_RULES_SECTIONS.map(section => section.id);
+        setLocalVisitedSections(new Set(allSectionIds));
+        
+      } else if (residencePolicyForm.completionPercentage >= 50) {
+        // Fallback: Estimate based on completion percentage
+        const readingPercentage = residencePolicyForm.completionPercentage >= 50 ? 
+          residencePolicyForm.completionPercentage - 50 : 0;
+        const estimatedSections = Math.ceil((readingPercentage / 50) * RESIDENCE_RULES_SECTIONS.length);
+        const sectionsToMark = RESIDENCE_RULES_SECTIONS.slice(0, estimatedSections);
+        console.log('📖 Estimating visited sections from completion %:', sectionsToMark.map(s => s.id));
+        setLocalVisitedSections(new Set(sectionsToMark.map(s => s.id)));
+      }
+      
+      setIsInitialized(true);
     }
-  }, [residencePolicyForm]);
+  }, [residencePolicyForm, isInitialized]);
   
   // Update unsaved changes in Redux
   useEffect(() => {
@@ -745,15 +823,21 @@ const ResidencePolicy = forwardRef(({ clientID: propClientID, title, formType = 
     setResPolicySignature(signature);
     setLocalErrors([]);
     
+    const actualReadingProgress = Math.round((visitedSections.size / RESIDENCE_RULES_SECTIONS.length) * 100);
+    const readingComplete = actualReadingProgress > 90 ? 50 : (actualReadingProgress * 0.5);
+    const signatureComplete = signature.trim() ? 50 : 0;
+    const calculatedCompletion = Math.round(readingComplete + signatureComplete);
+    
     dispatch(updateFormLocal({
       formType: 'residencePolicy',
       formData: {
         resPolicySignature: signature,
-        completionPercentage: visitedSections.size >= RESIDENCE_RULES_SECTIONS.length * 0.8 && signature.trim() ? 100 : 
-                            (visitedSections.size / RESIDENCE_RULES_SECTIONS.length * 50) + (signature.trim() ? 50 : 0)
+        sectionsRead: Array.from(visitedSections),
+        readingProgress: actualReadingProgress,
+        completionPercentage: calculatedCompletion
       }
     }));
-  }, [dispatch, visitedSections.size]);
+  }, [dispatch, visitedSections]);
 
   // Handle form submission
   const handleSubmit = useCallback(async (e) => {
@@ -778,19 +862,27 @@ const ResidencePolicy = forwardRef(({ clientID: propClientID, title, formType = 
       return;
     }
 
+    const calculatedReadingProgress = Math.round((visitedSections.size / RESIDENCE_RULES_SECTIONS.length) * 100);
+    
     const submitData = {
       resPolicySignature,
-      sectionsRead: Array.from(visitedSections),
-      readingProgress,
-      completionPercentage: 100,
+      sectionsRead: Array.from(visitedSections),  // ✅ Save as array
+      readingProgress: calculatedReadingProgress,
+      completionPercentage: 100,  // ✅ Always 100 when submitting
       status: 'completed',
+      clientID,
+      formType: 'residencePolicy',
       formData: {
         acknowledgedAt: new Date().toISOString(),
         rulesVersion: formConfig?.version || '2024-v1',
+        totalSections: RESIDENCE_RULES_SECTIONS.length,
+        sectionsVisited: visitedSections.size,
         ipAddress: window.location.hostname,
         userAgent: navigator.userAgent
       }
     };
+
+    console.log('💾 Submitting residence policy with data:', submitData);
 
     try {
       await dispatch(saveFormData({ 
@@ -799,12 +891,14 @@ const ResidencePolicy = forwardRef(({ clientID: propClientID, title, formType = 
         formData: submitData 
       })).unwrap();
       
+      console.log('✅ Residence policy saved successfully');
       setLocalErrors([]);
       setShowSuccessSnackbar(true);
     } catch (error) {
+      console.error('❌ Failed to save residence policy:', error);
       setLocalErrors([error.message || 'Failed to save residence policy acknowledgment']);
     }
-  }, [dispatch, clientID, resPolicySignature, visitedSections, readingProgress, formConfig]);
+  }, [dispatch, clientID, resPolicySignature, visitedSections, formConfig]);
 
   // Clear success messages
   const handleCloseSuccessSnackbar = useCallback(() => {
@@ -939,7 +1033,7 @@ const ResidencePolicy = forwardRef(({ clientID: propClientID, title, formType = 
             
             <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 1 }}>
               <Typography variant="caption" color="text.secondary">
-                {visitedSections.size} of {RESIDENCE_RULES_SECTIONS.length} sections reviewed ({readingProgress}%)
+                {visitedSections.size} of {RESIDENCE_RULES_SECTIONS.length} sections reviewed ({Math.round((visitedSections.size / RESIDENCE_RULES_SECTIONS.length) * 100)}%)
               </Typography>
               <Typography variant="caption" color="text.secondary">
                 {resPolicySignature ? 'Signature provided' : 'Signature required'}

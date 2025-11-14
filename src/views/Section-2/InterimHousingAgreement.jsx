@@ -64,16 +64,17 @@ const InterimHousingAgreement = forwardRef(({
   const theme = useTheme();
   const dispatch = useDispatch();
   
-  // Redux selectors - using the formType parameter
-  const existingData = useSelector((state) => selectFormByType(state, formType));
+  // ✅ FIX: Correct Redux selector usage - selectFormByType is a selector factory
+  const existingData = useSelector(selectFormByType(formType));
   const loading = useSelector(selectFormLoading);
   const saving = useSelector(selectSaving);
   const autoSaving = useSelector(selectAutoSaving);
   const saveSuccess = useSelector(selectSaveSuccess);
   const unsavedChanges = useSelector(selectUnsavedChanges);
   
-  // ✅ FIX: Add local loading state to prevent infinite loops
+  // ✅ Loading state management
   const [isInitialLoad, setIsInitialLoad] = useState(true);
+  const [dataLoaded, setDataLoaded] = useState(false);
   
   // Local state
   const [tppSign, setPatientSignature] = useState("");
@@ -81,13 +82,32 @@ const InterimHousingAgreement = forwardRef(({
   const [localErrors, setLocalErrors] = useState([]);
   const [showSuccessSnackbar, setShowSuccessSnackbar] = useState(false);
   
+  // ✅ Enhanced debugging
+  useEffect(() => {
+    console.log('🔍 InterimHousingAgreement State Debug:', {
+      formType,
+      clientID,
+      existingData,
+      existingDataKeys: existingData ? Object.keys(existingData) : 'null',
+      existingDataValues: existingData,
+      loading,
+      dataLoaded,
+      localState: {
+        tppSign,
+        hasReadPolicy
+      }
+    });
+  }, [formType, clientID, existingData, loading, dataLoaded, tppSign, hasReadPolicy]);
+  
   // ✅ EXPOSE getFormData VIA REF
   useImperativeHandle(ref, () => ({
     getFormData: () => ({
       tppSign,
       hasReadPolicy,
       clientID,
-      formType
+      formType,
+      completionPercentage,
+      lastModified: new Date().toISOString()
     })
   }));
   
@@ -103,32 +123,55 @@ const InterimHousingAgreement = forwardRef(({
     return clientID && tppSign.trim() && hasReadPolicy;
   }, [clientID, tppSign, hasReadPolicy]);
   
-  // ✅ FIX: Load form data with error handling
+  // ✅ FIX: Load form data only once on mount
   useEffect(() => {
-    if (clientID && formType) {
+    if (clientID && formType && !dataLoaded) {
+      console.log('📥 Fetching form data for:', { clientID, formType });
+      
       dispatch(fetchFormData({ clientID, formType }))
         .unwrap()
         .then((data) => {
-          console.log('Form data loaded:', data);
+          console.log('✅ Form data loaded successfully:', data);
+          setDataLoaded(true);
         })
         .catch((error) => {
-          console.warn('Failed to load form data (form will work with empty data):', error);
+          console.warn('⚠️ Failed to load form data (continuing with empty form):', error);
+          setDataLoaded(true); // Still set to true to prevent infinite retries
         })
         .finally(() => {
-          setTimeout(() => setIsInitialLoad(false), 1000);
+          setTimeout(() => setIsInitialLoad(false), 500);
         });
-    } else {
+    } else if (!clientID || !formType) {
       setIsInitialLoad(false);
+      setDataLoaded(true);
     }
-  }, [dispatch, clientID, formType]);
+  }, [dispatch, clientID, formType, dataLoaded]);
   
-  // Update local state when Redux form data changes
+  // ✅ FIX: Update local state when Redux data changes - NO local state in dependencies
   useEffect(() => {
-    if (existingData && Object.keys(existingData).length > 0) {
-      setPatientSignature(existingData.tppSign || "");
-      setHasReadPolicy(existingData.hasReadPolicy || false);
+    console.log('🔄 Checking for data to populate...', {
+      existingData,
+      hasData: existingData && Object.keys(existingData).length > 0,
+      dataLoaded
+    });
+
+    // Only populate if we have data and have finished loading
+    if (existingData && Object.keys(existingData).length > 0 && dataLoaded) {
+      const newSignature = existingData.tppSign || "";
+      const newPolicyRead = existingData.hasReadPolicy || false;
+      
+      console.log('📝 Populating fields with data:', {
+        tppSign: newSignature,
+        hasReadPolicy: newPolicyRead
+      });
+      
+      // Update local state
+      setPatientSignature(newSignature);
+      setHasReadPolicy(newPolicyRead);
+      
+      console.log('✅ Fields populated successfully');
     }
-  }, [existingData]);
+  }, [existingData, dataLoaded]); // ✅ CRITICAL: Removed tppSign and hasReadPolicy from dependencies
   
   // Update unsaved changes in Redux
   useEffect(() => {
@@ -218,7 +261,10 @@ const InterimHousingAgreement = forwardRef(({
       
       setLocalErrors([]);
       setShowSuccessSnackbar(true);
+      
+      console.log('✅ Form submitted successfully');
     } catch (error) {
+      console.error('❌ Failed to save:', error);
       setLocalErrors([error.message || 'Failed to save termination policy acknowledgment']);
     }
   }, [dispatch, clientID, tppSign, hasReadPolicy, formType]);
@@ -235,7 +281,7 @@ const InterimHousingAgreement = forwardRef(({
     dispatch(clearErrors());
   }, [dispatch]);
 
-  // ✅ FIX: Improved loading state
+  // ✅ Improved loading state
   if (isInitialLoad && loading) {
     return (
       <Container maxWidth="lg">

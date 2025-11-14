@@ -143,6 +143,14 @@ const HousingAgree = forwardRef(({ clientID: propClientID, title, formType = 'ho
         return agreementTerms.every(term => termsAcknowledged[term.id] === true);
     }, [termsAcknowledged]);
 
+    // ✅ CRITICAL FIX: Restore termsAcknowledged from saved form data
+    useEffect(() => {
+        if (formData.termsAcknowledged && typeof formData.termsAcknowledged === 'object') {
+            console.log('📖 Restoring acknowledged terms:', formData.termsAcknowledged);
+            setTermsAcknowledged(formData.termsAcknowledged);
+        }
+    }, [formData.termsAcknowledged]);
+
     // ✅ FIXED: Use useEffect with proper dependency tracking and prevent infinite loops
     useEffect(() => {
         // Only update if the value actually changed to prevent loops
@@ -160,23 +168,24 @@ const HousingAgree = forwardRef(({ clientID: propClientID, title, formType = 'ho
     ]);
 
     // ✅ ADDED: Expose getFormData method to parent FormModal
+    // ✅ ADDED: Expose getFormData method to parent FormModal
     useImperativeHandle(ref, () => ({
         getFormData: () => ({
             housingAgreeeSign: formData.housingAgreeeSign || '',
             acknowledgmentConfirmed: formData.acknowledgmentConfirmed || false,
             clientUnderstanding: formData.clientUnderstanding || false,
             dateAcknowledged: formData.dateAcknowledged || '',
-            termsAcknowledged: termsAcknowledged,
+            termsAcknowledged: termsAcknowledged,  // ✅ This is the critical field to save
             completionPercentage,
             lastModified: new Date().toISOString(),
             status: completionPercentage === 100 ? 'completed' : 'in_progress',
-            formData: {
-                formVersion: '2.0',
-                totalTerms: agreementTerms.length,
-                acknowledgedTerms: Object.values(termsAcknowledged).filter(Boolean).length
-            }
+            formVersion: '2.0',
+            totalTerms: agreementTerms.length,
+            acknowledgedTerms: Object.values(termsAcknowledged).filter(Boolean).length,
+            clientID,
+            formType
         })
-    }));
+    }), [formData, termsAcknowledged, completionPercentage, clientID]);
 
     // Field change handlers
     const handleFieldChange = useCallback((fieldName) => (event) => {

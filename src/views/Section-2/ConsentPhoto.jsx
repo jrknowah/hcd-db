@@ -1,7 +1,7 @@
-// ✅ Updated ConsentPhoto.jsx - Complete with Enhanced Form Management + forwardRef
+// ✅ FIXED ConsentPhoto.jsx - Corrected field names and validation
 
-import React, { useCallback, useState, forwardRef, useImperativeHandle } from "react";
-import { useSelector } from "react-redux";
+import React, { useCallback, useState, forwardRef, useImperativeHandle, useEffect, useMemo } from "react";
+import { useSelector, useDispatch } from "react-redux";
 import {
     Box,
     Typography,
@@ -16,7 +16,6 @@ import {
     LinearProgress,
     Chip,
     Snackbar,
-    Divider,
     Stepper,
     Step,
     StepLabel,
@@ -27,20 +26,22 @@ import {
     Camera as CameraIcon,
     Save as SaveIcon,
     CheckCircle as CheckCircleIcon,
-    Person as PersonIcon,
-    ExpandMore as ExpandMoreIcon,
-    Security as SecurityIcon,
-    Info as InfoIcon,
-    Warning as WarningIcon
+    Person as PersonIcon
 } from '@mui/icons-material';
 
-// Import hooks and utilities
-import { 
-    useFormManager,
-    useFormStepper,
-    createFormValidator,
-    calculateFormCompletion
-} from '../../hooks/useFormManager';
+// Import Redux actions
+import {
+    fetchFormData,
+    saveFormData,
+    updateFormLocal,
+    clearErrors,
+    clearSuccessFlags,
+    setUnsavedChanges,
+    selectFormByType,
+    selectFormLoading,
+    selectSaving,
+    selectSaveSuccess
+} from '../../backend/store/slices/authSigSlice';
 
 // Import data
 import {
@@ -49,220 +50,238 @@ import {
     clientReleasePHTList
 } from "../../data/arrayList";
 
-// ✅ Enhanced form validation rules
-const validationRules = createFormValidator({
-    required: ['clientReleaseItems', 'clientReleasePurposes', 'consentPhotoSign1', 'consentPhotoEffectiveDate', 'consentPhotoExpireDate'],
-    custom: {
-        clientReleaseItems: (value) => {
-            if (!value || !Array.isArray(value) || value.length === 0) {
-                return "Please select at least one type of content to authorize";
-            }
-            return true;
-        },
-        clientReleasePurposes: (value) => {
-            if (!value || !Array.isArray(value) || value.length === 0) {
-                return "Please select at least one purpose for the release";
-            }
-            return true;
-        },
-        consentPhotoSign1: (value) => {
-            if (!value || value.trim().length < 2) {
-                return "Electronic signature must be at least 2 characters";
-            }
-            return true;
-        },
-        consentPhotoEffectiveDate: (value) => {
-            if (!value) return "Effective date is required";
-            const date = new Date(value);
-            if (isNaN(date.getTime())) return "Invalid effective date";
-            return true;
-        },
-        consentPhotoExpireDate: (value, formData) => {
-            if (!value) return "Expiration date is required";
-            const expDate = new Date(value);
-            if (isNaN(expDate.getTime())) return "Invalid expiration date";
-            
-            if (formData.consentPhotoEffectiveDate) {
-                const effDate = new Date(formData.consentPhotoEffectiveDate);
-                if (expDate <= effDate) {
-                    return "Expiration date must be after effective date";
-                }
-            }
-            return true;
-        }
-    }
-});
-
-// Stepper configuration
+// Stepper steps
 const stepperSteps = [
-    {
-        id: 'content-selection',
-        label: 'Content Authorization',
-        description: 'Select what content can be used'
-    },
-    {
-        id: 'purpose-selection',
-        label: 'Purpose Selection',
-        description: 'Choose the purposes for use'
-    },
-    {
-        id: 'phi-information',
-        label: 'Health Information',
-        description: 'Specify health information if needed'
-    },
-    {
-        id: 'dates-signature',
-        label: 'Dates & Signature',
-        description: 'Set dates and provide signature'
-    }
+    { id: 'content-selection', label: 'Content Authorization' },
+    { id: 'purpose-selection', label: 'Purpose Selection' },
+    { id: 'phi-information', label: 'Health Information (Optional)' },
+    { id: 'dates-signature', label: 'Dates & Signature' }
 ];
 
 const ConsentPhoto = forwardRef(({ clientID: propClientID }, ref) => {
+    const dispatch = useDispatch();
     const selectedClient = useSelector((state) => state.clients?.selectedClient);
     const clientID = propClientID || selectedClient?.clientID;
 
-    // ✅ Use the enhanced form manager hook
-    const {
-        formData,
-        formLoading,
-        saving,
-        localErrors,
-        validationErrors,
-        isValid,
-        showSuccessSnackbar,
-        updateField,
-        updateFields,
-        submitForm,
-        saveDraft,
-        clearFormErrors,
-        clearSuccessState
-    } = useFormManager(
-        'consentPhoto',
-        clientID,
-        { version: '2.0' },
-        validationRules
-    );
-
-    // ✅ Enhanced stepper with proper validation
-    const {
-        activeStep,
-        nextStep,
-        previousStep,
-        goToStep,
-        progress: stepperProgress
-    } = useFormStepper(stepperSteps, (step) => {
-        // Validation for each step
-        switch (step) {
-            case 0:
-                return formData.clientReleaseItems && formData.clientReleaseItems.length > 0;
-            case 1:
-                return formData.clientReleasePurposes && formData.clientReleasePurposes.length > 0;
-            case 2:
-                return true; // Optional step
-            case 3:
-                return formData.consentPhotoSign1 && formData.consentPhotoEffectiveDate && formData.consentPhotoExpireDate;
-            default:
-                return true;
-        }
-    });
+    // Redux selectors - ✅ FIXED: Correct selector usage
+    const existingData = useSelector(selectFormByType('consentPhoto'));
+    const formLoading = useSelector(selectFormLoading);
+    const saving = useSelector(selectSaving);
+    const saveSuccess = useSelector(selectSaveSuccess);
 
     // Local state
-    const [showRevocationSection, setShowRevocationSection] = useState(false);
+    const [activeStep, setActiveStep] = useState(0);
+    const [clientReleaseItems, setClientReleaseItems] = useState([]);
+    const [clientReleasePurposes, setClientReleasePurposes] = useState([]);
+    const [clientReleasePHTItems, setClientReleasePHTItems] = useState([]);
+    const [consentPhotoSign1, setConsentPhotoSign1] = useState("");
+    const [consentPhotoEffectiveDate, setConsentPhotoEffectiveDate] = useState("");
+    // ✅ FIXED: Changed from consentPhotoExpireDate to consentPhotoExpirationDate
+    const [consentPhotoExpirationDate, setConsentPhotoExpirationDate] = useState("");
+    const [localErrors, setLocalErrors] = useState([]);
+    const [showSuccessSnackbar, setShowSuccessSnackbar] = useState(false);
+    const [dataLoaded, setDataLoaded] = useState(false);
 
-    // ✅ Calculate completion percentage with all required fields (MUST be before useImperativeHandle)
-    const requiredFields = [
-        'clientReleaseItems', 'clientReleasePurposes', 'consentPhotoSign1',
-        'consentPhotoEffectiveDate', 'consentPhotoExpireDate'
-    ];
-    
-    const allFields = [
-        ...requiredFields,
-        'clientReleasePHTItems',
-        'consentPhotoSign1Revoke'
-    ];
-    
-    const completionPercentage = calculateFormCompletion(formData, requiredFields, allFields);
+    // Calculate completion percentage
+    const completionPercentage = useMemo(() => {
+        const requiredFields = [
+            clientReleaseItems.length > 0,
+            clientReleasePurposes.length > 0,
+            consentPhotoSign1.trim(),
+            consentPhotoEffectiveDate,
+            consentPhotoExpirationDate
+        ];
+        const completed = requiredFields.filter(Boolean).length;
+        return Math.round((completed / requiredFields.length) * 100);
+    }, [clientReleaseItems, clientReleasePurposes, consentPhotoSign1, consentPhotoEffectiveDate, consentPhotoExpirationDate]);
 
-    // ✅ Expose getFormData method for AuthSig modal integration (AFTER completionPercentage is calculated)
+    // ✅ Expose getFormData method
     useImperativeHandle(ref, () => ({
         getFormData: () => ({
-            ...formData,
+            // ✅ CRITICAL: Convert arrays to simple string arrays for backend
+            clientReleaseItems: clientReleaseItems.map(item => 
+                typeof item === 'string' ? item : item.value
+            ),
+            clientReleasePurposes: clientReleasePurposes.map(item => 
+                typeof item === 'string' ? item : item.value
+            ),
+            clientReleasePHTItems: clientReleasePHTItems.map(item => 
+                typeof item === 'string' ? item : item.value
+            ),
+            consentPhotoSign1,
+            consentPhotoEffectiveDate,
+            consentPhotoExpirationDate, // ✅ FIXED: Correct field name
             clientID,
             formType: 'consentPhoto',
-            formVersion: '2.0',
-            stepperProgress,
-            completedSteps: activeStep + 1,
             completionPercentage
         })
-    }), [formData, clientID, stepperProgress, activeStep, completionPercentage]);
+    }), [clientReleaseItems, clientReleasePurposes, clientReleasePHTItems, consentPhotoSign1, 
+         consentPhotoEffectiveDate, consentPhotoExpirationDate, clientID, completionPercentage]);
 
-    // ✅ Enhanced field change handlers with proper data structure
-    const handleMultiSelectChange = useCallback((fieldName, selectedValues) => {
-        // Ensure we're storing the full object structure, not just values
-        const formattedValues = selectedValues ? selectedValues.map(item => {
-            if (typeof item === 'string') {
-                // Convert string back to object format
-                const foundItem = [...clientReleaseList, ...clientReleasePurposeList, ...clientReleasePHTList]
-                    .find(listItem => listItem.value === item);
-                return foundItem || { value: item };
+    // Load form data
+    useEffect(() => {
+        if (clientID && !dataLoaded) {
+            dispatch(fetchFormData({ clientID, formType: 'consentPhoto' }))
+                .unwrap()
+                .then(() => setDataLoaded(true))
+                .catch(() => setDataLoaded(true));
+        }
+    }, [dispatch, clientID, dataLoaded]);
+
+    // Populate fields from Redux
+    useEffect(() => {
+        if (existingData && Object.keys(existingData).length > 0 && dataLoaded) {
+            // ✅ Convert backend string arrays back to object arrays for Autocomplete
+            if (existingData.clientReleaseItems) {
+                const items = Array.isArray(existingData.clientReleaseItems)
+                    ? existingData.clientReleaseItems.map(item => 
+                        typeof item === 'string' 
+                            ? clientReleaseList.find(opt => opt.value === item) || { value: item }
+                            : item
+                    )
+                    : [];
+                setClientReleaseItems(items);
             }
-            return item;
-        }) : [];
-        
-        updateField(fieldName, formattedValues);
-    }, [updateField]);
 
-    const handleFieldChange = useCallback((fieldName) => (event) => {
-        const { value } = event.target;
-        updateField(fieldName, value);
-    }, [updateField]);
+            if (existingData.clientReleasePurposes) {
+                const purposes = Array.isArray(existingData.clientReleasePurposes)
+                    ? existingData.clientReleasePurposes.map(item => 
+                        typeof item === 'string'
+                            ? clientReleasePurposeList.find(opt => opt.value === item) || { value: item }
+                            : item
+                    )
+                    : [];
+                setClientReleasePurposes(purposes);
+            }
 
-    // ✅ Auto-fill dates with proper validation
+            if (existingData.clientReleasePHTItems) {
+                const phtItems = Array.isArray(existingData.clientReleasePHTItems)
+                    ? existingData.clientReleasePHTItems.map(item =>
+                        typeof item === 'string'
+                            ? clientReleasePHTList.find(opt => opt.value === item) || { value: item }
+                            : item
+                    )
+                    : [];
+                setClientReleasePHTItems(phtItems);
+            }
+
+            setConsentPhotoSign1(existingData.consentPhotoSign1 || "");
+            setConsentPhotoEffectiveDate(existingData.consentPhotoEffectiveDate || "");
+            // ✅ FIXED: Handle both old and new field names for backwards compatibility
+            setConsentPhotoExpirationDate(
+                existingData.consentPhotoExpirationDate || 
+                existingData.consentPhotoExpireDate || 
+                ""
+            );
+        }
+    }, [existingData, dataLoaded]);
+
+    // Update Redux on changes
+    useEffect(() => {
+        if (dataLoaded && completionPercentage > 0) {
+            dispatch(setUnsavedChanges(true));
+        }
+    }, [dispatch, dataLoaded, completionPercentage]);
+
+    // Auto-fill today's date
     const handleAutoFillEffectiveDate = useCallback(() => {
         const today = new Date().toISOString().split('T')[0];
         const oneYearLater = new Date();
         oneYearLater.setFullYear(oneYearLater.getFullYear() + 1);
         const expDate = oneYearLater.toISOString().split('T')[0];
         
-        updateFields({
-            consentPhotoEffectiveDate: today,
-            consentPhotoExpireDate: expDate
-        });
-    }, [updateFields]);
+        setConsentPhotoEffectiveDate(today);
+        setConsentPhotoExpirationDate(expDate);
+    }, []);
 
-    // ✅ Enhanced form submission with proper data structure
+    // Form submission
     const handleSubmit = useCallback(async (event) => {
-        event.preventDefault();
+        event?.preventDefault();
         
-        // Ensure all data is properly formatted before submission
-        const submissionData = {
-            ...formData,
-            formVersion: '2.0',
-            submissionType: 'final',
-            stepperProgress,
-            completedSteps: activeStep + 1,
-            completionPercentage
-        };
+        const validationErrors = [];
         
-        const result = await submitForm(submissionData);
-        
-        if (!result.success) {
-            console.error('Form submission failed:', result.errors);
+        if (!clientID) {
+            validationErrors.push("No client selected.");
         }
-    }, [submitForm, formData, stepperProgress, activeStep, completionPercentage]);
+        if (clientReleaseItems.length === 0) {
+            validationErrors.push("Please select at least one type of content to authorize.");
+        }
+        if (clientReleasePurposes.length === 0) {
+            validationErrors.push("Please select at least one purpose for the release.");
+        }
+        if (!consentPhotoSign1.trim()) {
+            validationErrors.push("Electronic signature is required.");
+        }
+        if (!consentPhotoEffectiveDate) {
+            validationErrors.push("Effective date is required.");
+        }
+        if (!consentPhotoExpirationDate) {
+            validationErrors.push("Expiration date is required.");
+        }
+        
+        // Validate expiration after effective
+        if (consentPhotoEffectiveDate && consentPhotoExpirationDate) {
+            const effDate = new Date(consentPhotoEffectiveDate);
+            const expDate = new Date(consentPhotoExpirationDate);
+            if (expDate <= effDate) {
+                validationErrors.push("Expiration date must be after effective date.");
+            }
+        }
+        
+        if (validationErrors.length > 0) {
+            setLocalErrors(validationErrors);
+            return;
+        }
 
-    // Save as draft
-    const handleSaveDraft = useCallback(async () => {
-        const draftData = {
-            ...formData,
-            status: 'draft',
-            stepperProgress,
-            completionPercentage
+        const submitData = {
+            // ✅ CRITICAL: Send as simple string arrays
+            clientReleaseItems: clientReleaseItems.map(item => 
+                typeof item === 'string' ? item : item.value
+            ),
+            clientReleasePurposes: clientReleasePurposes.map(item => 
+                typeof item === 'string' ? item : item.value
+            ),
+            clientReleasePHTItems: clientReleasePHTItems.map(item => 
+                typeof item === 'string' ? item : item.value
+            ),
+            consentPhotoSign1,
+            consentPhotoEffectiveDate,
+            consentPhotoExpirationDate, // ✅ FIXED: Correct field name
+            completionPercentage: 100,
+            status: 'completed',
+            clientID,
+            formType: 'consentPhoto'
         };
-        await saveDraft(draftData);
-    }, [saveDraft, formData, stepperProgress, completionPercentage]);
 
-    // ✅ Loading state
+        console.log('📤 Submitting ConsentPhoto data:', submitData);
+
+        try {
+            await dispatch(saveFormData({ 
+                clientID, 
+                formType: 'consentPhoto', 
+                formData: submitData 
+            })).unwrap();
+            
+            setLocalErrors([]);
+            setShowSuccessSnackbar(true);
+            console.log('✅ ConsentPhoto saved successfully');
+        } catch (error) {
+            console.error('❌ Failed to save ConsentPhoto:', error);
+            setLocalErrors([error.message || 'Failed to save consent form']);
+        }
+    }, [dispatch, clientID, clientReleaseItems, clientReleasePurposes, clientReleasePHTItems,
+        consentPhotoSign1, consentPhotoEffectiveDate, consentPhotoExpirationDate]);
+
+    const handleCloseSuccessSnackbar = useCallback(() => {
+        setShowSuccessSnackbar(false);
+        dispatch(clearSuccessFlags());
+    }, [dispatch]);
+
+    const handleClearErrors = useCallback(() => {
+        setLocalErrors([]);
+        dispatch(clearErrors());
+    }, [dispatch]);
+
     if (formLoading) {
         return (
             <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', p: 4 }}>
@@ -274,7 +293,7 @@ const ConsentPhoto = forwardRef(({ clientID: propClientID }, ref) => {
 
     return (
         <Box sx={{ maxWidth: 1000, mx: 'auto', p: 3 }}>
-            {/* Header Section */}
+            {/* Header */}
             <Card elevation={2} sx={{ mb: 3 }}>
                 <CardContent>
                     <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
@@ -283,11 +302,8 @@ const ConsentPhoto = forwardRef(({ clientID: propClientID }, ref) => {
                             <Typography variant="h4" gutterBottom sx={{ fontWeight: 600 }}>
                                 Authorization For Release and Publication
                             </Typography>
-                            <Typography variant="h6" color="text.secondary" sx={{ mb: 1 }}>
+                            <Typography variant="h6" color="text.secondary">
                                 Photographs, Art Work and/or Personal Information
-                            </Typography>
-                            <Typography variant="body2" color="text.secondary">
-                                Please complete this form to authorize the release and publication of your content.
                             </Typography>
                         </Box>
                     </Box>
@@ -298,14 +314,13 @@ const ConsentPhoto = forwardRef(({ clientID: propClientID }, ref) => {
                             <PersonIcon sx={{ mr: 1, color: 'text.secondary' }} />
                             <Typography variant="body2" color="text.secondary">
                                 Client: <strong>{selectedClient.firstName} {selectedClient.lastName}</strong>
-                                {selectedClient.clientID && ` (ID: ${selectedClient.clientID})`}
                             </Typography>
                         </Box>
                     )}
 
-                    {/* Progress Indicator */}
+                    {/* Progress */}
                     <Box sx={{ mt: 2 }}>
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                             <Typography variant="body2" color="text.secondary">
                                 Form Completion
                             </Typography>
@@ -319,109 +334,65 @@ const ConsentPhoto = forwardRef(({ clientID: propClientID }, ref) => {
                             variant="determinate" 
                             value={completionPercentage} 
                             sx={{ height: 8, borderRadius: 4 }}
-                            color={completionPercentage === 100 ? 'success' : 'primary'}
                         />
                     </Box>
                 </CardContent>
             </Card>
 
-            {/* Error Alerts */}
-            {(localErrors.length > 0 || validationErrors.length > 0) && (
-                <Alert 
-                    severity="error" 
-                    sx={{ mb: 3 }}
-                    onClose={clearFormErrors}
-                >
+            {/* Errors */}
+            {localErrors.length > 0 && (
+                <Alert severity="error" sx={{ mb: 3 }} onClose={handleClearErrors}>
                     <Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>
                         Please address the following issues:
                     </Typography>
-                    {[...localErrors, ...validationErrors].map((error, index) => (
-                        <Typography key={index} variant="body2">
-                            • {error}
-                        </Typography>
+                    {localErrors.map((error, index) => (
+                        <Typography key={index} variant="body2">• {error}</Typography>
                     ))}
                 </Alert>
             )}
 
-            {/* Main Form with Stepper */}
+            {/* Form */}
             <form onSubmit={handleSubmit}>
                 <Paper elevation={1} sx={{ p: 3, mb: 3 }}>
                     <Stepper activeStep={activeStep} orientation="vertical">
-                        {/* Step 1: Content Selection */}
+                        {/* Step 1: Content */}
                         <Step>
-                            <StepLabel>
-                                <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                                    Content Authorization
-                                </Typography>
-                            </StepLabel>
+                            <StepLabel>Content Authorization</StepLabel>
                             <StepContent>
                                 <Typography variant="body1" sx={{ mb: 2 }}>
-                                    I hereby authorize <strong>Holliday's Helping Hands</strong> to release and publish my:
+                                    I authorize <strong>Holliday's Helping Hands</strong> to release and publish my:
                                 </Typography>
                                 
                                 <Autocomplete
                                     multiple
                                     options={clientReleaseList}
                                     getOptionLabel={(option) => option.value}
-                                    value={formData.clientReleaseItems || []}
-                                    onChange={(event, newValue) => 
-                                        handleMultiSelectChange('clientReleaseItems', newValue)
-                                    }
-                                    renderTags={(value, getTagProps) =>
-                                        value.map((option, index) => (
-                                            <Chip
-                                                variant="outlined"
-                                                label={option.value}
-                                                size="small"
-                                                color="primary"
-                                                {...getTagProps({ index })}
-                                                key={option.value || index}
-                                            />
-                                        ))
-                                    }
+                                    value={clientReleaseItems}
+                                    onChange={(e, newValue) => setClientReleaseItems(newValue)}
                                     renderInput={(params) => (
                                         <TextField
                                             {...params}
                                             label="Select Content Types"
-                                            placeholder="Choose what content can be used"
-                                            variant="outlined"
                                             required
-                                            helperText="Select all types of content you authorize for use"
+                                            helperText="Select all types of content you authorize"
                                         />
                                     )}
                                     sx={{ mb: 2 }}
                                 />
 
-                                {formData.clientReleaseItems && formData.clientReleaseItems.length > 0 && (
-                                    <Alert severity="info" sx={{ mb: 2 }}>
-                                        <Typography variant="body2">
-                                            You have authorized the use of: {' '}
-                                            <strong>
-                                                {formData.clientReleaseItems.map(item => item.value).join(', ')}
-                                            </strong>
-                                        </Typography>
-                                    </Alert>
-                                )}
-
-                                <Box sx={{ mb: 2 }}>
-                                    <Button
-                                        variant="contained"
-                                        onClick={nextStep}
-                                        disabled={!formData.clientReleaseItems || formData.clientReleaseItems.length === 0}
-                                    >
-                                        Continue
-                                    </Button>
-                                </Box>
+                                <Button
+                                    variant="contained"
+                                    onClick={() => setActiveStep(1)}
+                                    disabled={clientReleaseItems.length === 0}
+                                >
+                                    Continue
+                                </Button>
                             </StepContent>
                         </Step>
 
-                        {/* Step 2: Purpose Selection */}
+                        {/* Step 2: Purpose */}
                         <Step>
-                            <StepLabel>
-                                <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                                    Purpose Selection
-                                </Typography>
-                            </StepLabel>
+                            <StepLabel>Purpose Selection</StepLabel>
                             <StepContent>
                                 <Typography variant="body1" sx={{ mb: 2 }}>
                                     For the following purpose or purposes:
@@ -431,50 +402,24 @@ const ConsentPhoto = forwardRef(({ clientID: propClientID }, ref) => {
                                     multiple
                                     options={clientReleasePurposeList}
                                     getOptionLabel={(option) => option.value}
-                                    value={formData.clientReleasePurposes || []}
-                                    onChange={(event, newValue) => 
-                                        handleMultiSelectChange('clientReleasePurposes', newValue)
-                                    }
-                                    renderTags={(value, getTagProps) =>
-                                        value.map((option, index) => (
-                                            <Chip
-                                                variant="outlined"
-                                                label={option.value}
-                                                size="small"
-                                                color="secondary"
-                                                {...getTagProps({ index })}
-                                                key={option.value || index}
-                                            />
-                                        ))
-                                    }
+                                    value={clientReleasePurposes}
+                                    onChange={(e, newValue) => setClientReleasePurposes(newValue)}
                                     renderInput={(params) => (
                                         <TextField
                                             {...params}
                                             label="Select Purposes"
-                                            placeholder="Choose the purposes for use"
-                                            variant="outlined"
                                             required
-                                            helperText="Select all applicable purposes for the use of your content"
                                         />
                                     )}
                                     sx={{ mb: 2 }}
                                 />
 
-                                <Alert severity="info" sx={{ mb: 2 }}>
-                                    <Typography variant="body2">
-                                        This information will only be used by Holliday's Helping Hands as an agency 
-                                        for the selected purposes above.
-                                    </Typography>
-                                </Alert>
-
-                                <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
-                                    <Button variant="outlined" onClick={previousStep}>
-                                        Back
-                                    </Button>
+                                <Box sx={{ display: 'flex', gap: 1 }}>
+                                    <Button variant="outlined" onClick={() => setActiveStep(0)}>Back</Button>
                                     <Button
                                         variant="contained"
-                                        onClick={nextStep}
-                                        disabled={!formData.clientReleasePurposes || formData.clientReleasePurposes.length === 0}
+                                        onClick={() => setActiveStep(2)}
+                                        disabled={clientReleasePurposes.length === 0}
                                     >
                                         Continue
                                     </Button>
@@ -482,123 +427,74 @@ const ConsentPhoto = forwardRef(({ clientID: propClientID }, ref) => {
                             </StepContent>
                         </Step>
 
-                        {/* Step 3: Health Information (Optional) */}
+                        {/* Step 3: PHI (Optional) */}
                         <Step>
-                            <StepLabel>
-                                <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                                    Health Information (Optional)
-                                </Typography>
-                            </StepLabel>
+                            <StepLabel>Health Information (Optional)</StepLabel>
                             <StepContent>
-                                <Typography variant="body1" sx={{ mb: 2 }}>
-                                    If applicable, check any health information needed:
-                                </Typography>
-                                
                                 <Autocomplete
                                     multiple
                                     options={clientReleasePHTList}
                                     getOptionLabel={(option) => option.value}
-                                    value={formData.clientReleasePHTItems || []}
-                                    onChange={(event, newValue) => 
-                                        handleMultiSelectChange('clientReleasePHTItems', newValue)
-                                    }
-                                    renderTags={(value, getTagProps) =>
-                                        value.map((option, index) => (
-                                            <Chip
-                                                variant="outlined"
-                                                label={option.value}
-                                                size="small"
-                                                color="warning"
-                                                {...getTagProps({ index })}
-                                                key={option.value || index}
-                                            />
-                                        ))
-                                    }
+                                    value={clientReleasePHTItems}
+                                    onChange={(e, newValue) => setClientReleasePHTItems(newValue)}
                                     renderInput={(params) => (
-                                        <TextField
-                                            {...params}
-                                            label="Health Information Types (Optional)"
-                                            placeholder="Select if health information will be included"
-                                            variant="outlined"
-                                            helperText="This step is optional - only complete if health information will be shared"
-                                        />
+                                        <TextField {...params} label="Health Information (Optional)" />
                                     )}
                                     sx={{ mb: 2 }}
                                 />
 
-                                <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
-                                    <Button variant="outlined" onClick={previousStep}>
-                                        Back
-                                    </Button>
-                                    <Button variant="contained" onClick={nextStep}>
-                                        Continue
-                                    </Button>
+                                <Box sx={{ display: 'flex', gap: 1 }}>
+                                    <Button variant="outlined" onClick={() => setActiveStep(1)}>Back</Button>
+                                    <Button variant="contained" onClick={() => setActiveStep(3)}>Continue</Button>
                                 </Box>
                             </StepContent>
                         </Step>
 
-                        {/* Step 4: Dates and Signature */}
+                        {/* Step 4: Dates & Signature */}
                         <Step>
-                            <StepLabel>
-                                <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                                    Authorization Period & Signature
-                                </Typography>
-                            </StepLabel>
+                            <StepLabel>Dates & Signature</StepLabel>
                             <StepContent>
                                 <Grid container spacing={2} sx={{ mb: 3 }}>
                                     <Grid item xs={12} sm={6}>
                                         <TextField
                                             fullWidth
                                             label="Effective Date"
-                                            name="consentPhotoEffectiveDate"
                                             type="date"
-                                            value={formData.consentPhotoEffectiveDate || ''}
-                                            onChange={handleFieldChange('consentPhotoEffectiveDate')}
+                                            value={consentPhotoEffectiveDate}
+                                            onChange={(e) => setConsentPhotoEffectiveDate(e.target.value)}
                                             required
                                             InputLabelProps={{ shrink: true }}
-                                            helperText="When this authorization becomes effective"
                                         />
-                                        <Button 
-                                            size="small" 
-                                            onClick={handleAutoFillEffectiveDate}
-                                            sx={{ mt: 1 }}
-                                        >
-                                            Use Today's Date
+                                        <Button size="small" onClick={handleAutoFillEffectiveDate} sx={{ mt: 1 }}>
+                                            Use Today
                                         </Button>
                                     </Grid>
                                     <Grid item xs={12} sm={6}>
                                         <TextField
                                             fullWidth
                                             label="Expiration Date"
-                                            name="consentPhotoExpireDate"
                                             type="date"
-                                            value={formData.consentPhotoExpireDate || ''}
-                                            onChange={handleFieldChange('consentPhotoExpireDate')}
+                                            value={consentPhotoExpirationDate}
+                                            onChange={(e) => setConsentPhotoExpirationDate(e.target.value)}
                                             required
                                             InputLabelProps={{ shrink: true }}
-                                            helperText="Authorization expires one year from effective date or end of treatment"
+                                            helperText="One year from effective date or end of treatment"
                                         />
                                     </Grid>
                                 </Grid>
 
-                                <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
-                                    Electronic Signature
-                                </Typography>
-                                
                                 <TextField
                                     fullWidth
-                                    label="Type your full name as electronic signature"
-                                    name="consentPhotoSign1"
-                                    value={formData.consentPhotoSign1 || ''}
-                                    onChange={handleFieldChange('consentPhotoSign1')}
+                                    label="Electronic Signature"
+                                    value={consentPhotoSign1}
+                                    onChange={(e) => setConsentPhotoSign1(e.target.value)}
                                     required
-                                    variant="outlined"
-                                    placeholder="Enter your full legal name"
-                                    helperText="This serves as your electronic signature for this authorization"
+                                    placeholder="Type your full legal name"
+                                    helperText="This serves as your electronic signature"
                                     sx={{ mb: 2 }}
                                 />
 
-                                {formData.consentPhotoSign1 && (
+                                {consentPhotoSign1 && (
                                     <Box sx={{ 
                                         p: 2, 
                                         bgcolor: 'success.50', 
@@ -611,64 +507,35 @@ const ConsentPhoto = forwardRef(({ clientID: propClientID }, ref) => {
                                     }}>
                                         <CheckCircleIcon sx={{ color: 'success.main', mr: 1 }} />
                                         <Typography variant="body2" color="success.main">
-                                            Signature captured: <strong>{formData.consentPhotoSign1}</strong>
+                                            Signature: <strong>{consentPhotoSign1}</strong>
                                         </Typography>
                                     </Box>
                                 )}
 
-                                <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
-                                    <Button variant="outlined" onClick={previousStep}>
-                                        Back
-                                    </Button>
-                                </Box>
+                                <Button variant="outlined" onClick={() => setActiveStep(2)}>Back</Button>
                             </StepContent>
                         </Step>
                     </Stepper>
                 </Paper>
 
-                {/* Action Buttons */}
-                <Box sx={{ display: 'flex', justifyContent: 'center', gap: 2, mt: 4 }}>
-                    <Button
-                        variant="outlined"
-                        size="large"
-                        onClick={handleSaveDraft}
-                        disabled={saving}
-                        sx={{ px: 4 }}
-                    >
-                        Save Draft
-                    </Button>
-                    
+                {/* Submit Button */}
+                <Box sx={{ textAlign: 'center' }}>
                     <Button
                         type="submit"
                         variant="contained"
                         size="large"
                         startIcon={saving ? <CircularProgress size={20} color="inherit" /> : <SaveIcon />}
-                        disabled={saving || !clientID || !isValid}
+                        disabled={saving || !clientID || completionPercentage < 100}
                         sx={{ px: 4, py: 1.5, fontWeight: 600 }}
                     >
-                        {saving ? 'Saving...' : 'Save Consent'}
+                        {saving ? 'Saving...' : 'Save Consent Form'}
                     </Button>
                 </Box>
-
-                {/* Completion Status */}
-                {completionPercentage < 100 && (
-                    <Box sx={{ mt: 3, textAlign: 'center' }}>
-                        <Alert severity="info" sx={{ display: 'inline-flex' }}>
-                            <Typography variant="body2">
-                                Complete all required steps in the form above before submitting.
-                            </Typography>
-                        </Alert>
-                    </Box>
-                )}
             </form>
 
             {/* Success Snackbar */}
-            <Snackbar
-                open={showSuccessSnackbar}
-                autoHideDuration={6000}
-                onClose={clearSuccessState}
-            >
-                <Alert onClose={clearSuccessState} severity="success" sx={{ width: '100%' }}>
+            <Snackbar open={showSuccessSnackbar} autoHideDuration={6000} onClose={handleCloseSuccessSnackbar}>
+                <Alert onClose={handleCloseSuccessSnackbar} severity="success">
                     ✅ Consent form saved successfully!
                 </Alert>
             </Snackbar>

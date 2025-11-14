@@ -507,11 +507,19 @@ const authSigSlice = createSlice({
                 if (formType) {
                     state.formLoading[formType] = false;
                     if (action.payload) {
-                        state.forms[formType] = action.payload;
+                    // ✅ FIX: Properly merge the form data
+                    state.forms[formType] = {
+                        ...state.forms[formType],
+                        ...action.payload,
+                        completionPercentage: action.payload.completionPercentage || 0,
+                        status: action.payload.status || 'draft'
+                    };
+                    
+                    console.log(`✅ Form ${formType} loaded with completion: ${action.payload.completionPercentage}%`);
                     }
                     state.formErrors[formType] = null;
                 }
-            })
+                })
             .addCase(fetchFormData.rejected, (state, action) => {
                 const formType = action.meta?.arg?.formType;
                 if (formType) {

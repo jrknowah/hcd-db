@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo, forwardRef, useImperativeHandle } from "react";
+import React, { useState, useEffect, useCallback, useMemo, forwardRef, useImperativeHandle, useRef } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import {
   Box,
@@ -16,7 +16,6 @@ import {
   Accordion,
   AccordionSummary,
   AccordionDetails,
-  Divider,
   Container,
   FormGroup,
   FormControlLabel,
@@ -25,7 +24,6 @@ import {
   ListItem,
   ListItemIcon,
   ListItemText,
-  Fade,
   Zoom,
   useTheme,
   alpha,
@@ -150,10 +148,11 @@ const AUTHORIZATION_SECTIONS = [
   }
 ];
 
-// Enhanced accordion section component
-const AuthorizationSection = ({ section, expanded, onChange, completed }) => {
+// Enhanced accordion section component - memoized to prevent unnecessary re-renders
+const AuthorizationSection = React.memo(({ section, expanded, onChange, completed }) => {
   const theme = useTheme();
   const IconComponent = section.icon;
+  // const prevExpandedRef = useRef(expandedSection);
   
   const renderContent = () => {
     const { content } = section;
@@ -336,26 +335,30 @@ const AuthorizationSection = ({ section, expanded, onChange, completed }) => {
       </AccordionDetails>
     </Accordion>
   );
-};
+});
+
+AuthorizationSection.displayName = 'AuthorizationSection';
 
 // Main component with forwardRef
 const AuthForDisclosure = forwardRef(({ 
   clientID, 
   title = "Authorization for Use or Disclosure of Health/Mental Health Information", 
-  formType = "authForDisclosure" // ✅ CRITICAL: Correct formType
+  formType = "authDisclosure"
 }, ref) => {
   const dispatch = useDispatch();
   const theme = useTheme();
 
   // Redux selectors
-  const existingData = useSelector((state) => selectFormByType(state, formType));
+  const existingData = useSelector((state) => state.authSig.forms?.[formType]);
   const loading = useSelector(selectFormLoading);
   const saving = useSelector(selectSaving);
   const saveSuccess = useSelector(selectSaveSuccess);
   const unsavedChanges = useSelector(selectUnsavedChanges);
 
-  // ✅ FIX: Local loading state to prevent infinite loops
-  const [isInitialLoad, setIsInitialLoad] = useState(true);
+  // ✅ Refs - MUST be declared before any state that uses them
+  const hasLoadedData = useRef(false);
+  const prevExpandedRef = useRef('overview');  // ✅ Match the initial expandedSection state  // ⬅️ Initialize with null, not expandedSection
+  const isInitialMount = useRef(true);
 
   // Local state for form data
   const [formState, setFormState] = useState({
@@ -367,71 +370,140 @@ const AuthForDisclosure = forwardRef(({
 
   // State for UI interactions
   const [expandedSection, setExpandedSection] = useState('overview');
-  const [completedSections, setCompletedSections] = useState([]);
+  const [completedSections, setCompletedSections] = useState(new Set());
   const [showSuccessSnackbar, setShowSuccessSnackbar] = useState(false);
-  const [hasReviewedAll, setHasReviewedAll] = useState(false);
+
+  // Rest of your component...
 
   // Expose getFormData method via ref
   useImperativeHandle(ref, () => ({
     getFormData: () => ({
       ...formState,
+      completedSections: Array.from(completedSections), // ⬅️ ADD THIS
       clientID,
       formType
     })
-  }));
+  }), [formState, completedSections, clientID, formType]); 
 
-  // ✅ FIX: Load existing form data with proper error handling
-  useEffect(() => {
-    if (clientID && formType) {
-      dispatch(fetchFormData({ clientID, formType }))
-        .unwrap()
-        .then((data) => {
-          console.log('Form data loaded successfully:', data);
-        })
-        .catch((error) => {
-          console.warn('Failed to load existing form data (form will work with empty data):', error);
-        })
-        .finally(() => {
-          // Always clear initial load state after 1 second max
-          setTimeout(() => setIsInitialLoad(false), 1000);
-        });
-    } else {
-      // No clientID, just show the form
-      setIsInitialLoad(false);
-    }
-  }, [dispatch, clientID, formType]);
+  // ✅ FIX: Load existing form data ONCE only
+useEffect(() => {
+  console.log('🔵 Load Effect - clientID:', clientID, 'formType:', formType, 'hasLoadedData:', hasLoadedData.current);
+  
+  if (clientID && formType && !hasLoadedData.current) {
+    hasLoadedData.current = true;
+    console.log('📡 Fetching form data...');
+    
+    dispatch(fetchFormData({ clientID, formType }))
+      .unwrap()
+      .then((data) => {
+        console.log('✅ Data loaded successfully:', data);
+        // After data loads successfully, allow section tracking
+        setTimeout(() => {
+          isInitialMount.current = false;
+          console.log('🟢 Initial mount complete, section tracking enabled');
+        }, 100);
+      })
+      .catch((error) => {
+        console.warn('❌ Failed to load existing form data:', error);
+        // Even on error, allow section tracking to work
+        isInitialMount.current = false;
+      });
+  }
+}, [dispatch, clientID, formType]);
 
-  // Populate form when data is loaded
-  useEffect(() => {
-    if (existingData) {
-      setFormState({
+// ✅ FIX: Populate form when data is loaded - only update if values actually changed
+// ✅ FIX: Populate form when data is loaded - only update if values actually changed
+useEffect(() => {
+  console.log('🟡 Populate Effect - existingData:', existingData);
+  
+  if (existingData && typeof existingData === 'object') {
+    console.log('📝 Populating form with:', existingData);
+    
+    setFormState(prev => {
+      const newState = {
         atrClientSign: existingData.atrClientSign || '',
         mentalHealthAuth: existingData.mentalHealthAuth || false,
         hivAidsAuth: existingData.hivAidsAuth || false,
         substanceUseAuth: existingData.substanceUseAuth || false
-      });
-    }
-  }, [existingData]);
-
-  // Handle accordion section changes
-  const handleSectionChange = useCallback((sectionId) => (event, isExpanded) => {
-    setExpandedSection(isExpanded ? sectionId : false);
+      };
+      
+      console.log('📋 New form state:', newState);
+      console.log('📋 Previous form state:', prev);
+      
+      // Only update if values actually changed
+      if (JSON.stringify(prev) === JSON.stringify(newState)) {
+        console.log('⏭️ Skipping update - no changes');
+        return prev;
+      }
+      console.log('✏️ Updating form state');
+      return newState;
+    });
     
-    // Mark section as completed when collapsed after being expanded
-    if (!isExpanded && !completedSections.includes(sectionId)) {
-      setCompletedSections(prev => [...prev, sectionId]);
+    // ✅ FIX: Filter out invalid values (false, null, undefined) when restoring
+    if (existingData.completedSections && Array.isArray(existingData.completedSections)) {
+      const validSections = existingData.completedSections.filter(
+        section => section && typeof section === 'string'
+      );
+      console.log('✅ Restoring completed sections:', validSections);
+      setCompletedSections(new Set(validSections));
+    } else {
+      console.log('⚠️ No completed sections to restore');
     }
-  }, [completedSections]);
+  }
+}, [existingData]);
+
+useEffect(() => {
+  console.log('🔄 Section tracking - isInitialMount:', isInitialMount.current, 'expandedSection:', expandedSection);
+  
+  // Skip tracking during initial data load
+  if (isInitialMount.current) {
+    console.log('⏸️ Skipping section tracking - initial mount');
+    return;
+  }
+  
+  // If we're moving to a different section, mark the previous one as completed
+  // ✅ FIX: Only add if prevExpandedRef.current is a valid section ID (not false)
+  if (prevExpandedRef.current && 
+      prevExpandedRef.current !== false && // ⬅️ ADD THIS CHECK
+      prevExpandedRef.current !== expandedSection) {
+    console.log('✅ Marking section as completed:', prevExpandedRef.current);
+    setCompletedSections(prev => {
+      if (prev.has(prevExpandedRef.current)) return prev;
+      const newSet = new Set(prev);
+      newSet.add(prevExpandedRef.current);
+      return newSet;
+    });
+  }
+  prevExpandedRef.current = expandedSection;
+}, [expandedSection]);
+
+
+  // ✅ FIX: Stable callback that doesn't recreate on completedSections change
+  const handleSectionChange = useCallback((sectionId) => (event, isExpanded) => {
+  setExpandedSection(isExpanded ? sectionId : false);
+}, []);
+  // const handleSectionChange = useCallback((sectionId) => (event, isExpanded) => {
+  //   setExpandedSection(isExpanded ? sectionId : false);
+    
+  //   // Mark section as completed when collapsed after being expanded
+  //   if (!isExpanded) {
+  //     setCompletedSections(prev => {
+  //       if (prev.has(sectionId)) return prev;
+  //       const newSet = new Set(prev);
+  //       newSet.add(sectionId);
+  //       return newSet;
+  //     });
+  //   }
+  // }, []); // No dependencies - uses functional setState
 
   // Check if all sections have been reviewed
-  useEffect(() => {
-    const allSectionsReviewed = AUTHORIZATION_SECTIONS.every(
-      section => completedSections.includes(section.id)
+  const hasReviewedAll = useMemo(() => {
+    return AUTHORIZATION_SECTIONS.every(
+      section => completedSections.has(section.id)
     );
-    setHasReviewedAll(allSectionsReviewed);
   }, [completedSections]);
 
-  // Handle form field changes
+  // ✅ FIX: Stable change handler
   const handleChange = useCallback((e) => {
     const { name, value, checked, type } = e.target;
     const fieldValue = type === 'checkbox' ? checked : value;
@@ -441,6 +513,7 @@ const AuthForDisclosure = forwardRef(({
       [name]: fieldValue
     }));
     
+    // Don't dispatch on every change - only mark unsaved
     dispatch(setUnsavedChanges(true));
   }, [dispatch]);
 
@@ -454,27 +527,55 @@ const AuthForDisclosure = forwardRef(({
   }, [formState, hasReviewedAll]);
 
   // Handle form save
-  const handleSave = useCallback(async (e) => {
-    e.preventDefault();
+  // const handleSave = useCallback(async (e) => {
+  //   e.preventDefault();
     
-    if (!isValid || !clientID) {
-      return;
-    }
+  //   if (!isValid || !clientID) {
+  //     return;
+  //   }
 
-    const formData = {
-      ...formState,
-      clientID,
-      formType
-    };
+  //   const formData = {
+  //     ...formState,
+  //     completedSections: Array.from(completedSections),
+  //     clientID,
+  //     formType
+  //   };
 
-    try {
-      await dispatch(saveFormData(formData)).unwrap();
-      setShowSuccessSnackbar(true);
-      dispatch(setUnsavedChanges(false));
-    } catch (error) {
-      console.error('Failed to save authorization:', error);
-    }
-  }, [dispatch, formState, clientID, formType, isValid]);
+  //   try {
+  //     await dispatch(saveFormData({ clientID, formType, formData })).unwrap();
+  //     setShowSuccessSnackbar(true);
+  //     dispatch(setUnsavedChanges(false));
+  //   } catch (error) {
+  //     console.error('Failed to save authorization:', error);
+  //   }
+  // }, [dispatch, formState, completedSections, clientID, formType, isValid]);
+  // Handle form save
+// Handle form save
+const handleSave = useCallback(async (e) => {
+  e.preventDefault();
+  
+  if (!isValid || !clientID) {
+    return;
+  }
+
+  const formData = {
+    ...formState,
+    completedSections: Array.from(completedSections),
+    clientID,
+    formType
+  };
+
+  console.log('💾 About to save - completedSections:', Array.from(completedSections)); // ⬅️ ADD THIS
+  console.log('💾 Full formData being saved:', formData); // ⬅️ ADD THIS
+
+  try {
+    await dispatch(saveFormData({ clientID, formType, formData })).unwrap();
+    setShowSuccessSnackbar(true);
+    dispatch(setUnsavedChanges(false));
+  } catch (error) {
+    console.error('Failed to save authorization:', error);
+  }
+}, [dispatch, formState, completedSections, clientID, formType, isValid]);
 
   // Handle success snackbar close
   const handleCloseSuccessSnackbar = useCallback(() => {
@@ -483,14 +584,16 @@ const AuthForDisclosure = forwardRef(({
   }, [dispatch]);
 
   // Calculate progress
+  // Calculate progress
   const progress = useMemo(() => {
     const totalSections = AUTHORIZATION_SECTIONS.length;
-    const completed = completedSections.length;
-    return (completed / totalSections) * 100;
+    const completed = completedSections.size;
+    const calculatedProgress = (completed / totalSections) * 100;
+    console.log('📊 Progress calculation:', { completed, totalSections, calculatedProgress }); // ⬅️ ADD THIS
+    return calculatedProgress;
   }, [completedSections]);
 
-  // ✅ FIX: Improved loading state - only show briefly
-  if (isInitialLoad && loading) {
+  if (loading && !hasLoadedData.current) {
     return (
       <Container maxWidth="lg">
         <Box sx={{ 
@@ -509,7 +612,6 @@ const AuthForDisclosure = forwardRef(({
     );
   }
 
-  // ✅ Show form even if loading fails
   return (
     <Container maxWidth="lg" sx={{ py: 4 }}>
       {/* Header Section */}
@@ -533,7 +635,7 @@ const AuthForDisclosure = forwardRef(({
               Review Progress
             </Typography>
             <Chip 
-              label={`${completedSections.length} / ${AUTHORIZATION_SECTIONS.length} Sections`}
+              label={`${completedSections.size} / ${AUTHORIZATION_SECTIONS.length} Sections`}
               color={hasReviewedAll ? "success" : "default"}
               size="small"
             />
@@ -554,7 +656,7 @@ const AuthForDisclosure = forwardRef(({
             section={section}
             expanded={expandedSection === section.id}
             onChange={handleSectionChange(section.id)}
-            completed={completedSections.includes(section.id)}
+            completed={completedSections.has(section.id)}
           />
         ))}
       </Box>

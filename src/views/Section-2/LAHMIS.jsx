@@ -20,7 +20,8 @@ import {
   AccordionDetails,
   Divider,
   FormControlLabel,
-  Switch
+  Switch,
+  Zoom
 } from '@mui/material';
 import {
   BusinessCenter as HMISIcon,
@@ -32,7 +33,8 @@ import {
   Add as AddIcon,
   Remove as RemoveIcon,
   Security as SecurityIcon,
-  Description as DocumentIcon
+  Description as DocumentIcon,
+  CloudDone as CloudDoneIcon
 } from '@mui/icons-material';
 
 // Import Redux actions
@@ -66,7 +68,7 @@ const LAHMIS = forwardRef(({ clientID: propClientID, title, formType = 'lahmis' 
     clientDOB: "",
     clientSSN: "",
     clientSignature: "",
-    signatureDate: "",
+    signatureDate: new Date().toISOString().split('T')[0],
     headOfHousehold: "",
     staffSignature: "",
     organization: "",
@@ -84,10 +86,34 @@ const LAHMIS = forwardRef(({ clientID: propClientID, title, formType = 'lahmis' 
   // Get client ID from props or Redux
   const clientID = propClientID || selectedClient?.clientID;
   
-  // Calculate completion percentage
-  const requiredFields = ['clientName', 'clientDOB', 'clientSSN', 'clientSignature', 'signatureDate'];
-  const completedFields = requiredFields.filter(field => formData[field]?.trim()).length;
-  const completionPercentage = Math.round(((completedFields + (formData.consentGiven ? 1 : 0)) / (requiredFields.length + 1)) * 100);
+  // ✅ FIX: Auto-populate client identification fields from selectedClient on mount
+  useEffect(() => {
+    if (selectedClient && !formData.clientName) {
+      console.log('🔄 Auto-populating client identification fields from selectedClient');
+      setFormData(prev => ({
+        ...prev,
+        clientName: `${selectedClient.firstName || ''} ${selectedClient.lastName || ''}`.trim(),
+        clientDOB: selectedClient.dateOfBirth || '',
+        clientSSN: selectedClient.ssn?.slice(-4) || '' // Last 4 digits only
+      }));
+    }
+  }, [selectedClient, formData.clientName]);
+  
+  // ✅ FIX: Calculate completion percentage - only user-fillable fields
+  const requiredFields = ['clientSignature', 'consentGiven'];
+  const completedFields = requiredFields.filter(field => {
+    if (field === 'consentGiven') return formData.consentGiven;
+    return formData[field]?.trim();
+  }).length;
+  const completionPercentage = Math.round((completedFields / requiredFields.length) * 100);
+  
+  console.log('📊 LAHMIS Completion:', {
+    completedFields,
+    totalRequired: requiredFields.length,
+    completionPercentage,
+    consentGiven: formData.consentGiven,
+    hasSignature: !!formData.clientSignature
+  });
 
   // ✅ ADDED: Expose getFormData method to parent FormModal
   useImperativeHandle(ref, () => ({
@@ -100,7 +126,7 @@ const LAHMIS = forwardRef(({ clientID: propClientID, title, formType = 'lahmis' 
       consentGiven: formData.consentGiven,
       submittedAt: new Date().toISOString()
     })
-  }));
+  }), [formData, children, completionPercentage]);
 
   // Load form data when component mounts
   useEffect(() => {
@@ -112,8 +138,14 @@ const LAHMIS = forwardRef(({ clientID: propClientID, title, formType = 'lahmis' 
   // Update local state when Redux form data changes
   useEffect(() => {
     if (lahmisForm && Object.keys(lahmisForm).length > 0) {
-      setFormData(lahmisForm.formData || formData);
-      setChildren(lahmisForm.children || children);
+      // ✅ Create deep copies to prevent frozen state issues
+      if (lahmisForm.formData) {
+        setFormData({ ...lahmisForm.formData });
+      }
+      if (lahmisForm.children && Array.isArray(lahmisForm.children)) {
+        // Deep copy children array to avoid read-only issues
+        setChildren(lahmisForm.children.map(child => ({ ...child })));
+      }
     }
   }, [lahmisForm]);
 
@@ -123,21 +155,30 @@ const LAHMIS = forwardRef(({ clientID: propClientID, title, formType = 'lahmis' 
     setFormData(newFormData);
     setLocalErrors([]);
     
+    // Calculate new completion
+    const newCompletedFields = requiredFields.filter(f => {
+      if (f === 'consentGiven') return newFormData.consentGiven;
+      return newFormData[f]?.trim();
+    }).length;
+    const newCompletionPercentage = Math.round((newCompletedFields / requiredFields.length) * 100);
+    
     // Update Redux store optimistically
     dispatch(updateFormLocal({
       formType: 'lahmis',
       formData: {
         formData: newFormData,
         children,
-        completionPercentage: Math.round(((requiredFields.filter(f => newFormData[f]?.trim()).length + (newFormData.consentGiven ? 1 : 0)) / (requiredFields.length + 1)) * 100)
+        completionPercentage: newCompletionPercentage
       }
     }));
   }, [dispatch, formData, children, requiredFields]);
 
   // Handle child information changes
   const handleChildChange = useCallback((index, field, value) => {
-    const newChildren = [...children];
-    newChildren[index][field] = value;
+    // ✅ FIX: Create deep copy to avoid "Cannot assign to read only property" error
+    const newChildren = children.map((child, i) => 
+      i === index ? { ...child, [field]: value } : child
+    );
     setChildren(newChildren);
     
     // Update Redux store optimistically
@@ -153,14 +194,16 @@ const LAHMIS = forwardRef(({ clientID: propClientID, title, formType = 'lahmis' 
 
   // Add child
   const addChild = useCallback(() => {
-    const newChildren = [...children, { name: "", dob: "", ssn: "", livingWithYou: "" }];
+    // ✅ Create proper copies to avoid frozen state issues
+    const newChildren = [...children.map(c => ({...c})), { name: "", dob: "", ssn: "", livingWithYou: "" }];
     setChildren(newChildren);
   }, [children]);
 
   // Remove child
   const removeChild = useCallback((index) => {
     if (children.length > 1) {
-      const newChildren = children.filter((_, i) => i !== index);
+      // ✅ Create proper copies when filtering
+      const newChildren = children.filter((_, i) => i !== index).map(c => ({...c}));
       setChildren(newChildren);
     }
   }, [children]);
@@ -179,18 +222,6 @@ const LAHMIS = forwardRef(({ clientID: propClientID, title, formType = 'lahmis' 
       return errors;
     }
 
-    if (!formData.clientName.trim()) {
-      errors.push("Client name is required.");
-    }
-
-    if (!formData.clientDOB.trim()) {
-      errors.push("Date of birth is required.");
-    }
-
-    if (!formData.clientSSN.trim()) {
-      errors.push("Last 4 digits of SSN are required.");
-    }
-
     if (!formData.clientSignature.trim()) {
       errors.push("Client signature is required.");
     }
@@ -203,7 +234,9 @@ const LAHMIS = forwardRef(({ clientID: propClientID, title, formType = 'lahmis' 
   }, [clientID, formData]);
 
   // Handle form submission
-  const handleSubmit = useCallback(async () => {
+  const handleSubmit = useCallback(async (e) => {
+    e?.preventDefault();
+    
     const validationErrors = validateForm();
     if (validationErrors.length > 0) {
       setLocalErrors(validationErrors);
@@ -248,9 +281,13 @@ const LAHMIS = forwardRef(({ clientID: propClientID, title, formType = 'lahmis' 
 
   if (formLoading) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', p: 4 }}>
-        <CircularProgress />
-        <Typography sx={{ ml: 2 }}>Loading HMIS consent data...</Typography>
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', p: 4, minHeight: 400 }}>
+        <Box sx={{ textAlign: 'center' }}>
+          <CircularProgress size={60} sx={{ mb: 2 }} />
+          <Typography variant="h6" color="text.secondary">
+            Loading HMIS consent data...
+          </Typography>
+        </Box>
       </Box>
     );
   }
@@ -271,7 +308,7 @@ const LAHMIS = forwardRef(({ clientID: propClientID, title, formType = 'lahmis' 
           <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
             <HMISIcon sx={{ fontSize: 40, mr: 2 }} />
             <Typography variant="h4" component="h1" sx={{ fontWeight: 600 }}>
-              LA HMIS Consent Form
+              {title || 'LA HMIS Consent Form'}
             </Typography>
           </Box>
           <Typography variant="subtitle1">
@@ -280,6 +317,17 @@ const LAHMIS = forwardRef(({ clientID: propClientID, title, formType = 'lahmis' 
           <Typography variant="body2" sx={{ mt: 1, opacity: 0.9 }}>
             Protected Personal Information Sharing Consent
           </Typography>
+
+          {/* Client Info */}
+          {selectedClient && (
+            <Box sx={{ display: 'flex', alignItems: 'center', mt: 2 }}>
+              <PersonIcon sx={{ mr: 1, opacity: 0.9 }} />
+              <Typography variant="body1" sx={{ fontWeight: 500 }}>
+                Client: {selectedClient.firstName} {selectedClient.lastName}
+                {selectedClient.clientID && ` (ID: ${selectedClient.clientID})`}
+              </Typography>
+            </Box>
+          )}
         </CardContent>
       </Card>
 
@@ -291,16 +339,26 @@ const LAHMIS = forwardRef(({ clientID: propClientID, title, formType = 'lahmis' 
               Form Completion
             </Typography>
             <Chip 
-              label={`${completionPercentage}%`}
-              color={completionPercentage === 100 ? "success" : "warning"}
+              label={`${completionPercentage}% Complete`}
+              color={completionPercentage === 100 ? "success" : "primary"}
               size="small"
+              sx={{ fontWeight: 600 }}
             />
           </Box>
           <LinearProgress 
             variant="determinate" 
             value={completionPercentage} 
             sx={{ height: 8, borderRadius: 5 }}
+            color={completionPercentage === 100 ? 'success' : 'primary'}
           />
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 1 }}>
+            <Typography variant="caption" color="text.secondary">
+              {completedFields} of {requiredFields.length} items completed
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              {formData.consentGiven ? 'Consent given' : 'Consent required'}
+            </Typography>
+          </Box>
         </CardContent>
       </Card>
 
@@ -405,10 +463,10 @@ const LAHMIS = forwardRef(({ clientID: propClientID, title, formType = 'lahmis' 
           {/* Consent Toggle */}
           <Box sx={{ 
             p: 2, 
-            bgcolor: 'primary.50', 
+            bgcolor: formData.consentGiven ? 'success.50' : 'primary.50', 
             borderRadius: 1, 
             border: '1px solid',
-            borderColor: 'primary.200'
+            borderColor: formData.consentGiven ? 'success.200' : 'primary.200'
           }}>
             <FormControlLabel
               control={
@@ -424,46 +482,78 @@ const LAHMIS = forwardRef(({ clientID: propClientID, title, formType = 'lahmis' 
                 </Typography>
               }
             />
+            {formData.consentGiven && (
+              <Box sx={{ mt: 1, display: 'flex', alignItems: 'center' }}>
+                <CheckCircleIcon sx={{ color: 'success.main', mr: 1, fontSize: 20 }} />
+                <Typography variant="body2" color="success.main" sx={{ fontWeight: 500 }}>
+                  Consent has been provided
+                </Typography>
+              </Box>
+            )}
           </Box>
         </AccordionDetails>
       </Accordion>
 
-      {/* Client Information Form */}
-      <Paper elevation={1} sx={{ p: 3, mb: 3 }}>
-        <Typography variant="h6" gutterBottom sx={{ fontWeight: 600, mb: 3 }}>
-          Client Information
+      {/* Signature Section - Matching ResidencePolicy style */}
+      <Paper elevation={2} sx={{ p: 4, mb: 3 }}>
+        <Typography variant="h6" gutterBottom sx={{ fontWeight: 600, color: 'primary.main' }}>
+          Electronic Signature
         </Typography>
         
-        <Grid container spacing={3}>
-          
-          <Grid item xs={12} >
-            <TextField
-              fullWidth
-              label="Client Signature"
-              value={formData.clientSignature}
-              onChange={(e) => handleFieldChange('clientSignature', e.target.value)}
-              required
-              placeholder="Type your full legal name"
-              helperText="Electronic signature"
-            />
+        <Typography variant="body1" sx={{ mb: 3 }}>
+          I have read and understand the LA HMIS consent agreement. I acknowledge and consent to the 
+          sharing of my protected personal information as described above.
+        </Typography>
+
+        <Box component="form" onSubmit={handleSubmit}>
+          <Grid container spacing={3}>
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label="Client Electronic Signature"
+                variant="outlined"
+                value={formData.clientSignature}
+                onChange={(e) => handleFieldChange('clientSignature', e.target.value)}
+                required
+                placeholder="Enter your full legal name"
+                helperText="Type your name to provide your electronic signature for this consent"
+              />
+            </Grid>
+
+            {formData.clientSignature && (
+              <Grid item xs={12}>
+                <Zoom in={!!formData.clientSignature}>
+                  <Alert 
+                    severity="success" 
+                    icon={<CheckCircleIcon />}
+                  >
+                    <Typography variant="body2">
+                      Signature captured: <strong>{formData.clientSignature}</strong>
+                    </Typography>
+                  </Alert>
+                </Zoom>
+              </Grid>
+            )}
+
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label="Head of Household (if different from client)"
+                variant="outlined"
+                value={formData.headOfHousehold}
+                onChange={(e) => handleFieldChange('headOfHousehold', e.target.value)}
+                helperText="Optional - only if head of household is someone else"
+              />
+            </Grid>
           </Grid>
-          <Grid item xs={12} >
-            <TextField
-              fullWidth
-              label="Head of Household"
-              value={formData.headOfHousehold}
-              onChange={(e) => handleFieldChange('headOfHousehold', e.target.value)}
-              helperText="If different from client"
-            />
-          </Grid>
-        </Grid>
+        </Box>
       </Paper>
 
       {/* Children Information */}
       <Paper elevation={1} sx={{ p: 3, mb: 3 }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
           <Typography variant="h6" sx={{ fontWeight: 600 }}>
-            Children Information (if applicable)
+            Children Information (Optional)
           </Typography>
           <Button
             startIcon={<AddIcon />}
@@ -538,11 +628,12 @@ const LAHMIS = forwardRef(({ clientID: propClientID, title, formType = 'lahmis' 
       {/* Submit Button */}
       <Box sx={{ textAlign: 'center' }}>
         <Button
+          type="submit"
           variant="contained"
           size="large"
           startIcon={saving ? <CircularProgress size={20} color="inherit" /> : <SaveIcon />}
           onClick={handleSubmit}
-          disabled={saving || !clientID}
+          disabled={saving || !clientID || completionPercentage < 100}
           sx={{ 
             px: 4, 
             py: 1.5,
@@ -557,7 +648,7 @@ const LAHMIS = forwardRef(({ clientID: propClientID, title, formType = 'lahmis' 
           <Box sx={{ mt: 2, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <WarningIcon sx={{ color: 'warning.main', mr: 1, fontSize: 20 }} />
             <Typography variant="body2" color="warning.main">
-              Please complete all required fields and provide consent before saving
+              Please provide consent and signature to complete
             </Typography>
           </Box>
         )}
@@ -568,13 +659,17 @@ const LAHMIS = forwardRef(({ clientID: propClientID, title, formType = 'lahmis' 
         open={showSuccessSnackbar || saveSuccess}
         autoHideDuration={6000}
         onClose={handleCloseSuccessSnackbar}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
       >
         <Alert 
           onClose={handleCloseSuccessSnackbar} 
           severity="success" 
           sx={{ width: '100%' }}
+          icon={<CloudDoneIcon />}
         >
-          ✅ HMIS consent form saved successfully!
+          <Typography variant="body2" sx={{ fontWeight: 600 }}>
+            ✅ HMIS consent form saved successfully!
+          </Typography>
         </Alert>
       </Snackbar>
     </Box>

@@ -1,4 +1,4 @@
-import React, { useState, useCallback, forwardRef, useImperativeHandle } from "react";
+import React, { useState, useCallback, useEffect, forwardRef, useImperativeHandle } from "react";
 import { useSelector } from 'react-redux';
 import {
     Box,
@@ -85,13 +85,42 @@ const AuthUseDiscHMHInfo = forwardRef(({ clientID: propClientID, title, formType
     // Local UI state
     const [showAllSections, setShowAllSections] = useState(false);
 
+    // ✅ FIX: Auto-populate client identification fields from selectedClient on mount
+    useEffect(() => {
+        if (selectedClient && !formData.authClientName) {
+            console.log('🔄 Auto-populating client identification fields from selectedClient');
+            updateFields({
+                authClientName: `${selectedClient.firstName || ''} ${selectedClient.lastName || ''}`.trim(),
+                authClientCID: selectedClient.clientID || '',
+                authClientDOB: selectedClient.dateOfBirth || '',
+                authClientSSN: selectedClient.ssn || '' // Optional - may not always be available
+            });
+        }
+    }, [selectedClient, formData.authClientName, updateFields]);
+
     // Calculate completion percentage
+    // ✅ FIX: Only include fields that are truly required for form completion
+    // SSN is removed since it's often not available
     const requiredFields = [
-        'authClientName', 'authClientCID', 'authClientDOB', 'authClientSSN',
-        'authClientContact', 'authClientOrg', 'authClientAuth', 'atrClientSign'
+        'authClientName',    // Auto-populated from selectedClient
+        'authClientCID',     // Auto-populated from selectedClient  
+        'authClientContact', // User fills
+        'authClientOrg',     // User fills
+        'authClientAuth',    // User fills (dropdown)
+        'atrClientSign'      // User fills (signature)
     ];
     
     const completionPercentage = calculateFormCompletion(formData, requiredFields);
+    
+    console.log('📊 Form completion debug:', {
+        completionPercentage,
+        requiredFields: requiredFields.length,
+        filledFields: requiredFields.filter(field => formData[field]).length,
+        formData: requiredFields.reduce((acc, field) => ({
+            ...acc,
+            [field]: formData[field] || 'EMPTY'
+        }), {})
+    });
 
     // ✅ ADDED: Expose getFormData method to parent FormModal
     useImperativeHandle(ref, () => ({
@@ -108,7 +137,7 @@ const AuthUseDiscHMHInfo = forwardRef(({ clientID: propClientID, title, formType
             formVersion: '2.0',
             submissionType: completionPercentage === 100 ? 'final' : 'draft'
         })
-    }));
+    }), [formData, completionPercentage]);
 
     // Field change handlers
     const handleFieldChange = useCallback((fieldName) => (event) => {
@@ -138,7 +167,7 @@ const AuthUseDiscHMHInfo = forwardRef(({ clientID: propClientID, title, formType
         await saveDraft();
     }, [saveDraft]);
 
-    // Auto-fill client info
+    // Auto-fill client info (manual trigger)
     const handleAutoFillClient = useCallback(() => {
         if (selectedClient) {
             updateFields({
@@ -192,7 +221,7 @@ const AuthUseDiscHMHInfo = forwardRef(({ clientID: propClientID, title, formType
                                 onClick={handleAutoFillClient}
                                 variant="outlined"
                             >
-                                Auto-fill Client Info
+                                Refresh Client Info
                             </Button>
                         </Box>
                     )}

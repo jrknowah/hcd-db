@@ -19,12 +19,11 @@ import {
   Accordion,
   AccordionSummary,
   AccordionDetails,
-  Divider,
-  Grid,
   List,
   ListItem,
   ListItemIcon,
-  ListItemText
+  ListItemText,
+  Zoom
 } from '@mui/material';
 import {
   Security as SecurityIcon,
@@ -33,10 +32,9 @@ import {
   Warning as WarningIcon,
   Person as PersonIcon,
   ExpandMore as ExpandMoreIcon,
-  Policy as PolicyIcon,
   HealthAndSafety as HealthIcon,
   Gavel as LegalIcon,
-  Description as DocumentIcon
+  CloudDone as CloudDoneIcon
 } from '@mui/icons-material';
 
 // Import Redux actions
@@ -71,27 +69,30 @@ const PrivacyPractice = forwardRef(({ clientID: propClientID, title, formType = 
     ppHI2: false,
     ppHI3: false,
     ppHI4: false,
-    // Signature fields
-    clientSignature: "",
-    clientPrintedName: "",
-    staffSignature: "",
-    copyDate: "",
-    copyInitials: ""
+    // Signature field
+    clientSignature: ""
   });
   
   const [localErrors, setLocalErrors] = useState([]);
   const [showSuccessSnackbar, setShowSuccessSnackbar] = useState(false);
-  const [expandedSection, setExpandedSection] = useState(false);
   
   // Get client ID from props or Redux
   const clientID = propClientID || selectedClient?.clientID;
   
-  // Calculate completion percentage
-  const requiredFields = 7; // 4 checkboxes + 3 signatures
-  const completedFields = Object.values(formData).filter(value => 
-    typeof value === 'boolean' ? value : (value && value.trim() !== "")
-  ).length - 2; // Exclude copyDate and copyInitials from required
-  const completionPercentage = Math.round((completedFields / requiredFields) * 100);
+  // ✅ FIX: Calculate completion percentage correctly to prevent >100%
+  const requiredFieldsList = ['ppHI1', 'ppHI2', 'ppHI3', 'ppHI4', 'clientSignature'];
+  const completedFields = requiredFieldsList.filter(field => {
+    const value = formData[field];
+    return typeof value === 'boolean' ? value : (value && value.trim() !== "");
+  }).length;
+  const completionPercentage = Math.round((completedFields / requiredFieldsList.length) * 100);
+  
+  console.log('📊 Privacy Practice Completion:', {
+    completedFields,
+    totalRequired: requiredFieldsList.length,
+    completionPercentage,
+    formData
+  });
 
   // ✅ ADDED: Expose getFormData method to parent FormModal
   useImperativeHandle(ref, () => ({
@@ -104,7 +105,7 @@ const PrivacyPractice = forwardRef(({ clientID: propClientID, title, formType = 
         acknowledgedAt: new Date().toISOString()
       }
     })
-  }));
+  }), [formData, completionPercentage]);
 
   // Load form data when component mounts
   useEffect(() => {
@@ -130,18 +131,23 @@ const PrivacyPractice = forwardRef(({ clientID: propClientID, title, formType = 
     setFormData(newFormData);
     setLocalErrors([]);
     
+    // Calculate new completion percentage
+    const newCompletedFields = requiredFieldsList.filter(f => {
+      const v = newFormData[f];
+      return typeof v === 'boolean' ? v : (v && v.trim() !== "");
+    }).length;
+    const newCompletionPercentage = Math.round((newCompletedFields / requiredFieldsList.length) * 100);
+    
     // Update Redux store optimistically
     dispatch(updateFormLocal({
       formType: 'privacyPractice',
       formData: {
         formData: newFormData,
         signature: field === 'clientSignature' ? value : formData.clientSignature,
-        completionPercentage: Math.round((Object.values(newFormData).filter(v => 
-          typeof v === 'boolean' ? v : (v && v.trim() !== "")
-        ).length - 2) / requiredFields * 100)
+        completionPercentage: newCompletionPercentage
       }
     }));
-  }, [dispatch, formData, requiredFields]);
+  }, [dispatch, formData, requiredFieldsList]);
 
   // Handle checkbox changes
   const handleCheckboxChange = useCallback((field) => (event) => {
@@ -167,22 +173,16 @@ const PrivacyPractice = forwardRef(({ clientID: propClientID, title, formType = 
     }
 
     if (!formData.clientSignature.trim()) {
-      errors.push("Client signature is required.");
-    }
-
-    if (!formData.clientPrintedName.trim()) {
-      errors.push("Client printed name is required.");
-    }
-
-    if (!formData.staffSignature.trim()) {
-      errors.push("Staff signature is required.");
+      errors.push("Electronic signature is required.");
     }
 
     return errors;
   }, [clientID, formData]);
 
   // Handle form submission
-  const handleSubmit = useCallback(async () => {
+  const handleSubmit = useCallback(async (e) => {
+    e?.preventDefault();
+    
     const validationErrors = validateForm();
     if (validationErrors.length > 0) {
       setLocalErrors(validationErrors);
@@ -227,9 +227,13 @@ const PrivacyPractice = forwardRef(({ clientID: propClientID, title, formType = 
 
   if (formLoading) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', p: 4 }}>
-        <CircularProgress />
-        <Typography sx={{ ml: 2 }}>Loading privacy practice data...</Typography>
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', p: 4, minHeight: 400 }}>
+        <Box sx={{ textAlign: 'center' }}>
+          <CircularProgress size={60} sx={{ mb: 2 }} />
+          <Typography variant="h6" color="text.secondary">
+            Loading privacy practice data...
+          </Typography>
+        </Box>
       </Box>
     );
   }
@@ -250,7 +254,7 @@ const PrivacyPractice = forwardRef(({ clientID: propClientID, title, formType = 
           <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
             <SecurityIcon sx={{ fontSize: 40, mr: 2 }} />
             <Typography variant="h4" component="h1" sx={{ fontWeight: 600 }}>
-              Notice of Privacy Practices
+              {title || 'Notice of Privacy Practices'}
             </Typography>
           </Box>
           <Typography variant="subtitle1">
@@ -259,6 +263,17 @@ const PrivacyPractice = forwardRef(({ clientID: propClientID, title, formType = 
           <Typography variant="body2" sx={{ mt: 1, opacity: 0.9 }}>
             Please review and acknowledge your understanding of our privacy practices
           </Typography>
+
+          {/* Client Info */}
+          {selectedClient && (
+            <Box sx={{ display: 'flex', alignItems: 'center', mt: 2 }}>
+              <PersonIcon sx={{ mr: 1, opacity: 0.9 }} />
+              <Typography variant="body1" sx={{ fontWeight: 500 }}>
+                Client: {selectedClient.firstName} {selectedClient.lastName}
+                {selectedClient.clientID && ` (ID: ${selectedClient.clientID})`}
+              </Typography>
+            </Box>
+          )}
         </CardContent>
       </Card>
 
@@ -270,16 +285,26 @@ const PrivacyPractice = forwardRef(({ clientID: propClientID, title, formType = 
               Form Completion
             </Typography>
             <Chip 
-              label={`${completionPercentage}%`}
-              color={completionPercentage === 100 ? "success" : "warning"}
+              label={`${completionPercentage}% Complete`}
+              color={completionPercentage === 100 ? "success" : "primary"}
               size="small"
+              sx={{ fontWeight: 600 }}
             />
           </Box>
           <LinearProgress 
             variant="determinate" 
             value={completionPercentage} 
             sx={{ height: 8, borderRadius: 5 }}
+            color={completionPercentage === 100 ? 'success' : 'primary'}
           />
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 1 }}>
+            <Typography variant="caption" color="text.secondary">
+              {completedFields} of {requiredFieldsList.length} items completed
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              {formData.clientSignature ? 'Signature provided' : 'Signature required'}
+            </Typography>
+          </Box>
         </CardContent>
       </Card>
 
@@ -517,114 +542,90 @@ const PrivacyPractice = forwardRef(({ clientID: propClientID, title, formType = 
         </Accordion>
       </Paper>
 
-      {/* Signature Section */}
-      <Paper elevation={1} sx={{ p: 3, mb: 3 }}>
-        <Typography variant="h6" gutterBottom sx={{ fontWeight: 600, mb: 3 }}>
-          Acknowledgment and Signatures
+      {/* Signature Section - Matching ResidencePolicy style */}
+      <Paper elevation={2} sx={{ p: 4, mb: 3 }}>
+        <Typography variant="h6" gutterBottom sx={{ fontWeight: 600, color: 'primary.main' }}>
+          Acknowledgment & Electronic Signature
         </Typography>
         
-        <Grid container spacing={3}>
-          <Grid item xs={12} md={6}>
-            <TextField
-              fullWidth
-              label="Client Signature"
-              variant="outlined"
-              value={formData.clientSignature}
-              onChange={handleTextChange('clientSignature')}
-              required
-              placeholder="Type your full legal name"
-              helperText="Electronic signature"
-            />
-          </Grid>
-          <Grid item xs={12} md={6}>
-            <TextField
-              fullWidth
-              label="Client Printed Name"
-              variant="outlined"
-              value={formData.clientPrintedName}
-              onChange={handleTextChange('clientPrintedName')}
-              required
-            />
-          </Grid>
-          <Grid item xs={12} md={6}>
-            <TextField
-              fullWidth
-              label="Staff Signature"
-              variant="outlined"
-              value={formData.staffSignature}
-              onChange={handleTextChange('staffSignature')}
-              required
-              placeholder="Staff member name"
-            />
-          </Grid>
-          <Grid item xs={12} md={3}>
-            <TextField
-              fullWidth
-              label="Copy Given Date"
-              variant="outlined"
-              type="date"
-              value={formData.copyDate}
-              onChange={handleTextChange('copyDate')}
-              InputLabelProps={{ shrink: true }}
-            />
-          </Grid>
-          <Grid item xs={12} md={3}>
-            <TextField
-              fullWidth
-              label="Initials"
-              variant="outlined"
-              value={formData.copyInitials}
-              onChange={handleTextChange('copyInitials')}
-              inputProps={{ maxLength: 3 }}
-            />
-          </Grid>
-        </Grid>
-
-        <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-          Client was given or refused a copy of this consent
+        <Typography variant="body1" sx={{ mb: 3 }}>
+          I have read and understand the Notice of Privacy Practices provided to me by 
+          the LA County Department of Health Services. I acknowledge the receipt and review of such notice.
         </Typography>
-      </Paper>
 
-      {/* Submit Button */}
-      <Box sx={{ textAlign: 'center' }}>
-        <Button
-          variant="contained"
-          size="large"
-          startIcon={saving ? <CircularProgress size={20} color="inherit" /> : <SaveIcon />}
-          onClick={handleSubmit}
-          disabled={saving || !clientID}
-          sx={{ 
-            px: 4, 
-            py: 1.5,
-            fontWeight: 600,
-            fontSize: '1.1rem'
-          }}
-        >
-          {saving ? 'Saving...' : 'Save Privacy Practice Acknowledgment'}
-        </Button>
+        <Box component="form" onSubmit={handleSubmit}>
+          <TextField
+            fullWidth
+            label="Patient Electronic Signature"
+            variant="outlined"
+            value={formData.clientSignature}
+            onChange={handleTextChange('clientSignature')}
+            required
+            placeholder="Enter your full legal name"
+            sx={{ mb: 2 }}
+            helperText="Type your name to provide your electronic signature for this acknowledgment"
+          />
 
-        {completionPercentage < 100 && (
-          <Box sx={{ mt: 2, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <WarningIcon sx={{ color: 'warning.main', mr: 1, fontSize: 20 }} />
-            <Typography variant="body2" color="warning.main">
-              Please complete all required fields before saving
-            </Typography>
+          {formData.clientSignature && (
+            <Zoom in={!!formData.clientSignature}>
+              <Alert 
+                severity="success" 
+                icon={<CheckCircleIcon />}
+                sx={{ mb: 3 }}
+              >
+                <Typography variant="body2">
+                  Signature captured: <strong>{formData.clientSignature}</strong>
+                </Typography>
+              </Alert>
+            </Zoom>
+          )}
+
+          {/* Submit Button */}
+          <Box sx={{ textAlign: 'center' }}>
+            <Button
+              type="submit"
+              variant="contained"
+              size="large"
+              startIcon={saving ? <CircularProgress size={20} color="inherit" /> : <SaveIcon />}
+              disabled={saving || !clientID || completionPercentage < 100}
+              sx={{ 
+                px: 4, 
+                py: 1.5,
+                fontWeight: 600,
+                fontSize: '1.1rem'
+              }}
+            >
+              {saving ? 'Saving...' : 'Save Acknowledgment'}
+            </Button>
+
+            {completionPercentage < 100 && (
+              <Box sx={{ mt: 2, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <WarningIcon sx={{ color: 'warning.main', mr: 1, fontSize: 20 }} />
+                <Typography variant="body2" color="warning.main">
+                  Please complete all required fields before saving
+                </Typography>
+              </Box>
+            )}
           </Box>
-        )}
-      </Box>
+        </Box>
+      </Paper>
 
       {/* Success Snackbar */}
       <Snackbar
         open={showSuccessSnackbar || saveSuccess}
         autoHideDuration={6000}
         onClose={handleCloseSuccessSnackbar}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
       >
         <Alert 
           onClose={handleCloseSuccessSnackbar} 
           severity="success" 
           sx={{ width: '100%' }}
+          icon={<CloudDoneIcon />}
         >
-          ✅ Privacy practice acknowledgment saved successfully!
+          <Typography variant="body2" sx={{ fontWeight: 600 }}>
+            ✅ Privacy practice acknowledgment saved successfully!
+          </Typography>
         </Alert>
       </Snackbar>
     </Box>

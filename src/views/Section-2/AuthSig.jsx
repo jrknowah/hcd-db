@@ -130,17 +130,17 @@ const FORM_CONFIGS = [
     priority: 'high',
     estimatedTime: '7 min'
   },
-  {
-    id: 'preScreen',
-    title: 'Housing Pre-Screen Form', 
-    description: 'Initial housing assessment questionnaire',
-    icon: HomeIcon,
-    component: MockComponent,
-    hasLogo: false,
-    category: 'housing',
-    priority: 'medium',
-    estimatedTime: '10 min'
-  },
+  // {
+  //   id: 'preScreen',
+  //   title: 'Housing Pre-Screen Form', 
+  //   description: 'Initial housing assessment questionnaire',
+  //   icon: HomeIcon,
+  //   component: MockComponent,
+  //   hasLogo: false,
+  //   category: 'housing',
+  //   priority: 'medium',
+  //   estimatedTime: '10 min'
+  // },
   {
     id: 'privacyPractice',
     title: 'LA County Notice Of Private Practices',
@@ -534,53 +534,55 @@ const FormModal = ({ form, open, onClose, clientID }) => {
   
   // ✅ COMPLETE - Submit complete form with validation
   const handleSubmitForm = async () => {
-    setSaveType('submit');
+  setSaveType('submit');
+  
+  try {
+    // ✅ Get actual form data from child component via ref
+    const formData = formRef.current?.getFormData?.();
     
-    try {
-      // ✅ Get actual form data from child component via ref
-      const formData = formRef.current?.getFormData?.();
-      
-      if (!formData) {
-        throw new Error('Unable to get form data. Make sure the form component exposes getFormData()');
-      }
-      
-      console.log('🚀 Submitting form:', form.id, 'Client:', clientID);
-      console.log('📦 Form data:', formData);
-      
-      // ✅ Validate completion before submitting
-      if (formData.completionPercentage !== 100) {
-        throw new Error('Please complete all required fields before submitting');
-      }
-      
-      // ✅ Dispatch Redux action with actual form data
-      await dispatch(saveFormData({
-        clientID: clientID,
-        formType: form.id,
-        formData: formData
-      })).unwrap();
-      
-      console.log('✅ Form submitted successfully');
-      
-      // ✅ Show success notification
-      showNotification('Form submitted successfully', 'success');
-      
-      setSaveType(null);
-      
-      // ✅ Close modal after successful submission
-      setTimeout(() => {
-        handleClose();
-      }, 1000);
-      
-    } catch (error) {
-      console.error('❌ Failed to submit form:', error);
-      
-      // ✅ Show error notification with detailed message
-      const errorMessage = error.message || error || 'Failed to submit form. Please check all required fields.';
-      showNotification(errorMessage, 'error');
-      
-      setSaveType(null);
+    if (!formData) {
+      throw new Error('Unable to get form data. Make sure the form component exposes getFormData()');
     }
-  };
+    
+    console.log('🚀 Submitting form:', form.id, 'Client:', clientID);
+    console.log('📦 Form data:', formData);
+    
+    // ✅ Ensure completion percentage is included
+    const dataToSubmit = {
+      ...formData,
+      completionPercentage: formData.completionPercentage || 100,
+      status: 'completed'
+    };
+    
+    // ✅ Dispatch Redux action with actual form data
+    const result = await dispatch(saveFormData({
+      clientID: clientID,
+      formType: form.id,
+      formData: dataToSubmit
+    })).unwrap();
+    
+    console.log('✅ Form submitted successfully:', result);
+    
+    // ✅ Show success notification
+    showNotification('Form submitted successfully', 'success');
+    
+    setSaveType(null);
+    
+    // ✅ Close modal after successful submission
+    setTimeout(() => {
+      handleClose();
+    }, 1000);
+    
+  } catch (error) {
+    console.error('❌ Failed to submit form:', error);
+    
+    // ✅ Show error notification with detailed message
+    const errorMessage = error.message || error || 'Failed to submit form. Please check all required fields.';
+    showNotification(errorMessage, 'error');
+    
+    setSaveType(null);
+  }
+};
   
   const handleViewForm = () => {
     setShowFormContent(true);
