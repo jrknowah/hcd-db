@@ -218,12 +218,14 @@ const EncounterNote = ({ clientID, exportMode }) => {
         careNoteType: formData.careNoteType?.value || formData.careNoteType,
         careNoteSite: formData.careNoteSite?.value || formData.careNoteSite,
         careNote: formData.careNote,
+        clientID: effectiveClientID,
         updatedBy: currentUser?.email || "unknown",
         updatedAt: new Date().toISOString(),
       };
 
       await dispatch(editEncounterNote({
         noteId: editNoteId,
+        clientID: effectiveClientID,
         updatedData: updateData
       })).unwrap();
 

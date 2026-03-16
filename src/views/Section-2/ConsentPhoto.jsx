@@ -63,13 +63,14 @@ const ConsentPhoto = forwardRef(({ clientID: propClientID }, ref) => {
     const selectedClient = useSelector((state) => state.clients?.selectedClient);
     const clientID = propClientID || selectedClient?.clientID;
 
-    // Redux selectors - ✅ FIXED: Correct selector usage
+    // Redux selectors - ✅ FIXED: Correct selector usage with parameters
     const existingData = useSelector(selectFormByType('consentPhoto'));
-    const formLoading = useSelector(selectFormLoading);
+    const loading = useSelector((state) => state.authSig.formLoading?.consentPhoto || state.authSig.formsLoading);
     const saving = useSelector(selectSaving);
     const saveSuccess = useSelector(selectSaveSuccess);
 
     // Local state
+    const [isInitialLoad, setIsInitialLoad] = useState(true);
     const [activeStep, setActiveStep] = useState(0);
     const [clientReleaseItems, setClientReleaseItems] = useState([]);
     const [clientReleasePurposes, setClientReleasePurposes] = useState([]);
@@ -121,16 +122,45 @@ const ConsentPhoto = forwardRef(({ clientID: propClientID }, ref) => {
     // Load form data
     useEffect(() => {
         if (clientID && !dataLoaded) {
+            console.log('📥 Loading ConsentPhoto data for client:', clientID);
+            
             dispatch(fetchFormData({ clientID, formType: 'consentPhoto' }))
                 .unwrap()
-                .then(() => setDataLoaded(true))
-                .catch(() => setDataLoaded(true));
+                .then((data) => {
+                    console.log('✅ ConsentPhoto data loaded:', data);
+                    setDataLoaded(true);
+                })
+                .catch((error) => {
+                    console.warn('⚠️ No existing data, starting with blank form:', error);
+                    setDataLoaded(true);
+                })
+                .finally(() => {
+                    // Exit loading state after a brief delay
+                    setTimeout(() => setIsInitialLoad(false), 300);
+                });
+        } else if (!clientID) {
+            // No client, exit loading immediately
+            setIsInitialLoad(false);
+            setDataLoaded(true);
         }
     }, [dispatch, clientID, dataLoaded]);
 
     // Populate fields from Redux
     useEffect(() => {
+        console.log('🔄 ConsentPhoto populate check:', {
+            existingData,
+            hasData: existingData && Object.keys(existingData).length > 0,
+            dataLoaded,
+            currentState: {
+                clientReleaseItems: clientReleaseItems.length,
+                clientReleasePurposes: clientReleasePurposes.length,
+                consentPhotoSign1
+            }
+        });
+
         if (existingData && Object.keys(existingData).length > 0 && dataLoaded) {
+            console.log('📝 Populating ConsentPhoto fields from Redux...');
+            
             // ✅ Convert backend string arrays back to object arrays for Autocomplete
             if (existingData.clientReleaseItems) {
                 const items = Array.isArray(existingData.clientReleaseItems)
@@ -140,6 +170,7 @@ const ConsentPhoto = forwardRef(({ clientID: propClientID }, ref) => {
                             : item
                     )
                     : [];
+                console.log('  ✅ Setting clientReleaseItems:', items);
                 setClientReleaseItems(items);
             }
 
@@ -151,6 +182,7 @@ const ConsentPhoto = forwardRef(({ clientID: propClientID }, ref) => {
                             : item
                     )
                     : [];
+                console.log('  ✅ Setting clientReleasePurposes:', purposes);
                 setClientReleasePurposes(purposes);
             }
 
@@ -162,6 +194,7 @@ const ConsentPhoto = forwardRef(({ clientID: propClientID }, ref) => {
                             : item
                     )
                     : [];
+                console.log('  ✅ Setting clientReleasePHTItems:', phtItems);
                 setClientReleasePHTItems(phtItems);
             }
 
@@ -173,8 +206,10 @@ const ConsentPhoto = forwardRef(({ clientID: propClientID }, ref) => {
                 existingData.consentPhotoExpireDate || 
                 ""
             );
+            
+            console.log('✅ ConsentPhoto fields populated successfully');
         }
-    }, [existingData, dataLoaded]);
+    }, [existingData, dataLoaded]); // ✅ NO local state in dependencies
 
     // Update Redux on changes
     useEffect(() => {
@@ -282,10 +317,11 @@ const ConsentPhoto = forwardRef(({ clientID: propClientID }, ref) => {
         dispatch(clearErrors());
     }, [dispatch]);
 
-    if (formLoading) {
+    // ✅ FIXED: Use local loading flag instead of Redux selector
+    if (isInitialLoad && loading) {
         return (
-            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', p: 4 }}>
-                <CircularProgress />
+            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', p: 4, minHeight: 400 }}>
+                <CircularProgress size={60} />
                 <Typography sx={{ ml: 2 }}>Loading consent form...</Typography>
             </Box>
         );

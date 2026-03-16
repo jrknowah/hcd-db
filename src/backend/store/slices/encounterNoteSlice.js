@@ -121,9 +121,8 @@ export const addEncounterNote = createAsyncThunk(
 // ✏️ Async thunk to edit encounter note
 export const editEncounterNote = createAsyncThunk(
   "encounterNote/editEncounterNote",
-  async ({ noteId, updatedData }, thunkAPI) => {
-    // ✅ PROTECTION: Return mock success for mock clients
-    if (shouldUseMockData(updatedData.clientID || 'mock-123')) {
+  async ({ noteId, updatedData, clientID }, thunkAPI) => {  // ← add clientID here
+    if (shouldUseMockData(clientID)) {
       console.log("🔧 Mock mode: Simulating encounter note update for", noteId);
       return {
         _id: noteId,

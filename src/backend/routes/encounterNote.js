@@ -52,6 +52,92 @@ const generateEncounterNoteID = (clientID) => {
 //   return Object.keys(errors).length > 0 ? errors : null;
 // };
 
+// GET /api/encounter-notes/bytype/:clientID/:noteType - Get notes by type
+router.get('/encounter-notes/bytype/:clientID/:noteType', async (req, res) => {
+  try {
+    const pool = await getPool();
+    const { clientID, noteType } = req.params;
+    
+    console.log(`📋 Fetching ${noteType} notes for client: ${clientID}`);
+    
+    const result = await pool.request()
+      .input('clientID', sql.NVarChar, clientID)
+      .input('noteType', sql.NVarChar, noteType)
+      .query(`
+        SELECT 
+          Id as _id, 
+          ClientID, 
+          CareNoteDate, 
+          CareNoteType, 
+          CareNoteSite, 
+          CareNote, 
+          CreatedBy, 
+          CreatedAt, 
+          UpdatedBy, 
+          UpdatedAt
+        FROM EncounterNotes 
+        WHERE ClientID = @clientID AND CareNoteType = @noteType
+        ORDER BY CareNoteDate DESC, CreatedAt DESC
+      `);
+    
+    // Map column names to match frontend expectations
+    const mappedNotes = result.recordset.map(note => ({
+      _id: note._id,
+      clientID: note.ClientID,
+      careNoteDate: note.CareNoteDate,
+      careNoteType: note.CareNoteType,
+      careNoteSite: note.CareNoteSite,
+      careNote: note.CareNote,
+      createdBy: note.CreatedBy,
+      createdAt: note.CreatedAt,
+      updatedBy: note.UpdatedBy,
+      updatedAt: note.UpdatedAt
+    }));
+    
+    res.json(mappedNotes);
+  } catch (err) {
+    console.error('❌ Error fetching encounter notes by type:', err);
+    res.status(500).json({ 
+      error: 'Failed to fetch encounter notes by type',
+      message: err.message 
+    });
+  }
+});
+
+
+// GET /api/encounter-notes/summary/:clientID - Get encounter notes summary for client
+router.get('/summary/:clientID', async (req, res) => {
+  try {
+    const pool = await getPool();
+    const { clientID } = req.params;
+    
+    console.log(`📊 Fetching encounter notes summary for client: ${clientID}`);
+    
+    const result = await pool.request()
+      .input('clientID', sql.NVarChar, clientID)
+      .query(`
+        SELECT 
+          COUNT(*) as totalNotes,
+          SUM(CASE WHEN CareNoteType = 'Individual' THEN 1 ELSE 0 END) as individualNotes,
+          SUM(CASE WHEN CareNoteType = 'Crisis' THEN 1 ELSE 0 END) as crisisNotes,
+          SUM(CASE WHEN CareNoteType = 'Group' THEN 1 ELSE 0 END) as groupNotes,
+          SUM(CASE WHEN CareNoteDate >= DATEADD(day, -30, GETDATE()) THEN 1 ELSE 0 END) as notesLast30Days,
+          MAX(CareNoteDate) as lastNoteDate,
+          MAX(UpdatedAt) as lastActivity
+        FROM EncounterNotes 
+        WHERE ClientID = @clientID
+      `);
+    
+    res.json(result.recordset[0]);
+  } catch (err) {
+    console.error('❌ Error fetching encounter notes summary:', err);
+    res.status(500).json({ 
+      error: 'Failed to fetch encounter notes summary',
+      message: err.message 
+    });
+  }
+});
+
 // GET /api/encounter-notes/:clientID - Fetch encounter notes for client
 router.get('/encounter-notes/:clientID', async (req, res) => {
   try {
@@ -293,89 +379,7 @@ router.delete('/encounter-notes/:noteId', async (req, res) => {
   }
 });
 
-// GET /api/encounter-notes/summary/:clientID - Get encounter notes summary for client
-router.get('/summary/:clientID', async (req, res) => {
-  try {
-    const pool = await getPool();
-    const { clientID } = req.params;
-    
-    console.log(`📊 Fetching encounter notes summary for client: ${clientID}`);
-    
-    const result = await pool.request()
-      .input('clientID', sql.NVarChar, clientID)
-      .query(`
-        SELECT 
-          COUNT(*) as totalNotes,
-          SUM(CASE WHEN CareNoteType = 'Individual' THEN 1 ELSE 0 END) as individualNotes,
-          SUM(CASE WHEN CareNoteType = 'Crisis' THEN 1 ELSE 0 END) as crisisNotes,
-          SUM(CASE WHEN CareNoteType = 'Group' THEN 1 ELSE 0 END) as groupNotes,
-          SUM(CASE WHEN CareNoteDate >= DATEADD(day, -30, GETDATE()) THEN 1 ELSE 0 END) as notesLast30Days,
-          MAX(CareNoteDate) as lastNoteDate,
-          MAX(UpdatedAt) as lastActivity
-        FROM EncounterNotes 
-        WHERE ClientID = @clientID
-      `);
-    
-    res.json(result.recordset[0]);
-  } catch (err) {
-    console.error('❌ Error fetching encounter notes summary:', err);
-    res.status(500).json({ 
-      error: 'Failed to fetch encounter notes summary',
-      message: err.message 
-    });
-  }
-});
 
-// GET /api/encounter-notes/bytype/:clientID/:noteType - Get notes by type
-router.get('/encounter-notes/bytype/:clientID/:noteType', async (req, res) => {
-  try {
-    const pool = await getPool();
-    const { clientID, noteType } = req.params;
-    
-    console.log(`📋 Fetching ${noteType} notes for client: ${clientID}`);
-    
-    const result = await pool.request()
-      .input('clientID', sql.NVarChar, clientID)
-      .input('noteType', sql.NVarChar, noteType)
-      .query(`
-        SELECT 
-          Id as _id, 
-          ClientID, 
-          CareNoteDate, 
-          CareNoteType, 
-          CareNoteSite, 
-          CareNote, 
-          CreatedBy, 
-          CreatedAt, 
-          UpdatedBy, 
-          UpdatedAt
-        FROM EncounterNotes 
-        WHERE ClientID = @clientID AND CareNoteType = @noteType
-        ORDER BY CareNoteDate DESC, CreatedAt DESC
-      `);
-    
-    // Map column names to match frontend expectations
-    const mappedNotes = result.recordset.map(note => ({
-      _id: note._id,
-      clientID: note.ClientID,
-      careNoteDate: note.CareNoteDate,
-      careNoteType: note.CareNoteType,
-      careNoteSite: note.CareNoteSite,
-      careNote: note.CareNote,
-      createdBy: note.CreatedBy,
-      createdAt: note.CreatedAt,
-      updatedBy: note.UpdatedBy,
-      updatedAt: note.UpdatedAt
-    }));
-    
-    res.json(mappedNotes);
-  } catch (err) {
-    console.error('❌ Error fetching encounter notes by type:', err);
-    res.status(500).json({ 
-      error: 'Failed to fetch encounter notes by type',
-      message: err.message 
-    });
-  }
-});
+
 
 module.exports = router;

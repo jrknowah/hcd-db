@@ -8,6 +8,17 @@ export const GROUP_MAPPINGS = {
   'HOPE_level1': 'f47eca14-0206-4719-91c7-fba7b2be382c',
   'HOPE_audit': 'fec5c917-431c-4663-85b2-efc9e9053e96',
   'HOPE_readonly': 'e95d2a7a-0390-414e-92bd-26fb5b745acf',
+  'hope_eubanks': 'd5115dd6-74f0-4abe-951f-6dc3e96fb1ee',
+  'hope_pacific': '1985ac8b-285d-45c1-9d0e-1ded3d3f6fca',
+  'hope_heart': '',
+  'hope_hope': '',
+  'hope_downey': '',
+  'hope_heritage': '',
+  'hope_northridge': '',
+  'hope_casa': '',
+  'hope_97': '',
+  'hope_104': '',
+  'hope_238': '',
 };
 
 // Define role-based permissions for HOPE system
@@ -30,7 +41,7 @@ export const ROLE_PERMISSIONS = {
   NURSE: [
     'read', 'write',
     'nursing_notes', 'vital_signs', 'medications', 'care_plans',
-    'section1', 'section2', 'section3', 'section4', 'section5'
+    'section1', 'section2', 'section5'
   ],
   AUDITOR: [
     'read', 'audit_access', 'generate_reports', 
@@ -56,7 +67,7 @@ export const SECTION_ACCESS = {
   IT_ADMIN: ['section1', 'section2', 'section3', 'section4', 'section5', 'section6', 'admin'],
   LEVEL1: ['section1', 'section2', 'section3', 'section4', 'section5', 'section6'],
   CASE_MANAGER: ['section1', 'section2', 'section3', 'section4', 'section6'],
-  NURSE: ['section1', 'section2', 'section3', 'section4', 'section5'],
+  NURSE: ['section1', 'section2', 'section5'],
   AUDITOR: ['section1', 'section2', 'section3', 'section4', 'section5', 'section6'],
   READONLY: ['section1', 'section2'],
 };

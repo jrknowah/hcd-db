@@ -144,13 +144,36 @@ export const saveFormData = createAsyncThunk(
         
         if (authSig.useMockData) {
             console.log('Using mock data for save');
+            const pct        = Number(formData.completionPercentage ?? 0);
+            const isComplete = pct === 100;
+            const now        = new Date().toISOString();
+
+            // Per-form signature field check (mirrors backend isFormComplete logic)
+            const sigFields = {
+                orientation: 'signature', clientRights: 'signature',
+                consentTreatment: 'signature', preScreen: 'signature',
+                privacyPractice: 'signature', lahmis: 'signature',
+                phiRelease: 'signature', residencePolicy: 'signature',
+                authDisclosure: 'atrClientSign', termination: 'signature',
+                advDirective: 'clientSignature', grievances: 'signature',
+                healthDisclosure: 'atrClientSign', consentPhoto: 'consentPhotoSign1',
+                housingAgreement: 'housingAgreeeSign',
+            };
+            const sigField = sigFields[formType] || 'signature';
+            const hasSig   = !!(formData[sigField] && String(formData[sigField]).trim().length >= 2);
+            const complete  = isComplete || hasSig;
+
             return {
-                formID: 'MOCK-' + formType.toUpperCase() + '-' + Date.now(),
+                formID:              'MOCK-' + formType.toUpperCase() + '-' + Date.now(),
                 clientID,
                 formType,
                 ...formData,
-                savedAt: new Date().toISOString(),
-                status: formData.signature ? 'completed' : 'in_progress'
+                completionPercentage: pct,
+                status:              complete ? 'completed' : 'in_progress',
+                completedBy:         complete ? 'mock.user@hospital.com' : null,
+                completedAt:         complete ? now : null,
+                createdBy:           'mock.user@hospital.com',
+                savedAt:             now,
             };
         }
 
@@ -481,10 +504,24 @@ const authSigSlice = createSlice({
             .addCase(fetchAuthorizationForms.fulfilled, (state, action) => {
                 state.formsLoading = false;
                 if (action.payload) {
-                    state.forms = { ...state.forms, ...action.payload.forms };
-                    state.overallCompletion = action.payload.overallCompletion || 0;
-                    state.totalForms = action.payload.totalForms || 15;
-                    state.completedForms = action.payload.completedForms || 0;
+                    // Merge each form individually so we preserve any locally-cached
+                    // field data while overwriting with fresh server values.
+                    const incoming = action.payload.forms || {};
+                    Object.keys(incoming).forEach(formType => {
+                        state.forms[formType] = {
+                            ...state.forms[formType],
+                            ...incoming[formType],
+                            // Guarantee numeric completionPercentage — never undefined
+                            completionPercentage: Number(incoming[formType]?.completionPercentage ?? 0),
+                        };
+                    });
+                    state.overallCompletion = action.payload.overallCompletion ?? 0;
+                    state.totalForms        = action.payload.totalForms        ?? 15;
+                    state.completedForms    = action.payload.completedForms    ?? 0;
+                    // Cache latest submission ID at slice level for easy access
+                    if (action.payload.submission?.submissionID) {
+                        state.lastSubmission = action.payload.submission;
+                    }
                 }
                 state.formsError = null;
             })
@@ -536,29 +573,36 @@ const authSigSlice = createSlice({
             })
             .addCase(saveFormData.fulfilled, (state, action) => {
                 state.saving = false;
-                
-                // Get formType from payload or meta
+
                 const formType = action.payload?.formType || action.meta?.arg?.formType;
-                
+
                 if (formType) {
-                    // Update the form data
+                    const prev = state.forms[formType] || {};
                     state.forms[formType] = {
-                        ...state.forms[formType],
+                        ...prev,
                         ...action.payload,
-                        lastSaved: new Date().toISOString()
+                        // Always keep completionPercentage as a number
+                        completionPercentage: Number(action.payload?.completionPercentage ?? prev.completionPercentage ?? 0),
+                        // Preserve completedBy/completedAt/createdBy explicitly
+                        completedBy: action.payload?.completedBy ?? prev.completedBy ?? null,
+                        completedAt: action.payload?.completedAt ?? prev.completedAt ?? null,
+                        createdBy:   action.payload?.createdBy   ?? prev.createdBy   ?? null,
+                        lastSaved:   new Date().toISOString(),
                     };
-                    
-                    // Update completion tracking
-                    if (action.payload.status === 'completed' && state.forms[formType].status !== 'completed') {
-                        state.completedForms = (state.completedForms || 0) + 1;
+
+                    // Update overall counts when a form transitions to completed
+                    const wasCompleted = prev.status === 'completed';
+                    const nowCompleted = action.payload?.status === 'completed';
+                    if (!wasCompleted && nowCompleted) {
+                        state.completedForms   = (state.completedForms || 0) + 1;
                         state.overallCompletion = Math.round((state.completedForms / state.totalForms) * 100);
                     }
                 }
-                
-                state.saveSuccess = true;
-                state.saveError = null;
+
+                state.saveSuccess    = true;
+                state.saveError      = null;
                 state.unsavedChanges = false;
-                
+
                 console.log(`Form ${formType} saved successfully in Redux`);
             })
             .addCase(saveFormData.rejected, (state, action) => {

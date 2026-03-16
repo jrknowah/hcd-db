@@ -3,7 +3,7 @@ const router = express.Router();
 const sql = require('mssql');
 // const { getDbConnection } = require('../config/database');
 const { connectToAzureSql } = require('../store/azureSql'); 
-const { logUserAction } = require('../middleware/logging');
+const { logUserAction } = require('../config/logAction');
 
 // ===== UTILITY FUNCTIONS =====
 

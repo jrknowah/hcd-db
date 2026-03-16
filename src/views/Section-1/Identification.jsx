@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box, Tabs, Tab, Typography, Button, Grid, Card, InputLabel, OutlinedInput, 
   Modal, IconButton, Chip, LinearProgress, Alert, CardContent, CardActions,
@@ -13,13 +13,12 @@ import {
   Visibility as ViewIcon,
   Close as CloseIcon
 } from '@mui/icons-material';
-import html2pdf from 'html2pdf.js';
 import { azureBlobService } from '../../backend/services/azureBlobService';
 import { useClientPersistence } from '../../hooks/useClientPersistence';
 import logUserAction from '../../backend/config/logAction';
 import ClientFace from './ClientFace';
 import Referrals from './Referrals';
-// ❌ REMOVED: import Discharge from './Discharge';
+import ClientExportPDF from '../../components/ClientExportPDF';
 
 const DOC_TYPES = [
   "Identification Card", "Driver's License", "Social Security Card", "Permanent Resident Alien Card",
@@ -46,11 +45,9 @@ const MOCK_FILES = [
 const Identification = () => {
   const API_URL = import.meta.env.VITE_APP_API_URL;
   
-  // ✅ FIXED: Get client data from hook FIRST
   const { clientID, client, hasClient, user, shouldUseMockData, isDevelopment } = useClientPersistence();
   
-  // ✅✅✅ CRITICAL FIX: ALL HOOKS MUST BE DECLARED BEFORE ANY CONDITIONAL RETURNS ✅✅✅
-  // State management - MOVED BEFORE THE LOADING GUARD
+  // State management
   const [forceMockData, setForceMockData] = useState(false);
   const [tabIndex, setTabIndex] = useState(0);
   const [files, setFiles] = useState([]);
@@ -60,20 +57,12 @@ const Identification = () => {
   const [error, setError] = useState(null);
   const [successMessage, setSuccessMessage] = useState('');
   
-  // PDF Export states
-  const [isExporting, setIsExporting] = useState(false);
-  const [exportProgress, setExportProgress] = useState(0);
-  
   // File management states
   const [fileToDelete, setFileToDelete] = useState(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [filePreview, setFilePreview] = useState(null);
   const [previewOpen, setPreviewOpen] = useState(false);
 
-  // Refs
-  const exportRef = useRef();
-
-  // ✅ Allow local override of mock data for testing
   const effectiveMockData = forceMockData || shouldUseMockData;
 
   // Load files when client changes
@@ -84,14 +73,12 @@ const Identification = () => {
     setError(null);
     
     if (effectiveMockData) {
-      // Mock data
       const timer = setTimeout(() => {
         setFiles(MOCK_FILES);
         setLoading(false);
       }, 1000);
       return () => clearTimeout(timer);
     } else {
-      // Load files from Azure Blob Storage
       azureBlobService.listClientFiles(client.clientID)
         .then((filesData) => {
           console.log('📂 Azure files loaded:', filesData);
@@ -101,7 +88,6 @@ const Identification = () => {
         .catch((err) => {
           console.error("❌ Error fetching files from Azure:", err);
           
-          // More detailed error message
           const errorMsg = err.response?.data?.message 
             || err.message 
             || "Failed to load client files from Azure storage";
@@ -110,7 +96,6 @@ const Identification = () => {
           setFiles([]);
           setLoading(false);
           
-          // Optional: Fall back to mock data in development
           if (isDevelopment) {
             console.warn("⚠️ Falling back to mock data due to API error");
             setFiles(MOCK_FILES);
@@ -128,7 +113,6 @@ const Identification = () => {
     }
   }, [successMessage]);
 
-  // ✅✅✅ NOW WE CAN DO THE LOADING GUARD - AFTER ALL HOOKS ARE DECLARED ✅✅✅
   if (!hasClient || !client) {
     return (
       <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '400px', p: 4 }}>
@@ -148,14 +132,12 @@ const Identification = () => {
   const handleFileSelect = (docType, file) => {
     if (!file) return;
     
-    // Validate file size (max 10MB)
-    const maxSize = 10 * 1024 * 1024; // 10MB
+    const maxSize = 10 * 1024 * 1024;
     if (file.size > maxSize) {
       setError(`File "${file.name}" is too large. Maximum size is 10MB.`);
       return;
     }
     
-    // Validate file type
     const allowedTypes = [
       'application/pdf',
       'image/jpeg',
@@ -187,7 +169,6 @@ const Identification = () => {
 
     try {
       if (effectiveMockData) {
-        // Mock upload with progress simulation
         for (let i = 0; i <= 100; i += 10) {
           setUploadProgress((prev) => ({ ...prev, [docType]: i }));
           await new Promise(resolve => setTimeout(resolve, 200));
@@ -204,7 +185,6 @@ const Identification = () => {
         setFiles((prev) => [mockFile, ...prev]);
         setSuccessMessage(`✅ ${fileToUpload.name} uploaded successfully (Mock)`);
       } else {
-        // Real Azure upload
         setUploadProgress((prev) => ({ ...prev, [docType]: 20 }));
         
         const uploadResult = await azureBlobService.uploadFile(
@@ -215,7 +195,6 @@ const Identification = () => {
         
         setUploadProgress((prev) => ({ ...prev, [docType]: 100 }));
         
-        // Add to files list
         const newFile = {
           fileName: uploadResult.fileName,
           blobUrl: uploadResult.blobUrl,
@@ -228,7 +207,6 @@ const Identification = () => {
         setFiles((prev) => [newFile, ...prev]);
         setSuccessMessage(`✅ ${uploadResult.fileName} uploaded successfully to Azure`);
 
-        // Log user action
         if (user && user.id !== 'mock-user-123') {
           await logUserAction(user, "UPLOAD_DOCUMENT", {
             clientID: client.clientID,
@@ -239,14 +217,12 @@ const Identification = () => {
         }
       }
       
-      // Clear the uploaded file from state
       setFilesToUpload((prev) => {
         const updated = { ...prev };
         delete updated[docType];
         return updated;
       });
       
-      // Clear progress after a delay
       setTimeout(() => {
         setUploadProgress((prev) => {
           const updated = { ...prev };
@@ -275,14 +251,12 @@ const Identification = () => {
   const handleDownloadFile = async (file) => {
     try {
       if (effectiveMockData) {
-        // Mock download
         alert(`Mock download: ${file.fileName}`);
         return;
       }
 
-      const downloadUrl = await azureBlobService.getDownloadUrl(file.blobName || file.fileName, client.clientID);
+      const downloadUrl = await azureBlobService.generateDownloadUrl(file.blobName || file.fileName);
       
-      // Create a temporary link and click it to trigger download
       const link = document.createElement('a');
       link.href = downloadUrl;
       link.download = file.fileName;
@@ -308,7 +282,6 @@ const Identification = () => {
 
     try {
       if (effectiveMockData) {
-        // Mock delete
         setFiles((prev) => prev.filter(f => f.fileName !== fileToDelete.fileName));
         setSuccessMessage(`✅ ${fileToDelete.fileName} deleted successfully (Mock)`);
       } else {
@@ -353,50 +326,6 @@ const Identification = () => {
     return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
   };
 
-  const handleExport = async () => {
-    if (!exportRef.current) return;
-    
-    setIsExporting(true);
-    setExportProgress(0);
-    
-    try {
-      const element = exportRef.current;
-      
-      // Simulate progress
-      const progressInterval = setInterval(() => {
-        setExportProgress(prev => Math.min(prev + 10, 90));
-      }, 200);
-      
-      const opt = {
-        margin: 10,
-        filename: `client-chart-${client.clientID}-${new Date().toISOString().split('T')[0]}.pdf`,
-        image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: { scale: 2 },
-        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-      };
-      
-      await html2pdf().set(opt).from(element).save();
-      
-      clearInterval(progressInterval);
-      setExportProgress(100);
-      setSuccessMessage('✅ Client chart exported successfully!');
-      
-      if (user && user.id !== 'mock-user-123') {
-        await logUserAction(user, "EXPORT_CHART", {
-          clientID: client.clientID
-        });
-      }
-    } catch (err) {
-      console.error("❌ Error exporting PDF:", err);
-      setError(`Failed to export chart: ${err.message}`);
-    } finally {
-      setTimeout(() => {
-        setIsExporting(false);
-        setExportProgress(0);
-      }, 1000);
-    }
-  };
-
   return (
     <Card sx={{ p: 3 }}>
       <Typography variant="h4" gutterBottom>
@@ -433,7 +362,6 @@ const Identification = () => {
         </Alert>
       )}
 
-      {/* ✅ UPDATED: Removed Discharge tab - now only 4 tabs */}
       <Tabs value={tabIndex} onChange={handleTabChange} sx={{ mb: 3 }}>
         <Tab label="Client Face Sheet" />
         <Tab label="Documents & Uploads" />
@@ -441,8 +369,10 @@ const Identification = () => {
         <Tab label="Export Complete Chart" />
       </Tabs>
 
+      {/* Tab 0: Client Face Sheet */}
       {tabIndex === 0 && <Box p={3}><ClientFace /></Box>}
       
+      {/* Tab 1: Documents & Uploads */}
       {tabIndex === 1 && (
         <Box p={3}>
           <Typography variant="h5" gutterBottom>
@@ -588,48 +518,13 @@ const Identification = () => {
         </Box>
       )}
       
+      {/* Tab 2: Referrals */}
       {tabIndex === 2 && <Box p={3}><Referrals /></Box>}
       
-      {/* ✅ UPDATED: Export is now tab index 3 instead of 4 */}
+      {/* Tab 3: Export Complete Chart */}
       {tabIndex === 3 && (
         <Box p={3}>
-          <Typography variant="h5" gutterBottom>
-            Export Complete Client Chart
-          </Typography>
-          <Typography variant="body1" sx={{ mb: 3 }}>
-            Export the complete client chart including all sections to a comprehensive PDF file.
-          </Typography>
-          
-          <Button 
-            variant="contained" 
-            size="large"
-            startIcon={<PdfIcon />}
-            onClick={handleExport}
-            disabled={isExporting}
-            sx={{ mb: 3 }}
-          >
-            {isExporting ? `Exporting... ${exportProgress}%` : "Export Complete Chart to PDF"}
-          </Button>
-
-          {/* ✅ UPDATED: Removed Discharge from export content */}
-          <div ref={exportRef} style={{ display: "none" }}>
-            <div style={{ padding: '20px', fontFamily: 'Arial, sans-serif' }}>
-              <div style={{ textAlign: 'center', marginBottom: '30px', borderBottom: '2px solid #333', paddingBottom: '20px' }}>
-                <h1>Client Chart - {client?.clientFirstName || 'Unknown'} {client?.clientLastName || 'Client'}</h1>
-                <p>Generated on: {new Date().toLocaleDateString()}</p>
-              </div>
-              
-              <div style={{ pageBreakAfter: 'always' }}>
-                <h2>Client Face Sheet</h2>
-                <ClientFace exportMode />
-              </div>
-              
-              <div>
-                <h2>Referrals</h2>
-                <Referrals exportMode />
-              </div>
-            </div>
-          </div>
+          <ClientExportPDF clientID={clientID} />
         </Box>
       )}
 

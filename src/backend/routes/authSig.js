@@ -215,8 +215,173 @@ function validateConsentPhoto(data) {
 }
 
 // ============================================================================
+// FORM METADATA - priorities and display numbers match frontend FORM_CONFIGS
+// ============================================================================
+
+const FORM_METADATA = {
+  orientation:      { formNumber: 1,  priority: 'high'   },
+  clientRights:     { formNumber: 2,  priority: 'high'   },
+  consentTreatment: { formNumber: 3,  priority: 'high'   },
+  preScreen:        { formNumber: 4,  priority: 'medium' },
+  privacyPractice:  { formNumber: 5,  priority: 'medium' },
+  lahmis:           { formNumber: 6,  priority: 'medium' },
+  phiRelease:       { formNumber: 7,  priority: 'medium' },
+  residencePolicy:  { formNumber: 8,  priority: 'medium' },
+  authDisclosure:   { formNumber: 9,  priority: 'medium' },
+  termination:      { formNumber: 10, priority: 'low'    },
+  advDirective:     { formNumber: 11, priority: 'medium' },
+  grievances:       { formNumber: 12, priority: 'medium' },
+  healthDisclosure: { formNumber: 13, priority: 'medium' },
+  consentPhoto:     { formNumber: 14, priority: 'medium' },
+  housingAgreement: { formNumber: 15, priority: 'low'    },
+};
+
+/**
+ * Determine if a form is complete based on its stored formData JSON.
+ * Each form type has its own required signature field name.
+ */
+function isFormComplete(formType, formData, completionPercentage) {
+  // Trust an explicit 100% completion flag from the saved payload
+  if (Number(completionPercentage) === 100) return true;
+
+  // Per-form signature field names
+  const signatureFields = {
+    orientation:      'signature',
+    clientRights:     'signature',
+    consentTreatment: 'signature',
+    preScreen:        'signature',
+    privacyPractice:  'signature',
+    lahmis:           'signature',
+    phiRelease:       'signature',
+    residencePolicy:  'signature',
+    authDisclosure:   'atrClientSign',
+    termination:      'signature',
+    advDirective:     'clientSignature',
+    grievances:       'signature',
+    healthDisclosure: 'atrClientSign',
+    consentPhoto:     'consentPhotoSign1',
+    housingAgreement: 'housingAgreeeSign',
+  };
+
+  const sigField = signatureFields[formType] || 'signature';
+  return !!(formData[sigField] && String(formData[sigField]).trim().length >= 2);
+}
+
+// ============================================================================
 // ROUTES
 // ============================================================================
+
+/**
+ * GET /:clientID/forms
+ * Get all authorization forms status for a client — used by dashboard & export.
+ * This was the MISSING endpoint causing completion%, completedBy, completedAt,
+ * createdBy, and submissionID to always show N/A / 0%.
+ */
+router.get('/:clientID/forms', async (req, res) => {
+  const { clientID } = req.params;
+
+  try {
+    const pool = await poolPromise;
+
+    // Fetch all saved forms for this client — read every dedicated column
+    const formsResult = await pool.request()
+      .input('clientID', sql.VarChar(50), clientID)
+      .query(`
+        SELECT formID, formType, status, priority,
+               completionPercentage, completedBy, completedAt,
+               createdBy, createdAt, updatedBy, updatedAt,
+               submissionID, lastAutoSave
+        FROM AuthorizationForms
+        WHERE clientID = @clientID
+      `);
+
+    // Fetch latest submission record (for submissionID)
+    const submissionResult = await pool.request()
+      .input('clientID', sql.VarChar(50), clientID)
+      .query(`
+        SELECT TOP 1 submissionID, status AS submissionStatus,
+                     submittedBy, submittedAt
+        FROM FormSubmissions
+        WHERE clientID = @clientID
+        ORDER BY submittedAt DESC
+      `);
+
+    const submission = submissionResult.recordset[0] || null;
+
+    // Index rows by formType — no need to parse formData JSON for the list view,
+    // all display fields are now in dedicated columns.
+    const dbForms = {};
+    formsResult.recordset.forEach(row => {
+      dbForms[row.formType] = row;
+    });
+
+    // Build full response for all 15 form types
+    const forms = {};
+    let completedCount = 0;
+
+    VALID_FORM_TYPES.forEach(formType => {
+      const meta = FORM_METADATA[formType] || { formNumber: 0, priority: 'medium' };
+      const row  = dbForms[formType];
+
+      if (!row) {
+        forms[formType] = {
+          formNumber:          meta.formNumber,
+          priority:            meta.priority,
+          status:              'not_started',
+          completionPercentage: 0,
+          completedBy:         null,
+          completedAt:         null,
+          createdBy:           null,
+          createdAt:           null,
+          updatedBy:           null,
+          lastUpdated:         null,
+          submissionID:        submission?.submissionID || null,
+        };
+        return;
+      }
+
+      if (row.status === 'completed') completedCount++;
+
+      forms[formType] = {
+        formNumber:          meta.formNumber,
+        // Use the stored priority column; fall back to metadata default
+        priority:            row.priority            || meta.priority,
+        status:              row.status              || 'draft',
+        completionPercentage: Number(row.completionPercentage ?? 0),
+        completedBy:         row.completedBy         || null,
+        completedAt:         row.completedAt         || null,
+        createdBy:           row.createdBy           || null,
+        createdAt:           row.createdAt           || null,
+        updatedBy:           row.updatedBy           || null,
+        lastUpdated:         row.updatedAt           || null,
+        lastAutoSave:        row.lastAutoSave        || null,
+        // Prefer the form's own FK submissionID column; fall back to latest submission
+        submissionID:        row.submissionID        || submission?.submissionID || null,
+      };
+    });
+
+    const overallCompletion = Math.round((completedCount / VALID_FORM_TYPES.length) * 100);
+
+    logUserAction(req, 'GET', 'AuthorizationForms');
+
+    res.json({
+      clientID,
+      forms,
+      overallCompletion,
+      totalForms:    VALID_FORM_TYPES.length,
+      completedForms: completedCount,
+      lastUpdated:   new Date().toISOString(),
+      submission:    submission || null,
+    });
+
+  } catch (err) {
+    console.error('Error fetching authorization forms list:', err);
+    res.status(500).json({
+      message: 'Error fetching authorization forms',
+      error: err.message,
+    });
+  }
+});
 
 /**
  * POST /:clientID/form/:formType
@@ -284,66 +449,130 @@ router.post('/:clientID/form/:formType', async (req, res) => {
       });
     }
     
-    // Prepare form data
-    const formData = {
-      ...req.body,
+    // ─── Resolve save metadata ───────────────────────────────────────────────
+    const incomingPct  = Number(req.body.completionPercentage ?? 0);
+    const isComplete   = isFormComplete(formType, req.body, incomingPct);
+    const newStatus    = isComplete ? 'completed' : 'in_progress';
+    const currentUser  = req.userEmail || req.user?.email || req.user?.name || 'system';
+    const now          = new Date();
+
+    // priority: honour whatever the frontend sent, default to schema value
+    const formPriority = req.body.priority || FORM_METADATA[formType]?.priority || 'medium';
+
+    // checkboxData: some forms (orientation) keep checkboxes in a dedicated field
+    const checkboxData = req.body.checkboxes
+      ? JSON.stringify(req.body.checkboxes)
+      : req.body.checkboxData || null;
+
+    // signature: use the canonical top-level signature field when present
+    const signature = req.body.signature || null;
+
+    // Strip fields that are stored as dedicated columns out of the JSON blob
+    // so we don't duplicate data between columns and the blob.
+    const { checkboxes, priority: _p, completionPercentage: _pct, status: _s,
+            completedBy: _cb, completedAt: _ca, createdBy: _crb, updatedBy: _ub,
+            submissionID: _sid, signature: _sig, checkboxData: _cd,
+            ...formDataPayload } = req.body;
+
+    const formDataJson = JSON.stringify({
+      ...formDataPayload,
       clientID,
       formType,
-      status: req.body.signature && req.body.completionPercentage === 100 ? 'completed' : 'draft',
-      updatedAt: new Date()
-    };
-    
-    // Check if form exists
+    });
+
+    // ─── Check if form already exists ───────────────────────────────────────
     const existingForm = await pool.request()
       .input('clientID', sql.VarChar(50), clientID)
       .input('formType', sql.VarChar(50), formType)
-      .query('SELECT * FROM AuthorizationForms WHERE clientID = @clientID AND formType = @formType');
-    
-    let result;
-    
-    if (existingForm.recordset.length > 0) {
-      // Update existing form
-      result = await pool.request()
-        .input('clientID', sql.VarChar(50), clientID)
-        .input('formType', sql.VarChar(50), formType)
-        .input('formData', sql.NVarChar(sql.MAX), JSON.stringify(formData))
-        .input('status', sql.VarChar(20), formData.status)
+      .query(`
+        SELECT formID, status, createdBy, completedBy, completedAt
+        FROM AuthorizationForms
+        WHERE clientID = @clientID AND formType = @formType
+      `);
+
+    const isNew = existingForm.recordset.length === 0;
+    const prev  = existingForm.recordset[0] || {};
+
+    if (isNew) {
+      // ── INSERT ─────────────────────────────────────────────────────────────
+      await pool.request()
+        .input('clientID',             sql.NVarChar(50),         clientID)
+        .input('formType',             sql.NVarChar(50),         formType)
+        .input('formData',             sql.NVarChar(sql.MAX),    formDataJson)
+        .input('checkboxData',         sql.NVarChar(sql.MAX),    checkboxData)
+        .input('signature',            sql.NVarChar(200),        signature)
+        .input('completionPercentage', sql.Decimal(5, 2),        incomingPct)
+        .input('status',               sql.NVarChar(20),         newStatus)
+        .input('priority',             sql.NVarChar(10),         formPriority)
+        .input('createdBy',            sql.NVarChar(100),        currentUser)
+        .input('updatedBy',            sql.NVarChar(100),        currentUser)
+        .input('completedBy',          sql.NVarChar(100),        isComplete ? currentUser : null)
+        .input('completedAt',          sql.DateTime2,            isComplete ? now : null)
         .query(`
-          UPDATE AuthorizationForms 
-          SET formData = @formData,
-              status = @status,
-              updatedAt = GETDATE()
+          INSERT INTO AuthorizationForms
+            (clientID, formType, formData, checkboxData, signature,
+             completionPercentage, status, priority,
+             completedBy, completedAt,
+             createdBy, updatedBy, createdAt, updatedAt)
+          VALUES
+            (@clientID, @formType, @formData, @checkboxData, @signature,
+             @completionPercentage, @status, @priority,
+             @completedBy, @completedAt,
+             @createdBy, @updatedBy, GETDATE(), GETDATE())
+        `);
+
+      logUserAction(req, 'CREATE', 'AuthorizationForm');
+
+    } else {
+      // ── UPDATE ─────────────────────────────────────────────────────────────
+      // Only set completedBy/completedAt on the transition to completed —
+      // don't overwrite them if a form is being re-edited after completion.
+      const wasCompleted   = prev.status === 'completed';
+      const nowCompleted   = isComplete;
+      const completedBy    = nowCompleted ? (prev.completedBy || currentUser) : prev.completedBy;
+      const completedAt    = nowCompleted ? (prev.completedAt || now)         : prev.completedAt;
+
+      await pool.request()
+        .input('clientID',             sql.NVarChar(50),         clientID)
+        .input('formType',             sql.NVarChar(50),         formType)
+        .input('formData',             sql.NVarChar(sql.MAX),    formDataJson)
+        .input('checkboxData',         sql.NVarChar(sql.MAX),    checkboxData)
+        .input('signature',            sql.NVarChar(200),        signature)
+        .input('completionPercentage', sql.Decimal(5, 2),        incomingPct)
+        .input('status',               sql.NVarChar(20),         newStatus)
+        .input('priority',             sql.NVarChar(10),         formPriority)
+        .input('updatedBy',            sql.NVarChar(100),        currentUser)
+        .input('completedBy',          sql.NVarChar(100),        completedBy  || null)
+        .input('completedAt',          sql.DateTime2,            completedAt  || null)
+        .query(`
+          UPDATE AuthorizationForms
+          SET formData             = @formData,
+              checkboxData         = @checkboxData,
+              signature            = @signature,
+              completionPercentage = @completionPercentage,
+              status               = @status,
+              priority             = @priority,
+              updatedBy            = @updatedBy,
+              updatedAt            = GETDATE(),
+              completedBy          = @completedBy,
+              completedAt          = @completedAt
           WHERE clientID = @clientID AND formType = @formType
         `);
-      
-      // Log action
+
       logUserAction(req, 'UPDATE', 'AuthorizationForm');
-    } else {
-      // Insert new form
-      result = await pool.request()
-        .input('clientID', sql.VarChar(50), clientID)
-        .input('formType', sql.VarChar(50), formType)
-        .input('formData', sql.NVarChar(sql.MAX), JSON.stringify(formData))
-        .input('status', sql.VarChar(20), formData.status)
-        .query(`
-          INSERT INTO AuthorizationForms 
-            (clientID, formType, formData, status, createdAt, updatedAt)
-          VALUES 
-            (@clientID, @formType, @formData, @status, GETDATE(), GETDATE())
-        `);
-      
-      // Log action
-      logUserAction(req, 'CREATE', 'AuthorizationForm');
     }
-    
-    // ✅ FIX: Return flat structure with formData properties at root level
-    res.json({ 
-      message: existingForm.recordset.length > 0 ? 'Form updated successfully' : 'Form created successfully',
+
+    res.json({
+      message:             isNew ? 'Form created successfully' : 'Form updated successfully',
       clientID,
       formType,
-      status: formData.status,
-      ...formData,  // Spread formData properties at root level
-      lastSaved: new Date().toISOString()
+      status:              newStatus,
+      completionPercentage: incomingPct,
+      priority:            formPriority,
+      completedBy:         isComplete ? (prev.completedBy || currentUser) : null,
+      completedAt:         isComplete ? (prev.completedAt || now.toISOString()) : null,
+      createdBy:           isNew ? currentUser : (prev.createdBy || null),
+      lastSaved:           now.toISOString(),
     });
     
   } catch (err) {
@@ -373,17 +602,33 @@ router.get('/:clientID/form/:formType', async (req, res) => {
       return res.status(404).json({ message: 'Form not found' });
     }
     
-    const form = result.recordset[0];
-    const formData = JSON.parse(form.formData || '{}');
-    
-    // Log action
+    const form     = result.recordset[0];
+    let formData   = {};
+    try { formData = JSON.parse(form.formData || '{}'); } catch (_) {}
+
+    // Dedicated columns are authoritative — they were written explicitly on save.
+    // formData JSON is supplementary (contains the actual field values for the form UI).
     logUserAction(req, 'GET', 'AuthorizationForm');
-    
+
     res.json({
+      // Form UI fields from the JSON blob
       ...formData,
-      status: form.status,
-      createdAt: form.createdAt,
-      updatedAt: form.updatedAt
+      // Dedicated columns override anything in the blob
+      formID:              form.formID,
+      clientID:            form.clientID,
+      formType:            form.formType,
+      checkboxData:        form.checkboxData ? JSON.parse(form.checkboxData) : formData.checkboxes || null,
+      signature:           form.signature    || formData.signature || null,
+      completionPercentage: Number(form.completionPercentage ?? formData.completionPercentage ?? 0),
+      status:              form.status,
+      priority:            form.priority,
+      submissionID:        form.submissionID || null,
+      completedBy:         form.completedBy  || null,
+      completedAt:         form.completedAt  || null,
+      createdBy:           form.createdBy    || null,
+      createdAt:           form.createdAt,
+      updatedBy:           form.updatedBy    || null,
+      updatedAt:           form.updatedAt,
     });
     
   } catch (err) {
@@ -401,54 +646,80 @@ router.get('/:clientID/form/:formType', async (req, res) => {
  */
 router.post('/:clientID/form/:formType/autosave', async (req, res) => {
   const { clientID, formType } = req.params;
-  
+
   try {
-    const pool = await poolPromise;
-    
-    const formData = {
-      ...req.body,
-      clientID,
-      formType,
-      status: 'draft',
-      updatedAt: new Date()
-    };
-    
+    const pool        = await poolPromise;
+    const currentUser = req.userEmail || req.user?.email || req.user?.name || 'system';
+    const incomingPct = Number(req.body.completionPercentage ?? 0);
+    const formPriority = req.body.priority || FORM_METADATA[formType]?.priority || 'medium';
+
+    // Strip dedicated-column fields from the JSON blob
+    const { checkboxes, priority: _p, completionPercentage: _pct, status: _s,
+            completedBy: _cb, completedAt: _ca, createdBy: _crb, updatedBy: _ub,
+            submissionID: _sid, signature: _sig, checkboxData: _cd,
+            ...formDataPayload } = req.body;
+
+    const formDataJson = JSON.stringify({ ...formDataPayload, clientID, formType });
+    const checkboxData = req.body.checkboxes ? JSON.stringify(req.body.checkboxes) : req.body.checkboxData || null;
+
     // Check if form exists
     const existingForm = await pool.request()
-      .input('clientID', sql.VarChar(50), clientID)
-      .input('formType', sql.VarChar(50), formType)
-      .query('SELECT * FROM AuthorizationForms WHERE clientID = @clientID AND formType = @formType');
-    
+      .input('clientID', sql.NVarChar(50), clientID)
+      .input('formType', sql.NVarChar(50), formType)
+      .query('SELECT formID FROM AuthorizationForms WHERE clientID = @clientID AND formType = @formType');
+
     if (existingForm.recordset.length > 0) {
-      // Update existing
       await pool.request()
-        .input('clientID', sql.VarChar(50), clientID)
-        .input('formType', sql.VarChar(50), formType)
-        .input('formData', sql.NVarChar(sql.MAX), JSON.stringify(formData))
-        .query('UPDATE AuthorizationForms SET formData = @formData, updatedAt = GETDATE() WHERE clientID = @clientID AND formType = @formType');
+        .input('clientID',             sql.NVarChar(50),      clientID)
+        .input('formType',             sql.NVarChar(50),      formType)
+        .input('formData',             sql.NVarChar(sql.MAX), formDataJson)
+        .input('checkboxData',         sql.NVarChar(sql.MAX), checkboxData)
+        .input('completionPercentage', sql.Decimal(5, 2),     incomingPct)
+        .input('priority',             sql.NVarChar(10),      formPriority)
+        .input('updatedBy',            sql.NVarChar(100),     currentUser)
+        .query(`
+          UPDATE AuthorizationForms
+          SET formData             = @formData,
+              checkboxData         = @checkboxData,
+              completionPercentage = @completionPercentage,
+              priority             = @priority,
+              updatedBy            = @updatedBy,
+              lastAutoSave         = GETDATE(),
+              updatedAt            = GETDATE()
+          WHERE clientID = @clientID AND formType = @formType
+        `);
     } else {
-      // Insert new
       await pool.request()
-        .input('clientID', sql.VarChar(50), clientID)
-        .input('formType', sql.VarChar(50), formType)
-        .input('formData', sql.NVarChar(sql.MAX), JSON.stringify(formData))
-        .input('status', sql.VarChar(20), 'draft')
-        .query('INSERT INTO AuthorizationForms (clientID, formType, formData, status, createdAt, updatedAt) VALUES (@clientID, @formType, @formData, @status, GETDATE(), GETDATE())');
+        .input('clientID',             sql.NVarChar(50),      clientID)
+        .input('formType',             sql.NVarChar(50),      formType)
+        .input('formData',             sql.NVarChar(sql.MAX), formDataJson)
+        .input('checkboxData',         sql.NVarChar(sql.MAX), checkboxData)
+        .input('completionPercentage', sql.Decimal(5, 2),     incomingPct)
+        .input('status',               sql.NVarChar(20),      'in_progress')
+        .input('priority',             sql.NVarChar(10),      formPriority)
+        .input('createdBy',            sql.NVarChar(100),     currentUser)
+        .input('updatedBy',            sql.NVarChar(100),     currentUser)
+        .query(`
+          INSERT INTO AuthorizationForms
+            (clientID, formType, formData, checkboxData, completionPercentage,
+             status, priority, createdBy, updatedBy, lastAutoSave, createdAt, updatedAt)
+          VALUES
+            (@clientID, @formType, @formData, @checkboxData, @completionPercentage,
+             @status, @priority, @createdBy, @updatedBy, GETDATE(), GETDATE(), GETDATE())
+        `);
     }
-    
-    res.json({ 
-      message: 'Form autosaved',
+
+    res.json({
+      message:             'Form autosaved',
       clientID,
       formType,
-      status: 'draft'
+      completionPercentage: incomingPct,
+      autoSavedAt:         new Date().toISOString(),
     });
-    
+
   } catch (err) {
     console.error('Autosave error:', err);
-    res.status(500).json({ 
-      message: 'Error autosaving form',
-      error: err.message 
-    });
+    res.status(500).json({ message: 'Error autosaving form', error: err.message });
   }
 });
 
@@ -459,69 +730,117 @@ router.post('/:clientID/form/:formType/autosave', async (req, res) => {
 router.post('/:clientID/forms/bulk', async (req, res) => {
   const { clientID } = req.params;
   const { forms } = req.body;
-  
+
   if (!Array.isArray(forms)) {
     return res.status(400).json({ message: 'forms must be an array' });
   }
-  
   if (forms.length === 0) {
     return res.status(400).json({ message: 'forms array cannot be empty' });
   }
-  
+
   try {
-    const pool = await poolPromise;
+    const pool        = await poolPromise;
+    const currentUser = req.userEmail || req.user?.email || req.user?.name || 'system';
     const transaction = new sql.Transaction(pool);
     await transaction.begin();
-    
+
     const results = [];
-    
+
     try {
       for (const form of forms) {
-        const { formType, ...formData } = form;
-        
-        if (!VALID_FORM_TYPES.includes(formType)) {
-          continue; // Skip invalid form types
-        }
-        
-        const data = {
-          ...formData,
-          clientID,
-          formType,
-          updatedAt: new Date()
-        };
-        
-        // Check if exists
+        const { formType, ...rest } = form;
+
+        if (!VALID_FORM_TYPES.includes(formType)) continue;
+
+        const incomingPct  = Number(rest.completionPercentage ?? 0);
+        const isComplete   = isFormComplete(formType, rest, incomingPct);
+        const newStatus    = isComplete ? 'completed' : 'in_progress';
+        const formPriority = rest.priority || FORM_METADATA[formType]?.priority || 'medium';
+        const checkboxData = rest.checkboxes ? JSON.stringify(rest.checkboxes) : rest.checkboxData || null;
+        const signature    = rest.signature || null;
+        const now          = new Date();
+
+        const { checkboxes, priority: _p, completionPercentage: _pct, status: _s,
+                completedBy: _cb, completedAt: _ca, createdBy: _crb, updatedBy: _ub,
+                submissionID: _sid, signature: _sig, checkboxData: _cd,
+                ...formDataPayload } = rest;
+
+        const formDataJson = JSON.stringify({ ...formDataPayload, clientID, formType });
+
         const existing = await transaction.request()
-          .input('clientID', sql.VarChar(50), clientID)
-          .input('formType', sql.VarChar(50), formType)
-          .query('SELECT * FROM AuthorizationForms WHERE clientID = @clientID AND formType = @formType');
-        
-        if (existing.recordset.length > 0) {
-          // Update
+          .input('clientID', sql.NVarChar(50), clientID)
+          .input('formType', sql.NVarChar(50), formType)
+          .query('SELECT formID, status, createdBy, completedBy, completedAt FROM AuthorizationForms WHERE clientID = @clientID AND formType = @formType');
+
+        const prev = existing.recordset[0] || null;
+
+        if (prev) {
+          const completedBy = isComplete ? (prev.completedBy || currentUser) : prev.completedBy;
+          const completedAt = isComplete ? (prev.completedAt || now)         : prev.completedAt;
+
           await transaction.request()
-            .input('clientID', sql.VarChar(50), clientID)
-            .input('formType', sql.VarChar(50), formType)
-            .input('formData', sql.NVarChar(sql.MAX), JSON.stringify(data))
-            .query('UPDATE AuthorizationForms SET formData = @formData, updatedAt = GETDATE() WHERE clientID = @clientID AND formType = @formType');
+            .input('clientID',             sql.NVarChar(50),      clientID)
+            .input('formType',             sql.NVarChar(50),      formType)
+            .input('formData',             sql.NVarChar(sql.MAX), formDataJson)
+            .input('checkboxData',         sql.NVarChar(sql.MAX), checkboxData)
+            .input('signature',            sql.NVarChar(200),     signature)
+            .input('completionPercentage', sql.Decimal(5, 2),     incomingPct)
+            .input('status',               sql.NVarChar(20),      newStatus)
+            .input('priority',             sql.NVarChar(10),      formPriority)
+            .input('updatedBy',            sql.NVarChar(100),     currentUser)
+            .input('completedBy',          sql.NVarChar(100),     completedBy || null)
+            .input('completedAt',          sql.DateTime2,         completedAt || null)
+            .query(`
+              UPDATE AuthorizationForms
+              SET formData             = @formData,
+                  checkboxData         = @checkboxData,
+                  signature            = @signature,
+                  completionPercentage = @completionPercentage,
+                  status               = @status,
+                  priority             = @priority,
+                  updatedBy            = @updatedBy,
+                  updatedAt            = GETDATE(),
+                  completedBy          = @completedBy,
+                  completedAt          = @completedAt
+              WHERE clientID = @clientID AND formType = @formType
+            `);
         } else {
-          // Insert
           await transaction.request()
-            .input('clientID', sql.VarChar(50), clientID)
-            .input('formType', sql.VarChar(50), formType)
-            .input('formData', sql.NVarChar(sql.MAX), JSON.stringify(data))
-            .input('status', sql.VarChar(20), 'draft')
-            .query('INSERT INTO AuthorizationForms (clientID, formType, formData, status, createdAt, updatedAt) VALUES (@clientID, @formType, @formData, @status, GETDATE(), GETDATE())');
+            .input('clientID',             sql.NVarChar(50),      clientID)
+            .input('formType',             sql.NVarChar(50),      formType)
+            .input('formData',             sql.NVarChar(sql.MAX), formDataJson)
+            .input('checkboxData',         sql.NVarChar(sql.MAX), checkboxData)
+            .input('signature',            sql.NVarChar(200),     signature)
+            .input('completionPercentage', sql.Decimal(5, 2),     incomingPct)
+            .input('status',               sql.NVarChar(20),      newStatus)
+            .input('priority',             sql.NVarChar(10),      formPriority)
+            .input('createdBy',            sql.NVarChar(100),     currentUser)
+            .input('updatedBy',            sql.NVarChar(100),     currentUser)
+            .input('completedBy',          sql.NVarChar(100),     isComplete ? currentUser : null)
+            .input('completedAt',          sql.DateTime2,         isComplete ? now : null)
+            .query(`
+              INSERT INTO AuthorizationForms
+                (clientID, formType, formData, checkboxData, signature,
+                 completionPercentage, status, priority,
+                 completedBy, completedAt,
+                 createdBy, updatedBy, createdAt, updatedAt)
+              VALUES
+                (@clientID, @formType, @formData, @checkboxData, @signature,
+                 @completionPercentage, @status, @priority,
+                 @completedBy, @completedAt,
+                 @createdBy, @updatedBy, GETDATE(), GETDATE())
+            `);
         }
-        
-        results.push({ formType, success: true });
+
+        results.push({ formType, status: newStatus, completionPercentage: incomingPct, success: true });
       }
-      
+
       await transaction.commit();
-      
-      res.json({ 
-        message: 'Forms saved successfully',
+
+      res.json({
+        message:    'Forms saved successfully',
         savedForms: results.length,
-        results
+        results,
       });
     } catch (err) {
       await transaction.rollback();
@@ -529,10 +848,7 @@ router.post('/:clientID/forms/bulk', async (req, res) => {
     }
   } catch (err) {
     console.error('Bulk save error:', err);
-    res.status(500).json({ 
-      message: 'Error saving forms',
-      error: err.message 
-    });
+    res.status(500).json({ message: 'Error saving forms', error: err.message });
   }
 });
 

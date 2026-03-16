@@ -140,6 +140,7 @@ let bioSocialRouterLoaded = false;
 let mentalHealthRouterLoaded = false;
 let reassessmentRouterLoaded = false;
 let mentalArchiveRouterLoaded = false;
+let clientExportRouterLoaded = false;
 
 
 // ✅ NEW: Try to load your actual routes first
@@ -230,70 +231,61 @@ try {
     router.get('/:clientID/forms', (req, res) => {
       const { clientID } = req.params;
       console.log('📋 Getting all authorization forms (MOCK):', clientID);
-      
-      const mockData = {
+
+      const FORM_META = [
+        { formType: 'orientation',      formNumber: 1,  priority: 'high'   },
+        { formType: 'clientRights',     formNumber: 2,  priority: 'high'   },
+        { formType: 'consentTreatment', formNumber: 3,  priority: 'high'   },
+        { formType: 'preScreen',        formNumber: 4,  priority: 'medium' },
+        { formType: 'privacyPractice',  formNumber: 5,  priority: 'medium' },
+        { formType: 'lahmis',           formNumber: 6,  priority: 'medium' },
+        { formType: 'phiRelease',       formNumber: 7,  priority: 'medium' },
+        { formType: 'residencePolicy',  formNumber: 8,  priority: 'medium' },
+        { formType: 'authDisclosure',   formNumber: 9,  priority: 'medium' },
+        { formType: 'termination',      formNumber: 10, priority: 'low'    },
+        { formType: 'advDirective',     formNumber: 11, priority: 'medium' },
+        { formType: 'grievances',       formNumber: 12, priority: 'medium' },
+        { formType: 'healthDisclosure', formNumber: 13, priority: 'medium' },
+        { formType: 'consentPhoto',     formNumber: 14, priority: 'medium' },
+        { formType: 'housingAgreement', formNumber: 15, priority: 'low'    },
+      ];
+
+      // Build forms map — check in-memory mock storage first, then return sensible defaults
+      const forms = {};
+      let completedCount = 0;
+
+      FORM_META.forEach(({ formType, formNumber, priority }) => {
+        const formKey  = `${clientID}_${formType}`;
+        const saved    = mockAuthorizationForms[formKey];
+        const isComplete = saved
+          ? (saved.status === 'completed' || Number(saved.completionPercentage) === 100)
+          : false;
+
+        if (isComplete) completedCount++;
+
+        forms[formType] = {
+          formNumber,
+          priority,
+          status:              saved?.status              || 'not_started',
+          completionPercentage: Number(saved?.completionPercentage ?? 0),
+          completedBy:         saved?.completedBy         || null,
+          completedAt:         saved?.completedAt         || null,
+          createdBy:           saved?.createdBy           || null,
+          createdAt:           saved?.savedAt             || null,
+          lastUpdated:         saved?.savedAt             || null,
+          submissionID:        null,
+        };
+      });
+
+      res.json({
         clientID,
-        forms: {
-          orientation: {
-            completed: true,
-            completedAt: "2025-01-15T10:30:00Z",
-            completedBy: "john.doe@hospital.com",
-            checkboxes: {
-              "Client Rights and Responsibilities": true,
-              "Privacy Practices Notice": true,
-              "Consent for Treatment and Services": true,
-              "clientAuthHI": true,
-              "clientAuthRel": true
-            },
-            signature: "John Doe",
-            completionPercentage: 100
-          },
-          clientRights: {
-            completed: false,
-            completedAt: null,
-            completedBy: null,
-            signature: null,
-            completionPercentage: 0
-          },
-          consentTreatment: {
-            completed: true,
-            completedAt: "2025-01-15T11:15:00Z",
-            completedBy: "john.doe@hospital.com",
-            signature: "John Doe",
-            completionPercentage: 100
-          },
-          consentPhoto: {
-            completed: false,
-            completedAt: null,
-            completedBy: null,
-            completionPercentage: 50
-          },
-          authDisclosure: {
-            completed: false,
-            completedAt: null,
-            completedBy: null,
-            completionPercentage: 0
-          },
-          advDirective: {
-            completed: false,
-            completedAt: null,
-            completedBy: null,
-            completionPercentage: 0
-          },
-          housingAgree: {
-            completed: false,
-            completedAt: null,
-            completedBy: null,
-            completionPercentage: 0
-          }
-        },
-        lastUpdated: "2025-01-15T11:15:00Z",
-        overallCompletion: 33,
-        totalForms: 15,
-        completedForms: 5
-      };
-      
-      res.json(mockData);
+        forms,
+        overallCompletion: Math.round((completedCount / FORM_META.length) * 100),
+        totalForms:        FORM_META.length,
+        completedForms:    completedCount,
+        lastUpdated:       new Date().toISOString(),
+        submission:        null,
+      });
     });
     
     // GET /api/authorization/:clientID/form/:formType - Get specific form
@@ -400,34 +392,49 @@ try {
       const { clientID, formType } = req.params;
       const data = req.body;
       console.log('💾 Saving form data (MOCK):', clientID, formType);
-      
+
       // Transform data for specific form types
       let transformedData = { ...data };
-      
+
       // Handle consentPhoto array transformations
       if (formType === 'consentPhoto') {
         ['clientReleaseItems', 'clientReleasePurposes', 'clientReleasePHTItems'].forEach(field => {
           if (Array.isArray(data[field])) {
-            transformedData[field] = data[field].map(item => 
+            transformedData[field] = data[field].map(item =>
               typeof item === 'object' ? item : { value: item }
             );
           }
         });
       }
-      
+
+      // Determine completion using all known signature field names
+      const pct        = Number(data.completionPercentage ?? 0);
+      const hasSig     = !!(
+        data.signature          || data.clientSignature  ||
+        data.consentPhotoSign1  || data.atrClientSign    ||
+        data.housingAgreeeSign
+      );
+      const isComplete = pct === 100 || hasSig;
+      const now        = new Date().toISOString();
+      const mockUser   = 'mock.user@hospital.com';
+
       // Save to mock storage
       const formKey = `${clientID}_${formType}`;
+      const existing = mockAuthorizationForms[formKey];
+
       mockAuthorizationForms[formKey] = {
-        formID: `MOCK-${formType.toUpperCase()}-${Date.now()}`,
+        formID:              `MOCK-${formType.toUpperCase()}-${Date.now()}`,
         clientID,
         formType,
         ...transformedData,
-        savedAt: new Date().toISOString(),
-        status: data.signature || data.clientSignature || data.consentPhotoSign1 || data.atrClientSign || data.housingAgreeeSign 
-          ? 'completed' 
-          : 'in_progress'
+        completionPercentage: pct,
+        status:              isComplete ? 'completed' : 'in_progress',
+        completedBy:         isComplete ? mockUser : null,
+        completedAt:         isComplete ? now      : null,
+        createdBy:           existing?.createdBy || mockUser,
+        savedAt:             now,
       };
-      
+
       console.log('✅ Form saved successfully (MOCK)');
       res.json(mockAuthorizationForms[formKey]);
     });
@@ -662,6 +669,7 @@ app.get('/api/health', (req, res) => {
       // In the health check routes object, add:
       miscDoc: miscDocRouterLoaded ? 'Real Azure SQL router' : 'Not loaded',
       personalInventory: personalInventoryRouterLoaded ? 'Real Azure SQL router' : 'Not loaded',
+      clientExport: clientExportRouterLoaded ? 'Real Azure SQL router' : 'Not loaded',
 
     },
     section3Endpoints: {
@@ -1168,6 +1176,18 @@ if (!medFaceSheetRouterLoaded) {
 }
 //End Section 5: Medical ===================================================================
 
+// ============================================================================
+// PDF Export Route
+// ============================================================================
+try {
+  const clientExportRouter = require('./routes/clientExport.js');
+  app.use('/api/export', clientExportRouter);
+  console.log('✅ Client Export router loaded from ./routes/clientExport.js');
+  clientExportRouterLoaded = true;
+} catch (err) {
+  console.log('⚠️  Could not load ./routes/clientExport.js:', err.message);
+}
+
 
 app.get('/api/debug/storage', (req, res) => {
   res.json({
@@ -1256,6 +1276,9 @@ if (process.env.NODE_ENV !== 'test') {
       console.log(`📝 Environment: ${process.env.NODE_ENV || 'development'}`);
       console.log(`💾 Database: ${dbConnected ? '✅ Azure SQL Connected' : '⚠️  Mock Data Only'}`);
       console.log(`☁️  Azure Storage: ${process.env.AZURE_STORAGE_CONNECTION_STRING ? '✅ Configured' : '⚠️  Not configured'}`);
+      console.log('STORAGE STRING:', process.env.AZURE_STORAGE_CONNECTION_STRING);
+      const connStr = process.env.AZURE_STORAGE_CONNECTION_STRING;
+      console.log('Using connection string:', connStr); // add this temporarily
       console.log(`🔗 Health check: http://localhost:${PORT}/api/health`);
       console.log(`🔍 Debug endpoint: http://localhost:${PORT}/api/debug/database`);
       
@@ -1318,6 +1341,8 @@ if (process.env.NODE_ENV !== 'test') {
       console.log('    - healthDisclosure: Health Info Disclosure');
       console.log('    - interimHousing  : Interim Housing Agreement');
       console.log('    - termination     : Termination Policy');
+      console.log('  📄 Export:');
+      console.log(`    ClientExport: ${clientExportRouterLoaded ? '✅ Real Azure SQL' : '❌ Not loaded'}`);
     });
 }
 // Error handling middleware

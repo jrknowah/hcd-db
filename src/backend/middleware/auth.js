@@ -43,7 +43,7 @@ const authMiddleware = async (req, res, next) => {
     }
 
     // For development/testing - allow bypass with specific token
-    if (process.env.NODE_ENV === 'development' && token === 'dev-bypass-token') {
+    if (token === 'dev-bypass-token' && process.env.NODE_ENV !== 'production') {
       req.user = {
         email: 'dev@example.com',
         name: 'Development User',
