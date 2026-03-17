@@ -11,6 +11,7 @@
 
 import { useState } from 'react';
 import { useSelector } from 'react-redux';
+import { useMsal } from '@azure/msal-react';
 import {
   Box,
   Button,
@@ -35,6 +36,10 @@ import DownloadDoneIcon from '@mui/icons-material/DownloadDone';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_APP_API_URL || 'http://localhost:5000';
 
+const LOGIN_REQUEST = {
+  scopes: [`api://${import.meta.env.VITE_AZURE_CLIENT_ID || import.meta.env.VITE_APP_CLIENT_ID}/.default`],
+};
+
 const SECTIONS = [
   { label: 'Section 1 – Identification & Referrals', color: '#1565C0' },
   { label: 'Section 2 – Authorization & Signature Forms', color: '#1976D2' },
@@ -44,33 +49,9 @@ const SECTIONS = [
   { label: 'Section 6 – Case Management', color: '#C62828' },
 ];
 
-// Scan sessionStorage for MSAL access token
-const getMsalTokenFromSession = () => {
-  for (let i = 0; i < sessionStorage.length; i++) {
-    const key = sessionStorage.key(i);
-    if (key && key.includes('accesstoken')) {
-      try {
-        const item = JSON.parse(sessionStorage.getItem(key));
-        if (item?.secret) return item.secret;
-      } catch {}
-    }
-  }
-  return null;
-};
-
 export default function ClientExportPDF({ clientID: propClientID }) {
+  const { instance, accounts } = useMsal();
   const selectedClient = useSelector((state) => state.clients?.selectedClient);
-
-  // Try every common Redux location for the token
-  const reduxToken = useSelector((state) =>
-    state.auth?.token ||
-    state.auth?.accessToken ||
-    state.auth?.idToken ||
-    state.auth?.msalToken ||
-    state.user?.token ||
-    state.user?.accessToken ||
-    null
-  );
 
   const clientID = propClientID || selectedClient?.clientID;
   const clientName = selectedClient
@@ -82,26 +63,22 @@ export default function ClientExportPDF({ clientID: propClientID }) {
   const [errorMsg, setErrorMsg] = useState('');
   const [snackOpen, setSnackOpen] = useState(false);
 
-  const getAuthToken = () => {
-    // 1. Try Redux store
-    if (reduxToken) {
-      console.log('🔑 Token source: Redux store');
-      return reduxToken;
+  const getAuthToken = async () => {
+    const account = accounts[0];
+    if (account) {
+      try {
+        const result = await instance.acquireTokenSilent({ ...LOGIN_REQUEST, account });
+        return result.accessToken;
+      } catch (e) {
+        console.warn('acquireTokenSilent failed, trying popup:', e.message);
+        try {
+          const result = await instance.acquireTokenPopup({ ...LOGIN_REQUEST, account });
+          return result.accessToken;
+        } catch (e2) {
+          console.error('acquireTokenPopup failed:', e2.message);
+        }
+      }
     }
-    // 2. Try MSAL sessionStorage
-    const msalToken = getMsalTokenFromSession();
-    if (msalToken) {
-      console.log('🔑 Token source: MSAL sessionStorage');
-      return msalToken;
-    }
-    // 3. Try localStorage fallbacks
-    const localToken = localStorage.getItem('authToken') || localStorage.getItem('token');
-    if (localToken) {
-      console.log('🔑 Token source: localStorage');
-      return localToken;
-    }
-    // 4. Dev bypass
-    console.log('🔑 Token source: dev-bypass-token');
     return 'dev-bypass-token';
   };
 
@@ -121,7 +98,7 @@ export default function ClientExportPDF({ clientID: propClientID }) {
     }, 600);
 
     try {
-      const authToken = getAuthToken();
+      const authToken = await getAuthToken();
       const headers = {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${authToken}`,
