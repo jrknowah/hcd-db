@@ -33,7 +33,7 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import FolderIcon from '@mui/icons-material/Folder';
 import DownloadDoneIcon from '@mui/icons-material/DownloadDone';
 
-const API_BASE = import.meta.env.VITE_APP_API_URL || 'http://localhost:5000';
+const API_BASE = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_APP_API_URL || 'http://localhost:5000';
 
 const SECTIONS = [
   { label: 'Section 1 – Identification & Referrals', color: '#1565C0' },
