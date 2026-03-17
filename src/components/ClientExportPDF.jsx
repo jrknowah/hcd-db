@@ -11,7 +11,6 @@
 
 import { useState } from 'react';
 import { useSelector } from 'react-redux';
-import { useMsal } from '@azure/msal-react';
 import {
   Box,
   Button,
@@ -36,9 +35,6 @@ import DownloadDoneIcon from '@mui/icons-material/DownloadDone';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_APP_API_URL || 'http://localhost:5000';
 
-const LOGIN_REQUEST = {
-  scopes: [`api://${import.meta.env.VITE_AZURE_CLIENT_ID || import.meta.env.VITE_APP_CLIENT_ID}/.default`],
-};
 
 const SECTIONS = [
   { label: 'Section 1 – Identification & Referrals', color: '#1565C0' },
@@ -50,8 +46,8 @@ const SECTIONS = [
 ];
 
 export default function ClientExportPDF({ clientID: propClientID }) {
-  const { instance, accounts } = useMsal();
   const selectedClient = useSelector((state) => state.clients?.selectedClient);
+  const azureToken = useSelector((state) => state.auth?.azureToken);
 
   const clientID = propClientID || selectedClient?.clientID;
   const clientName = selectedClient
@@ -63,22 +59,12 @@ export default function ClientExportPDF({ clientID: propClientID }) {
   const [errorMsg, setErrorMsg] = useState('');
   const [snackOpen, setSnackOpen] = useState(false);
 
-  const getAuthToken = async () => {
-    const account = accounts[0];
-    if (account) {
-      try {
-        const result = await instance.acquireTokenSilent({ ...LOGIN_REQUEST, account });
-        return result.accessToken;
-      } catch (e) {
-        console.warn('acquireTokenSilent failed, trying popup:', e.message);
-        try {
-          const result = await instance.acquireTokenPopup({ ...LOGIN_REQUEST, account });
-          return result.accessToken;
-        } catch (e2) {
-          console.error('acquireTokenPopup failed:', e2.message);
-        }
-      }
-    }
+  const getAuthToken = () => {
+    // 1. Redux store (set by loginWithAzure thunk)
+    if (azureToken && azureToken !== 'no-token') return azureToken;
+    // 2. localStorage fallback (persisted by authSlice)
+    const stored = localStorage.getItem('azureToken');
+    if (stored && stored !== 'no-token') return stored;
     return 'dev-bypass-token';
   };
 
@@ -98,7 +84,7 @@ export default function ClientExportPDF({ clientID: propClientID }) {
     }, 600);
 
     try {
-      const authToken = await getAuthToken();
+      const authToken = getAuthToken();
       const headers = {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${authToken}`,

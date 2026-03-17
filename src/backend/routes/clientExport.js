@@ -961,23 +961,6 @@ async function renderSection3(doc, pool, clientID) {
     fetched.strengths_error   = e.message;
   }
 
-  // CarePlan child tables (carePlanID FK)
-  fetched.carePlanActivities    = [];
-  fetched.carePlanProgressNotes = [];
-  if (fetched.carePlans && fetched.carePlans.length) {
-    const ids = fetched.carePlans
-      .map(cp => `'${String(cp.carePlanID).replace(/'/g, "''")}'`).join(',');
-    try {
-      const ra = await pool.request()
-        .query(`SELECT * FROM dbo.CarePlanActivities WHERE carePlanID IN (${ids}) ORDER BY createdAt DESC`);
-      fetched.carePlanActivities = ra.recordset;
-    } catch {}
-    try {
-      const rp = await pool.request()
-        .query(`SELECT * FROM dbo.CarePlanProgressNotes WHERE carePlanID IN (${ids}) ORDER BY noteDate DESC`);
-      fetched.carePlanProgressNotes = rp.recordset;
-    } catch {}
-  }
 
   // ── Summary table ─────────────────────────────────────────────────────────
   const S3_SUMMARY = [
@@ -985,8 +968,6 @@ async function renderSection3(doc, pool, clientID) {
     { key: 'mentalHealth',        label: 'Mental Health Assessment'        },
     { key: 'reassessment',        label: 'Reassessment / Follow-Up'        },
     { key: 'carePlans',           label: 'Care Plans'                      },
-    { key: 'carePlanActivities',  label: 'Care Plan Activities'            },
-    { key: 'carePlanProgressNotes',label:'Care Plan Progress Notes'        },
     { key: 'substanceAbuse',      label: 'Substance Use History'           },
     { key: 'arrests',             label: 'Arrest History'                  },
     { key: 'hospitalizations',    label: 'MH Hospitalizations'             },
@@ -1335,66 +1316,9 @@ async function renderSection3(doc, pool, clientID) {
   }
 
   // ══════════════════════════════════════════════════════════════════════════
-  // 5 — Care Plan Activities
+  // 5 — Substance Use History
   // ══════════════════════════════════════════════════════════════════════════
-  drawS3SubsectionBanner(doc, 5, 'Care Plan Activities');
-  drawSubHeader(doc, 'CarePlanActivities');
-  const caRows = fetched.carePlanActivities;
-  if (!caRows || !caRows.length) {
-    noData(doc);
-  } else {
-    caRows.forEach((ca, i) => {
-      doc.font('Helvetica-Bold').fontSize(9)
-         .text(`Activity #${i + 1} — ${safeStr(ca.activityTitle)}`);
-      drawTwoColumn(doc, [
-        ['Care Plan ID',    ca.carePlanID],
-        ['Assigned To',     ca.assignedTo],
-        ['Due Date',        formatDate(ca.dueDate)],
-        ['Completed',       formatBool(ca.completed)],
-        ['Completed Date',  formatDate(ca.completedDate)],
-        ['Completed By',    ca.completedBy],
-        ['Sort Order',      ca.sortOrder != null ? String(ca.sortOrder) : 'N/A'],
-        ['Created By',      ca.createdBy],
-        ['Created At',      formatDate(ca.createdAt)],
-        ['Updated By',      ca.updatedBy],
-        ['Updated At',      formatDate(ca.updatedAt)],
-      ]);
-      if (ca.activityDescription) drawField(doc, 'Description', ca.activityDescription);
-      if (ca.notes)               drawField(doc, 'Notes',       ca.notes);
-      doc.moveDown(0.3);
-    });
-  }
-
-  // ══════════════════════════════════════════════════════════════════════════
-  // 6 — Care Plan Progress Notes
-  // ══════════════════════════════════════════════════════════════════════════
-  drawS3SubsectionBanner(doc, 6, 'Care Plan Progress Notes');
-  drawSubHeader(doc, 'CarePlanProgressNotes');
-  const cpnRows = fetched.carePlanProgressNotes;
-  if (!cpnRows || !cpnRows.length) {
-    noData(doc);
-  } else {
-    cpnRows.forEach((pn, i) => {
-      doc.font('Helvetica-Bold').fontSize(9)
-         .text(`Progress Note #${i + 1} — ${formatDate(pn.noteDate || pn.createdAt)}`);
-      drawTwoColumn(doc, [
-        ['Care Plan ID',    pn.carePlanID],
-        ['Note Date',       formatDate(pn.noteDate)],
-        ['Progress Status', pn.progressStatus],
-        ['Created By',      pn.createdBy],
-        ['Created At',      formatDate(pn.createdAt)],
-      ]);
-      if (pn.progressDescription) drawField(doc, 'Progress Description', pn.progressDescription);
-      if (pn.barriers)            drawField(doc, 'Barriers',             pn.barriers);
-      if (pn.nextSteps)           drawField(doc, 'Next Steps',           pn.nextSteps);
-      doc.moveDown(0.3);
-    });
-  }
-
-  // ══════════════════════════════════════════════════════════════════════════
-  // 7 — Substance Use History
-  // ══════════════════════════════════════════════════════════════════════════
-  drawS3SubsectionBanner(doc, 7, 'Substance Use History');
+  drawS3SubsectionBanner(doc, 5, 'Substance Use History');
   drawSubHeader(doc, 'SubstanceAbuseData');
   const saRows = fetched.substanceAbuse;
   if (!saRows) {
@@ -1420,9 +1344,9 @@ async function renderSection3(doc, pool, clientID) {
   }
 
   // ══════════════════════════════════════════════════════════════════════════
-  // 8 — Arrest History
+  // 6 — Arrest History
   // ══════════════════════════════════════════════════════════════════════════
-  drawS3SubsectionBanner(doc, 8, 'Arrest History');
+  drawS3SubsectionBanner(doc, 6, 'Arrest History');
   drawSubHeader(doc, 'ArrestRecords');
   const arRows = fetched.arrests;
   if (!arRows) {
@@ -1448,9 +1372,9 @@ async function renderSection3(doc, pool, clientID) {
   }
 
   // ══════════════════════════════════════════════════════════════════════════
-  // 9 — MH Hospitalizations
+  // 7 — MH Hospitalizations
   // ══════════════════════════════════════════════════════════════════════════
-  drawS3SubsectionBanner(doc, 9, 'Mental Health Hospitalizations');
+  drawS3SubsectionBanner(doc, 7, 'Mental Health Hospitalizations');
   drawSubHeader(doc, 'MentalHealthHospitalizations');
   const mhhRows = fetched.hospitalizations;
   if (!mhhRows) {
@@ -1473,9 +1397,9 @@ async function renderSection3(doc, pool, clientID) {
   }
 
   // ══════════════════════════════════════════════════════════════════════════
-  // 10 — Psych Medications
+  // 8 — Psych Medications
   // ══════════════════════════════════════════════════════════════════════════
-  drawS3SubsectionBanner(doc, 10, 'Psych Medications');
+  drawS3SubsectionBanner(doc, 8, 'Psych Medications');
   drawSubHeader(doc, 'MentalHealthMedications');
   const mhmRows = fetched.medications;
   if (!mhmRows) {
@@ -1499,9 +1423,9 @@ async function renderSection3(doc, pool, clientID) {
   }
 
   // ══════════════════════════════════════════════════════════════════════════
-  // 11 — Mental Health Providers
+  // 9 — Mental Health Providers
   // ══════════════════════════════════════════════════════════════════════════
-  drawS3SubsectionBanner(doc, 11, 'Mental Health Providers');
+  drawS3SubsectionBanner(doc, 9, 'Mental Health Providers');
   drawSubHeader(doc, 'MentalHealthProviders');
   const mhpRows = fetched.mhProviders;
   if (!mhpRows) {
@@ -1527,9 +1451,9 @@ async function renderSection3(doc, pool, clientID) {
   }
 
   // ══════════════════════════════════════════════════════════════════════════
-  // 12 — Assessment Milestones
+  // 10 — Assessment Milestones
   // ══════════════════════════════════════════════════════════════════════════
-  drawS3SubsectionBanner(doc, 12, 'Assessment Milestones');
+  drawS3SubsectionBanner(doc, 10, 'Assessment Milestones');
   drawSubHeader(doc, 'AssessmentMilestones');
   const milRows = fetched.milestones;
   if (!milRows) {
@@ -1561,9 +1485,9 @@ async function renderSection3(doc, pool, clientID) {
   }
 
   // ══════════════════════════════════════════════════════════════════════════
-  // 13 — Assessment Risk Factors
+  // 11 — Assessment Risk Factors
   // ══════════════════════════════════════════════════════════════════════════
-  drawS3SubsectionBanner(doc, 13, 'Assessment Risk Factors');
+  drawS3SubsectionBanner(doc, 11, 'Assessment Risk Factors');
   drawSubHeader(doc, 'AssessmentRiskFactors');
   const rfRows = fetched.riskFactors;
   if (!rfRows) {
@@ -1592,9 +1516,9 @@ async function renderSection3(doc, pool, clientID) {
   }
 
   // ══════════════════════════════════════════════════════════════════════════
-  // 14 — Assessment Strengths
+  // 12 — Assessment Strengths
   // ══════════════════════════════════════════════════════════════════════════
-  drawS3SubsectionBanner(doc, 14, 'Assessment Strengths');
+  drawS3SubsectionBanner(doc, 12, 'Assessment Strengths');
   drawSubHeader(doc, 'AssessmentStrengths');
   const stRows = fetched.strengths;
   if (!stRows) {
@@ -1785,38 +1709,6 @@ async function renderSection4(doc, pool, clientID) {
     noData(doc, `Encounter notes not available: ${e.message}`);
   }
 
-  // ── 2. Care Plan Progress Notes ────────────────────────────────────────────
-  doc.addPage();
-  doc.y = 40;
-  drawS4SubsectionBanner(doc, 2, 'Care Plan Progress Notes (Most Recent 20)');
-  try {
-    const r = await pool.request()
-      .input('clientID', sql.NVarChar, clientID)
-      .query(`
-        SELECT TOP 20 pn.*
-        FROM dbo.CarePlanProgressNotes pn
-        INNER JOIN dbo.CarePlans cp ON pn.carePlanID = cp.carePlanID
-        WHERE cp.clientID = @clientID
-        ORDER BY pn.noteDate DESC
-      `);
-    if (r.recordset.length > 0) {
-      r.recordset.forEach((pn, i) => {
-        drawS4EntryHeader(doc, i + 1, formatDate(pn.noteDate || pn.createdAt), safeStr(pn.progressStatus));
-        drawS4MetaGrid(doc, [
-          ['Care Plan ID',    pn.carePlanID],  ['Progress Status', pn.progressStatus],
-          ['Created By',      pn.createdBy],   ['Created At',      formatDate(pn.createdAt)],
-        ]);
-        if (pn.progressDescription) drawS4Narrative(doc, 'Progress Description', pn.progressDescription);
-        if (pn.barriers)            drawS4Narrative(doc, 'Barriers',             pn.barriers);
-        if (pn.nextSteps)           drawS4Narrative(doc, 'Next Steps',           pn.nextSteps);
-        doc.y = doc.y + 8;
-      });
-    } else {
-      noData(doc);
-    }
-  } catch (e) {
-    noData(doc, `Care plan progress notes not available: ${e.message}`);
-  }
 }
 
 async function renderSection5(doc, pool, clientID) {
@@ -2284,4 +2176,4 @@ router.get('/client/:clientID/pdf', authenticateToken, async (req, res) => {
   }
 });
 
-module.exports = router; 
+module.exports = router;
