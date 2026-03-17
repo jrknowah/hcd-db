@@ -109,7 +109,7 @@ const AuthGuard = ({ children }) => {
             scopes: ['User.Read'],
             account: account,
           });
-          accessToken = tokenResponse.accessToken;
+          accessToken = tokenResponse.idToken;  // ID token is verifiable server-side; access tokens for Graph use nonce which breaks jwks-rsa
           console.log('✅ AuthGuard: Access token acquired');
         } catch (tokenError) {
           console.warn('⚠️ AuthGuard: Could not get access token silently:', tokenError.message);
