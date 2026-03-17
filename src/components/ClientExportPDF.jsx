@@ -32,42 +32,65 @@ import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import FolderIcon from '@mui/icons-material/Folder';
 import DownloadDoneIcon from '@mui/icons-material/DownloadDone';
+import { apiRequest } from '../backend/config/authConfig';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_APP_API_URL || 'http://localhost:5000';
 
-
 const SECTIONS = [
-  { label: 'Section 1 – Identification & Referrals', color: '#1565C0' },
-  { label: 'Section 2 – Authorization & Signature Forms', color: '#1976D2' },
-  { label: 'Section 3 – Assessment & Care Plans', color: '#388E3C' },
-  { label: 'Section 4 – Client Progress', color: '#F57C00' },
-  { label: 'Section 5 – Medical Information & Screenings', color: '#7B1FA2' },
-  { label: 'Section 6 – Case Management', color: '#C62828' },
+  { label: 'Section 1 – Identification & Referrals',          color: '#1565C0' },
+  { label: 'Section 2 – Authorization & Signature Forms',     color: '#1976D2' },
+  { label: 'Section 3 – Assessment & Care Plans',             color: '#388E3C' },
+  { label: 'Section 4 – Client Progress',                     color: '#F57C00' },
+  { label: 'Section 5 – Medical Information & Screenings',    color: '#7B1FA2' },
+  { label: 'Section 6 – Case Management',                     color: '#C62828' },
 ];
 
 export default function ClientExportPDF({ clientID: propClientID }) {
   const selectedClient = useSelector((state) => state.clients?.selectedClient);
-  const azureToken = useSelector((state) => state.auth?.azureToken);
+  const azureToken     = useSelector((state) => state.auth?.azureToken);
 
-  const clientID = propClientID || selectedClient?.clientID;
+  const clientID   = propClientID || selectedClient?.clientID;
   const clientName = selectedClient
     ? `${selectedClient.clientLastName || ''}, ${selectedClient.clientFirstName || ''}`.trim()
     : clientID || 'Unknown Client';
 
-  const [status, setStatus] = useState('idle'); // idle | loading | done | error
-  const [progress, setProgress] = useState(0);
-  const [errorMsg, setErrorMsg] = useState('');
+  const [status,    setStatus]    = useState('idle'); // idle | loading | done | error
+  const [progress,  setProgress]  = useState(0);
+  const [errorMsg,  setErrorMsg]  = useState('');
   const [snackOpen, setSnackOpen] = useState(false);
 
-  const getAuthToken = () => {
-    // 1. Redux store (set by loginWithAzure thunk)
+  // ── Token acquisition ───────────────────────────────────────────────────────
+  // Priority order:
+  //   1. Redux azureToken  — set by AuthGuard on login with the API scope token
+  //   2. localStorage      — persisted by authSlice across page refreshes
+  //   3. acquireTokenSilent — last resort, uses API scope (NOT User.Read / Graph)
+  //   4. dev-bypass-token  — only accepted by backend when NODE_ENV !== 'production'
+  const getAuthToken = async () => {
     if (azureToken && azureToken !== 'no-token') return azureToken;
-    // 2. localStorage fallback (persisted by authSlice)
+
     const stored = localStorage.getItem('azureToken');
     if (stored && stored !== 'no-token') return stored;
+
+    const msal = window.msalInstance;
+    if (msal) {
+      const accounts = msal.getAllAccounts();
+      if (accounts.length > 0) {
+        try {
+          const result = await msal.acquireTokenSilent({
+            scopes: ['User.Read'],
+            account: accounts[0],
+          });
+          if (result?.accessToken) return result.accessToken;
+        } catch (e) {
+          console.warn('acquireTokenSilent failed:', e.message);
+        }
+      }
+    }
+
     return 'dev-bypass-token';
   };
 
+  // ── Export handler ──────────────────────────────────────────────────────────
   const handleExport = async () => {
     if (!clientID) {
       setErrorMsg('No client selected. Please select a client before exporting.');
@@ -84,17 +107,19 @@ export default function ClientExportPDF({ clientID: propClientID }) {
     }, 600);
 
     try {
-      const authToken = getAuthToken();
-      const headers = {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${authToken}`,
-      };
+      const authToken = await getAuthToken();
 
       console.log('📤 Fetching:', `${API_BASE}/api/export/client/${clientID}/pdf`);
 
       const response = await fetch(
         `${API_BASE}/api/export/client/${encodeURIComponent(clientID)}/pdf`,
-        { method: 'GET', headers }
+        {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${authToken}`,
+          },
+        }
       );
 
       clearInterval(ticker);
@@ -108,15 +133,16 @@ export default function ClientExportPDF({ clientID: propClientID }) {
         throw new Error(msg);
       }
 
-      // Stream blob → trigger download
+      // Stream blob → trigger browser download
       const blob = await response.blob();
       setProgress(100);
 
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
+      const url         = URL.createObjectURL(blob);
+      const a           = document.createElement('a');
       const disposition = response.headers.get('Content-Disposition') || '';
-      const match = disposition.match(/filename="(.+)"/);
-      a.href = url;
+      const match       = disposition.match(/filename="(.+)"/);
+
+      a.href     = url;
       a.download = match ? match[1] : `${clientID}_Complete_Record.pdf`;
       document.body.appendChild(a);
       a.click();
@@ -125,6 +151,7 @@ export default function ClientExportPDF({ clientID: propClientID }) {
 
       setStatus('done');
       setTimeout(() => setStatus('idle'), 5000);
+
     } catch (err) {
       clearInterval(ticker);
       setErrorMsg(err.message || 'Export failed. Please try again.');
@@ -135,8 +162,8 @@ export default function ClientExportPDF({ clientID: propClientID }) {
   };
 
   const isLoading = status === 'loading';
-  const isDone = status === 'done';
-  const isError = status === 'error';
+  const isDone    = status === 'done';
+  const isError   = status === 'error';
 
   return (
     <Box sx={{ maxWidth: 640, mx: 'auto', mt: 3 }}>

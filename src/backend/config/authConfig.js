@@ -39,11 +39,11 @@ export const msalConfig = {
   },
 };
 
-// ✅ ADD THIS - Login request configuration
+// Login request configuration — Graph scopes for id_token + group claims
 export const loginRequest = {
   scopes: [
-    "User.Read", 
-    "openid", 
+    "User.Read",
+    "openid",
     "profile",
     "GroupMember.Read.All",
   ],
@@ -56,9 +56,15 @@ export const loginRequest = {
   }
 };
 
-// ✅ ADD THIS - Graph API request configuration
+// Graph API request configuration
 export const graphRequest = {
   scopes: ["User.Read", "GroupMember.Read.All", "Directory.Read.All"],
+};
+
+// API request configuration — token for YOUR backend (validated by auth.js middleware)
+// The audience in this token will match AZURE_CLIENT_ID on the backend.
+export const apiRequest = {
+  scopes: [`api://${import.meta.env.VITE_AZURE_CLIENT_ID}/access_as_user`],
 };
 
 // Validation function
@@ -83,10 +89,10 @@ export const validateConfig = () => {
   return true;
 };
 
-// ✅ ADD THIS - MSAL instance
+// MSAL instance
 export const msalInstance = new PublicClientApplication(msalConfig);
 
-// ✅ ADD THIS - Initialize MSAL
+// Initialize MSAL
 let initializationPromise = null;
 
 export const initializeMsal = async () => {
