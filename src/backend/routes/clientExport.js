@@ -1028,9 +1028,6 @@ async function renderSection3(doc, pool, clientID) {
     noData(doc);
   } else {
     const bs = bsRows[0];
-    // TEMP DEBUG — remove after confirming field names
-    console.log('[Section3 BioSocial raw]', JSON.stringify(bs, null, 2));
-
     // ── Header metadata ──
     drawSubHeader(doc, 'Record Info');
     drawTwoColumn(doc, [
@@ -2153,11 +2150,6 @@ router.get('/client/:clientID/pdf', authenticateToken, async (req, res) => {
     await renderSection1(doc, pool, clientID);
     await renderSection2(doc, pool, clientID);
     await renderSection3(doc, pool, clientID);
-    console.log('[CarePlans debug]', {
-      clientID,
-      rows: fetched.carePlans,
-      error: fetched.carePlans_error
-    });
     await renderSection4(doc, pool, clientID);
     await renderSection5(doc, pool, clientID);
     await renderSection6(doc, pool, clientID);
