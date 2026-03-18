@@ -858,25 +858,32 @@ const BSA_INCOME_COLS = [
 // ─── Section 3 — subsection page header banner ───────────────────────────────
 
 function drawS3SubsectionBanner(doc, number, title) {
-  doc.addPage();
+  // Only add a page if too close to bottom to fit banner + content
+  const pageBottom = doc.page.height - doc.page.margins.bottom;
+  if (doc.y > pageBottom - 80) {
+    doc.addPage();
+  } else {
+    doc.moveDown(0.8);
+  }
+
   const pw = doc.page.width;
   const ml = doc.page.margins.left;
   const mr = doc.page.margins.right;
   const w  = pw - ml - mr;
+  const y  = doc.y;
 
-  doc.rect(ml, doc.y, w, 22).fill('#C8E6C9');
-  const bannerY = doc.y - 22;
+  doc.rect(ml, y, w, 22).fill('#C8E6C9');
+  doc.rect(ml, y, 26, 22).fill('#388E3C');
 
-  // Number badge
-  doc.rect(ml, bannerY, 26, 22).fill('#388E3C');
   doc.fillColor('white').fontSize(10).font('Helvetica-Bold')
-     .text(String(number), ml + 1, bannerY + 6, { width: 26, align: 'center' });
+     .text(String(number), ml + 1, y + 6, { width: 26, align: 'center', lineBreak: false });
+  doc.y = y + 22;
 
-  // Title
   doc.fillColor('#1B5E20').fontSize(11).font('Helvetica-Bold')
-     .text(title, ml + 30, bannerY + 6, { width: w - 30 });
+     .text(title, ml + 30, y + 6, { width: w - 30, lineBreak: false });
 
-  doc.fillColor('#000000').moveDown(0.5);
+  doc.fillColor('#000000');
+  doc.y = y + 28;
 }
 
 // ─── Section 3 — CM observation checklist renderer ───────────────────────────
@@ -1283,7 +1290,6 @@ async function renderSection3(doc, pool, clientID) {
   // 4 — Care Plans
   // ══════════════════════════════════════════════════════════════════════════
   drawS3SubsectionBanner(doc, 4, 'Care Plans');
-  drawSubHeader(doc, 'CarePlans');
   const cpRows = fetched.carePlans;
   if (!cpRows) {
     noData(doc, `Query failed: ${fetched.carePlans_error}`);
@@ -1291,24 +1297,20 @@ async function renderSection3(doc, pool, clientID) {
     noData(doc);
   } else {
     cpRows.forEach((cp, i) => {
-      doc.font('Helvetica-Bold').fontSize(9)
-         .text(`Care Plan #${i + 1} — ${formatDate(cp.createdAt)}`);
-      drawTwoColumn(doc, [
-        ['Care Plan ID',  cp.carePlanID],
-        ['Status',        cp.status],
-        ['Priority',      cp.priority],
-        ['Target Date',   formatDate(cp.targetDate)],
-        ['Created By',    cp.createdBy],
-        ['Created At',    formatDate(cp.createdAt)],
-        ['Updated By',    cp.updatedBy],
-        ['Updated At',    formatDate(cp.updatedAt)],
+      const statusLabel = safeStr(cp.status);
+      drawS4EntryHeader(doc, i + 1, formatDate(cp.createdAt), statusLabel);
+      drawS4MetaGrid(doc, [
+        ['Status',      cp.status],      ['Priority',    cp.priority],
+        ['Target Date', formatDate(cp.targetDate)], ['Care Plan ID', cp.carePlanID],
+        ['Created By',  cp.createdBy],   ['Created At',  formatDate(cp.createdAt)],
+        ['Updated By',  cp.updatedBy],   ['Updated At',  formatDate(cp.updatedAt)],
       ]);
-      if (cp.careGoal)      drawField(doc, 'Goal',          cp.careGoal);
-      if (cp.careSteps)     drawField(doc, 'Steps',         cp.careSteps);
-      if (cp.careClientAct) drawField(doc, 'Client Action', cp.careClientAct);
-      if (cp.careCmAct)     drawField(doc, 'CM Action',     cp.careCmAct);
-      if (cp.careOutcome)   drawField(doc, 'Outcome',       cp.careOutcome);
-      doc.moveDown(0.5);
+      if (cp.careGoal)      drawS4Narrative(doc, 'Goal',          cp.careGoal);
+      if (cp.careSteps)     drawS4Narrative(doc, 'Steps',         cp.careSteps);
+      if (cp.careClientAct) drawS4Narrative(doc, 'Client Action', cp.careClientAct);
+      if (cp.careCmAct)     drawS4Narrative(doc, 'CM Action',     cp.careCmAct);
+      if (cp.careOutcome)   drawS4Narrative(doc, 'Outcome',       cp.careOutcome);
+      doc.y = doc.y + 8;
     });
   }
 
