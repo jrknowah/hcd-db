@@ -2153,6 +2153,11 @@ router.get('/client/:clientID/pdf', authenticateToken, async (req, res) => {
     await renderSection1(doc, pool, clientID);
     await renderSection2(doc, pool, clientID);
     await renderSection3(doc, pool, clientID);
+    console.log('[CarePlans debug]', {
+      clientID,
+      rows: fetched.carePlans,
+      error: fetched.carePlans_error
+    });
     await renderSection4(doc, pool, clientID);
     await renderSection5(doc, pool, clientID);
     await renderSection6(doc, pool, clientID);
