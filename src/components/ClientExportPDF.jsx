@@ -61,17 +61,15 @@ export default function ClientExportPDF({ clientID: propClientID }) {
   const [snackOpen, setSnackOpen] = useState(false);
 
   // ── Token acquisition ───────────────────────────────────────────────────────
-  // Uses useMsal() directly — the same MSAL instance AuthGuard uses.
-  // acquireTokenSilent with User.Read returns an idToken that the backend
-  // can verify (no nonce, signed with tenant keys, aud = app client ID).
-  // Falls back to Redux/localStorage if MSAL has no accounts (e.g. restored
-  // from localStorage after page refresh).
+  // Must return an ID token — audience = AZURE_CLIENT_ID.
+  // Using scopes ['openid', 'profile'] forces MSAL to return result.idToken
+  // instead of an access token. Never use 'User.Read' here — that returns a
+  // Graph access token (aud = 00000003-...) which the backend cannot verify.
   const getAuthToken = async () => {
-    // Try MSAL directly first — most reliable on the live site
     if (accounts && accounts.length > 0) {
       try {
         const result = await instance.acquireTokenSilent({
-          scopes: ['User.Read'],
+          scopes: ['openid', 'profile'],
           account: accounts[0],
         });
         if (result?.idToken) {
@@ -80,10 +78,23 @@ export default function ClientExportPDF({ clientID: propClientID }) {
         }
       } catch (e) {
         console.warn('acquireTokenSilent failed:', e.message);
+        // Try interactive fallback
+        try {
+          const result = await instance.acquireTokenPopup({
+            scopes: ['openid', 'profile'],
+            account: accounts[0],
+          });
+          if (result?.idToken) {
+            console.log('✅ Export: got idToken from popup');
+            return result.idToken;
+          }
+        } catch (popupErr) {
+          console.warn('acquireTokenPopup failed:', popupErr.message);
+        }
       }
     }
 
-    // Fall back to Redux store
+    // Fall back to Redux store (may already be an idToken stored at login)
     if (azureToken && azureToken !== 'no-token') {
       console.log('✅ Export: using Redux azureToken');
       return azureToken;
@@ -96,8 +107,8 @@ export default function ClientExportPDF({ clientID: propClientID }) {
       return stored;
     }
 
-    console.warn('⚠️ Export: no token found, using dev-bypass-token');
-    return 'dev-bypass-token';
+    console.warn('⚠️ Export: no token available');
+    return null;
   };
 
   // ── Export handler ──────────────────────────────────────────────────────────
@@ -118,6 +129,10 @@ export default function ClientExportPDF({ clientID: propClientID }) {
 
     try {
       const authToken = await getAuthToken();
+
+      if (!authToken) {
+        throw new Error('Could not acquire authentication token. Please sign out and sign back in.');
+      }
 
       console.log('📤 Fetching:', `${API_BASE}/api/export/client/${clientID}/pdf`);
       console.log('🔑 Token prefix:', authToken?.substring(0, 20));
