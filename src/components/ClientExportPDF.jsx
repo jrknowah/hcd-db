@@ -3,7 +3,7 @@
  * Frontend component — Full client record PDF export
  *
  * Usage: Drop inside any section tab, or as a standalone Export tab.
- * Requires: selectedClient in Redux store, JWT token in auth slice.
+ * Requires: selectedClient in Redux store, MSAL context in component tree.
  *
  * Props:
  *   clientID  {string}  – override; falls back to Redux selectedClient.clientID
@@ -11,6 +11,7 @@
 
 import { useState } from 'react';
 import { useSelector } from 'react-redux';
+import { useMsal } from '@azure/msal-react';
 import {
   Box,
   Button,
@@ -32,7 +33,6 @@ import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import FolderIcon from '@mui/icons-material/Folder';
 import DownloadDoneIcon from '@mui/icons-material/DownloadDone';
-import { apiRequest } from '../backend/config/authConfig';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_APP_API_URL || 'http://localhost:5000';
 
@@ -46,6 +46,7 @@ const SECTIONS = [
 ];
 
 export default function ClientExportPDF({ clientID: propClientID }) {
+  const { instance, accounts } = useMsal();
   const selectedClient = useSelector((state) => state.clients?.selectedClient);
   const azureToken     = useSelector((state) => state.auth?.azureToken);
 
@@ -54,39 +55,48 @@ export default function ClientExportPDF({ clientID: propClientID }) {
     ? `${selectedClient.clientLastName || ''}, ${selectedClient.clientFirstName || ''}`.trim()
     : clientID || 'Unknown Client';
 
-  const [status,    setStatus]    = useState('idle'); // idle | loading | done | error
+  const [status,    setStatus]    = useState('idle');
   const [progress,  setProgress]  = useState(0);
   const [errorMsg,  setErrorMsg]  = useState('');
   const [snackOpen, setSnackOpen] = useState(false);
 
   // ── Token acquisition ───────────────────────────────────────────────────────
-  // Priority order:
-  //   1. Redux azureToken  — set by AuthGuard on login with the API scope token
-  //   2. localStorage      — persisted by authSlice across page refreshes
-  //   3. acquireTokenSilent — last resort, uses API scope (NOT User.Read / Graph)
-  //   4. dev-bypass-token  — only accepted by backend when NODE_ENV !== 'production'
+  // Uses useMsal() directly — the same MSAL instance AuthGuard uses.
+  // acquireTokenSilent with User.Read returns an idToken that the backend
+  // can verify (no nonce, signed with tenant keys, aud = app client ID).
+  // Falls back to Redux/localStorage if MSAL has no accounts (e.g. restored
+  // from localStorage after page refresh).
   const getAuthToken = async () => {
-    if (azureToken && azureToken !== 'no-token') return azureToken;
-
-    const stored = localStorage.getItem('azureToken');
-    if (stored && stored !== 'no-token') return stored;
-
-    const msal = window.msalInstance;
-    if (msal) {
-      const accounts = msal.getAllAccounts();
-      if (accounts.length > 0) {
-        try {
-          const result = await msal.acquireTokenSilent({
-            scopes: ['User.Read'],
-            account: accounts[0],
-          });
-          if (result?.accessToken) return result.accessToken;
-        } catch (e) {
-          console.warn('acquireTokenSilent failed:', e.message);
+    // Try MSAL directly first — most reliable on the live site
+    if (accounts && accounts.length > 0) {
+      try {
+        const result = await instance.acquireTokenSilent({
+          scopes: ['User.Read'],
+          account: accounts[0],
+        });
+        if (result?.idToken) {
+          console.log('✅ Export: got idToken from MSAL');
+          return result.idToken;
         }
+      } catch (e) {
+        console.warn('acquireTokenSilent failed:', e.message);
       }
     }
 
+    // Fall back to Redux store
+    if (azureToken && azureToken !== 'no-token') {
+      console.log('✅ Export: using Redux azureToken');
+      return azureToken;
+    }
+
+    // Fall back to localStorage
+    const stored = localStorage.getItem('azureToken');
+    if (stored && stored !== 'no-token') {
+      console.log('✅ Export: using localStorage azureToken');
+      return stored;
+    }
+
+    console.warn('⚠️ Export: no token found, using dev-bypass-token');
     return 'dev-bypass-token';
   };
 
@@ -110,6 +120,7 @@ export default function ClientExportPDF({ clientID: propClientID }) {
       const authToken = await getAuthToken();
 
       console.log('📤 Fetching:', `${API_BASE}/api/export/client/${clientID}/pdf`);
+      console.log('🔑 Token prefix:', authToken?.substring(0, 20));
 
       const response = await fetch(
         `${API_BASE}/api/export/client/${encodeURIComponent(clientID)}/pdf`,
@@ -133,7 +144,6 @@ export default function ClientExportPDF({ clientID: propClientID }) {
         throw new Error(msg);
       }
 
-      // Stream blob → trigger browser download
       const blob = await response.blob();
       setProgress(100);
 
@@ -183,7 +193,6 @@ export default function ClientExportPDF({ clientID: propClientID }) {
 
           <Divider sx={{ my: 1.5 }} />
 
-          {/* Selected client indicator */}
           <Box display="flex" alignItems="center" gap={1} mb={2}>
             <Typography variant="body2" color="text.secondary">
               Client:
@@ -200,7 +209,6 @@ export default function ClientExportPDF({ clientID: propClientID }) {
             )}
           </Box>
 
-          {/* Sections list */}
           <List dense disablePadding>
             {SECTIONS.map((s) => (
               <ListItem key={s.label} disableGutters sx={{ py: 0.2 }}>
@@ -217,7 +225,6 @@ export default function ClientExportPDF({ clientID: propClientID }) {
 
           <Divider sx={{ my: 1.5 }} />
 
-          {/* Progress bar */}
           {isLoading && (
             <Box mb={2}>
               <Typography variant="body2" color="text.secondary" mb={0.5}>
@@ -230,7 +237,6 @@ export default function ClientExportPDF({ clientID: propClientID }) {
             </Box>
           )}
 
-          {/* Done indicator */}
           {isDone && (
             <Box display="flex" alignItems="center" gap={1} mb={2}>
               <DownloadDoneIcon color="success" />
@@ -240,7 +246,6 @@ export default function ClientExportPDF({ clientID: propClientID }) {
             </Box>
           )}
 
-          {/* Export button */}
           <Button
             variant="contained"
             color={isDone ? 'success' : isError ? 'error' : 'primary'}
@@ -274,7 +279,6 @@ export default function ClientExportPDF({ clientID: propClientID }) {
         </CardContent>
       </Card>
 
-      {/* Error snackbar */}
       <Snackbar
         open={snackOpen}
         autoHideDuration={6000}
