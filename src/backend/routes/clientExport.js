@@ -193,59 +193,93 @@ function drawCoverPage(doc, client, exportedBy) {
 async function renderSection1(doc, pool, clientID) {
   drawSectionHeader(doc, 'Section 1 – Identification & Referrals', '#1565C0');
 
-  // Client face sheet
+  // Client demographics from Clients table
+  try {
+    const r0 = await pool.request()
+      .input('clientID', sql.NVarChar, clientID)
+      .query('SELECT TOP 1 * FROM dbo.Clients WHERE clientID = @clientID');
+    const cl = r0.recordset[0];
+    if (cl) {
+      drawSubHeader(doc, 'Client Demographics');
+      drawTwoColumn(doc, [
+        ['First Name',       cl.clientFirstName],
+        ['Last Name',        cl.clientLastName],
+        ['Date of Birth',    formatDate(cl.clientDOB || cl.dob)],
+        ['Gender',           cl.clientGender || cl.gender],
+        ['SSN (last 4)',     cl.ssnLast4 ? `***-**-${cl.ssnLast4}` : 'N/A'],
+        ['Primary Language', cl.primaryLanguage || cl.clientLanguage],
+        ['Program',          cl.program || cl.clientProgram],
+        ['Site',             cl.clientSite || cl.site],
+        ['Enrollment Date',  formatDate(cl.enrollmentDate || cl.clientEnrollmentDate)],
+        ['Status',           cl.clientStatus],
+      ]);
+    } else {
+      noData(doc, 'No client record found.');
+    }
+  } catch (e) {
+    noData(doc, `Unable to load client demographics: ${e.message}`);
+  }
+
+  // Client contact & insurance from ClientFace table
   try {
     const r1 = await pool.request()
       .input('clientID', sql.NVarChar, clientID)
       .query('SELECT TOP 1 * FROM dbo.ClientFace WHERE clientID = @clientID');
     const cf = r1.recordset[0];
     if (cf) {
-      drawSubHeader(doc, 'Client Face Sheet');
+      drawSubHeader(doc, 'Contact & Insurance');
       drawTwoColumn(doc, [
-        ['First Name', cf.clientFirstName],
-        ['Last Name', cf.clientLastName],
-        ['Date of Birth', formatDate(cf.dob || cf.clientDOB)],
-        ['Gender', cf.gender || cf.clientGender],
-        ['SSN (last 4)', cf.ssnLast4 ? `***-**-${cf.ssnLast4}` : 'N/A'],
-        ['Phone', cf.phone || cf.clientPhone],
-        ['Address', cf.address || cf.clientAddress],
-        ['City/State/Zip', `${safeStr(cf.city)}, ${safeStr(cf.state)} ${safeStr(cf.zip)}`],
-        ['Program', cf.program],
-        ['Site', cf.site || cf.clientSite],
-        ['Enrollment Date', formatDate(cf.enrollmentDate)],
-        ['Insurance', cf.insurance || cf.primaryInsurance],
-        ['Emergency Contact', cf.emergencyContact],
-        ['Emergency Phone', cf.emergencyPhone],
-        ['Primary Language', cf.primaryLanguage],
-        ['Status', cf.clientStatus],
+        ['Phone',                  cf.clientContactNum],
+        ['Alt Phone',              cf.clientContactAltNum],
+        ['Email',                  cf.clientEmail],
+        ['Emergency Contact',      cf.clientEmgContactName],
+        ['Emergency Phone',        cf.clientEmgContactNum],
+        ['Emergency Relationship', cf.clientEmgContactRel],
+        ['Emergency Address',      cf.clientEmgContactAddress],
+        ['Insurance Type',         cf.clientMedInsType],
+        ['Insurance Carrier',      cf.clientMedCarrier],
+        ['Insurance Number',       cf.clientMedInsNum],
+        ['Primary Physician',      cf.clientMedPrimaryPhy],
+        ['Physician Facility',     cf.clientMedPrimaryPhyFacility],
+        ['Physician Phone',        cf.clientMedPrimaryPhyPhone],
+        ['Allergy Comments',       cf.clientAllergyComments],
       ]);
     } else {
-      noData(doc, 'No client face sheet record found.');
+      noData(doc, 'No contact/insurance record found.');
     }
   } catch (e) {
-    noData(doc, `Unable to load client face sheet: ${e.message}`);
+    noData(doc, `Unable to load contact info: ${e.message}`);
   }
 
   // Referrals
   try {
     const r2 = await pool.request()
       .input('clientID', sql.NVarChar, clientID)
-      .query('SELECT * FROM dbo.Referrals WHERE clientID = @clientID ORDER BY referralDate DESC');
-    if (r2.recordset.length > 0) {
-      drawSubHeader(doc, 'Referrals');
-      r2.recordset.forEach((ref, i) => {
-        doc.font('Helvetica-Bold').fontSize(9).text(`Referral #${i + 1}`);
-        drawTwoColumn(doc, [
-          ['Referral Date', formatDate(ref.referralDate)],
-          ['Referred By', ref.referredBy],
-          ['Referral Source', ref.referralSource],
-          ['Reason', ref.referralReason],
-          ['Status', ref.referralStatus],
-          ['Follow-up Date', formatDate(ref.followUpDate)],
-        ]);
+      .query('SELECT TOP 1 * FROM dbo.Referrals WHERE clientID = @clientID ORDER BY createdAt DESC');
+    drawSubHeader(doc, 'Referrals');
+    const ref = r2.recordset[0];
+    if (ref) {
+      const agencies = [
+        ['LAHSA', ref.lahsaReferral, ref.lahsaReferralFileName],
+        ['ODR',   ref.odrReferral,   ref.odrReferralFileName],
+        ['DHS',   ref.dhsReferral,   ref.dhsReferralFileName],
+        ['DMH',   ref.dmhReferral,   ref.dmhReferralFileName],
+      ];
+      agencies.forEach(([agency, hasReferral, fileName]) => {
+        if (hasReferral) {
+          drawTwoColumn(doc, [
+            [agency + ' Referral', 'Yes'],
+            [agency + ' File',     safeStr(fileName)],
+          ]);
+        }
       });
+      const anyReferral = agencies.some(([,v]) => v);
+      if (!anyReferral) noData(doc, 'No agency referrals on file.');
+      drawTwoColumn(doc, [
+        ['Created', formatDate(ref.createdAt)],
+        ['Updated', formatDate(ref.updatedAt)],
+      ]);
     } else {
-      drawSubHeader(doc, 'Referrals');
       noData(doc);
     }
   } catch (e) {
