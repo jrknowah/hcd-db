@@ -1577,6 +1577,14 @@ function drawS4EntryHeader(doc, index, dateStr, typeStr) {
   const ml = doc.page.margins.left;
   const w  = doc.page.width - ml - doc.page.margins.right;
   const h  = 16;
+
+  // Add a new page if not enough room for header + at least one meta row
+  const pageBottom = doc.page.height - doc.page.margins.bottom;
+  if (doc.y > pageBottom - 60) {
+    doc.addPage();
+    doc.y = doc.page.margins.top;
+  }
+
   const y  = doc.y;
 
   doc.rect(ml, y, w, h).fill('#F5F5F5').stroke('#E0E0E0');
@@ -1660,11 +1668,15 @@ function drawS4Narrative(doc, label, text) {
      .text(safeStr(text), textX, bodyY, { width: textW });
   // doc.y is now legitimately below the last line of wrapped text
 
-  // Left accent rule spanning label+body
-  doc.moveTo(ml + inset, labelY)
-     .lineTo(ml + inset, doc.y + 1)
-     .strokeColor('#F57C00').lineWidth(2).stroke()
-     .lineWidth(0.5).strokeColor('#000000');
+  // Only draw accent rule if text didn't wrap onto a new page
+  // (cross-page rules produce a line from old coords into new page space)
+  const currentPageBottom = doc.page.height - doc.page.margins.bottom;
+  if (doc.y < currentPageBottom && doc.y > labelY) {
+    doc.moveTo(ml + inset, labelY)
+       .lineTo(ml + inset, doc.y + 1)
+       .strokeColor('#F57C00').lineWidth(2).stroke()
+       .lineWidth(0.5).strokeColor('#000000');
+  }
 
   doc.y = doc.y + 5;
 }

@@ -2,9 +2,9 @@ const express = require('express');
 const router = express.Router();
 const sql = require('mssql');
 // const { getDbConnection } = require('../config/database');
-const { connectToAzureSql } = require('../store/azureSql'); 
+//const { connectToAzureSql } = require('../store/azureSql'); 
+const { getPool } = require('../store/azureSql');
 const { logUserAction } = require('../config/logAction');
-
 // ===== UTILITY FUNCTIONS =====
 
 const formatAssessmentData = (rows) => {
@@ -51,7 +51,7 @@ router.get('/assessment-care-plans/:clientID', async (req, res) => {
     const { clientID } = req.params;
     
     try {
-        const pool = await connectToAzureSql();
+        const pool = await getPool();
         
         // Get latest assessment for client
         const assessmentQuery = `
@@ -106,7 +106,7 @@ router.post('/assessment-care-plans/:clientID', async (req, res) => {
     const assessmentData = req.body;
     
     try {
-        const pool = await connectToAzureSql();
+        const pool = await getPool();
         const userEmail = req.user?.email || 'system@example.com';
         
         // Check if assessment already exists
@@ -242,7 +242,7 @@ router.get('/assessment-care-plans/:clientID/status', async (req, res) => {
     const { clientID } = req.params;
     
     try {
-        const pool = await connectToAzureSql();
+        const pool = await getPool();
         
         const statusQuery = `
             SELECT 
@@ -311,7 +311,7 @@ router.get('/assessment-care-plans/:clientID/metrics', async (req, res) => {
     const { clientID } = req.params;
     
     try {
-        const pool = await connectToAzureSql();
+        const pool = await getPool();
         
         const metricsQuery = `
             SELECT 
@@ -390,7 +390,7 @@ router.get('/assessment-care-plans/:clientID/milestones', async (req, res) => {
     const { clientID } = req.params;
     
     try {
-        const pool = await connectToAzureSql();
+        const pool = await getPool();
         
         // First get the assessment ID
         const assessmentQuery = `
@@ -484,7 +484,7 @@ router.put('/assessment-care-plans/assessment/:assessmentID/status', async (req,
     const { assessmentStatus, completionPercentage, notes } = req.body;
     
     try {
-        const pool = await connectToAzureSql();
+        const pool = await getPool();
         const userEmail = req.user?.email || 'system@example.com';
         
         const updateQuery = `
@@ -542,7 +542,7 @@ router.put('/assessment-care-plans/:clientID/milestones/:milestoneID/complete', 
     const { actualHours, notes } = req.body;
     
     try {
-        const pool = await connectToAzureSql();
+        const pool = await getPool();
         const userEmail = req.user?.email || 'system@example.com';
         
         // Mark milestone as completed
@@ -620,7 +620,7 @@ router.get('/assessment-care-plans/:clientID/report', async (req, res) => {
     const { clientID } = req.params;
     
     try {
-        const pool = await connectToAzureSql();
+        const pool = await getPool();
         
         // Get comprehensive assessment report data
         const reportQuery = `
@@ -720,7 +720,7 @@ router.delete('/assessment-care-plans/assessment/:assessmentID', async (req, res
     const { assessmentID } = req.params;
     
     try {
-        const pool = await connectToAzureSql();
+        const pool = await getPool();
         const userEmail = req.user?.email || 'system@example.com';
         
         // Soft delete by updating status
