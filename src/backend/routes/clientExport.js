@@ -1760,97 +1760,11 @@ async function renderSection5(doc, pool, clientID) {
   drawSectionHeader(doc, 'Section 5 – Medical Information & Screenings', '#7B1FA2');
   doc.y = 60;
 
-  // ─── S5 layout helpers (mirror S4 pattern, purple accent) ─────────────────
-
   function formatTime(val) {
     if (!val) return 'N/A';
     const s = String(val);
     const match = s.match(/^(\d{2}:\d{2})/);
     return match ? match[1] : s;
-  }
-
-  function drawS5SubsectionBanner(doc, number, title) {
-    const ml = doc.page.margins.left;
-    const w  = doc.page.width - ml - doc.page.margins.right;
-    const h  = 22;
-    const y  = doc.y;
-
-    doc.rect(ml, y, w, h).fill('#EDE7F6');
-    doc.rect(ml, y, 26, h).fill('#7B1FA2');
-
-    doc.fillColor('white').fontSize(10).font('Helvetica-Bold')
-       .text(String(number), ml + 1, y + 5, { width: 26, align: 'center', lineBreak: false });
-    doc.y = y + h;
-
-    doc.fillColor('#4A148C').fontSize(11).font('Helvetica-Bold')
-       .text(title, ml + 32, y + 5, { width: w - 32, lineBreak: false });
-    doc.y = y + h;
-
-    doc.fillColor('#000000');
-    doc.y = y + h + 8;
-  }
-
-  function drawS5EntryHeader(doc, index, primaryStr, secondaryStr) {
-    const ml = doc.page.margins.left;
-    const w  = doc.page.width - ml - doc.page.margins.right;
-    const h  = 16;
-    const y  = doc.y;
-
-    doc.rect(ml, y, w, h).fill('#F3E5F5').stroke('#CE93D8');
-    doc.circle(ml + 10, y + 8, 7).fill('#7B1FA2');
-
-    doc.fillColor('white').fontSize(7).font('Helvetica-Bold')
-       .text(String(index), ml + 3, y + 4, { width: 16, align: 'center', lineBreak: false });
-    doc.y = y + h;
-
-    doc.fillColor('#37474F').fontSize(8.5).font('Helvetica-Bold')
-       .text(primaryStr, ml + 24, y + 4, { width: 200, lineBreak: false });
-    doc.y = y + h;
-
-    if (secondaryStr && secondaryStr !== 'N/A') {
-      doc.fillColor('#6A1B9A').fontSize(7.5).font('Helvetica')
-         .text(secondaryStr, ml + 230, y + 5, { width: w - 250, align: 'right', lineBreak: false });
-      doc.y = y + h;
-    }
-
-    doc.fillColor('#000000');
-    doc.y = y + h + 4;
-  }
-
-  function drawS5MetaGrid(doc, pairs) {
-    const ml   = doc.page.margins.left;
-    const colW = (doc.page.width - ml - doc.page.margins.right) / 2;
-    const rowH = 13;
-    const pad  = 4;
-    const lblW = 80;
-
-    for (let i = 0; i < pairs.length; i += 2) {
-      const left  = pairs[i];
-      const right = pairs[i + 1];
-      const y     = doc.y;
-      const shade = (i / 2) % 2 === 0 ? '#FFFFFF' : '#FAF5FF';
-
-      doc.rect(ml, y, colW * 2, rowH).fill(shade);
-
-      doc.fillColor('#666666').font('Helvetica-Bold').fontSize(7)
-         .text(`${left[0]}:`, ml + pad, y + 3, { width: lblW, lineBreak: false });
-      doc.y = y + rowH;
-      doc.fillColor('#000000').font('Helvetica').fontSize(7.5)
-         .text(safeStr(left[1]), ml + pad + lblW + 2, y + 3, { width: colW - pad - lblW - 6, lineBreak: false });
-      doc.y = y + rowH;
-
-      if (right) {
-        doc.fillColor('#666666').font('Helvetica-Bold').fontSize(7)
-           .text(`${right[0]}:`, ml + colW + pad, y + 3, { width: lblW, lineBreak: false });
-        doc.y = y + rowH;
-        doc.fillColor('#000000').font('Helvetica').fontSize(7.5)
-           .text(safeStr(right[1]), ml + colW + pad + lblW + 2, y + 3, { width: colW - pad - lblW - 6, lineBreak: false });
-        doc.y = y + rowH;
-      }
-
-      doc.y = y + rowH;
-    }
-    doc.y = doc.y + 4;
   }
 
   function drawS5Narrative(doc, label, text) {
@@ -1860,18 +1774,15 @@ async function renderSection5(doc, pool, clientID) {
     const inset = 14;
     const textX = ml + inset + 6;
     const textW = w - inset - 8;
-
     const labelY = doc.y;
     doc.fillColor('#7B1FA2').font('Helvetica-Bold').fontSize(7.5)
        .text(label, textX, labelY, { width: textW, lineBreak: false });
     doc.y = labelY + 11;
-
     const bodyY = doc.y;
     doc.fillColor('#222222').font('Helvetica').fontSize(8.5)
        .text(safeStr(text), textX, bodyY, { width: textW });
-
-    const currentPageBottom = doc.page.height - doc.page.margins.bottom;
-    if (doc.y < currentPageBottom && doc.y > labelY) {
+    const pageBottom = doc.page.height - doc.page.margins.bottom;
+    if (doc.y < pageBottom && doc.y > labelY) {
       doc.moveTo(ml + inset, labelY)
          .lineTo(ml + inset, doc.y + 1)
          .strokeColor('#7B1FA2').lineWidth(2).stroke()
@@ -1880,25 +1791,69 @@ async function renderSection5(doc, pool, clientID) {
     doc.y = doc.y + 5;
   }
 
+  function parseJsonArr(val) {
+    if (!val) return null;
+    if (Array.isArray(val)) return val;
+    try { const p = JSON.parse(val); return Array.isArray(p) ? p : null; }
+    catch { return null; }
+  }
+
+  function drawMedicationsTable(doc, meds) {
+    if (!meds || !meds.length) { noData(doc, 'No medications on record.'); return; }
+    const ml   = doc.page.margins.left;
+    const tw   = doc.page.width - ml - doc.page.margins.right;
+    const rowH = 13;
+    const cols = [tw * 0.38, tw * 0.22, tw * 0.12, tw * 0.28];
+    const hY = doc.y;
+    doc.rect(ml, hY, tw, rowH).fill('#7B1FA2');
+    let hX = ml;
+    ['Medication', 'Dose', 'Taking', 'Side Effects'].forEach((h, i) => {
+      doc.fillColor('white').font('Helvetica-Bold').fontSize(7.5)
+         .text(h, hX + 3, hY + 3, { width: cols[i] - 4, lineBreak: false });
+      doc.y = hY + rowH;
+      hX += cols[i];
+    });
+    doc.y = hY + rowH;
+    meds.forEach((med, idx) => {
+      const rY    = doc.y;
+      const shade = idx % 2 === 0 ? '#FFFFFF' : '#F3E5F5';
+      doc.rect(ml, rY, tw, rowH).fill(shade);
+      let cX = ml;
+      [
+        safeStr(med.clientMedName),
+        safeStr(med.clientMedDose),
+        safeStr(med.clientMedTaking),
+        safeStr(med.clientMedSideEffects, '—'),
+      ].forEach((cell, i) => {
+        doc.fillColor('#000000').font('Helvetica').fontSize(7.5)
+           .text(cell, cX + 3, rY + 3, { width: cols[i] - 4, lineBreak: false });
+        doc.y = rY + rowH;
+        cX += cols[i];
+      });
+      doc.y = rY + rowH;
+    });
+    doc.y = doc.y + 6;
+  }
+
   // ══════════════════════════════════════════════════════════════════════════
   // 1 — Medical Face Sheet
   // ══════════════════════════════════════════════════════════════════════════
-  drawS5SubsectionBanner(doc, 1, 'Medical Face Sheet');
+  drawS4SubsectionBanner(doc, 1, 'Medical Face Sheet');
   try {
     const r = await pool.request()
       .input('clientID', sql.NVarChar, clientID)
       .query('SELECT TOP 1 * FROM dbo.medical_face_sheet WHERE clientID = @clientID');
     const mfs = r.recordset[0];
     if (mfs) {
-      drawS5MetaGrid(doc, [
+      drawS4MetaGrid(doc, [
         ['Client ID',    mfs.clientID],
         ['Last Updated', formatDate(mfs.updatedAt || mfs.createdAt)],
       ]);
-      drawS5Narrative(doc, 'Medical Conditions',          mfs.clientMedConditions);
-      drawS5Narrative(doc, 'Additional Medical History',  mfs.clientAddMedHistory);
-      drawS5Narrative(doc, 'Pertinent Medical Info',      mfs.clientMedPertinent);
-      drawS5Narrative(doc, 'Previous Lab Results',        mfs.clientPreviousLab);
-      drawS5Narrative(doc, 'Allergies',                   mfs.clientAllergies);
+      drawS5Narrative(doc, 'Medical Conditions',         mfs.clientMedConditions);
+      drawS5Narrative(doc, 'Additional Medical History', mfs.clientAddMedHistory);
+      drawS5Narrative(doc, 'Pertinent Medical Info',     mfs.clientMedPertinent);
+      drawS5Narrative(doc, 'Previous Lab Results',       mfs.clientPreviousLab);
+      drawS5Narrative(doc, 'Allergies',                  mfs.clientAllergies);
     } else {
       noData(doc);
     }
@@ -1906,15 +1861,14 @@ async function renderSection5(doc, pool, clientID) {
     noData(doc, `Medical face sheet unavailable: ${e.message}`);
   }
 
-  // ── Legacy MedicalInfo (silently skip if absent) ───────────────────────────
   try {
     const r = await pool.request()
       .input('clientID', sql.NVarChar, clientID)
       .query('SELECT TOP 1 * FROM dbo.MedicalInfo WHERE clientID = @clientID');
     const mi = r.recordset[0];
     if (mi) {
-      drawS5SubsectionBanner(doc, '1b', 'Medical Info (Legacy)');
-      drawS5MetaGrid(doc, [
+      drawS4SubsectionBanner(doc, '1b', 'Medical Info (Legacy)');
+      drawS4MetaGrid(doc, [
         ['Client ID',    mi.clientID],
         ['Last Updated', formatDate(mi.updatedAt || mi.createdAt)],
       ]);
@@ -1929,14 +1883,14 @@ async function renderSection5(doc, pool, clientID) {
   // ══════════════════════════════════════════════════════════════════════════
   // 2 — Allergy List
   // ══════════════════════════════════════════════════════════════════════════
-  drawS5SubsectionBanner(doc, 2, 'Allergy List');
+  drawS4SubsectionBanner(doc, 2, 'Allergy List');
   try {
     const r = await pool.request()
       .input('clientID', sql.NVarChar, clientID)
       .query('SELECT allergyName FROM dbo.ClientAllergies WHERE clientID = @clientID');
     if (r.recordset.length > 0) {
       r.recordset.forEach((row, i) => {
-        drawS5EntryHeader(doc, i + 1, safeStr(row.allergyName), '');
+        drawS4EntryHeader(doc, i + 1, safeStr(row.allergyName), '');
       });
     } else {
       noData(doc, 'No allergies on record.');
@@ -1948,63 +1902,66 @@ async function renderSection5(doc, pool, clientID) {
   // ══════════════════════════════════════════════════════════════════════════
   // 3 — Medical Screening
   // ══════════════════════════════════════════════════════════════════════════
-  drawS5SubsectionBanner(doc, 3, 'Medical Screening');
+  drawS4SubsectionBanner(doc, 3, 'Medical Screening');
   try {
     const r = await pool.request()
       .input('clientID', sql.NVarChar, clientID)
       .query('SELECT TOP 1 * FROM dbo.medical_screening WHERE clientID = @clientID');
     const sc = r.recordset[0];
     if (sc) {
-      drawS5MetaGrid(doc, [
+      drawS4MetaGrid(doc, [
         ['Screening Date', formatDate(sc.screeningDate || sc.createdAt)],
         ['Nurse / Staff',  sc.nurseName || sc.createdBy],
         ['Updated By',     sc.updatedBy],
         ['Updated At',     formatDate(sc.updatedAt)],
       ]);
 
-      // TB Symptom Checklist
-      const ml = doc.page.margins.left;
-      const tbY = doc.y;
+      const ml  = doc.page.margins.left;
+      const lblY = doc.y;
       doc.fillColor('#7B1FA2').font('Helvetica-Bold').fontSize(8)
-         .text('TB Symptom Checklist', ml + 20, tbY, { lineBreak: false });
-      doc.y = tbY + 12;
-      const tbSymptoms = [
+         .text('TB Symptom Checklist', ml + 20, lblY, { lineBreak: false });
+      doc.y = lblY + 13;
+      [
         ['Persistent Cough',        sc.tbCough],
         ['Coughing Blood',          sc.tbCoughBlood],
         ['Night Sweats',            sc.medSweat],
         ['Fever',                   sc.clientFever],
         ['Unexplained Weight Loss', sc.clientWeightLoss],
-      ];
-      tbSymptoms.forEach(([label, val]) => {
+      ].forEach(([label, val]) => {
         const checked = String(val || '').toLowerCase() === 'yes';
         const y = doc.y;
         doc.fillColor(checked ? '#2E7D32' : '#757575').font('Helvetica').fontSize(8.5)
            .text(`${checked ? '☑' : '☐'}  ${label}`, ml + 20, y, { lineBreak: false });
         doc.y = y + 13;
       });
-      doc.y = doc.y + 6;
+      doc.y = doc.y + 8;
 
       drawS5Narrative(doc, 'Hepatitis A/B Status', sc.clientHepAB);
       drawS5Narrative(doc, 'Risk Factors',          sc.clientRiskFactors);
-      drawS5Narrative(doc, 'Current Medications',   sc.clientMedications);
       drawS5Narrative(doc, 'Surgical History',      sc.clientSurgeries);
 
+      const meds = parseJsonArr(sc.clientMedications);
+      const medLblY = doc.y;
+      doc.fillColor('#7B1FA2').font('Helvetica-Bold').fontSize(8)
+         .text('Current Medications', ml + 20, medLblY, { lineBreak: false });
+      doc.y = medLblY + 13;
+      drawMedicationsTable(doc, meds);
+
       if (sc.clientBC) {
-        drawS5MetaGrid(doc, [
-          ['Birth Control Method',    sc.clientBCName],
-          ['BC Start Date',           formatDate(sc.clientBCDate)],
-          ['BC Location / Provider',  sc.clientBCLoc],
+        drawS4MetaGrid(doc, [
+          ['Birth Control Method',   sc.clientBCName],
+          ['BC Start Date',          formatDate(sc.clientBCDate)],
+          ['BC Location / Provider', sc.clientBCLoc],
         ]);
       }
 
-      // Sexual Health PHI block
       const shY = doc.y;
-      doc.rect(doc.page.margins.left, shY, doc.page.width - doc.page.margins.left - doc.page.margins.right, 14)
-         .fill('#EDE7F6');
+      const shW = doc.page.width - ml - doc.page.margins.right;
+      doc.rect(ml, shY, shW, 14).fill('#EDE7F6');
       doc.fillColor('#4A148C').font('Helvetica-Bold').fontSize(8)
-         .text('⚕  Sexual Health (PHI)', doc.page.margins.left + 6, shY + 3, { lineBreak: false });
+         .text('⚕  Sexual Health — PHI', ml + 6, shY + 3, { lineBreak: false });
       doc.y = shY + 14;
-      drawS5MetaGrid(doc, [
+      drawS4MetaGrid(doc, [
         ['Partners – Last Year',  sc.clientSexLastYear],
         ['Partners – Last Month', sc.clientSexLastMonth],
         ['Last Sexual Activity',  formatDate(sc.clientLastSexDate)],
@@ -2023,21 +1980,22 @@ async function renderSection5(doc, pool, clientID) {
   // ══════════════════════════════════════════════════════════════════════════
   doc.addPage();
   doc.y = 40;
-  drawS5SubsectionBanner(doc, 4, 'Nursing Admission Assessment');
+  drawS4SubsectionBanner(doc, 4, 'Nursing Admission Assessment');
   try {
     const r = await pool.request()
       .input('clientID', sql.NVarChar, clientID)
       .query('SELECT TOP 1 * FROM dbo.nursing_admission WHERE clientID = @clientID ORDER BY createdAt DESC');
     const na = r.recordset[0];
     if (na) {
-      drawS5EntryHeader(doc, 1, formatDate(na.admissionDate || na.createdAt), na.nurseName || na.staffName);
-      drawS5MetaGrid(doc, [
-        ['Temp (°F)',       na.cpT],
-        ['Pulse (bpm)',     na.cpP],
-        ['Resp (br/min)',   na.cpR],
-        ['Blood Pressure',  na.cpBP],
+      drawS4EntryHeader(doc, 1,
+        formatDate(na.admissionDate || na.createdAt),
+        na.nurseName || na.staffName
+      );
+      drawS4MetaGrid(doc, [
+        ['Temp (°F)',      na.cpT],   ['Pulse (bpm)',    na.cpP],
+        ['Resp (br/min)', na.cpR],   ['Blood Pressure', na.cpBP],
       ]);
-      const assessmentFields = [
+      [
         ['Level of Consciousness',   na.loc],
         ['Oriented To',              na.orientedToList],
         ['Oriented To Room',         na.orientedToRoomList],
@@ -2061,11 +2019,9 @@ async function renderSection5(doc, pool, clientID) {
         ['Bed Mobility',             na.bedMobility],
         ['Front Body Inspection',    na.frontBodyInspection],
         ['Rear Body Inspection',     na.rearBodyInspection],
-      ];
-      assessmentFields.forEach(([label, val]) => {
-        if (val !== null && val !== undefined && val !== '') {
+      ].forEach(([label, val]) => {
+        if (val !== null && val !== undefined && val !== '')
           drawS5Narrative(doc, label, val);
-        }
       });
     } else {
       noData(doc);
@@ -2079,7 +2035,7 @@ async function renderSection5(doc, pool, clientID) {
   // ══════════════════════════════════════════════════════════════════════════
   doc.addPage();
   doc.y = 40;
-  drawS5SubsectionBanner(doc, 5, 'Vital Signs Log (Most Recent 20)');
+  drawS4SubsectionBanner(doc, 5, 'Vital Signs Log (Most Recent 20)');
   try {
     const r = await pool.request()
       .input('clientID', sql.NVarChar, clientID)
@@ -2087,22 +2043,17 @@ async function renderSection5(doc, pool, clientID) {
     if (r.recordset.length > 0) {
       r.recordset.forEach((vs, i) => {
         const bp = (vs.bloodPressureSystolic && vs.bloodPressureDiastolic)
-          ? `${vs.bloodPressureSystolic} / ${vs.bloodPressureDiastolic}`
-          : 'N/A';
-        drawS5EntryHeader(doc, i + 1, formatDate(vs.recordDate), formatTime(vs.recordTime));
-        drawS5MetaGrid(doc, [
-          ['Blood Pressure',     bp],
-          ['Pulse (bpm)',        vs.pulse],
-          ['Temp (°F)',          vs.temperature],
-          ['Resp (br/min)',      vs.respiratoryRate],
-          ['O2 Saturation (%)', vs.oxygenSaturation],
-          ['Weight (lbs)',       vs.weight],
-          ['Blood Glucose',      vs.bloodGlucose],
-          ['Pain Level',         vs.painLevel],
-          ['Recorded By',        vs.recordedBy],
+          ? `${vs.bloodPressureSystolic} / ${vs.bloodPressureDiastolic}` : 'N/A';
+        drawS4EntryHeader(doc, i + 1, formatDate(vs.recordDate), formatTime(vs.recordTime));
+        drawS4MetaGrid(doc, [
+          ['Blood Pressure',    bp],                  ['Pulse (bpm)',      vs.pulse],
+          ['Temp (°F)',         vs.temperature],       ['Resp (br/min)',    vs.respiratoryRate],
+          ['O2 Saturation (%)', vs.oxygenSaturation], ['Weight (lbs)',     vs.weight],
+          ['Blood Glucose',     vs.bloodGlucose],      ['Pain Level',      vs.painLevel],
+          ['Recorded By',       vs.recordedBy],        ['', ''],
         ]);
         if (vs.notes) drawS5Narrative(doc, 'Notes', vs.notes);
-        doc.y = doc.y + 6;
+        doc.y = doc.y + 8;
       });
     } else {
       noData(doc);
@@ -2116,7 +2067,7 @@ async function renderSection5(doc, pool, clientID) {
   // ══════════════════════════════════════════════════════════════════════════
   doc.addPage();
   doc.y = 40;
-  drawS5SubsectionBanner(doc, 6, 'Medication Administration Record (Most Recent 30)');
+  drawS4SubsectionBanner(doc, 6, 'Medication Administration Record (Most Recent 30)');
   try {
     const r = await pool.request()
       .input('clientID', sql.NVarChar, clientID)
@@ -2124,20 +2075,17 @@ async function renderSection5(doc, pool, clientID) {
               WHERE clientID = @clientID ORDER BY administeredDate DESC`);
     if (r.recordset.length > 0) {
       r.recordset.forEach((mar, i) => {
-        drawS5EntryHeader(doc, i + 1,
-          `${safeStr(mar.medicationName)} — ${formatDate(mar.administeredDate)}`,
+        drawS4EntryHeader(doc, i + 1,
+          `${safeStr(mar.medicationName)}  —  ${formatDate(mar.administeredDate)}`,
           `Scheduled: ${formatTime(mar.scheduledTime)}`
         );
-        drawS5MetaGrid(doc, [
-          ['Dosage',          mar.dosage],
-          ['Route',           mar.route],
-          ['Frequency',       mar.frequency],
-          ['Status',          mar.status],
-          ['Hold Reason',     mar.holdReason],
-          ['Administered By', mar.administeredBy],
+        drawS4MetaGrid(doc, [
+          ['Dosage',          mar.dosage],     ['Route',           mar.route],
+          ['Frequency',       mar.frequency],  ['Status',          mar.status],
+          ['Hold Reason',     mar.holdReason], ['Administered By', mar.administeredBy],
         ]);
         if (mar.notes) drawS5Narrative(doc, 'Notes', mar.notes);
-        doc.y = doc.y + 6;
+        doc.y = doc.y + 8;
       });
     } else {
       noData(doc);
@@ -2151,7 +2099,7 @@ async function renderSection5(doc, pool, clientID) {
   // ══════════════════════════════════════════════════════════════════════════
   doc.addPage();
   doc.y = 40;
-  drawS5SubsectionBanner(doc, 7, 'Medical Appointments');
+  drawS4SubsectionBanner(doc, 7, 'Medical Appointments');
   try {
     const r = await pool.request()
       .input('clientID', sql.NVarChar, clientID)
@@ -2159,19 +2107,19 @@ async function renderSection5(doc, pool, clientID) {
               WHERE clientID = @clientID ORDER BY medApptDate DESC`);
     if (r.recordset.length > 0) {
       r.recordset.forEach((appt, i) => {
-        drawS5EntryHeader(doc, i + 1,
+        drawS4EntryHeader(doc, i + 1,
           formatDate(appt.medApptDate),
           appt.medApptType || appt.appointmentType
         );
-        drawS5MetaGrid(doc, [
-          ['Provider / Clinic',   appt.medApptProvider || appt.provider],
-          ['Time',                appt.medApptTime || formatTime(appt.apptTime)],
-          ['Transport Arranged',  String(appt.medApptTranport || '').toLowerCase() === 'yes' ? 'Yes' : 'No'],
-          ['Status',              appt.status],
+        drawS4MetaGrid(doc, [
+          ['Provider / Clinic',  appt.medApptProvider || appt.provider],
+          ['Time',               appt.medApptTime || formatTime(appt.apptTime)],
+          ['Transport Arranged', String(appt.medApptTranport || '').toLowerCase() === 'yes' ? 'Yes' : 'No'],
+          ['Status',             appt.status],
         ]);
         if (appt.medApptNotes || appt.notes)
           drawS5Narrative(doc, 'Outcome / Notes', appt.medApptNotes || appt.notes);
-        doc.y = doc.y + 6;
+        doc.y = doc.y + 8;
       });
     } else {
       noData(doc);
@@ -2185,7 +2133,7 @@ async function renderSection5(doc, pool, clientID) {
   // ══════════════════════════════════════════════════════════════════════════
   doc.addPage();
   doc.y = 40;
-  drawS5SubsectionBanner(doc, 8, 'Nursing Archive Index');
+  drawS4SubsectionBanner(doc, 8, 'Nursing Archive Index');
   try {
     const r = await pool.request()
       .input('clientID', sql.NVarChar, clientID)
@@ -2195,13 +2143,13 @@ async function renderSection5(doc, pool, clientID) {
               WHERE clientID = @clientID AND (isDeleted IS NULL OR isDeleted = 0)
               ORDER BY uploadedAt DESC`);
     if (r.recordset.length > 0) {
-      r.recordset.forEach((doc2, i) => {
-        drawS5EntryHeader(doc, i + 1, safeStr(doc2.documentName), safeStr(doc2.categoryName));
-        drawS5MetaGrid(doc, [
-          ['Document Date',   formatDate(doc2.documentDate)],
-          ['Confidentiality', doc2.confidentialityLevel],
-          ['Uploaded By',     doc2.uploadedBy],
-          ['Uploaded At',     formatDate(doc2.uploadedAt)],
+      r.recordset.forEach((arch, i) => {
+        drawS4EntryHeader(doc, i + 1, safeStr(arch.documentName), safeStr(arch.categoryName));
+        drawS4MetaGrid(doc, [
+          ['Document Date',   formatDate(arch.documentDate)],
+          ['Confidentiality', arch.confidentialityLevel],
+          ['Uploaded By',     arch.uploadedBy],
+          ['Uploaded At',     formatDate(arch.uploadedAt)],
         ]);
         doc.y = doc.y + 4;
       });
@@ -2212,6 +2160,7 @@ async function renderSection5(doc, pool, clientID) {
     noData(doc, `Nursing archive unavailable: ${e.message}`);
   }
 }
+
 
 async function renderSection6(doc, pool, clientID) {
   drawSectionHeader(doc, 'Section 6 – Case Management', '#C62828');
