@@ -1758,33 +1758,147 @@ async function renderSection4(doc, pool, clientID) {
 
 async function renderSection5(doc, pool, clientID) {
   drawSectionHeader(doc, 'Section 5 – Medical Information & Screenings', '#7B1FA2');
+  doc.y = 60;
 
-  // ─── Helper: format time(0) columns as HH:MM ───────────────────────────────
+  // ─── S5 layout helpers (mirror S4 pattern, purple accent) ─────────────────
+
   function formatTime(val) {
     if (!val) return 'N/A';
-    // mssql returns time as a string like "08:30:00.0000000" or a Date
     const s = String(val);
     const match = s.match(/^(\d{2}:\d{2})/);
     return match ? match[1] : s;
   }
 
-  // ─── 1. Medical Face Sheet (primary table) ─────────────────────────────────
+  function drawS5SubsectionBanner(doc, number, title) {
+    const ml = doc.page.margins.left;
+    const w  = doc.page.width - ml - doc.page.margins.right;
+    const h  = 22;
+    const y  = doc.y;
+
+    doc.rect(ml, y, w, h).fill('#EDE7F6');
+    doc.rect(ml, y, 26, h).fill('#7B1FA2');
+
+    doc.fillColor('white').fontSize(10).font('Helvetica-Bold')
+       .text(String(number), ml + 1, y + 5, { width: 26, align: 'center', lineBreak: false });
+    doc.y = y + h;
+
+    doc.fillColor('#4A148C').fontSize(11).font('Helvetica-Bold')
+       .text(title, ml + 32, y + 5, { width: w - 32, lineBreak: false });
+    doc.y = y + h;
+
+    doc.fillColor('#000000');
+    doc.y = y + h + 8;
+  }
+
+  function drawS5EntryHeader(doc, index, primaryStr, secondaryStr) {
+    const ml = doc.page.margins.left;
+    const w  = doc.page.width - ml - doc.page.margins.right;
+    const h  = 16;
+    const y  = doc.y;
+
+    doc.rect(ml, y, w, h).fill('#F3E5F5').stroke('#CE93D8');
+    doc.circle(ml + 10, y + 8, 7).fill('#7B1FA2');
+
+    doc.fillColor('white').fontSize(7).font('Helvetica-Bold')
+       .text(String(index), ml + 3, y + 4, { width: 16, align: 'center', lineBreak: false });
+    doc.y = y + h;
+
+    doc.fillColor('#37474F').fontSize(8.5).font('Helvetica-Bold')
+       .text(primaryStr, ml + 24, y + 4, { width: 200, lineBreak: false });
+    doc.y = y + h;
+
+    if (secondaryStr && secondaryStr !== 'N/A') {
+      doc.fillColor('#6A1B9A').fontSize(7.5).font('Helvetica')
+         .text(secondaryStr, ml + 230, y + 5, { width: w - 250, align: 'right', lineBreak: false });
+      doc.y = y + h;
+    }
+
+    doc.fillColor('#000000');
+    doc.y = y + h + 4;
+  }
+
+  function drawS5MetaGrid(doc, pairs) {
+    const ml   = doc.page.margins.left;
+    const colW = (doc.page.width - ml - doc.page.margins.right) / 2;
+    const rowH = 13;
+    const pad  = 4;
+    const lblW = 80;
+
+    for (let i = 0; i < pairs.length; i += 2) {
+      const left  = pairs[i];
+      const right = pairs[i + 1];
+      const y     = doc.y;
+      const shade = (i / 2) % 2 === 0 ? '#FFFFFF' : '#FAF5FF';
+
+      doc.rect(ml, y, colW * 2, rowH).fill(shade);
+
+      doc.fillColor('#666666').font('Helvetica-Bold').fontSize(7)
+         .text(`${left[0]}:`, ml + pad, y + 3, { width: lblW, lineBreak: false });
+      doc.y = y + rowH;
+      doc.fillColor('#000000').font('Helvetica').fontSize(7.5)
+         .text(safeStr(left[1]), ml + pad + lblW + 2, y + 3, { width: colW - pad - lblW - 6, lineBreak: false });
+      doc.y = y + rowH;
+
+      if (right) {
+        doc.fillColor('#666666').font('Helvetica-Bold').fontSize(7)
+           .text(`${right[0]}:`, ml + colW + pad, y + 3, { width: lblW, lineBreak: false });
+        doc.y = y + rowH;
+        doc.fillColor('#000000').font('Helvetica').fontSize(7.5)
+           .text(safeStr(right[1]), ml + colW + pad + lblW + 2, y + 3, { width: colW - pad - lblW - 6, lineBreak: false });
+        doc.y = y + rowH;
+      }
+
+      doc.y = y + rowH;
+    }
+    doc.y = doc.y + 4;
+  }
+
+  function drawS5Narrative(doc, label, text) {
+    if (!text || safeStr(text) === 'N/A') return;
+    const ml    = doc.page.margins.left;
+    const w     = doc.page.width - ml - doc.page.margins.right;
+    const inset = 14;
+    const textX = ml + inset + 6;
+    const textW = w - inset - 8;
+
+    const labelY = doc.y;
+    doc.fillColor('#7B1FA2').font('Helvetica-Bold').fontSize(7.5)
+       .text(label, textX, labelY, { width: textW, lineBreak: false });
+    doc.y = labelY + 11;
+
+    const bodyY = doc.y;
+    doc.fillColor('#222222').font('Helvetica').fontSize(8.5)
+       .text(safeStr(text), textX, bodyY, { width: textW });
+
+    const currentPageBottom = doc.page.height - doc.page.margins.bottom;
+    if (doc.y < currentPageBottom && doc.y > labelY) {
+      doc.moveTo(ml + inset, labelY)
+         .lineTo(ml + inset, doc.y + 1)
+         .strokeColor('#7B1FA2').lineWidth(2).stroke()
+         .lineWidth(0.5).strokeColor('#000000');
+    }
+    doc.y = doc.y + 5;
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // 1 — Medical Face Sheet
+  // ══════════════════════════════════════════════════════════════════════════
+  drawS5SubsectionBanner(doc, 1, 'Medical Face Sheet');
   try {
     const r = await pool.request()
       .input('clientID', sql.NVarChar, clientID)
       .query('SELECT TOP 1 * FROM dbo.medical_face_sheet WHERE clientID = @clientID');
-    drawSubHeader(doc, 'Medical Face Sheet');
     const mfs = r.recordset[0];
     if (mfs) {
-      drawTwoColumn(doc, [
-        ['Client ID', mfs.clientID],
-        ['Date Updated', formatDate(mfs.updatedAt || mfs.createdAt)],
+      drawS5MetaGrid(doc, [
+        ['Client ID',    mfs.clientID],
+        ['Last Updated', formatDate(mfs.updatedAt || mfs.createdAt)],
       ]);
-      drawField(doc, 'Medical Conditions', mfs.clientMedConditions);
-      drawField(doc, 'Additional Medical History', mfs.clientAddMedHistory);
-      drawField(doc, 'Pertinent Medical Information', mfs.clientMedPertinent);
-      drawField(doc, 'Previous Lab Results', mfs.clientPreviousLab);
-      drawField(doc, 'Allergies (Face Sheet)', mfs.clientAllergies);
+      drawS5Narrative(doc, 'Medical Conditions',          mfs.clientMedConditions);
+      drawS5Narrative(doc, 'Additional Medical History',  mfs.clientAddMedHistory);
+      drawS5Narrative(doc, 'Pertinent Medical Info',      mfs.clientMedPertinent);
+      drawS5Narrative(doc, 'Previous Lab Results',        mfs.clientPreviousLab);
+      drawS5Narrative(doc, 'Allergies',                   mfs.clientAllergies);
     } else {
       noData(doc);
     }
@@ -1792,40 +1906,38 @@ async function renderSection5(doc, pool, clientID) {
     noData(doc, `Medical face sheet unavailable: ${e.message}`);
   }
 
-  // ─── 2. MedicalInfo (legacy duplicate — render if present) ────────────────
+  // ── Legacy MedicalInfo (silently skip if absent) ───────────────────────────
   try {
     const r = await pool.request()
       .input('clientID', sql.NVarChar, clientID)
       .query('SELECT TOP 1 * FROM dbo.MedicalInfo WHERE clientID = @clientID');
     const mi = r.recordset[0];
     if (mi) {
-      drawSubHeader(doc, 'Medical Info (Legacy)');
-      drawTwoColumn(doc, [
-        ['Client ID', mi.clientID],
-        ['Date Updated', formatDate(mi.updatedAt || mi.createdAt)],
+      drawS5SubsectionBanner(doc, '1b', 'Medical Info (Legacy)');
+      drawS5MetaGrid(doc, [
+        ['Client ID',    mi.clientID],
+        ['Last Updated', formatDate(mi.updatedAt || mi.createdAt)],
       ]);
-      drawField(doc, 'Medical Conditions', mi.clientMedConditions);
-      drawField(doc, 'Additional Medical History', mi.clientAddMedHistory);
-      drawField(doc, 'Pertinent Medical Information', mi.clientMedPertinent);
-      drawField(doc, 'Previous Lab Results', mi.clientPreviousLab);
-      drawField(doc, 'Allergies (Legacy)', mi.clientAllergies);
+      drawS5Narrative(doc, 'Medical Conditions',         mi.clientMedConditions);
+      drawS5Narrative(doc, 'Additional Medical History', mi.clientAddMedHistory);
+      drawS5Narrative(doc, 'Pertinent Medical Info',     mi.clientMedPertinent);
+      drawS5Narrative(doc, 'Previous Lab Results',       mi.clientPreviousLab);
+      drawS5Narrative(doc, 'Allergies (Legacy)',         mi.clientAllergies);
     }
-    // If no legacy record, silently skip — not an error
-  } catch {
-    // Table may not exist in all environments — silently skip
-  }
+  } catch {}
 
-  // ─── 3. Client Allergies (dedicated table) ─────────────────────────────────
+  // ══════════════════════════════════════════════════════════════════════════
+  // 2 — Allergy List
+  // ══════════════════════════════════════════════════════════════════════════
+  drawS5SubsectionBanner(doc, 2, 'Allergy List');
   try {
     const r = await pool.request()
       .input('clientID', sql.NVarChar, clientID)
       .query('SELECT allergyName FROM dbo.ClientAllergies WHERE clientID = @clientID');
-    drawSubHeader(doc, 'Allergy List');
     if (r.recordset.length > 0) {
-      r.recordset.forEach(row => {
-        doc.font('Helvetica').fontSize(9).text(`• ${safeStr(row.allergyName)}`, { indent: 10 });
+      r.recordset.forEach((row, i) => {
+        drawS5EntryHeader(doc, i + 1, safeStr(row.allergyName), '');
       });
-      doc.moveDown(0.5);
     } else {
       noData(doc, 'No allergies on record.');
     }
@@ -1833,16 +1945,29 @@ async function renderSection5(doc, pool, clientID) {
     noData(doc, `Allergy list unavailable: ${e.message}`);
   }
 
-  // ─── 4. Medical Screening ──────────────────────────────────────────────────
+  // ══════════════════════════════════════════════════════════════════════════
+  // 3 — Medical Screening
+  // ══════════════════════════════════════════════════════════════════════════
+  drawS5SubsectionBanner(doc, 3, 'Medical Screening');
   try {
     const r = await pool.request()
       .input('clientID', sql.NVarChar, clientID)
       .query('SELECT TOP 1 * FROM dbo.medical_screening WHERE clientID = @clientID');
-    drawSubHeader(doc, 'Medical Screening');
     const sc = r.recordset[0];
     if (sc) {
+      drawS5MetaGrid(doc, [
+        ['Screening Date', formatDate(sc.screeningDate || sc.createdAt)],
+        ['Nurse / Staff',  sc.nurseName || sc.createdBy],
+        ['Updated By',     sc.updatedBy],
+        ['Updated At',     formatDate(sc.updatedAt)],
+      ]);
+
       // TB Symptom Checklist
-      doc.font('Helvetica-Bold').fontSize(9).text('TB Symptom Checklist:').moveDown(0.2);
+      const ml = doc.page.margins.left;
+      const tbY = doc.y;
+      doc.fillColor('#7B1FA2').font('Helvetica-Bold').fontSize(8)
+         .text('TB Symptom Checklist', ml + 20, tbY, { lineBreak: false });
+      doc.y = tbY + 12;
       const tbSymptoms = [
         ['Persistent Cough',        sc.tbCough],
         ['Coughing Blood',          sc.tbCoughBlood],
@@ -1851,31 +1976,35 @@ async function renderSection5(doc, pool, clientID) {
         ['Unexplained Weight Loss', sc.clientWeightLoss],
       ];
       tbSymptoms.forEach(([label, val]) => {
-        const answer = String(val || '').toLowerCase() === 'yes' ? '✓ Yes' : '✗ No';
-        doc.font('Helvetica').fontSize(9).text(`  ${answer}  ${label}`, { indent: 10 });
+        const checked = String(val || '').toLowerCase() === 'yes';
+        const y = doc.y;
+        doc.fillColor(checked ? '#2E7D32' : '#757575').font('Helvetica').fontSize(8.5)
+           .text(`${checked ? '☑' : '☐'}  ${label}`, ml + 20, y, { lineBreak: false });
+        doc.y = y + 13;
       });
-      doc.moveDown(0.5);
+      doc.y = doc.y + 6;
 
-      // General medical history fields
-      drawField(doc, 'Hepatitis A/B Status', sc.clientHepAB);
-      drawField(doc, 'Risk Factors', sc.clientRiskFactors);
-      drawField(doc, 'Current Medications', sc.clientMedications);
-      drawField(doc, 'Surgical History', sc.clientSurgeries);
+      drawS5Narrative(doc, 'Hepatitis A/B Status', sc.clientHepAB);
+      drawS5Narrative(doc, 'Risk Factors',          sc.clientRiskFactors);
+      drawS5Narrative(doc, 'Current Medications',   sc.clientMedications);
+      drawS5Narrative(doc, 'Surgical History',      sc.clientSurgeries);
 
-      // Birth control sub-group
       if (sc.clientBC) {
-        doc.font('Helvetica-Bold').fontSize(9).text('Birth Control:').moveDown(0.2);
-        drawTwoColumn(doc, [
-          ['Method', sc.clientBCName],
-          ['Start Date', formatDate(sc.clientBCDate)],
-          ['Location/Provider', sc.clientBCLoc],
+        drawS5MetaGrid(doc, [
+          ['Birth Control Method',    sc.clientBCName],
+          ['BC Start Date',           formatDate(sc.clientBCDate)],
+          ['BC Location / Provider',  sc.clientBCLoc],
         ]);
       }
 
-      // Sexual health — clearly labelled PHI sub-section
-      doc.font('Helvetica-Bold').fontSize(9).fillColor('#7B1FA2').text('Sexual Health (PHI)').moveDown(0.2);
-      doc.fillColor('#000000');
-      drawTwoColumn(doc, [
+      // Sexual Health PHI block
+      const shY = doc.y;
+      doc.rect(doc.page.margins.left, shY, doc.page.width - doc.page.margins.left - doc.page.margins.right, 14)
+         .fill('#EDE7F6');
+      doc.fillColor('#4A148C').font('Helvetica-Bold').fontSize(8)
+         .text('⚕  Sexual Health (PHI)', doc.page.margins.left + 6, shY + 3, { lineBreak: false });
+      doc.y = shY + 14;
+      drawS5MetaGrid(doc, [
         ['Partners – Last Year',  sc.clientSexLastYear],
         ['Partners – Last Month', sc.clientSexLastMonth],
         ['Last Sexual Activity',  formatDate(sc.clientLastSexDate)],
@@ -1889,32 +2018,29 @@ async function renderSection5(doc, pool, clientID) {
     noData(doc, `Medical screening unavailable: ${e.message}`);
   }
 
-  // ─── 5. Nursing Admission Assessment ──────────────────────────────────────
+  // ══════════════════════════════════════════════════════════════════════════
+  // 4 — Nursing Admission Assessment
+  // ══════════════════════════════════════════════════════════════════════════
+  doc.addPage();
+  doc.y = 40;
+  drawS5SubsectionBanner(doc, 4, 'Nursing Admission Assessment');
   try {
     const r = await pool.request()
       .input('clientID', sql.NVarChar, clientID)
       .query('SELECT TOP 1 * FROM dbo.nursing_admission WHERE clientID = @clientID ORDER BY createdAt DESC');
     const na = r.recordset[0];
-    drawSubHeader(doc, 'Nursing Admission Assessment');
     if (na) {
-      // Admission vitals at time of admission
-      drawTwoColumn(doc, [
-        ['Admission Date',   formatDate(na.admissionDate || na.createdAt)],
-        ['Nurse / Staff',    na.nurseName || na.staffName],
-        ['Temp (°F)',        na.cpT],
-        ['Pulse (bpm)',      na.cpP],
-        ['Resp (br/min)',    na.cpR],
+      drawS5EntryHeader(doc, 1, formatDate(na.admissionDate || na.createdAt), na.nurseName || na.staffName);
+      drawS5MetaGrid(doc, [
+        ['Temp (°F)',       na.cpT],
+        ['Pulse (bpm)',     na.cpP],
+        ['Resp (br/min)',   na.cpR],
         ['Blood Pressure',  na.cpBP],
       ]);
-
-      // Functional / assessment fields — render label+value; don't parse list content
       const assessmentFields = [
         ['Level of Consciousness',   na.loc],
         ['Oriented To',              na.orientedToList],
         ['Oriented To Room',         na.orientedToRoomList],
-        ['Temp (List)',              na.tList],
-        ['Pulse (List)',             na.pList],
-        ['Resp (List)',              na.rList],
         ['History Of',               na.historyOf],
         ['Edema',                    na.edema],
         ['Lung Sounds',              na.lungSounds],
@@ -1938,7 +2064,7 @@ async function renderSection5(doc, pool, clientID) {
       ];
       assessmentFields.forEach(([label, val]) => {
         if (val !== null && val !== undefined && val !== '') {
-          drawField(doc, label, val);
+          drawS5Narrative(doc, label, val);
         }
       });
     } else {
@@ -1948,20 +2074,23 @@ async function renderSection5(doc, pool, clientID) {
     noData(doc, `Nursing admission unavailable: ${e.message}`);
   }
 
-  // ─── 6. Vital Signs Log (most recent 20) ──────────────────────────────────
+  // ══════════════════════════════════════════════════════════════════════════
+  // 5 — Vital Signs Log
+  // ══════════════════════════════════════════════════════════════════════════
+  doc.addPage();
+  doc.y = 40;
+  drawS5SubsectionBanner(doc, 5, 'Vital Signs Log (Most Recent 20)');
   try {
     const r = await pool.request()
       .input('clientID', sql.NVarChar, clientID)
-      .query(`SELECT TOP 20 * FROM dbo.vital_signs WHERE clientID = @clientID ORDER BY recordDate DESC`);
-    drawSubHeader(doc, 'Vital Signs Log (Most Recent 20)');
+      .query('SELECT TOP 20 * FROM dbo.vital_signs WHERE clientID = @clientID ORDER BY recordDate DESC');
     if (r.recordset.length > 0) {
       r.recordset.forEach((vs, i) => {
         const bp = (vs.bloodPressureSystolic && vs.bloodPressureDiastolic)
           ? `${vs.bloodPressureSystolic} / ${vs.bloodPressureDiastolic}`
           : 'N/A';
-        doc.font('Helvetica-Bold').fontSize(9)
-          .text(`Record ${i + 1} — ${formatDate(vs.recordDate)}  ${formatTime(vs.recordTime)}`);
-        drawTwoColumn(doc, [
+        drawS5EntryHeader(doc, i + 1, formatDate(vs.recordDate), formatTime(vs.recordTime));
+        drawS5MetaGrid(doc, [
           ['Blood Pressure',     bp],
           ['Pulse (bpm)',        vs.pulse],
           ['Temp (°F)',          vs.temperature],
@@ -1971,8 +2100,9 @@ async function renderSection5(doc, pool, clientID) {
           ['Blood Glucose',      vs.bloodGlucose],
           ['Pain Level',         vs.painLevel],
           ['Recorded By',        vs.recordedBy],
-          ['Notes',              vs.notes],
         ]);
+        if (vs.notes) drawS5Narrative(doc, 'Notes', vs.notes);
+        doc.y = doc.y + 6;
       });
     } else {
       noData(doc);
@@ -1981,27 +2111,33 @@ async function renderSection5(doc, pool, clientID) {
     noData(doc, `Vital signs log unavailable: ${e.message}`);
   }
 
-  // ─── 7. Medication Administration Record (most recent 30) ─────────────────
+  // ══════════════════════════════════════════════════════════════════════════
+  // 6 — Medication Administration Record
+  // ══════════════════════════════════════════════════════════════════════════
+  doc.addPage();
+  doc.y = 40;
+  drawS5SubsectionBanner(doc, 6, 'Medication Administration Record (Most Recent 30)');
   try {
     const r = await pool.request()
       .input('clientID', sql.NVarChar, clientID)
       .query(`SELECT TOP 30 * FROM dbo.medication_administration_record
               WHERE clientID = @clientID ORDER BY administeredDate DESC`);
-    drawSubHeader(doc, 'Medication Administration Record (Most Recent 30)');
     if (r.recordset.length > 0) {
       r.recordset.forEach((mar, i) => {
-        doc.font('Helvetica-Bold').fontSize(9)
-          .text(`MAR #${i + 1} — ${formatDate(mar.administeredDate)}  (Scheduled: ${formatTime(mar.scheduledTime)})`);
-        drawTwoColumn(doc, [
-          ['Medication',    mar.medicationName],
-          ['Dosage',        mar.dosage],
-          ['Route',         mar.route],
-          ['Frequency',     mar.frequency],
-          ['Status',        mar.status],
-          ['Hold Reason',   mar.holdReason],
+        drawS5EntryHeader(doc, i + 1,
+          `${safeStr(mar.medicationName)} — ${formatDate(mar.administeredDate)}`,
+          `Scheduled: ${formatTime(mar.scheduledTime)}`
+        );
+        drawS5MetaGrid(doc, [
+          ['Dosage',          mar.dosage],
+          ['Route',           mar.route],
+          ['Frequency',       mar.frequency],
+          ['Status',          mar.status],
+          ['Hold Reason',     mar.holdReason],
           ['Administered By', mar.administeredBy],
-          ['Notes',         mar.notes],
         ]);
+        if (mar.notes) drawS5Narrative(doc, 'Notes', mar.notes);
+        doc.y = doc.y + 6;
       });
     } else {
       noData(doc);
@@ -2010,25 +2146,32 @@ async function renderSection5(doc, pool, clientID) {
     noData(doc, `Medication administration record unavailable: ${e.message}`);
   }
 
-  // ─── 8. Medical Appointments ──────────────────────────────────────────────
+  // ══════════════════════════════════════════════════════════════════════════
+  // 7 — Medical Appointments
+  // ══════════════════════════════════════════════════════════════════════════
+  doc.addPage();
+  doc.y = 40;
+  drawS5SubsectionBanner(doc, 7, 'Medical Appointments');
   try {
     const r = await pool.request()
       .input('clientID', sql.NVarChar, clientID)
       .query(`SELECT * FROM dbo.medical_appointments
               WHERE clientID = @clientID ORDER BY medApptDate DESC`);
-    drawSubHeader(doc, 'Medical Appointments');
     if (r.recordset.length > 0) {
       r.recordset.forEach((appt, i) => {
-        doc.font('Helvetica-Bold').fontSize(9)
-          .text(`Appointment ${i + 1} — ${formatDate(appt.medApptDate)}`);
-        drawTwoColumn(doc, [
-          ['Provider / Clinic', appt.medApptProvider || appt.provider],
-          ['Type',              appt.medApptType || appt.appointmentType],
-          ['Time',              appt.medApptTime || formatTime(appt.apptTime)],
-          ['Transport Arranged', String(appt.medApptTranport || '').toLowerCase() === 'yes' ? 'Yes' : 'No'],
-          ['Status',            appt.status],
-          ['Outcome / Notes',   appt.medApptNotes || appt.notes],
+        drawS5EntryHeader(doc, i + 1,
+          formatDate(appt.medApptDate),
+          appt.medApptType || appt.appointmentType
+        );
+        drawS5MetaGrid(doc, [
+          ['Provider / Clinic',   appt.medApptProvider || appt.provider],
+          ['Time',                appt.medApptTime || formatTime(appt.apptTime)],
+          ['Transport Arranged',  String(appt.medApptTranport || '').toLowerCase() === 'yes' ? 'Yes' : 'No'],
+          ['Status',              appt.status],
         ]);
+        if (appt.medApptNotes || appt.notes)
+          drawS5Narrative(doc, 'Outcome / Notes', appt.medApptNotes || appt.notes);
+        doc.y = doc.y + 6;
       });
     } else {
       noData(doc);
@@ -2037,7 +2180,12 @@ async function renderSection5(doc, pool, clientID) {
     noData(doc, `Medical appointments unavailable: ${e.message}`);
   }
 
-  // ─── 9. Nursing Archive Index (no file content) ────────────────────────────
+  // ══════════════════════════════════════════════════════════════════════════
+  // 8 — Nursing Archive Index
+  // ══════════════════════════════════════════════════════════════════════════
+  doc.addPage();
+  doc.y = 40;
+  drawS5SubsectionBanner(doc, 8, 'Nursing Archive Index');
   try {
     const r = await pool.request()
       .input('clientID', sql.NVarChar, clientID)
@@ -2046,17 +2194,16 @@ async function renderSection5(doc, pool, clientID) {
               FROM dbo.nursing_archive
               WHERE clientID = @clientID AND (isDeleted IS NULL OR isDeleted = 0)
               ORDER BY uploadedAt DESC`);
-    drawSubHeader(doc, 'Nursing Archive Index');
     if (r.recordset.length > 0) {
       r.recordset.forEach((doc2, i) => {
-        drawTwoColumn(doc, [
-          ['Document Name',        doc2.documentName],
-          ['Category',             doc2.categoryName],
-          ['Document Date',        formatDate(doc2.documentDate)],
-          ['Confidentiality',      doc2.confidentialityLevel],
-          ['Uploaded By',          doc2.uploadedBy],
-          ['Uploaded At',          formatDate(doc2.uploadedAt)],
+        drawS5EntryHeader(doc, i + 1, safeStr(doc2.documentName), safeStr(doc2.categoryName));
+        drawS5MetaGrid(doc, [
+          ['Document Date',   formatDate(doc2.documentDate)],
+          ['Confidentiality', doc2.confidentialityLevel],
+          ['Uploaded By',     doc2.uploadedBy],
+          ['Uploaded At',     formatDate(doc2.uploadedAt)],
         ]);
+        doc.y = doc.y + 4;
       });
     } else {
       noData(doc, 'No archived nursing documents found.');
