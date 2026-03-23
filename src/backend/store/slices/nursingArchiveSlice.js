@@ -2,7 +2,7 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 
 // ✅ FIXED: Consistent API base URL using import.meta.env
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
 
 // ✅ FIXED: Consistent mock data helper function
 const shouldUseMockData = (clientID) => {

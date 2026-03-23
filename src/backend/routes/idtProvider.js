@@ -121,6 +121,42 @@ const sanitizeIDTData = (data) => {
     return sanitized;
 };
 
+// ✅ GET /api/idt-provider/note/:id - Get specific IDT provider note
+router.get('/idt-provider/note/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        console.log(`📡 Fetching IDT provider note: ${id}`);
+        
+        const pool = await sql.connect(dbConfig);
+        const result = await pool.request()
+            .input('id', sql.Int, id)
+            .query(`
+                SELECT *
+                FROM dbo.idt_provider_notes 
+                WHERE id = @id
+            `);
+        
+        if (result.recordset.length === 0) {
+            console.log(`⚠️ IDT provider note not found: ${id}`);
+            return res.status(404).json({ 
+                message: 'IDT provider note not found'
+            });
+        }
+        
+        console.log(`✅ IDT provider note found: ${id}`);
+        res.json(result.recordset[0]);
+        
+    } catch (error) {
+        console.error('❌ Error fetching IDT provider note:', error);
+        res.status(500).json({ 
+            message: 'Failed to fetch IDT provider note', 
+            error: error.message 
+        });
+    }
+});
+
+
 // ✅ GET /api/idt-provider/:clientID - Get ALL IDT provider notes for client
 router.get('/idt-provider/:clientID', async (req, res) => {
     try {
@@ -153,41 +189,6 @@ router.get('/idt-provider/:clientID', async (req, res) => {
         console.error('❌ Error fetching IDT provider notes:', error);
         res.status(500).json({ 
             message: 'Failed to fetch IDT provider notes', 
-            error: error.message 
-        });
-    }
-});
-
-// ✅ GET /api/idt-provider/note/:id - Get specific IDT provider note
-router.get('/idt-provider/note/:id', async (req, res) => {
-    try {
-        const { id } = req.params;
-        
-        console.log(`📡 Fetching IDT provider note: ${id}`);
-        
-        const pool = await sql.connect(dbConfig);
-        const result = await pool.request()
-            .input('id', sql.Int, id)
-            .query(`
-                SELECT *
-                FROM dbo.idt_provider_notes 
-                WHERE id = @id
-            `);
-        
-        if (result.recordset.length === 0) {
-            console.log(`⚠️ IDT provider note not found: ${id}`);
-            return res.status(404).json({ 
-                message: 'IDT provider note not found'
-            });
-        }
-        
-        console.log(`✅ IDT provider note found: ${id}`);
-        res.json(result.recordset[0]);
-        
-    } catch (error) {
-        console.error('❌ Error fetching IDT provider note:', error);
-        res.status(500).json({ 
-            message: 'Failed to fetch IDT provider note', 
             error: error.message 
         });
     }

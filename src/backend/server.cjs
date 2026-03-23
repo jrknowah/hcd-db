@@ -660,6 +660,7 @@ app.get('/api/health', (req, res) => {
       idtProvider: idtProviderRouterLoaded ? 'Real Azure SQL router' : 'Fallback mock router',
       idtNursing: idtNursingRouterLoaded ? 'Real Azure SQL router' : 'Fallback mock router',
       nursingArchive: nursingArchiveRouterLoaded ? 'Real Azure SQL router' : 'Fallback mock router',
+      medObservation: medObservationRouterLoaded ? 'Real Azure SQL router' : 'Fallback mock router',
       
       // File Management
       files: filesRouterLoaded ? 'Real Azure Blob router' : 'Fallback mock router',
@@ -826,6 +827,7 @@ let progressNoteRouterLoaded = false;
 let idtProviderRouterLoaded = false;
 let idtNursingRouterLoaded = false;
 let nursingArchiveRouterLoaded = false;
+let medObservationRouterLoaded = false;
 
 console.log('🏥 Loading Section 5 Medical Routes...');
 console.log('🔍 Current directory:', __dirname);
@@ -1025,6 +1027,16 @@ try {
   nursingArchiveRouterLoaded = true;
 } catch (err) {
   console.log('⚠️  Could not load nursingArchive.js:', err.message);
+}
+
+// MEDICAL OBSERVATION RECORD
+try {
+  const medObservationRouter = require('./routes/medObservation.js');
+  app.use('/api', medObservationRouter);
+  console.log('✅ Medical Observation router loaded');
+  medObservationRouterLoaded = true;
+} catch (err) {
+  console.log('⚠️  Could not load medObservation.js:', err.message);
 }
 
 console.log('✅ Section 5 Medical Routes Loading Complete');
@@ -1308,6 +1320,7 @@ if (process.env.NODE_ENV !== 'test') {
       console.log(`    IDTProvider: ${idtProviderRouterLoaded ? '✅ Real Azure SQL' : '⚠️  Mock fallback'}`);
       console.log(`    IDTNursing: ${idtNursingRouterLoaded ? '✅ Real Azure SQL' : '⚠️  Mock fallback'}`);
       console.log(`    NursingArchive: ${nursingArchiveRouterLoaded ? '✅ Real Azure SQL' : '⚠️  Mock fallback'}`);
+      console.log(`    MedObservation: ${medObservationRouterLoaded ? '✅ Real Azure SQL' : '⚠️  Mock fallback'}`);
       
       console.log('  📂 File Management:');
       console.log(`    Files: ${filesRouterLoaded ? '✅ Real Azure Blob' : '⚠️  Mock fallback'}`);

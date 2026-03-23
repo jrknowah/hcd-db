@@ -3,39 +3,6 @@ const router = express.Router();
 const sql = require('mssql');
 const { connectToAzureSQL } = require('../store/azureSql');
 
-// GET /api/idt-nursing/:clientID - Get ALL IDT nursing notes for client
-router.get('/idt-nursing/:clientID', async (req, res) => {
-  try {
-    const { clientID } = req.params;
-    const { limit = 100, offset = 0 } = req.query;
-    
-    console.log(`📡 Fetching IDT nursing notes for client: ${clientID}`);
-    
-    const pool = await connectToAzureSQL();
-    const result = await pool.request()
-      .input('clientID', sql.VarChar(50), clientID)
-      .input('limit', sql.Int, parseInt(limit))
-      .input('offset', sql.Int, parseInt(offset))
-      .query(`
-        SELECT *
-        FROM idt_nursing_notes 
-        WHERE clientID = @clientID 
-        ORDER BY createdAt DESC
-        OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
-      `);
-    
-    console.log(`✅ Found ${result.recordset.length} IDT nursing notes`);
-    res.json(result.recordset);
-    
-  } catch (error) {
-    console.error('❌ Error fetching IDT nursing notes:', error);
-    res.status(500).json({ 
-      message: 'Failed to fetch IDT nursing notes', 
-      error: error.message 
-    });
-  }
-});
-
 // GET /api/idt-nursing/note/:idtNursingID - Get specific IDT nursing note
 router.get('/idt-nursing/note/:idtNursingID', async (req, res) => {
   try {
@@ -66,6 +33,40 @@ router.get('/idt-nursing/note/:idtNursingID', async (req, res) => {
     console.error('❌ Error fetching IDT nursing note:', error);
     res.status(500).json({ 
       message: 'Failed to fetch IDT nursing note', 
+      error: error.message 
+    });
+  }
+});
+
+
+// GET /api/idt-nursing/:clientID - Get ALL IDT nursing notes for client
+router.get('/idt-nursing/:clientID', async (req, res) => {
+  try {
+    const { clientID } = req.params;
+    const { limit = 100, offset = 0 } = req.query;
+    
+    console.log(`📡 Fetching IDT nursing notes for client: ${clientID}`);
+    
+    const pool = await connectToAzureSQL();
+    const result = await pool.request()
+      .input('clientID', sql.VarChar(50), clientID)
+      .input('limit', sql.Int, parseInt(limit))
+      .input('offset', sql.Int, parseInt(offset))
+      .query(`
+        SELECT *
+        FROM idt_nursing_notes 
+        WHERE clientID = @clientID 
+        ORDER BY createdAt DESC
+        OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
+      `);
+    
+    console.log(`✅ Found ${result.recordset.length} IDT nursing notes`);
+    res.json(result.recordset);
+    
+  } catch (error) {
+    console.error('❌ Error fetching IDT nursing notes:', error);
+    res.status(500).json({ 
+      message: 'Failed to fetch IDT nursing notes', 
       error: error.message 
     });
   }

@@ -108,63 +108,7 @@ const validateFileContent = async (filePath, mimeType) => {
 };
 
 // ✅ GET /api/nursing-archive/:clientID - Get all documents for client
-router.get('/nursing-archive/:clientID', async (req, res) => {
-    try {
-        const { clientID } = req.params;
-        const { category, search, startDate, endDate } = req.query;
-        
-        const pool = await sql.connect(dbConfig);
-        let query = `
-            SELECT 
-                na.*,
-                dc.categoryName,
-                dc.categoryDescription
-            FROM dbo.NursingArchive na
-            LEFT JOIN dbo.DocumentCategories dc ON na.categoryID = dc.categoryID
-            WHERE na.clientID = @clientID
-        `;
-        
-        const request = pool.request().input('clientID', sql.VarChar(50), clientID);
-        
-        // Add filters
-        if (category) {
-            query += ' AND dc.categoryName = @category';
-            request.input('category', sql.VarChar(100), category);
-        }
-        
-        if (search) {
-            query += ' AND (na.documentName LIKE @search OR na.description LIKE @search OR na.keywords LIKE @search)';
-            request.input('search', sql.VarChar(500), `%${search}%`);
-        }
-        
-        if (startDate) {
-            query += ' AND na.documentDate >= @startDate';
-            request.input('startDate', sql.Date, startDate);
-        }
-        
-        if (endDate) {
-            query += ' AND na.documentDate <= @endDate';
-            request.input('endDate', sql.Date, endDate);
-        }
-        
-        query += ' ORDER BY na.uploadedAt DESC';
-        
-        const result = await request.query(query);
-        
-        await logUserAction(req, 'GET', 'NursingArchive', clientID);
-        
-        res.json(result.recordset);
-        
-    } catch (error) {
-        console.error('Error fetching documents:', error);
-        res.status(500).json({ 
-            message: 'Failed to fetch documents', 
-            error: error.message 
-        });
-    }
-});
-
-// ✅ POST /api/nursing-archive/:clientID/upload - Upload new document(s)
+// Specific routes FIRST — must come before /:clientID to avoid shadowing
 router.post('/nursing-archive/:clientID/upload', upload.array('files', 10), async (req, res) => {
     try {
         const { clientID } = req.params;
@@ -558,6 +502,64 @@ router.get('/nursing-archive/categories', async (req, res) => {
 });
 
 // ✅ GET /api/nursing-archive/:clientID/search - Search documents
+
+router.get('/nursing-archive/:clientID', async (req, res) => {
+    try {
+        const { clientID } = req.params;
+        const { category, search, startDate, endDate } = req.query;
+        
+        const pool = await sql.connect(dbConfig);
+        let query = `
+            SELECT 
+                na.*,
+                dc.categoryName,
+                dc.categoryDescription
+            FROM dbo.NursingArchive na
+            LEFT JOIN dbo.DocumentCategories dc ON na.categoryID = dc.categoryID
+            WHERE na.clientID = @clientID
+        `;
+        
+        const request = pool.request().input('clientID', sql.VarChar(50), clientID);
+        
+        // Add filters
+        if (category) {
+            query += ' AND dc.categoryName = @category';
+            request.input('category', sql.VarChar(100), category);
+        }
+        
+        if (search) {
+            query += ' AND (na.documentName LIKE @search OR na.description LIKE @search OR na.keywords LIKE @search)';
+            request.input('search', sql.VarChar(500), `%${search}%`);
+        }
+        
+        if (startDate) {
+            query += ' AND na.documentDate >= @startDate';
+            request.input('startDate', sql.Date, startDate);
+        }
+        
+        if (endDate) {
+            query += ' AND na.documentDate <= @endDate';
+            request.input('endDate', sql.Date, endDate);
+        }
+        
+        query += ' ORDER BY na.uploadedAt DESC';
+        
+        const result = await request.query(query);
+        
+        await logUserAction(req, 'GET', 'NursingArchive', clientID);
+        
+        res.json(result.recordset);
+        
+    } catch (error) {
+        console.error('Error fetching documents:', error);
+        res.status(500).json({ 
+            message: 'Failed to fetch documents', 
+            error: error.message 
+        });
+    }
+});
+
+// ✅ POST /api/nursing-archive/:clientID/upload - Upload new document(s)
 router.get('/nursing-archive/:clientID/search', async (req, res) => {
     try {
         const { clientID } = req.params;
