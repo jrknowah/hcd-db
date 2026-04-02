@@ -1289,8 +1289,8 @@ if (process.env.NODE_ENV !== 'test') {
       console.log(`💾 Database: ${dbConnected ? '✅ Azure SQL Connected' : '⚠️  Mock Data Only'}`);
       console.log(`☁️  Azure Storage: ${process.env.AZURE_STORAGE_CONNECTION_STRING ? '✅ Configured' : '⚠️  Not configured'}`);
       console.log('STORAGE STRING:', process.env.AZURE_STORAGE_CONNECTION_STRING);
-      const connStr = process.env.AZURE_STORAGE_CONNECTION_STRING;
-      console.log('Using connection string:', connStr); // add this temporarily
+      // const connStr = process.env.AZURE_STORAGE_CONNECTION_STRING;
+      // console.log('Using connection string:', connStr); // add this temporarily
       console.log(`🔗 Health check: http://localhost:${PORT}/api/health`);
       console.log(`🔍 Debug endpoint: http://localhost:${PORT}/api/debug/database`);
       
