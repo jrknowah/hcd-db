@@ -270,6 +270,84 @@ router.post('/upload', upload.single('file'), async (req, res) => {
 });
 
 /**
+ * GET /file/download-url
+ * Must be registered BEFORE /file/:fileName to avoid being shadowed.
+ * Generates a proxy stream URL (Managed Identity) or SAS URL (connection string).
+ * Query params: blobName (required), expiryHours (optional, default 1)
+ */
+router.get('/file/download-url', async (req, res) => {
+  console.log('🔗 download-url called with:', req.query);
+  try {
+    const { blobName, expiryHours = 1 } = req.query;
+
+    if (!blobName) {
+      return res.status(400).json({ message: 'blobName is required' });
+    }
+
+    console.log(`🔗 Generating download URL for: ${blobName}`);
+
+    if (blobServiceClient) {
+      try {
+        const { generateBlobSASQueryParameters, BlobSASPermissions, StorageSharedKeyCredential } = require('@azure/storage-blob');
+
+        const containerClient = await getContainerClient();
+        const blobClient = containerClient.getBlobClient(blobName);
+
+        const exists = await blobClient.exists();
+        if (!exists) {
+          return res.status(404).json({ message: `File not found in Azure: ${blobName}` });
+        }
+
+        // Connection string: generate a SAS token directly
+        if (HAS_CONNECTION_STRING) {
+          const accountName = CONNECTION_STRING.match(/AccountName=([^;]+)/)?.[1];
+          const accountKey  = CONNECTION_STRING.match(/AccountKey=([^;]+)/)?.[1];
+
+          if (accountName && accountKey) {
+            const sharedKeyCredential = new StorageSharedKeyCredential(accountName, accountKey);
+            const expiresOn = new Date(Date.now() + Number(expiryHours) * 60 * 60 * 1000);
+
+            const sasToken = generateBlobSASQueryParameters(
+              {
+                containerName: CONTAINER_NAME,
+                blobName,
+                permissions: BlobSASPermissions.parse('r'),
+                expiresOn,
+              },
+              sharedKeyCredential
+            ).toString();
+
+            const signedUrl = `${blobClient.url}?${sasToken}`;
+            console.log(`   ✅ SAS URL generated (expires in ${expiryHours}h)`);
+            return res.json({ url: signedUrl, expiresOn });
+          }
+        }
+
+        // Managed Identity: proxy stream through backend
+        const proxyUrl = `${req.protocol}://${req.get('host')}/api/file/stream/${encodeURIComponent(blobName)}`;
+        console.log(`   ℹ️  Managed Identity in use — returning proxy URL`);
+        return res.json({ url: proxyUrl });
+
+      } catch (azureErr) {
+        console.error('❌ Failed to generate download URL:', azureErr.message);
+        return res.status(500).json({ message: 'Failed to generate download URL', detail: azureErr.message });
+      }
+    }
+
+    if (ENABLE_LOCAL_FALLBACK || IS_LOCAL) {
+      const localUrl = `${req.protocol}://${req.get('host')}/uploads/${path.basename(blobName)}`;
+      return res.json({ url: localUrl });
+    }
+
+    return res.status(503).json({ message: 'Storage not configured' });
+
+  } catch (err) {
+    console.error('❌ download-url error:', err);
+    return res.status(500).json({ message: 'Failed to generate download URL', detail: err.message });
+  }
+});
+
+/**
  * GET /file/:fileName
  */
 router.get('/file/:fileName', async (req, res) => {
@@ -672,85 +750,7 @@ router.get('/mental-archive/:clientID', async (req, res) => {
   }
 });
 
-/**
- * GET /file/download-url
- * Generates a short-lived SAS URL for a specific blob so the browser can download it directly.
- * Query params: blobName (required), expiryHours (optional, default 1)
- */
-router.get('/file/download-url', async (req, res) => {
-  console.log('🔗 download-url called with:', req.query);
-  try {
-    const { blobName, expiryHours = 1 } = req.query;
 
-    if (!blobName) {
-      return res.status(400).json({ message: 'blobName is required' });
-    }
-
-    console.log(`🔗 Generating download URL for: ${blobName}`);
-
-    if (blobServiceClient) {
-      try {
-        const { generateBlobSASQueryParameters, BlobSASPermissions, StorageSharedKeyCredential } = require('@azure/storage-blob');
-
-        const containerClient = await getContainerClient();
-        const blobClient = containerClient.getBlobClient(blobName);
-
-        const exists = await blobClient.exists();
-        if (!exists) {
-          return res.status(404).json({ message: `File not found in Azure: ${blobName}` });
-        }
-
-        // If using a connection string we can generate a SAS token directly
-        if (HAS_CONNECTION_STRING) {
-          const accountName = CONNECTION_STRING.match(/AccountName=([^;]+)/)?.[1];
-          const accountKey  = CONNECTION_STRING.match(/AccountKey=([^;]+)/)?.[1];
-
-          if (accountName && accountKey) {
-            const sharedKeyCredential = new StorageSharedKeyCredential(accountName, accountKey);
-            const expiresOn = new Date(Date.now() + Number(expiryHours) * 60 * 60 * 1000);
-
-            const sasToken = generateBlobSASQueryParameters(
-              {
-                containerName: CONTAINER_NAME,
-                blobName,
-                permissions: BlobSASPermissions.parse('r'),
-                expiresOn,
-              },
-              sharedKeyCredential
-            ).toString();
-
-            const signedUrl = `${blobClient.url}?${sasToken}`;
-            console.log(`   ✅ SAS URL generated (expires in ${expiryHours}h)`);
-            return res.json({ url: signedUrl, expiresOn });
-          }
-        }
-
-        // Managed Identity: fall back to a time-limited proxy stream through the backend
-        // since Managed Identity can't sign SAS tokens directly without the account key.
-        // Return a backend proxy URL instead.
-        const proxyUrl = `${req.protocol}://${req.get('host')}/api/file/stream/${encodeURIComponent(blobName)}`;
-        console.log(`   ℹ️  Managed Identity in use — returning proxy URL`);
-        return res.json({ url: proxyUrl });
-
-      } catch (azureErr) {
-        console.error('❌ Failed to generate SAS URL:', azureErr.message);
-        return res.status(500).json({ message: 'Failed to generate download URL', detail: azureErr.message });
-      }
-    }
-
-    // Local fallback
-    if (ENABLE_LOCAL_FALLBACK || IS_LOCAL) {
-      const localUrl = `${req.protocol}://${req.get('host')}/uploads/${path.basename(blobName)}`;
-      return res.json({ url: localUrl });
-    }
-
-    return res.status(503).json({ message: 'Storage not configured' });
-
-  } catch (err) {
-    console.error('❌ download-url error:', err);
-    return res.status(500).json({ message: 'Failed to generate download URL', detail: err.message });
-  }
-});
 
 /**
  * GET /file/stream/:blobName
