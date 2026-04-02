@@ -85,14 +85,10 @@ async function getContainerClient() {
     
     const client = blobServiceClient.getContainerClient(CONTAINER_NAME);
     
-    // PRODUCTION FIX: Don't try to create - just verify it exists
-    // Container should already exist in Azure Portal
-    const exists = await client.exists();
-    if (!exists) {
-      throw new Error(`Container '${CONTAINER_NAME}' does not exist. Please create it in Azure Portal first.`);
-    }
-    
-    console.log(`✅ Successfully connected to container '${CONTAINER_NAME}'`);
+    // Skip exists() — it calls getProperties() which triggers
+    // AuthorizationPermissionMismatch under Managed Identity even with correct
+    // RBAC. Container is known to exist; skip the check and go straight to use.
+    console.log(`✅ Container client ready: '${CONTAINER_NAME}'`);
     _containerClient = client;
     return _containerClient;
     
