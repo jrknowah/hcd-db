@@ -757,9 +757,9 @@ router.get('/mental-archive/:clientID', async (req, res) => {
  * Streams a blob directly from Azure — used as a fallback when Managed Identity
  * is in use and SAS token generation is not available.
  */
-router.get('/file/stream/*', async (req, res) => {
+router.get('/file/stream/*blobPath', async (req, res) => {
   try {
-    const blobName = decodeURIComponent(req.params[0]);
+    const blobName = decodeURIComponent(req.params.blobPath);
 
     if (!blobServiceClient) {
       return res.status(503).json({ message: 'Azure storage not configured' });
