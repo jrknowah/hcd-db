@@ -293,10 +293,7 @@ router.get('/file/download-url', async (req, res) => {
         const containerClient = await getContainerClient();
         const blobClient = containerClient.getBlobClient(blobName);
 
-        const exists = await blobClient.exists();
-        if (!exists) {
-          return res.status(404).json({ message: `File not found in Azure: ${blobName}` });
-        }
+        // Skip exists() — fails under Managed Identity. Stream/SAS step handles 404.
 
         // Connection string: generate a SAS token directly
         if (HAS_CONNECTION_STRING) {
@@ -365,16 +362,9 @@ router.get('/file/:fileName', async (req, res) => {
         const containerClient = await getContainerClient();
         const blobClient = containerClient.getBlobClient(blobName);
 
-        const exists = await blobClient.exists();
-        if (!exists) {
-          console.warn(`   ⚠️  File not found in Azure: ${blobName}`);
-          if (!ENABLE_LOCAL_FALLBACK) {
-            return res.status(404).json({ message: 'File not found' });
-          }
-        } else {
+        try {
           const props = await blobClient.getProperties();
           console.log(`   ✅ File found in Azure, size: ${props.contentLength} bytes`);
-
           return res.json({
             blobName,
             fileName: path.basename(blobName),
@@ -384,6 +374,15 @@ router.get('/file/:fileName', async (req, res) => {
             lastModified: props.lastModified,
             storage: 'azure'
           });
+        } catch (propErr) {
+          if (propErr.statusCode === 404) {
+            console.warn(`   ⚠️  File not found in Azure: ${blobName}`);
+            if (!ENABLE_LOCAL_FALLBACK) {
+              return res.status(404).json({ message: 'File not found' });
+            }
+          } else {
+            throw propErr;
+          }
         }
       } catch (azureErr) {
         console.error('❌ Azure retrieval failed:', azureErr.message);
@@ -573,22 +572,19 @@ router.delete('/file/:fileName', async (req, res) => {
         const containerClient = await getContainerClient();
         const blockBlobClient = containerClient.getBlockBlobClient(blobName);
 
-        const exists = await blockBlobClient.exists();
-        if (!exists) {
-          console.warn(`   ⚠️  File not found in Azure: ${blobName}`);
-          if (!ENABLE_LOCAL_FALLBACK) {
-            return res.status(404).json({ message: 'File not found' });
-          }
-        } else {
+        try {
           await blockBlobClient.delete();
           console.log(`   ✅ File deleted from Azure`);
-
-          return res.json({
-            success: true,
-            message: 'File deleted successfully',
-            blobName,
-            storage: 'azure'
-          });
+          return res.json({ success: true, message: 'File deleted successfully', blobName, storage: 'azure' });
+        } catch (delErr) {
+          if (delErr.statusCode === 404) {
+            console.warn(`   ⚠️  File not found in Azure: ${blobName}`);
+            if (!ENABLE_LOCAL_FALLBACK) {
+              return res.status(404).json({ message: 'File not found' });
+            }
+          } else {
+            throw delErr;
+          }
         }
       } catch (azureErr) {
         console.error('❌ Azure deletion failed:', azureErr.message);
@@ -768,17 +764,26 @@ router.get('/file/stream/*blobPath', async (req, res) => {
     const containerClient = await getContainerClient();
     const blobClient = containerClient.getBlobClient(blobName);
 
-    const exists = await blobClient.exists();
-    if (!exists) {
-      return res.status(404).json({ message: 'File not found' });
+    console.log(`📥 Streaming blob: ${blobName}`);
+
+    // Skip exists() — it uses getProperties() which can fail under Managed Identity.
+    // Instead, attempt download directly and handle Azure's 404 response.
+    let downloadResponse;
+    try {
+      downloadResponse = await blobClient.download();
+    } catch (downloadErr) {
+      if (downloadErr.statusCode === 404) {
+        return res.status(404).json({ message: 'File not found in storage' });
+      }
+      throw downloadErr;
     }
 
-    const props = await blobClient.getProperties();
-    res.setHeader('Content-Type', props.contentType || 'application/octet-stream');
+    const contentType = downloadResponse.contentType || 'application/octet-stream';
+    const contentLength = downloadResponse.contentLength;
+    res.setHeader('Content-Type', contentType);
     res.setHeader('Content-Disposition', `attachment; filename="${path.basename(blobName)}"`);
-    if (props.contentLength) res.setHeader('Content-Length', props.contentLength);
+    if (contentLength) res.setHeader('Content-Length', contentLength);
 
-    const downloadResponse = await blobClient.download();
     downloadResponse.readableStreamBody.pipe(res);
 
   } catch (err) {
