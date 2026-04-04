@@ -755,7 +755,8 @@ router.get('/mental-archive/:clientID', async (req, res) => {
  */
 router.get('/file/stream/*blobPath', async (req, res) => {
   try {
-    const blobName = decodeURIComponent(req.params.blobPath);
+    // req.params.blobPath joins segments with commas in path-to-regexp v8 — use req.path instead
+    const blobName = decodeURIComponent(req.path.replace(/^/file/stream//, ''));
 
     if (!blobServiceClient) {
       return res.status(503).json({ message: 'Azure storage not configured' });
