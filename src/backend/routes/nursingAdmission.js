@@ -1,21 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const sql = require('mssql');
-
-// Database connection - adjust config as needed
-const dbConfig = {
-  server: process.env.DB_SERVER,
-  database: process.env.DB_DATABASE,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  port: parseInt(process.env.DB_PORT) || 1433,
-  options: {
-    encrypt: true,
-    trustServerCertificate: true,
-    enableArithAbort: true,
-    requestTimeout: 30000,
-  },
-};
+const { getPool } = require('../store/azureSql.js');
 
 // Utility function to handle database errors
 const handleDatabaseError = (error, res, operation) => {
@@ -59,6 +45,97 @@ const safeParse = (str) => {
   }
 };
 
+// GET /api/nursing-admission/:clientID/summary - Get admission summary
+router.get('/nursing-admission/:clientID/summary', async (req, res) => {
+  try {
+    const { clientID } = req.params;
+    if (!clientID) return res.status(400).json({ error: 'Client ID is required' });
+    const pool = await getPool();
+    const summaryQuery = `
+      SELECT 
+        COUNT(*) as totalAssessments,
+        MAX(createdAt) as lastAssessmentDate,
+        CASE WHEN COUNT(*) > 0 THEN 'Assessed' ELSE 'Not Assessed' END as overallStatus,
+        CASE 
+          WHEN EXISTS(
+            SELECT 1 FROM nursing_admission 
+            WHERE clientID = @clientID 
+              AND (
+                JSON_VALUE(clientPain, '$[0]') LIKE '%High%' OR
+                JSON_VALUE(clientPain, '$[0]') LIKE '%Severe%' OR
+                cathType IS NOT NULL AND cathType != ''
+              )
+          ) THEN 1
+          ELSE 0
+        END as followUpRequired
+      FROM nursing_admission 
+      WHERE clientID = @clientID
+    `;
+    const result = await pool.request()
+      .input('clientID', sql.NVarChar, clientID)
+      .query(summaryQuery);
+    const summary = result.recordset[0];
+    res.json({
+      totalAssessments: summary.totalAssessments || 0,
+      lastAssessmentDate: summary.lastAssessmentDate,
+      overallStatus: summary.overallStatus,
+      followUpRequired: summary.followUpRequired === 1,
+      adlScore: 16
+    });
+  } catch (error) {
+    handleDatabaseError(error, res, 'fetching admission summary');
+  }
+});
+
+// GET /api/nursing-admission/:clientID/body-inspection - Get body inspection data
+router.get('/nursing-admission/:clientID/body-inspection', async (req, res) => {
+  try {
+    const { clientID } = req.params;
+    if (!clientID) return res.status(400).json({ error: 'Client ID is required' });
+    const pool = await getPool();
+    const result = await pool.request()
+      .input('clientID', sql.NVarChar, clientID)
+      .query(`SELECT frontBodyInspection, rearBodyInspection, updatedAt FROM nursing_admission WHERE clientID = @clientID ORDER BY updatedAt DESC`);
+    if (result.recordset.length > 0) {
+      const inspection = result.recordset[0];
+      res.json({
+        frontBodyInspection: safeParse(inspection.frontBodyInspection),
+        rearBodyInspection: safeParse(inspection.rearBodyInspection),
+        updatedAt: inspection.updatedAt
+      });
+    } else {
+      res.status(404).json({ error: 'No body inspection data found' });
+    }
+  } catch (error) {
+    handleDatabaseError(error, res, 'fetching body inspection');
+  }
+});
+
+// GET /api/nursing-admission/:clientID/vitals - Get vitals history
+router.get('/nursing-admission/:clientID/vitals', async (req, res) => {
+  try {
+    const { clientID } = req.params;
+    const { limit = 10 } = req.query;
+    if (!clientID) return res.status(400).json({ error: 'Client ID is required' });
+    const pool = await getPool();
+    const result = await pool.request()
+      .input('clientID', sql.NVarChar, clientID)
+      .input('limit', sql.Int, parseInt(limit))
+      .query(`
+        SELECT TOP (@limit)
+          CAST(createdAt AS DATE) as date,
+          cpT as temperature, cpP as pulse, cpR as respiration, cpBP as bloodPressure, createdAt
+        FROM nursing_admission 
+        WHERE clientID = @clientID 
+          AND (cpT IS NOT NULL OR cpP IS NOT NULL OR cpR IS NOT NULL OR cpBP IS NOT NULL)
+        ORDER BY createdAt DESC
+      `);
+    res.json(result.recordset);
+  } catch (error) {
+    handleDatabaseError(error, res, 'fetching vitals history');
+  }
+});
+
 // GET /api/nursing-admission/:clientID - Fetch nursing admission data
 router.get('/nursing-admission/:clientID', async (req, res) => {
   try {
@@ -68,7 +145,7 @@ router.get('/nursing-admission/:clientID', async (req, res) => {
       return res.status(400).json({ error: 'Client ID is required' });
     }
 
-    const pool = await sql.connect(dbConfig);
+    const pool = await getPool();
     
     const query = `
       SELECT * FROM nursing_admission 
@@ -109,9 +186,9 @@ router.get('/nursing-admission/:clientID', async (req, res) => {
         }
       });
       
-      res.json([admission]); // Return as array
+      res.json(admission); // Return single object
     } else {
-      res.json([]); // Return empty array if no data
+      res.json(null); // Return null if no data
     }
     
   } catch (error) {
@@ -139,7 +216,7 @@ router.post('/nursing-admission/:clientID', async (req, res) => {
     //   return res.status(400).json({ error: validation.message });
     // }
     
-    const pool = await sql.connect(dbConfig);
+    const pool = await getPool();
     
     // Check if admission already exists
     const checkQuery = `SELECT id FROM nursing_admission WHERE clientID = @clientID`;
@@ -322,7 +399,7 @@ router.put('/nursing-admission/:id', async (req, res) => {
       return res.status(400).json({ error: 'Admission ID is required' });
     }
     
-    const pool = await sql.connect(dbConfig);
+    const pool = await getPool();
     
     // Check if admission exists
     const checkResult = await pool.request()
@@ -389,7 +466,7 @@ router.delete('/nursing-admission/:id', async (req, res) => {
       return res.status(400).json({ error: 'Admission ID is required' });
     }
     
-    const pool = await sql.connect(dbConfig);
+    const pool = await getPool();
     
     // Check if admission exists
     const checkResult = await pool.request()
@@ -418,167 +495,6 @@ router.delete('/nursing-admission/:id', async (req, res) => {
   }
 });
 
-// GET /api/nursing-admission/:clientID/summary - Get admission summary and statistics
-router.get('/nursing-admission/:clientID/summary', async (req, res) => {
-  try {
-    const { clientID } = req.params;
-    
-    if (!clientID) {
-      return res.status(400).json({ error: 'Client ID is required' });
-    }
-    
-    const pool = await sql.connect(dbConfig);
-    
-    const summaryQuery = `
-      SELECT 
-        COUNT(*) as totalAssessments,
-        MAX(createdAt) as lastAssessmentDate,
-        -- Calculate ADL independence score
-        CASE 
-          WHEN COUNT(*) > 0 THEN 'Assessed'
-          ELSE 'Not Assessed'
-        END as overallStatus,
-        
-        -- Count risk factors from history
-        (
-          SELECT COUNT(*)
-          FROM nursing_admission n
-          WHERE n.clientID = @clientID 
-            AND (
-              JSON_VALUE(n.historyOf, '$[0]') IS NOT NULL OR
-              JSON_VALUE(n.clientPain, '$[0]') LIKE '%Pain%' OR
-              n.cpBP LIKE '%/%' AND (
-                CAST(LEFT(n.cpBP, CHARINDEX('/', n.cpBP) - 1) AS INT) > 140 OR
-                CAST(RIGHT(n.cpBP, LEN(n.cpBP) - CHARINDEX('/', n.cpBP)) AS INT) > 90
-              )
-            )
-        ) as riskFactorCount,
-        
-        -- Check for follow-up requirements
-        CASE 
-          WHEN EXISTS(
-            SELECT 1 FROM nursing_admission 
-            WHERE clientID = @clientID 
-              AND (
-                JSON_VALUE(clientPain, '$[0]') LIKE '%High%' OR
-                JSON_VALUE(clientPain, '$[0]') LIKE '%Severe%' OR
-                cathType IS NOT NULL AND cathType != ''
-              )
-          ) THEN 1
-          ELSE 0
-        END as followUpRequired
-        
-      FROM nursing_admission 
-      WHERE clientID = @clientID
-    `;
-    
-    const result = await pool.request()
-      .input('clientID', sql.NVarChar, clientID)
-      .query(summaryQuery);
-    
-    if (result.recordset.length > 0) {
-      const summary = result.recordset[0];
-      res.json({
-        totalAssessments: summary.totalAssessments || 0,
-        lastAssessmentDate: summary.lastAssessmentDate,
-        overallStatus: summary.overallStatus,
-        riskFactorCount: summary.riskFactorCount || 0,
-        followUpRequired: summary.followUpRequired === 1,
-        adlScore: 16 // Default full independence, calculate based on actual data
-      });
-    } else {
-      res.json({
-        totalAssessments: 0,
-        lastAssessmentDate: null,
-        overallStatus: 'Not Assessed',
-        riskFactorCount: 0,
-        followUpRequired: false,
-        adlScore: 0
-      });
-    }
-    
-  } catch (error) {
-    handleDatabaseError(error, res, 'fetching admission summary');
-  }
-});
-
-// GET /api/nursing-admission/:clientID/body-inspection - Get body inspection data only
-router.get('/nursing-admission/:clientID/body-inspection', async (req, res) => {
-  try {
-    const { clientID } = req.params;
-    
-    if (!clientID) {
-      return res.status(400).json({ error: 'Client ID is required' });
-    }
-    
-    const pool = await sql.connect(dbConfig);
-    
-    const query = `
-      SELECT 
-        frontBodyInspection,
-        rearBodyInspection,
-        updatedAt
-      FROM nursing_admission 
-      WHERE clientID = @clientID
-      ORDER BY updatedAt DESC
-    `;
-    
-    const result = await pool.request()
-      .input('clientID', sql.NVarChar, clientID)
-      .query(query);
-    
-    if (result.recordset.length > 0) {
-      const inspection = result.recordset[0];
-      res.json({
-        frontBodyInspection: safeParse(inspection.frontBodyInspection),
-        rearBodyInspection: safeParse(inspection.rearBodyInspection),
-        updatedAt: inspection.updatedAt
-      });
-    } else {
-      res.status(404).json({ error: 'No body inspection data found' });
-    }
-    
-  } catch (error) {
-    handleDatabaseError(error, res, 'fetching body inspection');
-  }
-});
-
-// GET /api/nursing-admission/:clientID/vitals - Get vitals history
-router.get('/nursing-admission/:clientID/vitals', async (req, res) => {
-  try {
-    const { clientID } = req.params;
-    const { limit = 10 } = req.query;
-    
-    if (!clientID) {
-      return res.status(400).json({ error: 'Client ID is required' });
-    }
-    
-    const pool = await sql.connect(dbConfig);
-    
-    const query = `
-      SELECT TOP (@limit)
-        CAST(createdAt AS DATE) as date,
-        cpT as temperature,
-        cpP as pulse,
-        cpR as respiration,
-        cpBP as bloodPressure,
-        createdAt
-      FROM nursing_admission 
-      WHERE clientID = @clientID 
-        AND (cpT IS NOT NULL OR cpP IS NOT NULL OR cpR IS NOT NULL OR cpBP IS NOT NULL)
-      ORDER BY createdAt DESC
-    `;
-    
-    const result = await pool.request()
-      .input('clientID', sql.NVarChar, clientID)
-      .input('limit', sql.Int, parseInt(limit))
-      .query(query);
-    
-    res.json(result.recordset);
-    
-  } catch (error) {
-    handleDatabaseError(error, res, 'fetching vitals history');
-  }
-});
+// Sub-routes (/summary, /body-inspection, /vitals) are defined above the generic /:clientID GET route
 
 module.exports = router;

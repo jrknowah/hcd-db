@@ -200,7 +200,8 @@ router.post('/medication-admin/:clientID', async (req, res) => {
     request.input('dosage', sql.NVarChar(100), marData.dosage || '');
     request.input('route', sql.NVarChar(50), marData.route || '');
     request.input('frequency', sql.NVarChar(100), marData.frequency || '');
-    request.input('scheduledTime', sql.NVarChar(10), marData.scheduledTime || null);
+    const scheduledTimePost = marData.scheduledTime && marData.scheduledTime.trim() !== '' ? marData.scheduledTime.trim() : null;
+    request.input('scheduledTime', sql.VarChar(10), scheduledTimePost);
     request.input('administeredDate', sql.Date, formatDateForDB(marData.administeredDate));
     request.input('administeredTime', sql.DateTime, marData.administeredTime ? new Date(marData.administeredTime) : new Date());
     request.input('administeredBy', sql.NVarChar(255), marData.administeredBy || 'system');
@@ -261,7 +262,8 @@ router.put('/medication-admin/:marID', async (req, res) => {
     request.input('dosage', sql.NVarChar(100), marData.dosage || '');
     request.input('route', sql.NVarChar(50), marData.route || '');
     request.input('frequency', sql.NVarChar(100), marData.frequency || '');
-    request.input('scheduledTime', sql.NVarChar(10), marData.scheduledTime || null);
+    const scheduledTimePut = marData.scheduledTime && marData.scheduledTime.trim() !== '' ? marData.scheduledTime.trim() : null;
+    request.input('scheduledTime', sql.VarChar(10), scheduledTimePut);
     request.input('administeredDate', sql.Date, formatDateForDB(marData.administeredDate));
     request.input('administeredTime', sql.DateTime, marData.administeredTime ? new Date(marData.administeredTime) : null);
     request.input('administeredBy', sql.NVarChar(255), marData.administeredBy || 'system');
@@ -428,7 +430,8 @@ router.post('/vital-signs/:clientID', async (req, res) => {
     const request = pool.request();
     request.input('clientID', sql.NVarChar(50), clientID);
     request.input('recordDate', sql.Date, formatDateForDB(vitalData.recordDate) || new Date());
-    request.input('recordTime', sql.NVarChar(10), vitalData.recordTime || new Date().toTimeString().slice(0, 5));
+    const recordTimePost = vitalData.recordTime && vitalData.recordTime.trim() !== '' ? vitalData.recordTime.trim() : new Date().toTimeString().slice(0, 5);
+    request.input('recordTime', sql.VarChar(10), recordTimePost);
     request.input('bloodPressureSystolic', sql.Int, vitalData.bloodPressureSystolic || null);
     request.input('bloodPressureDiastolic', sql.Int, vitalData.bloodPressureDiastolic || null);
     request.input('temperature', sql.Decimal(4, 1), vitalData.temperature || null);
@@ -489,7 +492,8 @@ router.put('/vital-signs/:vitalSignID', async (req, res) => {
     const request = pool.request();
     request.input('vitalSignID', sql.BigInt, vitalSignID);
     request.input('recordDate', sql.Date, formatDateForDB(vitalData.recordDate));
-    request.input('recordTime', sql.NVarChar(10), vitalData.recordTime || null);
+    const recordTimePut = vitalData.recordTime && vitalData.recordTime.trim() !== '' ? vitalData.recordTime.trim() : null;
+    request.input('recordTime', sql.VarChar(10), recordTimePut);
     request.input('bloodPressureSystolic', sql.Int, vitalData.bloodPressureSystolic || null);
     request.input('bloodPressureDiastolic', sql.Int, vitalData.bloodPressureDiastolic || null);
     request.input('temperature', sql.Decimal(4, 1), vitalData.temperature || null);
