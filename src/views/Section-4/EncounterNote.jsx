@@ -170,7 +170,9 @@ const EncounterNote = ({ clientID, exportMode }) => {
 
   const openEditModal = (note) => {
     setFormData({
-      careNoteDate: note.careNoteDate,
+      careNoteDate: note.careNoteDate
+        ? new Date(note.careNoteDate).toISOString().split('T')[0]
+        : new Date().toISOString().split('T')[0],
       careNoteType: cmNoteType.find(type => type.value === note.careNoteType) || null,
       careNoteSite: hhhSiteList2.find(site => site.value === note.careNoteSite) || null,
       careNote: note.careNote,

@@ -2,7 +2,7 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+const API_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
 
 // ✅ Helper function to check if we should use mock data
 const shouldUseMockData = (clientID) => {
@@ -111,6 +111,26 @@ export const deleteArrestRecord = createAsyncThunk(
   }
 );
 
+
+// ✏️ Async thunk to update an arrest record
+export const updateArrestData = createAsyncThunk(
+  "arrests/updateArrestData",
+  async ({ clientID, arrestID, ...data }, thunkAPI) => {
+    if (shouldUseMockData(clientID)) {
+      console.log("🔧 Mock mode: Simulating arrest update for", arrestID);
+      return { ...data, arrestID, clientID };
+    }
+
+    try {
+      const response = await axios.put(`${API_URL}/api/mental-health/${clientID}/arrests/${arrestID}`, data);
+      return response.data;
+    } catch (error) {
+      console.error("❌ Error updating arrest record:", error);
+      return thunkAPI.rejectWithValue(error.response?.data || "Update failed");
+    }
+  }
+);
+
 const initialState = {
   arrests: [],
   status: "idle",
@@ -184,6 +204,14 @@ const arrestSlice = createSlice({
       // Delete arrest record
       .addCase(deleteArrestRecord.fulfilled, (state, action) => {
         state.arrests = state.arrests.filter(arrest => arrest.arrestID !== action.payload);
+      })
+      // Update arrest record
+      .addCase(updateArrestData.fulfilled, (state, action) => {
+        const index = state.arrests.findIndex(a => a.arrestID === action.payload.arrestID);
+        if (index !== -1) {
+          state.arrests[index] = action.payload;
+        }
+        state.error = null;
       });
   },
 });

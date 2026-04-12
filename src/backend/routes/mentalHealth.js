@@ -721,6 +721,57 @@ router.delete('/mental-health/:clientID/arrests/:arrestID', async (req, res) => 
   }
 });
 
+
+// PUT /api/mental-health/:clientID/arrests/:arrestID - Update arrest record
+router.put('/mental-health/:clientID/arrests/:arrestID', async (req, res) => {
+  try {
+    const pool = await getPool();
+    const { clientID, arrestID } = req.params;
+    const arrestData = req.body;
+
+    console.log(`👮 Updating arrest record: ${arrestID} for client: ${clientID}`);
+
+    const result = await pool.request()
+      .input('arrestID', sql.VarChar, arrestID)
+      .input('arrestDate', sql.Date, arrestData.mhaDate || null)
+      .input('charge', sql.NVarChar, arrestData.mhaCharge || null)
+      .input('misdemeanorOrFelony', sql.VarChar, arrestData.mhaMF || null)
+      .input('location', sql.NVarChar, arrestData.mhaLoc || null)
+      .input('timeServed', sql.NVarChar, arrestData.mhaTime || null)
+      .input('result', sql.NVarChar, arrestData.mhaResult || null)
+      .input('updatedBy', sql.VarChar, arrestData.updatedBy || 'unknown')
+      .query(`
+        UPDATE ArrestRecords
+        SET
+          arrestDate          = @arrestDate,
+          charge              = @charge,
+          misdemeanorOrFelony = @misdemeanorOrFelony,
+          location            = @location,
+          timeServed          = @timeServed,
+          result              = @result,
+          updatedBy           = @updatedBy,
+          updatedAt           = GETDATE()
+        WHERE arrestID = @arrestID;
+
+        SELECT * FROM ArrestRecords WHERE arrestID = @arrestID;
+      `);
+
+    if (result.recordset.length === 0) {
+      return res.status(404).json({ error: 'Arrest record not found' });
+    }
+
+    console.log(`✅ Arrest record ${arrestID} updated`);
+    res.json(result.recordset[0]);
+
+  } catch (error) {
+    console.error('⚠️ Error updating arrest record:', error);
+    res.status(500).json({
+      error: 'Failed to update arrest record',
+      message: error.message
+    });
+  }
+});
+
 // GET /api/mental-health/:clientID/summary - Get mental health summary
 router.get('/mental-health/:clientID/summary', async (req, res) => {
   try {

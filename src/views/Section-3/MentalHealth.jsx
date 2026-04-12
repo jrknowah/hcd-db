@@ -4,7 +4,7 @@ import {
   TextField, Typography, Alert, IconButton, Table, TableBody, TableCell, 
   TableHead, TableRow, Divider
 } from '@mui/material';
-import { Delete as DeleteIcon, Add as AddIcon } from '@mui/icons-material';
+import { Delete as DeleteIcon, Add as AddIcon, Edit as EditIcon } from '@mui/icons-material';
 import { useSelector, useDispatch } from 'react-redux';
 import Select from 'react-select';
 import { 
@@ -24,7 +24,7 @@ import {
   addMedicationLocal,
   removeMedicationLocal
 } from '../../backend/store/slices/MentalHealthSlice';
-import { fetchArrestData, saveArrestData } from '../../backend/store/slices/arrestActions';
+import { fetchArrestData, saveArrestData, updateArrestData, deleteArrestRecord } from '../../backend/store/slices/arrestActions';
 import logUserAction from "../../backend/config/logAction";
 import {
   cmOb1, cmOb2, cmOb3, cmOb4, cmOb5, cmOb6, cmOb7, cmOb8, cmOb9, cmOb10, cmOb11, cmObNone,
@@ -253,6 +253,9 @@ const MentalHealth = ({ exportMode }) => {
   const [newArrest, setNewArrest] = useState({
     mhaDate: '', mhaCharge: '', mhaMF: null, mhaLoc: '', mhaTime: '', mhaResult: ''
   });
+
+  // Editing arrest state
+  const [editingArrest, setEditingArrest] = useState(null); // holds the arrest being edited
 
   // Substance abuse tracking
   const [substanceData, setSubstanceData] = useState({});
@@ -597,7 +600,7 @@ const MentalHealth = ({ exportMode }) => {
         createdBy: currentUser?.email || 'unknown'
       };
 
-      await dispatch(saveArrestData({ clientId: currentClient.clientID, ...arrestToSave }));
+      await dispatch(saveArrestData({ clientID: currentClient.clientID, ...arrestToSave }));
       alert("✅ Arrest record saved!");
       
       if (currentUser) {
@@ -613,6 +616,82 @@ const MentalHealth = ({ exportMode }) => {
       console.error("❌ Error saving arrest data:", error);
       alert("❌ Failed to save arrest data.");
     }
+  };
+
+  const handleEditArrest = (arrest) => {
+    setEditingArrest({
+      arrestID: arrest.arrestID,
+      mhaDate: arrest.arrestDate
+        ? new Date(arrest.arrestDate).toISOString().split('T')[0]
+        : '',
+      mhaCharge: arrest.charge || '',
+      mhaMF: arrest.misdemeanorOrFelony
+        ? { value: arrest.misdemeanorOrFelony, label: arrest.misdemeanorOrFelony }
+        : null,
+      mhaLoc: arrest.location || '',
+      mhaTime: arrest.timeServed || '',
+      mhaResult: arrest.result || '',
+    });
+  };
+
+  const handleUpdateArrest = async () => {
+    if (!currentClient?.clientID || !editingArrest?.arrestID) return;
+
+    try {
+      const updatePayload = {
+        clientID: currentClient.clientID,
+        arrestID: editingArrest.arrestID,
+        mhaDate: editingArrest.mhaDate,
+        mhaCharge: editingArrest.mhaCharge,
+        mhaMF: editingArrest.mhaMF?.value || editingArrest.mhaMF || '',
+        mhaLoc: editingArrest.mhaLoc,
+        mhaTime: editingArrest.mhaTime,
+        mhaResult: editingArrest.mhaResult,
+        updatedBy: currentUser?.email || 'unknown',
+      };
+
+      await dispatch(updateArrestData(updatePayload)).unwrap();
+
+      if (currentUser) {
+        await logUserAction(currentUser, "UPDATE_ARREST_DATA", {
+          clientID: currentClient.clientID,
+          arrestID: editingArrest.arrestID,
+        });
+      }
+
+      alert("✅ Arrest record updated!");
+      setEditingArrest(null);
+    } catch (error) {
+      console.error("❌ Error updating arrest:", error);
+      alert("❌ Failed to update arrest record.");
+    }
+  };
+
+  const handleDeleteArrest = async (arrestID) => {
+    if (!currentClient?.clientID) return;
+    if (!window.confirm("Delete this arrest record? This cannot be undone.")) return;
+
+    try {
+      await dispatch(deleteArrestRecord({ clientID: currentClient.clientID, arrestID })).unwrap();
+      if (currentUser) {
+        await logUserAction(currentUser, "DELETE_ARREST_DATA", {
+          clientID: currentClient.clientID,
+          arrestID,
+        });
+      }
+    } catch (error) {
+      console.error("❌ Error deleting arrest:", error);
+      alert("❌ Failed to delete arrest record.");
+    }
+  };
+
+  const handleEditingArrestChange = (e) => {
+    const { name, value } = e.target;
+    setEditingArrest(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleEditingArrestSelectChange = (name, option) => {
+    setEditingArrest(prev => ({ ...prev, [name]: option }));
   };
 
   const handleSubmit = async (e) => {
@@ -1359,17 +1438,46 @@ const MentalHealth = ({ exportMode }) => {
                       <TableCell>Location</TableCell>
                       <TableCell>Time Served</TableCell>
                       <TableCell>Result</TableCell>
+                      {!exportMode && <TableCell>Actions</TableCell>}
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {arrests.map((arrest, idx) => (
-                      <TableRow key={idx}>
-                        <TableCell>{arrest.date}</TableCell>
+                    {arrests.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={exportMode ? 6 : 7} align="center">
+                          No arrest records on file.
+                        </TableCell>
+                      </TableRow>
+                    ) : arrests.map((arrest) => (
+                      <TableRow key={arrest.arrestID}>
+                        <TableCell>
+                          {arrest.arrestDate
+                            ? new Date(arrest.arrestDate).toISOString().split('T')[0]
+                            : ''}
+                        </TableCell>
                         <TableCell>{arrest.charge}</TableCell>
                         <TableCell>{arrest.misdemeanorOrFelony}</TableCell>
                         <TableCell>{arrest.location}</TableCell>
                         <TableCell>{arrest.timeServed}</TableCell>
                         <TableCell>{arrest.result}</TableCell>
+                        {!exportMode && (
+                          <TableCell>
+                            <IconButton
+                              size="small"
+                              color="primary"
+                              onClick={() => handleEditArrest(arrest)}
+                            >
+                              <EditIcon />
+                            </IconButton>
+                            <IconButton
+                              size="small"
+                              color="error"
+                              onClick={() => handleDeleteArrest(arrest.arrestID)}
+                            >
+                              <DeleteIcon />
+                            </IconButton>
+                          </TableCell>
+                        )}
                       </TableRow>
                     ))}
                   </TableBody>
@@ -1684,6 +1792,76 @@ const MentalHealth = ({ exportMode }) => {
           <DialogActions>
             <Button onClick={addMedicationHandler} variant="contained" color="primary">Add Medication</Button>
             <Button onClick={() => toggleModal('addMedication')}>Cancel</Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* Edit Arrest Modal */}
+        <Dialog open={!!editingArrest} onClose={() => setEditingArrest(null)} maxWidth="md" fullWidth>
+          <DialogTitle>Edit Arrest Record</DialogTitle>
+          <DialogContent>
+            <Grid container spacing={2} sx={{ mt: 1 }}>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  type="date"
+                  label="Date"
+                  name="mhaDate"
+                  value={editingArrest?.mhaDate || ''}
+                  onChange={handleEditingArrestChange}
+                  InputLabelProps={{ shrink: true }}
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="Charge"
+                  name="mhaCharge"
+                  value={editingArrest?.mhaCharge || ''}
+                  onChange={handleEditingArrestChange}
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <Typography variant="body1" sx={{ mb: 1 }}>Misdemeanor(M) or Felony(F)</Typography>
+                <Select
+                  options={formatMFOptions()}
+                  value={editingArrest?.mhaMF || null}
+                  onChange={(option) => handleEditingArrestSelectChange('mhaMF', option)}
+                  placeholder="Select..."
+                  styles={customSelectStyles}
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="Location of Offense (City/State)"
+                  name="mhaLoc"
+                  value={editingArrest?.mhaLoc || ''}
+                  onChange={handleEditingArrestChange}
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="Time Served"
+                  name="mhaTime"
+                  value={editingArrest?.mhaTime || ''}
+                  onChange={handleEditingArrestChange}
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="Result In?"
+                  name="mhaResult"
+                  value={editingArrest?.mhaResult || ''}
+                  onChange={handleEditingArrestChange}
+                />
+              </Grid>
+            </Grid>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={handleUpdateArrest} variant="contained" color="primary">Update</Button>
+            <Button onClick={() => setEditingArrest(null)}>Cancel</Button>
           </DialogActions>
         </Dialog>
 

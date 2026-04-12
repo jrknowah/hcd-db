@@ -14,6 +14,23 @@ try {
   throw new Error('azureSql module not found');
 }
 
+// =====================================================================
+// ⚠️  DB MIGRATION REQUIRED if you haven't run this yet:
+//   ALTER TABLE EncounterNotes
+//     DROP CONSTRAINT <your_existing_careNoteType_check>;
+//   ALTER TABLE EncounterNotes
+//     ADD CONSTRAINT CK_EncounterNotes_CareNoteType
+//     CHECK (CareNoteType IN (
+//       'Individual','Crisis','Group','Summary','Intake',
+//       'MHA','Care Plan','Discharge','Case Conference'
+//     ));
+// =====================================================================
+
+const VALID_NOTE_TYPES = [
+  'Individual', 'Crisis', 'Group', 'Summary', 'Intake',
+  'MHA', 'Care Plan', 'Discharge', 'Case Conference'
+];
+
 // Generate unique encounter note ID
 const generateEncounterNoteID = (clientID) => {
   const timestamp = Date.now().toString().slice(-8);
@@ -106,7 +123,7 @@ router.get('/encounter-notes/bytype/:clientID/:noteType', async (req, res) => {
 
 
 // GET /api/encounter-notes/summary/:clientID - Get encounter notes summary for client
-router.get('/summary/:clientID', async (req, res) => {
+router.get('/encounter-notes/summary/:clientID', async (req, res) => {
   try {
     const pool = await getPool();
     const { clientID } = req.params;
@@ -206,6 +223,14 @@ router.post('/encounter-notes/:clientID', async (req, res) => {
     //   });
     // }
     
+    // Validate note type against allowed values
+    if (noteData.careNoteType && !VALID_NOTE_TYPES.includes(noteData.careNoteType)) {
+      return res.status(400).json({
+        error: 'Validation failed',
+        message: `Invalid note type '${noteData.careNoteType}'. Allowed: ${VALID_NOTE_TYPES.join(', ')}`
+      });
+    }
+
     console.log(`📝 Creating encounter note for client: ${clientID}`);
     
     const result = await pool.request()
@@ -277,6 +302,14 @@ router.put('/encounter-notes/:noteId', async (req, res) => {
     //   });
     // }
     
+    // Validate note type against allowed values
+    if (updateData.careNoteType && !VALID_NOTE_TYPES.includes(updateData.careNoteType)) {
+      return res.status(400).json({
+        error: 'Validation failed',
+        message: `Invalid note type '${updateData.careNoteType}'. Allowed: ${VALID_NOTE_TYPES.join(', ')}`
+      });
+    }
+
     console.log(`📝 Updating encounter note: ${noteId}`);
     
     // Check if note exists
