@@ -540,9 +540,17 @@ const medObservationSlice = createSlice({
         state.error = action.payload;
       })
       
-      .addCase(saveMedicationRecord.fulfilled, (state, action) => {
-        state.medicationRecords.unshift(action.payload);
+      .addCase(saveMedicationRecord.pending, (state) => {
+        state.medicationLoading = true;
         state.medicationError = null;
+      })
+      .addCase(saveMedicationRecord.fulfilled, (state) => {
+        state.medicationLoading = false;
+        state.medicationError = null;
+      })
+      .addCase(saveMedicationRecord.rejected, (state, action) => {
+        state.medicationLoading = false;
+        state.medicationError = action.payload;
       })
       
       .addCase(updateMedicationRecord.fulfilled, (state, action) => {
@@ -580,9 +588,17 @@ const medObservationSlice = createSlice({
         state.error = action.payload;
       })
       
-      .addCase(saveVitalSigns.fulfilled, (state, action) => {
-        state.vitalSigns.unshift(action.payload);
+      .addCase(saveVitalSigns.pending, (state) => {
+        state.vitalSignsLoading = true;
         state.vitalSignsError = null;
+      })
+      .addCase(saveVitalSigns.fulfilled, (state) => {
+        state.vitalSignsLoading = false;
+        state.vitalSignsError = null;
+      })
+      .addCase(saveVitalSigns.rejected, (state, action) => {
+        state.vitalSignsLoading = false;
+        state.vitalSignsError = action.payload;
       })
       
       .addCase(updateVitalSigns.fulfilled, (state, action) => {
@@ -624,9 +640,17 @@ const medObservationSlice = createSlice({
         state.error = action.payload;
       })
       
-      .addCase(saveDailyObservation.fulfilled, (state, action) => {
-        state.dailyObservations.unshift(action.payload);
+      .addCase(saveDailyObservation.pending, (state) => {
+        state.observationsLoading = true;
         state.observationsError = null;
+      })
+      .addCase(saveDailyObservation.fulfilled, (state) => {
+        state.observationsLoading = false;
+        state.observationsError = null;
+      })
+      .addCase(saveDailyObservation.rejected, (state, action) => {
+        state.observationsLoading = false;
+        state.observationsError = action.payload;
       })
       
       .addCase(updateDailyObservation.fulfilled, (state, action) => {

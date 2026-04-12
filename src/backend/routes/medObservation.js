@@ -630,7 +630,7 @@ router.get('/vital-signs/:clientID/trends', async (req, res) => {
 // ============================================================================
 // DAILY OBSERVATIONS ENDPOINTS
 // ============================================================================
-
+  
 // GET /api/daily-observations/:clientID - Get daily observations
 router.get('/daily-observations/:clientID', async (req, res) => {
   try {
