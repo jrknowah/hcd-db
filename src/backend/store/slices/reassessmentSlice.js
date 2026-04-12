@@ -309,8 +309,9 @@ const reassessmentSlice = createSlice({
         loadDataIntoForm: (state, action) => {
             const data = action.payload;
 
-            // cmOb* fields must be arrays of { value, label } objects.
-            // From the DB they may arrive as JSON strings or plain string arrays.
+            // ── 1. Normalize cmOb* multi-select arrays ────────────────────
+            // DB may return JSON strings or plain string arrays; Autocomplete
+            // needs every element as { value, label }.
             const cmObFields = [
                 'cmOb1','cmOb2','cmOb3','cmOb4','cmOb5','cmOb6',
                 'cmOb7','cmOb8','cmOb9','cmOb10','cmOb11','cmObNone'
@@ -335,6 +336,25 @@ const reassessmentSlice = createSlice({
                     );
                 } else {
                     normalized[field] = [];
+                }
+            });
+
+            // ── 2. Flatten scalar fields that might arrive as {value,label} ─
+            // If any string field was accidentally stored/loaded as a react-select
+            // object, extract the .value so MUI Select / TextField receives a
+            // plain string and never tries to render an object as JSX (error #31).
+            const scalarFields = [
+                'reasonForRef', 'suicHomiThou', 'columbiaSRComp', 'columbiaSR',
+                'selfHarm', 'psyHosp', 'traumaExp',
+                'medReAssess', 'subAbuseReAssess', 'medHistReAssess',
+                'eduHistoryReAssess', 'empHistReAssess', 'legalReAssess',
+                'livingArrReAssess', 'homelessReAssess', 'depCareReAssess',
+                'famReAssess', 'diagDescriptCodeChoice',
+            ];
+            scalarFields.forEach(field => {
+                const val = normalized[field];
+                if (val !== null && val !== undefined && typeof val === 'object' && !Array.isArray(val)) {
+                    normalized[field] = val.value ?? '';
                 }
             });
 
