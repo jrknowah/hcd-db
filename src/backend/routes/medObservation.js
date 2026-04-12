@@ -200,8 +200,8 @@ router.post('/medication-admin/:clientID', async (req, res) => {
     request.input('dosage', sql.NVarChar(100), marData.dosage || '');
     request.input('route', sql.NVarChar(50), marData.route || '');
     request.input('frequency', sql.NVarChar(100), marData.frequency || '');
-    const _stPost = marData.scheduledTime && String(marData.scheduledTime).trim() ? String(marData.scheduledTime).trim() : null;
-    if (_stPost) request.input('scheduledTime', sql.Time, _stPost);
+    const scheduledTimePost = marData.scheduledTime && marData.scheduledTime.trim() !== '' ? marData.scheduledTime.trim() : null;
+    request.input('scheduledTime', sql.VarChar(10), scheduledTimePost);
     request.input('administeredDate', sql.Date, formatDateForDB(marData.administeredDate));
     request.input('administeredTime', sql.DateTime, marData.administeredTime ? new Date(marData.administeredTime) : new Date());
     request.input('administeredBy', sql.NVarChar(255), marData.administeredBy || 'system');
@@ -218,7 +218,7 @@ router.post('/medication-admin/:clientID', async (req, res) => {
       )
       OUTPUT INSERTED.*
       VALUES (
-        @clientID, @medicationName, @dosage, @route, @frequency, ${_stPost ? '@scheduledTime' : 'NULL'},
+        @clientID, @medicationName, @dosage, @route, @frequency, @scheduledTime,
         @administeredDate, @administeredTime, @administeredBy, @status, @holdReason,
         @notes, @createdBy, GETDATE(), GETDATE()
       )
@@ -262,8 +262,8 @@ router.put('/medication-admin/:marID', async (req, res) => {
     request.input('dosage', sql.NVarChar(100), marData.dosage || '');
     request.input('route', sql.NVarChar(50), marData.route || '');
     request.input('frequency', sql.NVarChar(100), marData.frequency || '');
-    const _stPut = marData.scheduledTime && String(marData.scheduledTime).trim() ? String(marData.scheduledTime).trim() : null;
-    if (_stPut) request.input('scheduledTime', sql.Time, _stPut);
+    const scheduledTimePut = marData.scheduledTime && marData.scheduledTime.trim() !== '' ? marData.scheduledTime.trim() : null;
+    request.input('scheduledTime', sql.VarChar(10), scheduledTimePut);
     request.input('administeredDate', sql.Date, formatDateForDB(marData.administeredDate));
     request.input('administeredTime', sql.DateTime, marData.administeredTime ? new Date(marData.administeredTime) : null);
     request.input('administeredBy', sql.NVarChar(255), marData.administeredBy || 'system');
@@ -279,7 +279,7 @@ router.put('/medication-admin/:marID', async (req, res) => {
         dosage = @dosage,
         route = @route,
         frequency = @frequency,
-        scheduledTime = ${_stPut ? '@scheduledTime' : 'NULL'},
+        scheduledTime = @scheduledTime,
         administeredDate = @administeredDate,
         administeredTime = @administeredTime,
         administeredBy = @administeredBy,
@@ -430,8 +430,9 @@ router.post('/vital-signs/:clientID', async (req, res) => {
     const request = pool.request();
     request.input('clientID', sql.NVarChar(50), clientID);
     request.input('recordDate', sql.Date, formatDateForDB(vitalData.recordDate) || new Date());
-    const _rtPost = vitalData.recordTime && String(vitalData.recordTime).trim() ? String(vitalData.recordTime).trim() : new Date().toTimeString().slice(0, 8);
-    if (_rtPost) request.input('recordTime', sql.Time, _rtPost);
+    const rawTimePost = vitalData.recordTime && vitalData.recordTime.trim() !== '' ? vitalData.recordTime.trim() : new Date().toTimeString().slice(0, 5);
+    const recordTimePost = rawTimePost.length === 5 ? rawTimePost + ':00' : rawTimePost;
+    request.input('recordTime', sql.VarChar(10), recordTimePost);
     request.input('bloodPressureSystolic', sql.Int, vitalData.bloodPressureSystolic || null);
     request.input('bloodPressureDiastolic', sql.Int, vitalData.bloodPressureDiastolic || null);
     request.input('temperature', sql.Decimal(4, 1), vitalData.temperature || null);
@@ -452,7 +453,7 @@ router.post('/vital-signs/:clientID', async (req, res) => {
       )
       OUTPUT INSERTED.*
       VALUES (
-        @clientID, @recordDate, ${_rtPost ? '@recordTime' : 'NULL'}, @bloodPressureSystolic, @bloodPressureDiastolic,
+        @clientID, @recordDate, @recordTime, @bloodPressureSystolic, @bloodPressureDiastolic,
         @temperature, @pulse, @respirations, @oxygenSaturation, @weight, @bloodGlucose,
         @painLevel, @notes, @recordedBy, GETDATE()
       )
@@ -492,8 +493,9 @@ router.put('/vital-signs/:vitalSignID', async (req, res) => {
     const request = pool.request();
     request.input('vitalSignID', sql.BigInt, vitalSignID);
     request.input('recordDate', sql.Date, formatDateForDB(vitalData.recordDate));
-    const _rtPut = vitalData.recordTime && String(vitalData.recordTime).trim() ? String(vitalData.recordTime).trim() : null;
-    if (_rtPut) request.input('recordTime', sql.Time, _rtPut);
+    const rawTimePut = vitalData.recordTime && vitalData.recordTime.trim() !== '' ? vitalData.recordTime.trim() : null;
+    const recordTimePut = rawTimePut && rawTimePut.length === 5 ? rawTimePut + ':00' : rawTimePut;
+    request.input('recordTime', sql.VarChar(10), recordTimePut);
     request.input('bloodPressureSystolic', sql.Int, vitalData.bloodPressureSystolic || null);
     request.input('bloodPressureDiastolic', sql.Int, vitalData.bloodPressureDiastolic || null);
     request.input('temperature', sql.Decimal(4, 1), vitalData.temperature || null);
@@ -510,7 +512,7 @@ router.put('/vital-signs/:vitalSignID', async (req, res) => {
       UPDATE vital_signs 
       SET 
         recordDate = @recordDate,
-        recordTime = ${_rtPut ? '@recordTime' : 'NULL'},
+        recordTime = @recordTime,
         bloodPressureSystolic = @bloodPressureSystolic,
         bloodPressureDiastolic = @bloodPressureDiastolic,
         temperature = @temperature,

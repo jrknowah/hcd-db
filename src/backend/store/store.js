@@ -28,6 +28,7 @@ import referrals from './slices/referralSlice';  // ✅ Enhanced referrals slice
 import discharge from './slices/dischargeSlice'; // ✅ Enhanced discharge slice
 import encounterNote from './slices/encounterNoteSlice'; // ✅ Encounter notes slice
 import carePlans from './slices/carePlanSlice.js'; // ✅ Care plans slice
+import medObservation from './slices/medObservationSlice';
 
 // const preloadedState = rehydrateState();
 
@@ -59,6 +60,7 @@ const store = configureStore({
     discharge: discharge,    // ✅ Enhanced discharge
     encounterNote: encounterNote, // ✅ Encounter notes
     carePlans: carePlans,   // ✅ Care plans management
+    medObservation: medObservation, // ✅ Medication observation
   },
   // preloadedState,
   middleware: (getDefaultMiddleware) =>
