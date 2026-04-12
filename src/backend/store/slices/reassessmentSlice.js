@@ -267,12 +267,15 @@ const reassessmentSlice = createSlice({
         updateFormField: (state, action) => {
             const { field, value } = action.payload;
             state.formData[field] = value;
+            // Recalculate inline so the component never needs to dispatch this separately
+            reassessmentSlice.caseReducers.calculateCompletionPercentage(state);
         },
 
         // Update array field (for multi-selects)
         updateArrayField: (state, action) => {
             const { field, values } = action.payload;
             state.formData[field] = Array.isArray(values) ? values : [];
+            reassessmentSlice.caseReducers.calculateCompletionPercentage(state);
         },
 
         // Calculate completion percentage
@@ -309,9 +312,8 @@ const reassessmentSlice = createSlice({
         loadDataIntoForm: (state, action) => {
             const data = action.payload;
 
-            // ── 1. Normalize cmOb* multi-select arrays ────────────────────
-            // DB may return JSON strings or plain string arrays; Autocomplete
-            // needs every element as { value, label }.
+            // cmOb* fields must be arrays of { value, label } objects.
+            // From the DB they may arrive as JSON strings or plain string arrays.
             const cmObFields = [
                 'cmOb1','cmOb2','cmOb3','cmOb4','cmOb5','cmOb6',
                 'cmOb7','cmOb8','cmOb9','cmOb10','cmOb11','cmObNone'
@@ -336,25 +338,6 @@ const reassessmentSlice = createSlice({
                     );
                 } else {
                     normalized[field] = [];
-                }
-            });
-
-            // ── 2. Flatten scalar fields that might arrive as {value,label} ─
-            // If any string field was accidentally stored/loaded as a react-select
-            // object, extract the .value so MUI Select / TextField receives a
-            // plain string and never tries to render an object as JSX (error #31).
-            const scalarFields = [
-                'reasonForRef', 'suicHomiThou', 'columbiaSRComp', 'columbiaSR',
-                'selfHarm', 'psyHosp', 'traumaExp',
-                'medReAssess', 'subAbuseReAssess', 'medHistReAssess',
-                'eduHistoryReAssess', 'empHistReAssess', 'legalReAssess',
-                'livingArrReAssess', 'homelessReAssess', 'depCareReAssess',
-                'famReAssess', 'diagDescriptCodeChoice',
-            ];
-            scalarFields.forEach(field => {
-                const val = normalized[field];
-                if (val !== null && val !== undefined && typeof val === 'object' && !Array.isArray(val)) {
-                    normalized[field] = val.value ?? '';
                 }
             });
 
@@ -520,11 +503,22 @@ export const selectHasErrors = (state) => {
     return !!(r?.error || r?.summaryError || r?.allError || r?.searchError || r?.saveError || r?.updateError);
 };
 
-export const selectCompletionStatus = (state) => ({
-    status: state.reassessment?.completionStatus || 'Not Started',
-    percentage: state.reassessment?.completionPercentage || 0,
-    isCompleted: state.reassessment?.isCompleted || false
-});
+// Stable references — only changes when the underlying values change
+let _lastCompletionStatus = { status: 'Not Started', percentage: 0, isCompleted: false };
+export const selectCompletionStatus = (state) => {
+    const status = state.reassessment?.completionStatus || 'Not Started';
+    const percentage = state.reassessment?.completionPercentage || 0;
+    const isCompleted = state.reassessment?.isCompleted || false;
+    if (
+        _lastCompletionStatus.status === status &&
+        _lastCompletionStatus.percentage === percentage &&
+        _lastCompletionStatus.isCompleted === isCompleted
+    ) {
+        return _lastCompletionStatus;
+    }
+    _lastCompletionStatus = { status, percentage, isCompleted };
+    return _lastCompletionStatus;
+};
 
 // ✅ Export reducer
 export default reassessmentSlice.reducer;

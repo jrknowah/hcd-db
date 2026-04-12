@@ -48,7 +48,6 @@ import {
     saveReassessmentData,
     updateFormField,
     updateArrayField,
-    calculateCompletionPercentage,
     loadDataIntoForm,
     selectReassessmentData,
     selectFormData,
@@ -77,8 +76,6 @@ const ReAssessment = () => {
     const isSaving = useSelector(selectIsSaving) || false;
     
     const [saveStatus, setSaveStatus] = useState(null);
-    // Guard: only load DB data into form once per client fetch, not after every save
-    const dataLoadedRef = React.useRef(false);
 
     // ✅ Fetch reassessment data when client is available
     useEffect(() => {
@@ -88,11 +85,10 @@ const ReAssessment = () => {
         }
     }, [clientID, dispatch]);
 
-    // ✅ Load fetched data into form fields when data changes (once per fetch)
+    // ✅ Load fetched data into form fields when data changes
     useEffect(() => {
-        if (reassessmentData && Object.keys(reassessmentData).length > 0 && !dataLoadedRef.current) {
+        if (reassessmentData && Object.keys(reassessmentData).length > 0) {
             console.log('📝 Loading data into form:', reassessmentData);
-            dataLoadedRef.current = true;
             
             // Format dates for date inputs (YYYY-MM-DD)
             const formattedData = {
@@ -117,18 +113,6 @@ const ReAssessment = () => {
             dispatch(loadDataIntoForm(formattedData));
         }
     }, [reassessmentData, dispatch]);
-
-    // Reset the guard when client changes so next fetch re-loads
-    useEffect(() => {
-        dataLoadedRef.current = false;
-    }, [clientID]);
-
-    // ✅ Update completion percentage when form data changes
-    useEffect(() => {
-        if (Object.keys(formData).length > 0) {
-            dispatch(calculateCompletionPercentage());
-        }
-    }, [formData, dispatch]);
 
     // ✅ Handle input changes using Redux actions
     const handleInputChange = (e) => {
