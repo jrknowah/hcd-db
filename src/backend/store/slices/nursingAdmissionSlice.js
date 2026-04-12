@@ -438,7 +438,7 @@ const nursingAdmissionSlice = createSlice({
       })
       .addCase(fetchNursingAdmission.fulfilled, (state, action) => {
         state.loading = false;
-        state.data = action.payload;
+        state.data = action.payload || {};
         state.error = null;
       })
       .addCase(fetchNursingAdmission.rejected, (state, action) => {
@@ -543,11 +543,6 @@ const nursingAdmissionSlice = createSlice({
       .addCase(fetchVitalsHistory.rejected, (state, action) => {
         state.vitalsLoading = false;
         state.vitalsError = action.payload;
-      })
-      .addCase(fetchNursingAdmission.fulfilled, (state, action) => {
-        state.loading = false;
-        state.data = action.payload || {};  // guard against null response
-        state.error = null;
       });
   },
 });
