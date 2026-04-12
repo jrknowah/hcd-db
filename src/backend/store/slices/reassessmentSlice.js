@@ -6,7 +6,7 @@ import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import axios from 'axios';
 
 // Base API URL
-const HCD_API = `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}`;
+const HCD_API = `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000'}`;
 
 // ✅ Async Thunks for API calls
 export const fetchReassessmentData = createAsyncThunk(
@@ -308,7 +308,37 @@ const reassessmentSlice = createSlice({
         // Load data into form
         loadDataIntoForm: (state, action) => {
             const data = action.payload;
-            state.formData = { ...state.formData, ...data };
+
+            // cmOb* fields must be arrays of { value, label } objects.
+            // From the DB they may arrive as JSON strings or plain string arrays.
+            const cmObFields = [
+                'cmOb1','cmOb2','cmOb3','cmOb4','cmOb5','cmOb6',
+                'cmOb7','cmOb8','cmOb9','cmOb10','cmOb11','cmObNone'
+            ];
+
+            const normalized = { ...data };
+            cmObFields.forEach(field => {
+                let val = data[field];
+                if (!val) { normalized[field] = []; return; }
+
+                // Deserialize JSON string from DB
+                if (typeof val === 'string') {
+                    try { val = JSON.parse(val); } catch { val = []; }
+                }
+
+                // Ensure every element is a { value, label } object
+                if (Array.isArray(val)) {
+                    normalized[field] = val.map(item =>
+                        typeof item === 'string'
+                            ? { value: item, label: item }
+                            : item
+                    );
+                } else {
+                    normalized[field] = [];
+                }
+            });
+
+            state.formData = { ...state.formData, ...normalized };
         }
     },
 

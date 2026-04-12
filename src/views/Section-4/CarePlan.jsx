@@ -257,7 +257,9 @@ const CarePlan = ({ clientID, exportMode }) => {
       careOutcome: plan.careOutcome || "",
       status: plan.status || "Planning",
       priority: plan.priority || "Medium",
-      targetDate: plan.targetDate || ""
+      targetDate: plan.targetDate
+        ? new Date(plan.targetDate).toISOString().split('T')[0]
+        : ""
     });
     setEditingId(plan._id);
     setEditMode(true);

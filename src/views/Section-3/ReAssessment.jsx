@@ -169,7 +169,10 @@ const ReAssessment = () => {
                 // For arrays, only include if they have items
                 if (Array.isArray(value)) {
                     if (value.length > 0) {
-                        acc[key] = value;
+                        // Serialize { value, label } objects to JSON string for DB storage
+                        acc[key] = JSON.stringify(value.map(item =>
+                            typeof item === 'object' && item !== null ? item.value : item
+                        ));
                     }
                 } else {
                     acc[key] = value;

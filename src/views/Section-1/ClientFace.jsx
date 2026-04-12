@@ -122,18 +122,8 @@ const ClientFace = ({ exportMode = false }) => {
   const validateForm = () => {
     const errors = [];
     
-    if (!formData.clientContactNum?.trim()) {
-      errors.push('Phone number is required');
-    }
-    
-    if (!formData.clientEmail?.trim()) {
-      errors.push('Email is required');
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.clientEmail)) {
+    if (formData.clientEmail?.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.clientEmail)) {
       errors.push('Email must be a valid email address');
-    }
-    
-    if (!formData.clientMedInsType?.trim()) {
-      errors.push('Insurance type is required');
     }
     
     return errors;
@@ -217,10 +207,7 @@ const ClientFace = ({ exportMode = false }) => {
   };
 
   const completionPercentage = getCompletionPercentage();
-  const isFormValid = validationErrors.length === 0 && 
-                     formData.clientContactNum && 
-                     formData.clientEmail && 
-                     formData.clientMedInsType;
+  const isFormValid = validationErrors.length === 0;
 
   // Loading state
   if (loading && !dataLoaded) {
