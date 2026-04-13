@@ -267,7 +267,6 @@ const reassessmentSlice = createSlice({
         updateFormField: (state, action) => {
             const { field, value } = action.payload;
             state.formData[field] = value;
-            // Recalculate inline so the component never needs to dispatch this separately
             reassessmentSlice.caseReducers.calculateCompletionPercentage(state);
         },
 
@@ -341,7 +340,24 @@ const reassessmentSlice = createSlice({
                 }
             });
 
+            // Scalar select fields: flatten any {value,label} objects to strings
+            const scalarFields = [
+                'reasonForRef','suicHomiThou','columbiaSRComp','columbiaSR',
+                'selfHarm','psyHosp','traumaExp',
+                'medReAssess','subAbuseReAssess','medHistReAssess',
+                'eduHistoryReAssess','empHistReAssess','legalReAssess',
+                'livingArrReAssess','homelessReAssess','depCareReAssess',
+                'famReAssess','diagDescriptCodeChoice',
+            ];
+            scalarFields.forEach(field => {
+                const val = normalized[field];
+                if (val !== null && val !== undefined && typeof val === 'object' && !Array.isArray(val)) {
+                    normalized[field] = val.value ?? '';
+                }
+            });
+
             state.formData = { ...state.formData, ...normalized };
+            reassessmentSlice.caseReducers.calculateCompletionPercentage(state);
         }
     },
 
@@ -503,21 +519,18 @@ export const selectHasErrors = (state) => {
     return !!(r?.error || r?.summaryError || r?.allError || r?.searchError || r?.saveError || r?.updateError);
 };
 
-// Stable references — only changes when the underlying values change
-let _lastCompletionStatus = { status: 'Not Started', percentage: 0, isCompleted: false };
+let _prevCompletionStatus = { status: 'Not Started', percentage: 0, isCompleted: false };
 export const selectCompletionStatus = (state) => {
     const status = state.reassessment?.completionStatus || 'Not Started';
     const percentage = state.reassessment?.completionPercentage || 0;
     const isCompleted = state.reassessment?.isCompleted || false;
     if (
-        _lastCompletionStatus.status === status &&
-        _lastCompletionStatus.percentage === percentage &&
-        _lastCompletionStatus.isCompleted === isCompleted
-    ) {
-        return _lastCompletionStatus;
-    }
-    _lastCompletionStatus = { status, percentage, isCompleted };
-    return _lastCompletionStatus;
+        _prevCompletionStatus.status === status &&
+        _prevCompletionStatus.percentage === percentage &&
+        _prevCompletionStatus.isCompleted === isCompleted
+    ) return _prevCompletionStatus;
+    _prevCompletionStatus = { status, percentage, isCompleted };
+    return _prevCompletionStatus;
 };
 
 // ✅ Export reducer

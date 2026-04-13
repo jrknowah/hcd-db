@@ -48,7 +48,6 @@ import {
     saveReassessmentData,
     updateFormField,
     updateArrayField,
-    calculateCompletionPercentage,
     loadDataIntoForm,
     selectReassessmentData,
     selectFormData,
@@ -77,6 +76,7 @@ const ReAssessment = () => {
     const isSaving = useSelector(selectIsSaving) || false;
     
     const [saveStatus, setSaveStatus] = useState(null);
+    const dataLoadedRef = React.useRef(false);
 
     // ✅ Fetch reassessment data when client is available
     useEffect(() => {
@@ -86,12 +86,11 @@ const ReAssessment = () => {
         }
     }, [clientID, dispatch]);
 
-    // ✅ Load fetched data into form fields when data changes
+    // ✅ Load fetched data into form once per client fetch
     useEffect(() => {
-        if (reassessmentData && Object.keys(reassessmentData).length > 0) {
+        if (reassessmentData && Object.keys(reassessmentData).length > 0 && !dataLoadedRef.current) {
+            dataLoadedRef.current = true;
             console.log('📝 Loading data into form:', reassessmentData);
-            
-            // Format dates for date inputs (YYYY-MM-DD)
             const formattedData = {
                 ...reassessmentData,
                 dateFullAssess: reassessmentData.dateFullAssess 
@@ -110,17 +109,14 @@ const ReAssessment = () => {
                     ? new Date(reassessmentData.homelessReAssessDate).toISOString().split('T')[0] 
                     : '',
             };
-            
             dispatch(loadDataIntoForm(formattedData));
         }
     }, [reassessmentData, dispatch]);
 
-    // ✅ Update completion percentage when form data changes
+    // Reset load guard when client changes
     useEffect(() => {
-        if (Object.keys(formData).length > 0) {
-            dispatch(calculateCompletionPercentage());
-        }
-    }, [formData, dispatch]);
+        dataLoadedRef.current = false;
+    }, [clientID]);
 
     // ✅ Handle input changes using Redux actions
     const handleInputChange = (e) => {
@@ -603,7 +599,7 @@ const ReAssessment = () => {
                                                 renderTags={(tagValue, getTagProps) =>
                                                     tagValue.map((option, index) => (
                                                         <Chip
-                                                            key={typeof option === 'string' ? option : option?.value}
+                                                            key={typeof option === 'string' ? option : option?.value ?? index}
                                                             label={typeof option === 'string' ? option : (option?.label ?? '')}
                                                             {...getTagProps({ index })}
                                                             size="small"
