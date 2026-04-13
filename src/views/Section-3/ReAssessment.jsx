@@ -48,6 +48,7 @@ import {
     saveReassessmentData,
     updateFormField,
     updateArrayField,
+    calculateCompletionPercentage,
     loadDataIntoForm,
     selectReassessmentData,
     selectFormData,
@@ -113,6 +114,13 @@ const ReAssessment = () => {
             dispatch(loadDataIntoForm(formattedData));
         }
     }, [reassessmentData, dispatch]);
+
+    // ✅ Update completion percentage when form data changes
+    useEffect(() => {
+        if (Object.keys(formData).length > 0) {
+            dispatch(calculateCompletionPercentage());
+        }
+    }, [formData, dispatch]);
 
     // ✅ Handle input changes using Redux actions
     const handleInputChange = (e) => {
@@ -577,17 +585,26 @@ const ReAssessment = () => {
                                             <Autocomplete
                                                 multiple
                                                 options={options}
-                                                getOptionLabel={(option) => option.label}
-                                                value={formData[field] || []}
+                                                getOptionLabel={(option) =>
+                                                    typeof option === 'string' ? option : (option?.label ?? '')
+                                                }
+                                                isOptionEqualToValue={(option, val) =>
+                                                    option?.value === (typeof val === 'string' ? val : val?.value)
+                                                }
+                                                value={(formData[field] || []).map(item =>
+                                                    typeof item === 'string'
+                                                        ? { value: item, label: item }
+                                                        : item
+                                                )}
                                                 onChange={(event, newValue) => handleMultiSelectChange(field, newValue)}
                                                 renderInput={(params) => (
                                                     <TextField {...params} label={labels[field]} />
                                                 )}
-                                                renderTags={(value, getTagProps) =>
-                                                    value.map((option, index) => (
+                                                renderTags={(tagValue, getTagProps) =>
+                                                    tagValue.map((option, index) => (
                                                         <Chip
-                                                            key={option.value}
-                                                            label={option.label}
+                                                            key={typeof option === 'string' ? option : option?.value}
+                                                            label={typeof option === 'string' ? option : (option?.label ?? '')}
                                                             {...getTagProps({ index })}
                                                             size="small"
                                                             color="primary"
