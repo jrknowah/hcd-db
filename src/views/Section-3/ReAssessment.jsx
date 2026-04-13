@@ -86,37 +86,29 @@ const ReAssessment = () => {
         }
     }, [clientID, dispatch]);
 
-    // ✅ Load fetched data into form once per client fetch
+    // Load fetched data into form once per client fetch
     useEffect(() => {
         if (reassessmentData && Object.keys(reassessmentData).length > 0 && !dataLoadedRef.current) {
             dataLoadedRef.current = true;
-            console.log('📝 Loading data into form:', reassessmentData);
             const formattedData = {
                 ...reassessmentData,
-                dateFullAssess: reassessmentData.dateFullAssess 
-                    ? new Date(reassessmentData.dateFullAssess).toISOString().split('T')[0] 
-                    : '',
-                dateLastReAssess: reassessmentData.dateLastReAssess 
-                    ? new Date(reassessmentData.dateLastReAssess).toISOString().split('T')[0] 
-                    : '',
-                subAbuseReAssessDate: reassessmentData.subAbuseReAssessDate 
-                    ? new Date(reassessmentData.subAbuseReAssessDate).toISOString().split('T')[0] 
-                    : '',
-                medHistReAssessDate: reassessmentData.medHistReAssessDate 
-                    ? new Date(reassessmentData.medHistReAssessDate).toISOString().split('T')[0] 
-                    : '',
-                homelessReAssessDate: reassessmentData.homelessReAssessDate 
-                    ? new Date(reassessmentData.homelessReAssessDate).toISOString().split('T')[0] 
-                    : '',
+                dateFullAssess: reassessmentData.dateFullAssess
+                    ? new Date(reassessmentData.dateFullAssess).toISOString().split('T')[0] : '',
+                dateLastReAssess: reassessmentData.dateLastReAssess
+                    ? new Date(reassessmentData.dateLastReAssess).toISOString().split('T')[0] : '',
+                subAbuseReAssessDate: reassessmentData.subAbuseReAssessDate
+                    ? new Date(reassessmentData.subAbuseReAssessDate).toISOString().split('T')[0] : '',
+                medHistReAssessDate: reassessmentData.medHistReAssessDate
+                    ? new Date(reassessmentData.medHistReAssessDate).toISOString().split('T')[0] : '',
+                homelessReAssessDate: reassessmentData.homelessReAssessDate
+                    ? new Date(reassessmentData.homelessReAssessDate).toISOString().split('T')[0] : '',
             };
             dispatch(loadDataIntoForm(formattedData));
         }
     }, [reassessmentData, dispatch]);
 
     // Reset load guard when client changes
-    useEffect(() => {
-        dataLoadedRef.current = false;
-    }, [clientID]);
+    useEffect(() => { dataLoadedRef.current = false; }, [clientID]);
 
     // ✅ Handle input changes using Redux actions
     const handleInputChange = (e) => {
@@ -581,32 +573,47 @@ const ReAssessment = () => {
                                             <Autocomplete
                                                 multiple
                                                 options={options}
-                                                getOptionLabel={(option) =>
-                                                    typeof option === 'string' ? option : (option?.label ?? '')
-                                                }
-                                                isOptionEqualToValue={(option, val) =>
-                                                    option?.value === (typeof val === 'string' ? val : val?.value)
-                                                }
-                                                value={(formData[field] || []).map(item =>
-                                                    typeof item === 'string'
-                                                        ? { value: item, label: item }
-                                                        : item
-                                                )}
+                                                getOptionLabel={(option) => {
+                                                    if (typeof option === 'string') return option;
+                                                    if (!option) return '';
+                                                    const l = option.label;
+                                                    if (typeof l === 'string') return l;
+                                                    if (l && typeof l === 'object') return String(l.label ?? l.value ?? '');
+                                                    const v = option.value;
+                                                    if (typeof v === 'string') return v;
+                                                    return '';
+                                                }}
+                                                isOptionEqualToValue={(option, val) => {
+                                                    const ov = typeof option === 'string' ? option : String(typeof option?.value === 'object' ? (option.value?.value ?? '') : (option?.value ?? ''));
+                                                    const vv = typeof val === 'string' ? val : String(typeof val?.value === 'object' ? (val.value?.value ?? '') : (val?.value ?? ''));
+                                                    return ov === vv;
+                                                }}
+                                                value={(formData[field] || []).map(item => {
+                                                    if (typeof item === 'string') return { value: item, label: item };
+                                                    if (!item) return { value: '', label: '' };
+                                                    const v = typeof item.value === 'string' ? item.value : typeof item.value === 'object' ? String(item.value?.value ?? '') : String(item.value ?? '');
+                                                    const l = typeof item.label === 'string' ? item.label : typeof item.label === 'object' ? String(item.label?.label ?? item.label?.value ?? '') : v;
+                                                    return { value: v, label: l };
+                                                })}
                                                 onChange={(event, newValue) => handleMultiSelectChange(field, newValue)}
                                                 renderInput={(params) => (
                                                     <TextField {...params} label={labels[field]} />
                                                 )}
                                                 renderTags={(tagValue, getTagProps) =>
-                                                    tagValue.map((option, index) => (
-                                                        <Chip
-                                                            key={typeof option === 'string' ? option : option?.value ?? index}
-                                                            label={typeof option === 'string' ? option : (option?.label ?? '')}
-                                                            {...getTagProps({ index })}
-                                                            size="small"
-                                                            color="primary"
-                                                            variant="outlined"
-                                                        />
-                                                    ))
+                                                    tagValue.map((option, index) => {
+                                                        const l = typeof option === 'string' ? option : typeof option?.label === 'string' ? option.label : typeof option?.label === 'object' ? String(option.label?.label ?? option.label?.value ?? '') : String(option?.value ?? '');
+                                                        const k = typeof option === 'string' ? option : typeof option?.value === 'string' ? option.value : index;
+                                                        return (
+                                                            <Chip
+                                                                key={k}
+                                                                label={l}
+                                                                {...getTagProps({ index })}
+                                                                size="small"
+                                                                color="primary"
+                                                                variant="outlined"
+                                                            />
+                                                        );
+                                                    })
                                                 }
                                                 limitTags={2}
                                                 disableCloseOnSelect

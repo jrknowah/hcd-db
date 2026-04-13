@@ -328,26 +328,31 @@ const reassessmentSlice = createSlice({
                     try { val = JSON.parse(val); } catch { val = []; }
                 }
 
-                // Ensure every element is a { value, label } object
+                // Ensure every element is a { value, label } object with plain string values
+                const toStr = (v) => {
+                    if (typeof v === 'string') return v;
+                    if (v && typeof v === 'object') return v.value ?? v.label ?? '';
+                    return String(v ?? '');
+                };
                 if (Array.isArray(val)) {
-                    normalized[field] = val.map(item =>
-                        typeof item === 'string'
-                            ? { value: item, label: item }
-                            : item
-                    );
+                    normalized[field] = val.map(item => {
+                        if (typeof item === 'string') return { value: item, label: item };
+                        const v = toStr(item?.value ?? item);
+                        const l = toStr(item?.label ?? item?.value ?? item);
+                        return { value: v, label: l };
+                    });
                 } else {
                     normalized[field] = [];
                 }
             });
 
-            // Scalar select fields: flatten any {value,label} objects to strings
+            // Flatten scalar select fields that may have arrived as {value,label} objects
             const scalarFields = [
                 'reasonForRef','suicHomiThou','columbiaSRComp','columbiaSR',
-                'selfHarm','psyHosp','traumaExp',
-                'medReAssess','subAbuseReAssess','medHistReAssess',
-                'eduHistoryReAssess','empHistReAssess','legalReAssess',
-                'livingArrReAssess','homelessReAssess','depCareReAssess',
-                'famReAssess','diagDescriptCodeChoice',
+                'selfHarm','psyHosp','traumaExp','medReAssess','subAbuseReAssess',
+                'medHistReAssess','eduHistoryReAssess','empHistReAssess','legalReAssess',
+                'livingArrReAssess','homelessReAssess','depCareReAssess','famReAssess',
+                'diagDescriptCodeChoice',
             ];
             scalarFields.forEach(field => {
                 const val = normalized[field];
@@ -519,18 +524,14 @@ export const selectHasErrors = (state) => {
     return !!(r?.error || r?.summaryError || r?.allError || r?.searchError || r?.saveError || r?.updateError);
 };
 
-let _prevCompletionStatus = { status: 'Not Started', percentage: 0, isCompleted: false };
+let _cs = { status: 'Not Started', percentage: 0, isCompleted: false };
 export const selectCompletionStatus = (state) => {
-    const status = state.reassessment?.completionStatus || 'Not Started';
-    const percentage = state.reassessment?.completionPercentage || 0;
-    const isCompleted = state.reassessment?.isCompleted || false;
-    if (
-        _prevCompletionStatus.status === status &&
-        _prevCompletionStatus.percentage === percentage &&
-        _prevCompletionStatus.isCompleted === isCompleted
-    ) return _prevCompletionStatus;
-    _prevCompletionStatus = { status, percentage, isCompleted };
-    return _prevCompletionStatus;
+    const s = state.reassessment?.completionStatus || 'Not Started';
+    const p = state.reassessment?.completionPercentage || 0;
+    const c = state.reassessment?.isCompleted || false;
+    if (_cs.status === s && _cs.percentage === p && _cs.isCompleted === c) return _cs;
+    _cs = { status: s, percentage: p, isCompleted: c };
+    return _cs;
 };
 
 // ✅ Export reducer
