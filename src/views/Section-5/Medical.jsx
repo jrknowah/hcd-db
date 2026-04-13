@@ -29,7 +29,7 @@ import {
   Archive as ArchiveIcon,
   Timeline as TimelineIcon,
   Medication as MedicationIcon,
-  ExitToApp as DischargeIcon
+  // ExitToApp as DischargeIcon
 } from '@mui/icons-material';
 import { section5List } from "../../data/arrayList";
 import MedFaceSheet from "./MedFaceSheet";
@@ -41,7 +41,7 @@ import IDTNoteProvider from './IDTNoteProvider';
 import NursingArchive from './NursingArchive';
 import MedicalObservationRecord from './MedicalObservationRecord';
 // ✅ ADDED: Discharge component from Section 1
-import Discharge from '../Section-1/Discharge';
+// import Discharge from '../Section-1/Discharge';
 
 const Medical = () => {
   // ✅ ALIGNED: Match Identification.jsx pattern exactly
@@ -62,7 +62,7 @@ const Medical = () => {
     { section5Title: 'First Progress Note', section5Date: '' },
     { section5Title: 'IDT Meeting - Nursing', section5Date: '' },
     { section5Title: 'IDT Meeting - Provider', section5Date: '' },
-    { section5Title: 'Discharge Planning', section5Date: '' }, // ✅ ADDED
+    // { section5Title: 'Discharge Planning', section5Date: '' }, // ✅ ADDED
   ];
 
   // ✅ ALIGNED: Same client check pattern as Identification.jsx
@@ -131,7 +131,7 @@ const Medical = () => {
             <Tab icon={<MedicationIcon />} label="Observation Record" iconPosition="start" />
             <Tab icon={<IDTIcon />} label="Nursing IDT" iconPosition="start" />
             <Tab icon={<IDTIcon />} label="Provider IDT" iconPosition="start" />
-            <Tab icon={<DischargeIcon />} label="Discharge" iconPosition="start" />
+            {/* <Tab icon={<DischargeIcon />} label="Discharge" iconPosition="start" /> */}
             <Tab icon={<ArchiveIcon />} label="Nursing Archive" iconPosition="start" />
           </Tabs>
 
@@ -295,7 +295,7 @@ const Medical = () => {
               </Box>
             )}
 
-            {/* ✅ NEW: Discharge Tab */}
+            {/* ✅ NEW: Discharge Tab 
             {activeTab === 8 && (
               <Box>
                 <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -305,7 +305,7 @@ const Medical = () => {
                 <Discharge />
               </Box>
             )}
-
+*/}
             {/* Nursing Archive Tab */}
             {activeTab === 9 && (
               <Box>
