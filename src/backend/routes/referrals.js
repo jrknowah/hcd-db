@@ -3,25 +3,25 @@ const router = express.Router();
 const multer = require("multer");
 const path = require("path");
 const sql = require("mssql");
-const { connectToAzureSQL } = require("../store/azureSql");
+const { getPool } = require("../store/azureSql");
 const { BlobServiceClient } = require('@azure/storage-blob');
-const fs = require('fs').promises;
+const { DefaultAzureCredential } = require('@azure/identity');
 
-// Configure Azure Blob Storage
-const AZURE_STORAGE_CONNECTION_STRING = process.env.AZURE_STORAGE_CONNECTION_STRING;
+// Configure Azure Blob Storage using Managed Identity (no connection string needed)
+const STORAGE_ACCOUNT_NAME = process.env.AZURE_STORAGE_ACCOUNT_NAME || 'clientintakestorage';
 const CONTAINER_NAME = "client-docs";
 
-// Initialize blob service client
+// Initialize blob service client via Managed Identity
 let blobServiceClient = null;
-if (AZURE_STORAGE_CONNECTION_STRING) {
-  try {
-    blobServiceClient = BlobServiceClient.fromConnectionString(AZURE_STORAGE_CONNECTION_STRING);
-    console.log('✅ Azure Blob Storage initialized for referrals');
-  } catch (error) {
-    console.error('❌ Failed to initialize Azure Blob Storage:', error.message);
-  }
-} else {
-  console.warn('⚠️ AZURE_STORAGE_CONNECTION_STRING not found - file uploads will use local storage');
+try {
+  const credential = new DefaultAzureCredential();
+  blobServiceClient = new BlobServiceClient(
+    `https://${STORAGE_ACCOUNT_NAME}.blob.core.windows.net`,
+    credential
+  );
+  console.log('✅ Azure Blob Storage initialized for referrals (Managed Identity)');
+} catch (error) {
+  console.error('❌ Failed to initialize Azure Blob Storage:', error.message);
 }
 
 // Configure multer to use memory storage for Azure uploads
@@ -39,7 +39,7 @@ router.get('/clientReferrals/:clientID', async (req, res) => {
   console.log(`${new Date().toISOString()} - GET /clientReferrals/${clientID}`);
 
   try {
-    const pool = await connectToAzureSQL();  // ✅ FIXED: Use connectToAzureSQL() instead of sql.connect(azureConfig)
+    const pool = await getPool();  // ✅ FIXED: Use connectToAzureSQL() instead of sql.connect(azureConfig)
     
     // ✅ FIXED: Include ALL 4 referral fields in SELECT
     const result = await pool.request()
@@ -99,7 +99,7 @@ router.post("/saveClientReferrals", async (req, res) => {
   }
 
   try {
-    const pool = await connectToAzureSQL();
+    const pool = await getPool();
     await pool.request()
       .input("clientID", sql.NVarChar, clientID)
       .input("lahsaReferral", sql.NVarChar(sql.MAX), lahsaReferral || '')
@@ -161,11 +161,6 @@ router.post("/uploadReferral", upload.single("file"), async (req, res) => {
       try {
         const containerClient = blobServiceClient.getContainerClient(CONTAINER_NAME);
         
-        // Create container if it doesn't exist
-        await containerClient.createIfNotExists({
-          access: 'blob'
-        });
-        
         // Generate unique blob name
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
         const blobName = `referrals/${clientID}/${type}/${timestamp}_${fileName}`;
@@ -206,7 +201,7 @@ router.post("/uploadReferral", upload.single("file"), async (req, res) => {
     }
 
     // Save file info to database
-    const pool = await connectToAzureSQL();
+    const pool = await getPool();
     const result = await pool.request()
       .input("clientID", sql.NVarChar, clientID)
       .input("referralType", sql.NVarChar, type)
@@ -242,7 +237,7 @@ router.post("/uploadReferral", upload.single("file"), async (req, res) => {
 // GET /referralFiles/:clientID - Get uploaded files
 router.get("/referralFiles/:clientID", async (req, res) => {
   try {
-    const pool = await connectToAzureSQL();
+    const pool = await getPool();
     const result = await pool.request()
       .input("clientID", sql.NVarChar, req.params.clientID)
       .query(`
@@ -276,7 +271,7 @@ router.delete("/referralFiles/:fileID", async (req, res) => {
   const { fileID } = req.params;
 
   try {
-    const pool = await connectToAzureSQL();
+    const pool = await getPool();
     
     // Get file info first
     const fileResult = await pool.request()
