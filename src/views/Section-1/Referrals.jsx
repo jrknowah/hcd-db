@@ -22,6 +22,7 @@ import RetryIcon from '@mui/icons-material/Refresh';
 import WarningIcon from '@mui/icons-material/Warning';
 import {
   fetchReferralData,
+  fetchReferralFiles,
   saveReferralData,
   uploadReferralFile,
   updateReferralField,
@@ -37,7 +38,8 @@ import {
   selectReferralsError,
   selectReferralsSuccess,
   selectReferralsDataLoaded,
-  selectReferralUploadProgress
+  selectReferralUploadProgress,
+  selectReferralUploadedFiles,
 } from "../../backend/store/slices/referralSlice";
 
 const Referrals = ({ exportMode }) => {
@@ -52,6 +54,7 @@ const Referrals = ({ exportMode }) => {
   const successMessage = useSelector(selectReferralsSuccess);
   const dataLoaded = useSelector(selectReferralsDataLoaded);
   const uploadProgress = useSelector(selectReferralUploadProgress);
+  const uploadedFiles = useSelector(selectReferralUploadedFiles);
   
   // Get current client and user from Redux
   const currentClient = useSelector((state) => state?.clients?.selectedClient);
@@ -93,6 +96,7 @@ const Referrals = ({ exportMode }) => {
       if (!dataLoaded) {
         dispatch(fetchReferralData(currentClient.clientID));
       }
+      dispatch(fetchReferralFiles(currentClient.clientID));
     }
   }, [dispatch, currentClient?.clientID, dataLoaded]);
 
@@ -423,11 +427,27 @@ const Referrals = ({ exportMode }) => {
               </Alert>
             )}
 
-            {/* Show uploaded file info */}
-            {referrals[`${referralType.key}File`] && !hasFile && (
-              <Alert severity="success" sx={{ mt: 1 }}>
-                File uploaded: {referrals[`${referralType.key}File`]}
-              </Alert>
+            {/* Previously uploaded files from database */}
+            {uploadedFiles.filter(f => f.referralType === referralType.key).length > 0 && (
+              <Box sx={{ mt: 1 }}>
+                <Typography variant="caption" color="text.secondary">Uploaded files:</Typography>
+                {uploadedFiles
+                  .filter(f => f.referralType === referralType.key)
+                  .map((f, idx) => (
+                    <Alert key={idx} severity="success" sx={{ mt: 0.5, py: 0 }}>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Typography variant="body2">
+                          {f.fileUrl
+                            ? <a href={f.fileUrl} target="_blank" rel="noopener noreferrer">{f.fileName}</a>
+                            : f.fileName}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
+                          {f.uploadedAt ? new Date(f.uploadedAt).toLocaleDateString() : ''}
+                        </Typography>
+                      </Box>
+                    </Alert>
+                  ))}
+              </Box>
             )}
 
             {/* ✅ NEW: Manual retry button for failed uploads */}

@@ -123,6 +123,24 @@ export const saveReferralData = createAsyncThunk(
   }
 );
 
+// Fetch uploaded files for a client
+export const fetchReferralFiles = createAsyncThunk(
+  "referral/fetchReferralFiles",
+  async (clientID, { rejectWithValue }) => {
+    try {
+      const isDevelopment = import.meta.env.MODE === 'development';
+      if (isDevelopment && !import.meta.env.VITE_USE_REAL_DATA) {
+        return [];
+      }
+      const axiosInstance = createAxiosInstance(30000);
+      const { data } = await axiosInstance.get(`${API}/api/referralFiles/${clientID}`);
+      return data;
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.error || 'Failed to fetch referral files');
+    }
+  }
+);
+
 // ✅ ENHANCED: Upload file with progress tracking, timeout, and detailed error messages
 export const uploadReferralFile = createAsyncThunk(
   "referral/uploadReferralFile",
@@ -217,6 +235,8 @@ const referralSlice = createSlice({
       dmhReferral: "", // ✅ ADDED: DMH field
     },
     uploadProgress: {},
+    uploadedFiles: [],
+    filesLoaded: false,
     loading: false,
     saving: false,
     uploading: false,
@@ -262,6 +282,8 @@ const referralSlice = createSlice({
         state.dataLoaded = false;
         state.error = null;
         state.uploadProgress = {};
+        state.uploadedFiles = [];
+        state.filesLoaded = false;
         state.lastUploadAttempt = null;
       }
     },
@@ -326,6 +348,15 @@ const referralSlice = createSlice({
         state.error = action.payload || 'Failed to save referral data';
       })
       
+      // Fetch uploaded files
+      .addCase(fetchReferralFiles.fulfilled, (state, action) => {
+        state.uploadedFiles = action.payload;
+        state.filesLoaded = true;
+      })
+      .addCase(fetchReferralFiles.rejected, (state) => {
+        state.filesLoaded = true; // don't retry endlessly
+      })
+
       // Upload referral file
       .addCase(uploadReferralFile.pending, (state) => {
         state.uploading = true;
@@ -335,8 +366,13 @@ const referralSlice = createSlice({
       .addCase(uploadReferralFile.fulfilled, (state, action) => {
         state.uploading = false;
         state.successMessage = `✅ ${action.payload.fileName} uploaded successfully`;
-        
-        // ✅ Store file info in state
+        // Append to file list so UI reflects it immediately
+        state.uploadedFiles.push({
+          fileName: action.payload.fileName,
+          fileUrl: action.payload.fileUrl,
+          referralType: action.payload.referralType,
+          uploadedAt: new Date().toISOString(),
+        });
         if (action.payload.referralType) {
           state.referrals[`${action.payload.referralType}File`] = action.payload.fileName;
           state.referrals[`${action.payload.referralType}FileUrl`] = action.payload.fileUrl;
@@ -368,6 +404,9 @@ export const selectReferralsError = (state) => state.referrals?.error || null;
 export const selectReferralsSuccess = (state) => state.referrals?.successMessage || null;
 export const selectReferralsDataLoaded = (state) => state.referrals?.dataLoaded || false;
 export const selectReferralUploadProgress = (state) => state.referrals?.uploadProgress || {};
+export const selectReferralUploadedFiles = (state) => state.referrals?.uploadedFiles || [];
 export const selectLastUploadAttempt = (state) => state.referrals?.lastUploadAttempt || null;
+
+export { fetchReferralFiles };
 
 export default referralSlice.reducer;

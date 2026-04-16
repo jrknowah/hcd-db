@@ -6,8 +6,8 @@ const fs = require('fs');
 const crypto = require('crypto');
 const router = express.Router();
 
-// Database connection (assumes you have this configured)
-// const { poolPromise } = require('../db/database');
+// Database connection
+const { getPool } = require('../store/azureSql');
 
 // Configure multer for file uploads
 const storage = multer.diskStorage({
@@ -31,13 +31,12 @@ const upload = multer({
     fileSize: 100 * 1024 * 1024, // 100MB limit
   },
   fileFilter: (req, file, cb) => {
-    // Allow common document and image types
     const allowedTypes = /jpeg|jpg|png|gif|pdf|doc|docx|txt|xls|xlsx|ppt|pptx|rtf|odt|ods|odp/;
     const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-    const mimetype = allowedTypes.test(file.mimetype) || 
+    const mimetype = allowedTypes.test(file.mimetype) ||
                      file.mimetype.includes('officedocument') ||
                      file.mimetype.includes('opendocument');
-    
+
     if (mimetype && extname) {
       return cb(null, true);
     } else {
@@ -51,90 +50,292 @@ function generateChecksum(filePath) {
   return new Promise((resolve, reject) => {
     const hash = crypto.createHash('md5');
     const stream = fs.createReadStream(filePath);
-    
     stream.on('data', data => hash.update(data));
     stream.on('end', () => resolve(hash.digest('hex')));
     stream.on('error', reject);
   });
 }
 
+// Helper function to determine retention years based on category
+function getRetentionYears(category) {
+  const retentionMap = {
+    'legal': 7,
+    'medical': 5,
+    'financial': 7,
+    'benefits': 5,
+    'employment': 3,
+    'housing': 3,
+    'identification': 10,
+    'general': 2,
+    'other': 2
+  };
+  return retentionMap[category] || 2;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SPECIFIC ROUTES — must come before /:clientID and /:documentID catch-alls
+// ─────────────────────────────────────────────────────────────────────────────
+
 /**
- * GET /api/misc-documents/:clientID
- * Get miscellaneous documents for a specific client
+ * GET /api/misc-documents/:clientID/categories
+ * Get document categories with counts
+ * ✅ Before /:clientID
  */
-router.get('/misc-documents/:clientID', async (req, res) => {
+router.get('/misc-documents/:clientID/categories', async (req, res) => {
   try {
     const { clientID } = req.params;
-    const { category, archived, limit = 50, offset = 0 } = req.query;
-    
-    const pool = await poolPromise;
-    let sqlQuery = `
-      SELECT 
-        documentID,
-        clientID,
-        fileName,
-        originalFileName,
-        fileSize,
-        mimeType,
-        filePath,
-        documentCategory,
-        documentDescription,
-        uploadDate,
-        lastAccessed,
-        accessCount,
-        isArchived,
-        retentionDate,
-        confidentialityLevel,
-        uploadedBy,
-        approvedBy,
-        approvalDate,
-        version,
-        checksum,
-        tags,
-        relatedDocuments,
-        createdBy,
-        createdAt,
-        updatedBy,
-        updatedAt
-      FROM dbo.MiscDocuments 
-      WHERE clientID = @clientID
-    `;
-    
-    const request = pool.request();
-    request.input('clientID', sql.NVarChar(50), clientID);
 
-    if (category) {
-      sqlQuery += ` AND documentCategory = @category`;
-      request.input('category', sql.NVarChar(100), category);
-    }
+    const pool = await getPool();
+    const result = await pool.request()
+      .input('clientID', sql.NVarChar(50), clientID)
+      .query(`
+        SELECT 
+          documentCategory as category,
+          COUNT(*) as count
+        FROM dbo.MiscDocuments 
+        WHERE clientID = @clientID AND isArchived = 0
+        GROUP BY documentCategory
+        ORDER BY count DESC
+      `);
 
-    if (archived !== undefined) {
-      sqlQuery += ` AND isArchived = @archived`;
-      request.input('archived', sql.Bit, archived === 'true');
-    }
+    const predefinedCategories = [
+      { category: 'general', label: 'General Documents', count: 0 },
+      { category: 'medical', label: 'Medical Records', count: 0 },
+      { category: 'legal', label: 'Legal Documents', count: 0 },
+      { category: 'financial', label: 'Financial Records', count: 0 },
+      { category: 'identification', label: 'Identification', count: 0 },
+      { category: 'benefits', label: 'Benefits Documentation', count: 0 },
+      { category: 'housing', label: 'Housing Documents', count: 0 },
+      { category: 'employment', label: 'Employment Records', count: 0 },
+      { category: 'other', label: 'Other', count: 0 }
+    ];
 
-    sqlQuery += ` ORDER BY uploadDate DESC OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY`;
-    request.input('offset', sql.Int, parseInt(offset));
-    request.input('limit', sql.Int, parseInt(limit));
+    const categoriesWithCounts = predefinedCategories.map(predefined => {
+      const actual = result.recordset.find(r => r.category === predefined.category);
+      return { ...predefined, count: actual ? actual.count : 0 };
+    });
 
-    const result = await request.query(sqlQuery);
-
-    // Parse JSON fields
-    const documents = result.recordset.map(doc => ({
-      ...doc,
-      tags: doc.tags ? JSON.parse(doc.tags) : [],
-      relatedDocuments: doc.relatedDocuments ? JSON.parse(doc.relatedDocuments) : []
-    }));
-
-    res.json(documents);
+    res.json(categoriesWithCounts);
   } catch (error) {
-    console.error('Error fetching misc documents:', error);
-    res.status(500).json({ 
-      message: 'Error fetching misc documents', 
-      error: error.message 
+    console.error('Error fetching document categories:', error);
+    res.status(500).json({
+      message: 'Error fetching document categories',
+      error: error.message
     });
   }
 });
+
+/**
+ * GET /api/misc-documents/:clientID/summary
+ * Get document summary statistics
+ * ✅ Before /:clientID
+ */
+router.get('/misc-documents/:clientID/summary', async (req, res) => {
+  try {
+    const { clientID } = req.params;
+
+    const pool = await getPool();
+    const result = await pool.request()
+      .input('clientID', sql.NVarChar(50), clientID)
+      .query(`
+        SELECT 
+          COUNT(*) as totalDocuments,
+          SUM(fileSize) as totalFileSize,
+          SUM(CASE WHEN uploadDate >= DATEADD(day, -7, GETDATE()) THEN 1 ELSE 0 END) as recentUploads,
+          SUM(CASE WHEN approvedBy IS NULL THEN 1 ELSE 0 END) as pendingApprovals,
+          SUM(CASE WHEN isArchived = 1 THEN 1 ELSE 0 END) as archivedDocuments,
+          AVG(CAST(fileSize AS FLOAT)) as averageFileSize,
+          MAX(uploadDate) as lastUpload,
+          SUM(CASE WHEN retentionDate <= DATEADD(day, 30, GETDATE()) THEN 1 ELSE 0 END) as retentionAlerts
+        FROM dbo.MiscDocuments 
+        WHERE clientID = @clientID
+      `);
+
+    const summary = result.recordset[0];
+
+    const categoryResult = await pool.request()
+      .input('clientID', sql.NVarChar(50), clientID)
+      .query(`
+        SELECT 
+          documentCategory,
+          COUNT(*) as count
+        FROM dbo.MiscDocuments 
+        WHERE clientID = @clientID AND isArchived = 0
+        GROUP BY documentCategory
+      `);
+
+    const documentsByCategory = {};
+    categoryResult.recordset.forEach(row => {
+      documentsByCategory[row.documentCategory] = row.count;
+    });
+
+    const accessResult = await pool.request()
+      .input('clientID', sql.NVarChar(50), clientID)
+      .query(`
+        SELECT TOP 1 originalFileName
+        FROM dbo.MiscDocuments 
+        WHERE clientID = @clientID
+        ORDER BY accessCount DESC
+      `);
+
+    res.json({
+      totalDocuments: summary.totalDocuments || 0,
+      totalFileSize: parseInt(summary.totalFileSize) || 0,
+      documentsByCategory,
+      recentUploads: summary.recentUploads || 0,
+      pendingApprovals: summary.pendingApprovals || 0,
+      archivedDocuments: summary.archivedDocuments || 0,
+      averageFileSize: parseFloat(summary.averageFileSize) || 0,
+      lastUpload: summary.lastUpload ? summary.lastUpload.toISOString().split('T')[0] : null,
+      mostAccessedDocument: accessResult.recordset[0]?.originalFileName || 'None',
+      retentionAlerts: summary.retentionAlerts || 0
+    });
+  } catch (error) {
+    console.error('Error fetching document summary:', error);
+    res.status(500).json({
+      message: 'Error fetching document summary',
+      error: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/misc-documents/:documentID/download
+ * Download specific document
+ * ✅ Before /:clientID
+ */
+router.get('/misc-documents/:documentID/download', async (req, res) => {
+  try {
+    const { documentID } = req.params;
+
+    const pool = await getPool();
+    const result = await pool.request()
+      .input('documentID', sql.Int, documentID)
+      .query(`
+        SELECT filePath, originalFileName, mimeType, accessCount
+        FROM dbo.MiscDocuments 
+        WHERE documentID = @documentID
+      `);
+
+    if (result.recordset.length === 0) {
+      return res.status(404).json({ message: 'Document not found' });
+    }
+
+    const document = result.recordset[0];
+
+    if (!fs.existsSync(document.filePath)) {
+      return res.status(404).json({ message: 'File not found on disk' });
+    }
+
+    // Update access count
+    await pool.request()
+      .input('documentID', sql.Int, documentID)
+      .query(`
+        UPDATE dbo.MiscDocuments 
+        SET accessCount = accessCount + 1,
+            lastAccessed = GETDATE()
+        WHERE documentID = @documentID
+      `);
+
+    res.setHeader('Content-Disposition', `attachment; filename="${document.originalFileName}"`);
+    res.setHeader('Content-Type', document.mimeType);
+
+    const fileStream = fs.createReadStream(document.filePath);
+    fileStream.pipe(res);
+  } catch (error) {
+    console.error('Error downloading document:', error);
+    res.status(500).json({
+      message: 'Error downloading document',
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/misc-documents/:documentID/approve
+ * Approve document
+ * ✅ Before /:documentID catch-all PUT/DELETE
+ */
+router.post('/misc-documents/:documentID/approve', async (req, res) => {
+  try {
+    const { documentID } = req.params;
+    const { approvedBy } = req.body;
+
+    const pool = await getPool();
+    const result = await pool.request()
+      .input('documentID', sql.Int, documentID)
+      .input('approvedBy', sql.NVarChar(100), approvedBy)
+      .input('approvalDate', sql.Date, new Date())
+      .query(`
+        UPDATE dbo.MiscDocuments 
+        SET approvedBy = @approvedBy,
+            approvalDate = @approvalDate,
+            updatedAt = GETDATE()
+        OUTPUT inserted.*
+        WHERE documentID = @documentID
+      `);
+
+    if (result.recordset.length === 0) {
+      return res.status(404).json({ message: 'Document not found' });
+    }
+
+    const document = result.recordset[0];
+    if (document.tags) document.tags = JSON.parse(document.tags);
+    if (document.relatedDocuments) document.relatedDocuments = JSON.parse(document.relatedDocuments);
+
+    res.json(document);
+  } catch (error) {
+    console.error('Error approving document:', error);
+    res.status(500).json({
+      message: 'Error approving document',
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/misc-documents/:documentID/archive
+ * Archive/unarchive document
+ * ✅ Before /:documentID catch-all PUT/DELETE
+ */
+router.post('/misc-documents/:documentID/archive', async (req, res) => {
+  try {
+    const { documentID } = req.params;
+    const { isArchived } = req.body;
+
+    const pool = await getPool();
+    const result = await pool.request()
+      .input('documentID', sql.Int, documentID)
+      .input('isArchived', sql.Bit, isArchived)
+      .query(`
+        UPDATE dbo.MiscDocuments 
+        SET isArchived = @isArchived,
+            updatedAt = GETDATE()
+        OUTPUT inserted.*
+        WHERE documentID = @documentID
+      `);
+
+    if (result.recordset.length === 0) {
+      return res.status(404).json({ message: 'Document not found' });
+    }
+
+    const document = result.recordset[0];
+    if (document.tags) document.tags = JSON.parse(document.tags);
+    if (document.relatedDocuments) document.relatedDocuments = JSON.parse(document.relatedDocuments);
+
+    res.json(document);
+  } catch (error) {
+    console.error('Error archiving document:', error);
+    res.status(500).json({
+      message: 'Error archiving document',
+      error: error.message
+    });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PARAMETERIZED CATCH-ALL ROUTES — after all specific routes
+// ─────────────────────────────────────────────────────────────────────────────
 
 /**
  * POST /api/misc-documents/:clientID/upload
@@ -155,18 +356,14 @@ router.post('/misc-documents/:clientID/upload', upload.single('file'), async (re
       return res.status(400).json({ message: 'No file uploaded' });
     }
 
-    // Generate checksum
     const checksum = await generateChecksum(req.file.path);
-
-    // Parse tags
     const tagsArray = tags ? tags.split(',').map(tag => tag.trim()) : [category];
 
-    // Calculate retention date based on category
     const retentionYears = getRetentionYears(category);
     const retentionDate = new Date();
     retentionDate.setFullYear(retentionDate.getFullYear() + retentionYears);
 
-    const pool = await poolPromise;
+    const pool = await getPool();
     const result = await pool.request()
       .input('clientID', sql.NVarChar(50), clientID)
       .input('fileName', sql.NVarChar(255), req.file.filename)
@@ -204,23 +401,98 @@ router.post('/misc-documents/:clientID/upload', upload.single('file'), async (re
       `);
 
     const document = result.recordset[0];
-    
-    // Parse JSON fields for response
     document.tags = JSON.parse(document.tags);
     document.relatedDocuments = JSON.parse(document.relatedDocuments);
 
     res.json(document);
   } catch (error) {
     console.error('Error uploading document:', error);
-    
-    // Clean up uploaded file on error
+
     if (req.file && fs.existsSync(req.file.path)) {
       fs.unlinkSync(req.file.path);
     }
-    
-    res.status(500).json({ 
-      message: 'Error uploading document', 
-      error: error.message 
+
+    res.status(500).json({
+      message: 'Error uploading document',
+      error: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/misc-documents/:clientID
+ * Get miscellaneous documents for a specific client
+ * ✅ After all /:clientID/sub-routes
+ */
+router.get('/misc-documents/:clientID', async (req, res) => {
+  try {
+    const { clientID } = req.params;
+    const { category, archived, limit = 50, offset = 0 } = req.query;
+
+    const pool = await getPool();
+    let sqlQuery = `
+      SELECT 
+        documentID,
+        clientID,
+        fileName,
+        originalFileName,
+        fileSize,
+        mimeType,
+        filePath,
+        documentCategory,
+        documentDescription,
+        uploadDate,
+        lastAccessed,
+        accessCount,
+        isArchived,
+        retentionDate,
+        confidentialityLevel,
+        uploadedBy,
+        approvedBy,
+        approvalDate,
+        version,
+        checksum,
+        tags,
+        relatedDocuments,
+        createdBy,
+        createdAt,
+        updatedBy,
+        updatedAt
+      FROM dbo.MiscDocuments 
+      WHERE clientID = @clientID
+    `;
+
+    const request = pool.request();
+    request.input('clientID', sql.NVarChar(50), clientID);
+
+    if (category) {
+      sqlQuery += ` AND documentCategory = @category`;
+      request.input('category', sql.NVarChar(100), category);
+    }
+
+    if (archived !== undefined) {
+      sqlQuery += ` AND isArchived = @archived`;
+      request.input('archived', sql.Bit, archived === 'true');
+    }
+
+    sqlQuery += ` ORDER BY uploadDate DESC OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY`;
+    request.input('offset', sql.Int, parseInt(offset));
+    request.input('limit', sql.Int, parseInt(limit));
+
+    const result = await request.query(sqlQuery);
+
+    const documents = result.recordset.map(doc => ({
+      ...doc,
+      tags: doc.tags ? JSON.parse(doc.tags) : [],
+      relatedDocuments: doc.relatedDocuments ? JSON.parse(doc.relatedDocuments) : []
+    }));
+
+    res.json(documents);
+  } catch (error) {
+    console.error('Error fetching misc documents:', error);
+    res.status(500).json({
+      message: 'Error fetching misc documents',
+      error: error.message
     });
   }
 });
@@ -234,12 +506,11 @@ router.put('/misc-documents/:documentID', async (req, res) => {
     const { documentID } = req.params;
     const updateData = req.body;
 
-    const pool = await poolPromise;
-    
-    // Build dynamic update query
+    const pool = await getPool();
+
     const updateFields = [];
     const inputs = {};
-    
+
     Object.keys(updateData).forEach(key => {
       if (key !== 'documentID' && key !== 'createdAt' && key !== 'createdBy' && key !== 'filePath') {
         updateFields.push(`${key} = @${key}`);
@@ -255,7 +526,7 @@ router.put('/misc-documents/:documentID', async (req, res) => {
 
     const request = pool.request();
     request.input('documentID', sql.Int, documentID);
-    
+
     Object.keys(inputs).forEach(key => {
       if (key.includes('Date')) {
         request.input(key, sql.Date, inputs[key]);
@@ -282,17 +553,15 @@ router.put('/misc-documents/:documentID', async (req, res) => {
     }
 
     const document = result.recordset[0];
-    
-    // Parse JSON fields
     if (document.tags) document.tags = JSON.parse(document.tags);
     if (document.relatedDocuments) document.relatedDocuments = JSON.parse(document.relatedDocuments);
 
     res.json(document);
   } catch (error) {
     console.error('Error updating document:', error);
-    res.status(500).json({ 
-      message: 'Error updating document', 
-      error: error.message 
+    res.status(500).json({
+      message: 'Error updating document',
+      error: error.message
     });
   }
 });
@@ -305,9 +574,8 @@ router.delete('/misc-documents/:documentID', async (req, res) => {
   try {
     const { documentID } = req.params;
 
-    const pool = await poolPromise;
-    
-    // First get file path to delete physical file
+    const pool = await getPool();
+
     const fileResult = await pool.request()
       .input('documentID', sql.Int, documentID)
       .query(`
@@ -327,7 +595,6 @@ router.delete('/misc-documents/:documentID', async (req, res) => {
       return res.status(404).json({ message: 'Document not found' });
     }
 
-    // Delete physical file
     if (fileResult.recordset.length > 0) {
       const filePath = fileResult.recordset[0].filePath;
       if (fs.existsSync(filePath)) {
@@ -338,295 +605,11 @@ router.delete('/misc-documents/:documentID', async (req, res) => {
     res.json({ message: 'Document deleted successfully' });
   } catch (error) {
     console.error('Error deleting document:', error);
-    res.status(500).json({ 
-      message: 'Error deleting document', 
-      error: error.message 
+    res.status(500).json({
+      message: 'Error deleting document',
+      error: error.message
     });
   }
 });
-
-/**
- * GET /api/misc-documents/:documentID/download
- * Download specific document
- */
-router.get('/misc-documents/:documentID/download', async (req, res) => {
-  try {
-    const { documentID } = req.params;
-
-    const pool = await poolPromise;
-    const result = await pool.request()
-      .input('documentID', sql.Int, documentID)
-      .query(`
-        SELECT filePath, originalFileName, mimeType, accessCount
-        FROM dbo.MiscDocuments 
-        WHERE documentID = @documentID
-      `);
-
-    if (result.recordset.length === 0) {
-      return res.status(404).json({ message: 'Document not found' });
-    }
-
-    const document = result.recordset[0];
-    
-    if (!fs.existsSync(document.filePath)) {
-      return res.status(404).json({ message: 'File not found on disk' });
-    }
-
-    // Update access count
-    await pool.request()
-      .input('documentID', sql.Int, documentID)
-      .query(`
-        UPDATE dbo.MiscDocuments 
-        SET accessCount = accessCount + 1,
-            lastAccessed = GETDATE()
-        WHERE documentID = @documentID
-      `);
-
-    // Set appropriate headers
-    res.setHeader('Content-Disposition', `attachment; filename="${document.originalFileName}"`);
-    res.setHeader('Content-Type', document.mimeType);
-    
-    // Stream file
-    const fileStream = fs.createReadStream(document.filePath);
-    fileStream.pipe(res);
-  } catch (error) {
-    console.error('Error downloading document:', error);
-    res.status(500).json({ 
-      message: 'Error downloading document', 
-      error: error.message 
-    });
-  }
-});
-
-/**
- * GET /api/misc-documents/:clientID/categories
- * Get document categories with counts
- */
-router.get('/misc-documents/:clientID/categories', async (req, res) => {
-  try {
-    const { clientID } = req.params;
-
-    const pool = await poolPromise;
-    const result = await pool.request()
-      .input('clientID', sql.NVarChar(50), clientID)
-      .query(`
-        SELECT 
-          documentCategory as category,
-          COUNT(*) as count
-        FROM dbo.MiscDocuments 
-        WHERE clientID = @clientID AND isArchived = 0
-        GROUP BY documentCategory
-        ORDER BY count DESC
-      `);
-
-    // Add predefined categories with zero counts
-    const predefinedCategories = [
-      { category: 'general', label: 'General Documents', count: 0 },
-      { category: 'medical', label: 'Medical Records', count: 0 },
-      { category: 'legal', label: 'Legal Documents', count: 0 },
-      { category: 'financial', label: 'Financial Records', count: 0 },
-      { category: 'identification', label: 'Identification', count: 0 },
-      { category: 'benefits', label: 'Benefits Documentation', count: 0 },
-      { category: 'housing', label: 'Housing Documents', count: 0 },
-      { category: 'employment', label: 'Employment Records', count: 0 },
-      { category: 'other', label: 'Other', count: 0 }
-    ];
-
-    // Merge with actual counts
-    const categoriesWithCounts = predefinedCategories.map(predefined => {
-      const actual = result.recordset.find(r => r.category === predefined.category);
-      return {
-        ...predefined,
-        count: actual ? actual.count : 0
-      };
-    });
-
-    res.json(categoriesWithCounts);
-  } catch (error) {
-    console.error('Error fetching document categories:', error);
-    res.status(500).json({ 
-      message: 'Error fetching document categories', 
-      error: error.message 
-    });
-  }
-});
-
-/**
- * GET /api/misc-documents/:clientID/summary
- * Get document summary statistics
- */
-router.get('/misc-documents/:clientID/summary', async (req, res) => {
-  try {
-    const { clientID } = req.params;
-
-    const pool = await poolPromise;
-    const result = await pool.request()
-      .input('clientID', sql.NVarChar(50), clientID)
-      .query(`
-        SELECT 
-          COUNT(*) as totalDocuments,
-          SUM(fileSize) as totalFileSize,
-          SUM(CASE WHEN uploadDate >= DATEADD(day, -7, GETDATE()) THEN 1 ELSE 0 END) as recentUploads,
-          SUM(CASE WHEN approvedBy IS NULL THEN 1 ELSE 0 END) as pendingApprovals,
-          SUM(CASE WHEN isArchived = 1 THEN 1 ELSE 0 END) as archivedDocuments,
-          AVG(CAST(fileSize AS FLOAT)) as averageFileSize,
-          MAX(uploadDate) as lastUpload,
-          SUM(CASE WHEN retentionDate <= DATEADD(day, 30, GETDATE()) THEN 1 ELSE 0 END) as retentionAlerts
-        FROM dbo.MiscDocuments 
-        WHERE clientID = @clientID
-      `);
-
-    const summary = result.recordset[0];
-    
-    // Get category breakdown
-    const categoryResult = await pool.request()
-      .input('clientID', sql.NVarChar(50), clientID)
-      .query(`
-        SELECT 
-          documentCategory,
-          COUNT(*) as count
-        FROM dbo.MiscDocuments 
-        WHERE clientID = @clientID AND isArchived = 0
-        GROUP BY documentCategory
-      `);
-
-    const documentsByCategory = {};
-    categoryResult.recordset.forEach(row => {
-      documentsByCategory[row.documentCategory] = row.count;
-    });
-
-    // Get most accessed document
-    const accessResult = await pool.request()
-      .input('clientID', sql.NVarChar(50), clientID)
-      .query(`
-        SELECT TOP 1 originalFileName
-        FROM dbo.MiscDocuments 
-        WHERE clientID = @clientID
-        ORDER BY accessCount DESC
-      `);
-
-    const formattedSummary = {
-      totalDocuments: summary.totalDocuments || 0,
-      totalFileSize: parseInt(summary.totalFileSize) || 0,
-      documentsByCategory,
-      recentUploads: summary.recentUploads || 0,
-      pendingApprovals: summary.pendingApprovals || 0,
-      archivedDocuments: summary.archivedDocuments || 0,
-      averageFileSize: parseFloat(summary.averageFileSize) || 0,
-      lastUpload: summary.lastUpload ? summary.lastUpload.toISOString().split('T')[0] : null,
-      mostAccessedDocument: accessResult.recordset[0]?.originalFileName || 'None',
-      retentionAlerts: summary.retentionAlerts || 0
-    };
-
-    res.json(formattedSummary);
-  } catch (error) {
-    console.error('Error fetching document summary:', error);
-    res.status(500).json({ 
-      message: 'Error fetching document summary', 
-      error: error.message 
-    });
-  }
-});
-
-/**
- * POST /api/misc-documents/:documentID/approve
- * Approve document
- */
-router.post('/misc-documents/:documentID/approve', async (req, res) => {
-  try {
-    const { documentID } = req.params;
-    const { approvedBy } = req.body;
-
-    const pool = await poolPromise;
-    const result = await pool.request()
-      .input('documentID', sql.Int, documentID)
-      .input('approvedBy', sql.NVarChar(100), approvedBy)
-      .input('approvalDate', sql.Date, new Date())
-      .query(`
-        UPDATE dbo.MiscDocuments 
-        SET approvedBy = @approvedBy,
-            approvalDate = @approvalDate,
-            updatedAt = GETDATE()
-        OUTPUT inserted.*
-        WHERE documentID = @documentID
-      `);
-
-    if (result.recordset.length === 0) {
-      return res.status(404).json({ message: 'Document not found' });
-    }
-
-    const document = result.recordset[0];
-    
-    // Parse JSON fields
-    if (document.tags) document.tags = JSON.parse(document.tags);
-    if (document.relatedDocuments) document.relatedDocuments = JSON.parse(document.relatedDocuments);
-
-    res.json(document);
-  } catch (error) {
-    console.error('Error approving document:', error);
-    res.status(500).json({ 
-      message: 'Error approving document', 
-      error: error.message 
-    });
-  }
-});
-
-/**
- * POST /api/misc-documents/:documentID/archive
- * Archive/unarchive document
- */
-router.post('/misc-documents/:documentID/archive', async (req, res) => {
-  try {
-    const { documentID } = req.params;
-    const { isArchived } = req.body;
-
-    const pool = await poolPromise;
-    const result = await pool.request()
-      .input('documentID', sql.Int, documentID)
-      .input('isArchived', sql.Bit, isArchived)
-      .query(`
-        UPDATE dbo.MiscDocuments 
-        SET isArchived = @isArchived,
-            updatedAt = GETDATE()
-        OUTPUT inserted.*
-        WHERE documentID = @documentID
-      `);
-
-    if (result.recordset.length === 0) {
-      return res.status(404).json({ message: 'Document not found' });
-    }
-
-    const document = result.recordset[0];
-    
-    // Parse JSON fields
-    if (document.tags) document.tags = JSON.parse(document.tags);
-    if (document.relatedDocuments) document.relatedDocuments = JSON.parse(document.relatedDocuments);
-
-    res.json(document);
-  } catch (error) {
-    console.error('Error archiving document:', error);
-    res.status(500).json({ 
-      message: 'Error archiving document', 
-      error: error.message 
-    });
-  }
-});
-
-// Helper function to determine retention years based on category
-function getRetentionYears(category) {
-  const retentionMap = {
-    'legal': 7,
-    'medical': 5,
-    'financial': 7,
-    'benefits': 5,
-    'employment': 3,
-    'housing': 3,
-    'identification': 10,
-    'general': 2,
-    'other': 2
-  };
-  
-  return retentionMap[category] || 2;
-}
 
 module.exports = router;
