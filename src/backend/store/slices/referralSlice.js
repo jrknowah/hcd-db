@@ -2,7 +2,7 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
 
-const API = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+const API = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
 
 // ✅ NEW: Configure axios timeout
 const API_TIMEOUT = 60000; // 60 seconds for file uploads
@@ -393,7 +393,7 @@ export const {
   clearSuccess,
   setCurrentClient,
   resetReferrals
-} = referralSlice.actions; 
+} = referralSlice.actions;
 
 // Selectors
 export const selectReferrals = (state) => state.referrals?.referrals || {};
@@ -406,7 +406,5 @@ export const selectReferralsDataLoaded = (state) => state.referrals?.dataLoaded 
 export const selectReferralUploadProgress = (state) => state.referrals?.uploadProgress || {};
 export const selectReferralUploadedFiles = (state) => state.referrals?.uploadedFiles || [];
 export const selectLastUploadAttempt = (state) => state.referrals?.lastUploadAttempt || null;
-
-export { fetchReferralFiles };
 
 export default referralSlice.reducer;
