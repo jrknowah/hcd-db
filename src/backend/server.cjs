@@ -4,7 +4,10 @@ const path = require('path');
 const app = express();
 require('dotenv').config({ path: '../.env' });
 const { BlobServiceClient } = require('@azure/storage-blob'); 
-const { requireAdmin } = require('./middleware/requireAdmin.cjs');
+// const { requireAdmin } = require('./middleware/requireAdmin.cjs');
+
+const authMiddleware = require('./middleware/auth.js');
+const { requireAdmin } = require('./middleware/auth.js');
 // ✅ FIXED: Better database connection handling
 let dbConnected = false;
 let dbModule = null;
@@ -48,9 +51,9 @@ try {
   // const adminHealthRouter = require('./routes/admin/health.cjs');
 
   // requireAdmin applied once at mount — covers all sub-routes
-  app.use('/api/admin/errors', requireAdmin, adminErrorsRouter);
-  app.use('/api/admin/access', requireAdmin, adminAccessRouter);
-  app.use('/api/admin/health', requireAdmin, adminHealthRouter);
+  app.use('/api/admin/errors', authMiddleware, requireAdmin, adminErrorsRouter);
+  // app.use('/api/admin/access', requireAdmin, adminAccessRouter);
+  // app.use('/api/admin/health', requireAdmin, adminHealthRouter);
 
   adminRoutesLoaded = true;
   console.log('✓ Admin routes loaded');

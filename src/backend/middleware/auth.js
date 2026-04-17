@@ -84,6 +84,7 @@ const authMiddleware = async (req, res, next) => {
         groups:   decoded.groups || [],
         tenantId: decoded.tid,
         isAdmin:  (decoded.roles  || []).includes('Admin') ||
+                  (decoded.roles  || []).includes('ITAdmin') ||
                   (decoded.groups || []).includes(process.env.ADMIN_GROUP_ID) ||
                   (decoded.wids   || []).includes('62e90394-69f5-4237-9190-012177145e10'),
       };
