@@ -11,6 +11,7 @@ import AssessCarePlans from './views/Section-3/AssessCarePlans';
 import  store  from './backend/store/store';
 import AdminErrors from './views/Dashboard/AdminErrors';
 import { ProtectedAdminRoute } from './views/Dashboard/ProtectedAdminRoute';
+import AdminLayout from './views/Dashboard/AdminLayout';
 
 // At the very top of App.jsx, before any other code:
 if (typeof window !== 'undefined') {

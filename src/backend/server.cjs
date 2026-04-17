@@ -44,8 +44,8 @@ app.use(express.json());
 
 try {
   const adminErrorsRouter = require('./routes/admin/errors.cjs');
-  const adminAccessRouter = require('./routes/admin/access.cjs');
-  const adminHealthRouter = require('./routes/admin/health.cjs');
+  // const adminAccessRouter = require('./routes/admin/access.cjs');
+  // const adminHealthRouter = require('./routes/admin/health.cjs');
 
   // requireAdmin applied once at mount — covers all sub-routes
   app.use('/api/admin/errors', requireAdmin, adminErrorsRouter);
