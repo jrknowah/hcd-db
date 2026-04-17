@@ -1,12 +1,15 @@
 // middleware/auth.js - Backend Authentication Middleware
 const jwt = require('jsonwebtoken');
 const jwksClient = require('jwks-rsa');
+const TENANT_ID = '2fca3a49-cd1a-4717-bccc-5dbd1ea86b64';
+const APP_CLIENT_ID = '0b3e6463-bea7-4521-a36a-a32edb6af7a1';
 
 // ID tokens are signed with tenant-specific keys.
 // We use the tenant JWKS endpoint — ID tokens do not have a nonce
 // in the header so jwks-rsa can verify them normally.
 const jwks = jwksClient({
-  jwksUri: `https://login.microsoftonline.com/${process.env.AZURE_TENANT_ID}/discovery/v2.0/keys`,
+  // jwksUri: `https://login.microsoftonline.com/${process.env.AZURE_TENANT_ID}/discovery/v2.0/keys`,
+  jwksUri: `https://login.microsoftonline.com/${TENANT_ID}/discovery/v2.0/keys`,
   requestHeaders: {},
   timeout: 30000,
   cache: true,
@@ -59,12 +62,12 @@ const authMiddleware = async (req, res, next) => {
     // ID tokens have audience = your app's client ID.
     // Access tokens for Graph have audience = 00000003-... and a nonce
     // that prevents server-side signature verification — don't use those.
-    jwt.verify(token, getKey, {
-      audience: process.env.AZURE_CLIENT_ID,
-      issuer: [
-        `https://login.microsoftonline.com/${process.env.AZURE_TENANT_ID}/v2.0`,
-        `https://sts.windows.net/${process.env.AZURE_TENANT_ID}/`,
-      ],
+jwt.verify(token, getKey, {
+  audience: APP_CLIENT_ID,
+  issuer: [
+    `https://login.microsoftonline.com/${TENANT_ID}/v2.0`,
+    `https://sts.windows.net/${TENANT_ID}/`,
+  ],
       algorithms: ['RS256']
     }, (err, decoded) => {
       if (err) {
