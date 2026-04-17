@@ -10,7 +10,8 @@ import AuthGuard from './components/Auth/AuthGuard';
 import AssessCarePlans from './views/Section-3/AssessCarePlans';
 import  store  from './backend/store/store';
 import AdminErrors from './views/Dashboard/AdminErrors';
-import { ProtectedAdminRoute } from './views/Dashboard/ProtectedAdminRoute';
+// import { ProtectedAdminRoute } from './views/Dashboard/ProtectedAdminRoute';
+import ProtectedRoute from './components/Auth/ProtectedRoute';
 import AdminLayout from './views/Dashboard/AdminLayout';
 
 // At the very top of App.jsx, before any other code:
@@ -337,15 +338,21 @@ const AppRoutes = () => {
               } />
               
             </Route>
-            <Route path="/admin" element={
-              <ProtectedAdminRoute>
-                <AdminLayout />
-              </ProtectedAdminRoute>
-            }>
-              <Route index element={<Navigate to="errors" replace />} />
-              <Route path="errors" element={<AdminErrors />} />
-              {/* Future: access, audit, health, exports */}
-            </Route>
+            <Route path="/admin" element={<Navigate to="/admin/errors" replace />} />
+            <Route path="/admin/errors" element={
+              <ProtectedRoute requiredRoles={['ITAdmin']}>
+                <AdminErrors />
+              </ProtectedRoute>
+            } />
+            <Route path="/unauthorized" element={
+              <Box sx={{ p: 4, textAlign: 'center' }}>
+                <Typography variant="h4" gutterBottom>Access Denied</Typography>
+                <Typography variant="body1" sx={{ mb: 3 }}>
+                  You don't have permission to access this area.
+                </Typography>
+                <a href="/dashboard">Return to Dashboard</a>
+              </Box>
+            } />
             {/* ✅ Catch all */}
             <Route path="*" element={
               <Box sx={{ p: 3, backgroundColor: 'error.main', color: 'error.contrastText' }}>
