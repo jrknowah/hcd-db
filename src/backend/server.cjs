@@ -4,9 +4,11 @@ const path = require('path');
 const app = express();
 require('dotenv').config({ path: '../.env' });
 const { BlobServiceClient } = require('@azure/storage-blob'); 
+const { requireAdmin } = require('./middleware/requireAdmin.cjs');
 // ✅ FIXED: Better database connection handling
 let dbConnected = false;
 let dbModule = null;
+let adminRoutesLoaded = false;
 
 // Only connect to database if NOT in test mode
 if (process.env.NODE_ENV !== 'test') {
@@ -39,6 +41,22 @@ app.use(cors({
   credentials: true
 }));
 app.use(express.json());
+
+try {
+  const adminErrorsRouter = require('./routes/admin/errors.cjs');
+  const adminAccessRouter = require('./routes/admin/access.cjs');
+  const adminHealthRouter = require('./routes/admin/health.cjs');
+
+  // requireAdmin applied once at mount — covers all sub-routes
+  app.use('/api/admin/errors', requireAdmin, adminErrorsRouter);
+  app.use('/api/admin/access', requireAdmin, adminAccessRouter);
+  app.use('/api/admin/health', requireAdmin, adminHealthRouter);
+
+  adminRoutesLoaded = true;
+  console.log('✓ Admin routes loaded');
+} catch (err) {
+  console.error('✗ Failed to load admin routes:', err.message);
+}
 
 // ============================================================================
 // Azure Authentication Endpoints
