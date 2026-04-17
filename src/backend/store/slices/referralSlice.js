@@ -393,7 +393,7 @@ export const {
   clearSuccess,
   setCurrentClient,
   resetReferrals
-} = referralSlice.actions;
+} = referralSlice.actions; 
 
 // Selectors
 export const selectReferrals = (state) => state.referrals?.referrals || {};

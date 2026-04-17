@@ -543,7 +543,7 @@ const Referrals = ({ exportMode }) => {
       )}
 
       <Typography variant="h5" gutterBottom>
-        Client Referrals
+        Client Referrals.  
       </Typography>
       
       <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
@@ -552,7 +552,7 @@ const Referrals = ({ exportMode }) => {
 
       <Grid container spacing={3}>
         {referralTypes.map(renderUploadCard)}
-      </Grid>
+      </Grid>   
 
       {/* Save notes button - separate from file uploads */}
       {!exportMode && (
@@ -572,4 +572,4 @@ const Referrals = ({ exportMode }) => {
   );
 };
 
-export default Referrals;
+export default Referrals;  
