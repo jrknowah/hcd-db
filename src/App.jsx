@@ -9,7 +9,7 @@ import { msalInstance, initializeMsal } from './backend/config/authConfig';
 import AuthGuard from './components/Auth/AuthGuard';
 import AssessCarePlans from './views/Section-3/AssessCarePlans';
 import  store  from './backend/store/store';
-import AdminErrors from './views/Admin/AdminErrors';
+import AdminErrors from './views/Dashboard/AdminErrors';
 import { ProtectedAdminRoute } from './views/Dashboard/ProtectedAdminRoute';
 
 // At the very top of App.jsx, before any other code:
