@@ -2,7 +2,18 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
 
-const API = import.meta.env.VITE_API_URL || '';
+// ✅ FIX: Use VITE_API_BASE_URL (the established HCD env var), not VITE_API_URL
+const API = import.meta.env.VITE_API_BASE_URL || '';
+
+// Helper: normalize any thrown axios error into a clean string for state.error
+const normalizeError = (err, fallback) => {
+  const data = err?.response?.data;
+  if (typeof data === "string") return data;
+  if (data && typeof data === "object") {
+    return data.message || data.error || fallback;
+  }
+  return err?.message || fallback;
+};
 
 // Mock data for development
 const MOCK_DISCHARGE_DATA = {
@@ -23,17 +34,16 @@ export const fetchClientDischarge = createAsyncThunk(
     try {
       const isDevelopment = import.meta.env.MODE === 'development';
       const shouldUseMockData = isDevelopment && !import.meta.env.VITE_USE_REAL_DATA;
-      
+
       if (shouldUseMockData) {
-        // Mock data with delay
         await new Promise(resolve => setTimeout(resolve, 500));
         return MOCK_DISCHARGE_DATA;
       }
 
       const response = await axios.get(`${API}/api/getClientDischarge/${clientID}`);
-      return response.data;
-    } catch (error) {
-      return rejectWithValue(error.response?.data?.message || 'Failed to fetch discharge data');
+      return response.data || {};
+    } catch (err) {
+      return rejectWithValue(normalizeError(err, 'Failed to fetch discharge data'));
     }
   }
 );
@@ -44,9 +54,8 @@ export const saveClientDischarge = createAsyncThunk(
     try {
       const isDevelopment = import.meta.env.MODE === 'development';
       const shouldUseMockData = isDevelopment && !import.meta.env.VITE_USE_REAL_DATA;
-      
+
       if (shouldUseMockData) {
-        // Mock save with delay
         await new Promise(resolve => setTimeout(resolve, 1000));
         return { ...dischargeData, clientID };
       }
@@ -54,26 +63,28 @@ export const saveClientDischarge = createAsyncThunk(
       const payload = { ...dischargeData, clientID };
       await axios.post(`${API}/api/saveClientDischarge`, payload);
       return payload;
-    } catch (error) {
-      return rejectWithValue(error.response?.data?.message || 'Failed to save discharge data');
+    } catch (err) {
+      return rejectWithValue(normalizeError(err, 'Failed to save discharge data'));
     }
   }
 );
 
+const initialDischargeData = {
+  clientDischargeDate: "",
+  clientDischargeDiag: "",
+  clientDischargI: "",
+  clientDischargII: "",
+  clientDischargIII: "",
+  clientDischargIV: "",
+  clientDischargV: "",
+  clientDischargVI: "",
+  clientDischargVII: "",
+};
+
 const dischargeSlice = createSlice({
   name: "discharge",
   initialState: {
-    dischargeData: {
-      clientDischargeDate: "",
-      clientDischargeDiag: "",
-      clientDischargI: "",
-      clientDischargII: "",
-      clientDischargIII: "",
-      clientDischargIV: "",
-      clientDischargV: "",
-      clientDischargVI: "",
-      clientDischargVII: "",
-    },
+    dischargeData: { ...initialDischargeData },
     loading: false,
     saving: false,
     error: null,
@@ -85,57 +96,46 @@ const dischargeSlice = createSlice({
     setDischargeForm: (state, action) => {
       state.dischargeData = { ...state.dischargeData, ...action.payload };
     },
-    
+
     updateDischargeField: (state, action) => {
       const { field, value } = action.payload;
       state.dischargeData[field] = value;
     },
-    
-    // ADD THIS: The missing setError action
+
     setError: (state, action) => {
-      state.error = action.payload;
+      // Always coerce to string to prevent React #31 if a non-string slips through
+      const val = action.payload;
+      if (val == null) {
+        state.error = null;
+      } else if (typeof val === "string") {
+        state.error = val;
+      } else if (typeof val === "object") {
+        state.error = val.message || val.error || JSON.stringify(val);
+      } else {
+        state.error = String(val);
+      }
     },
-    
+
     clearError: (state) => {
       state.error = null;
     },
-    
+
     clearSuccess: (state) => {
       state.successMessage = null;
     },
-    
+
     setCurrentClient: (state, action) => {
       if (action.payload !== state.currentClientID) {
         state.currentClientID = action.payload;
-        state.dischargeData = {
-          clientDischargeDate: "",
-          clientDischargeDiag: "",
-          clientDischargI: "",
-          clientDischargII: "",
-          clientDischargIII: "",
-          clientDischargIV: "",
-          clientDischargV: "",
-          clientDischargVI: "",
-          clientDischargVII: "",
-        };
+        state.dischargeData = { ...initialDischargeData };
         state.dataLoaded = false;
         state.error = null;
         state.successMessage = null;
       }
     },
-    
+
     resetDischarge: (state) => {
-      state.dischargeData = {
-        clientDischargeDate: "",
-        clientDischargeDiag: "",
-        clientDischargI: "",
-        clientDischargII: "",
-        clientDischargIII: "",
-        clientDischargIV: "",
-        clientDischargV: "",
-        clientDischargVI: "",
-        clientDischargVII: "",
-      };
+      state.dischargeData = { ...initialDischargeData };
       state.error = null;
       state.successMessage = null;
       state.dataLoaded = false;
@@ -150,15 +150,17 @@ const dischargeSlice = createSlice({
       })
       .addCase(fetchClientDischarge.fulfilled, (state, action) => {
         state.loading = false;
-        state.dischargeData = { ...state.dischargeData, ...action.payload };
+        state.dischargeData = { ...state.dischargeData, ...(action.payload || {}) };
         state.dataLoaded = true;
       })
       .addCase(fetchClientDischarge.rejected, (state, action) => {
         state.loading = false;
-        state.error = action.payload || 'Failed to fetch discharge data';
+        state.error = typeof action.payload === "string"
+          ? action.payload
+          : 'Failed to fetch discharge data';
         state.dataLoaded = false;
       })
-      
+
       // Save discharge data
       .addCase(saveClientDischarge.pending, (state) => {
         state.saving = true;
@@ -167,20 +169,22 @@ const dischargeSlice = createSlice({
       })
       .addCase(saveClientDischarge.fulfilled, (state, action) => {
         state.saving = false;
-        state.dischargeData = action.payload;
+        state.dischargeData = { ...state.dischargeData, ...(action.payload || {}) };
         state.successMessage = '✅ Discharge data saved successfully';
       })
       .addCase(saveClientDischarge.rejected, (state, action) => {
         state.saving = false;
-        state.error = action.payload || 'Failed to save discharge data';
+        state.error = typeof action.payload === "string"
+          ? action.payload
+          : 'Failed to save discharge data';
       });
   },
 });
 
-export const { 
+export const {
   setDischargeForm,
   updateDischargeField,
-  setError,  // Export the missing action
+  setError,
   clearError,
   clearSuccess,
   setCurrentClient,

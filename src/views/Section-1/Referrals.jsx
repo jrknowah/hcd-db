@@ -437,8 +437,14 @@ const Referrals = ({ exportMode }) => {
                     <Alert key={idx} severity="success" sx={{ mt: 0.5, py: 0 }}>
                       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <Typography variant="body2">
-                          {f.fileUrl
-                            ? <a href={f.fileUrl} target="_blank" rel="noopener noreferrer">{f.fileName}</a>
+                          {f.fileID
+                            ? <a 
+                                href={`${import.meta.env.VITE_API_BASE_URL}/api/referralFiles/download/${f.fileID}`} 
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                              >
+                                {f.fileName}
+                              </a>
                             : f.fileName}
                         </Typography>
                         <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>

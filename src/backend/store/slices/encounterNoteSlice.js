@@ -4,6 +4,25 @@ import axios from "axios";
 
 const API_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
 
+// ✅ Normalize any axios/server error payload into a plain string.
+// Backend returns { error, message } — passing that object straight into
+// state.error and then rendering it caused React error #31.
+const toErrorMessage = (err, fallback = 'Request failed') => {
+  if (!err) return fallback;
+  if (typeof err === 'string') return err;
+  // axios error shape
+  if (err.response?.data) {
+    const d = err.response.data;
+    if (typeof d === 'string') return d;
+    return d.message || d.error || fallback;
+  }
+  // plain object from server like { error, message }
+  if (typeof err === 'object') {
+    return err.message || err.error || fallback;
+  }
+  return String(err);
+};
+
 // ✅ Helper function to check if we should use mock data
 const shouldUseMockData = (clientID) => {
   const isDevelopment = import.meta.env.MODE === 'development';
@@ -87,7 +106,7 @@ export const fetchEncounterNotes = createAsyncThunk(
       return response.data;
     } catch (error) {
       console.error("❌ Error fetching encounter notes:", error);
-      return thunkAPI.rejectWithValue(error.response?.data || "Fetch failed");
+      return thunkAPI.rejectWithValue(toErrorMessage(error, 'Fetch failed'));
     }
   }
 );
@@ -113,7 +132,7 @@ export const addEncounterNote = createAsyncThunk(
       return response.data;
     } catch (error) {
       console.error("❌ Error adding encounter note:", error);
-      return thunkAPI.rejectWithValue(error.response?.data || "Add failed");
+      return thunkAPI.rejectWithValue(toErrorMessage(error, 'Add failed'));
     }
   }
 );
@@ -136,7 +155,7 @@ export const editEncounterNote = createAsyncThunk(
       return response.data;
     } catch (error) {
       console.error("❌ Error editing encounter note:", error);
-      return thunkAPI.rejectWithValue(error.response?.data || "Edit failed");
+      return thunkAPI.rejectWithValue(toErrorMessage(error, 'Edit failed'));
     }
   }
 );
@@ -156,7 +175,7 @@ export const deleteEncounterNote = createAsyncThunk(
       return noteId;
     } catch (error) {
       console.error("❌ Error deleting encounter note:", error);
-      return thunkAPI.rejectWithValue(error.response?.data || "Delete failed");
+      return thunkAPI.rejectWithValue(toErrorMessage(error, 'Delete failed'));
     }
   }
 );
@@ -215,7 +234,7 @@ const encounterNoteSlice = createSlice({
       })
       .addCase(fetchEncounterNotes.rejected, (state, action) => {
         state.status = "failed";
-        state.error = action.payload;
+        state.error = toErrorMessage(action.payload, 'Fetch failed');
       })
       // Add encounter note
       .addCase(addEncounterNote.pending, (state) => {
@@ -228,7 +247,7 @@ const encounterNoteSlice = createSlice({
       })
       .addCase(addEncounterNote.rejected, (state, action) => {
         state.status = "failed";
-        state.error = action.payload;
+        state.error = toErrorMessage(action.payload, 'Add failed');
       })
       // Edit encounter note
       .addCase(editEncounterNote.pending, (state) => {
@@ -244,7 +263,7 @@ const encounterNoteSlice = createSlice({
       })
       .addCase(editEncounterNote.rejected, (state, action) => {
         state.status = "failed";
-        state.error = action.payload;
+        state.error = toErrorMessage(action.payload, 'Edit failed');
       })
       // Delete encounter note
       .addCase(deleteEncounterNote.fulfilled, (state, action) => {

@@ -105,7 +105,18 @@ const EncounterNote = ({ clientID, exportMode }) => {
   const reduxUser = useSelector((state) => state?.auth?.user);
   const reduxSelectedClient = useSelector((state) => state?.clients?.selectedClient);
   const encounterNoteState = useSelector((state) => state?.encounterNote || {});
-  const { data: reduxEncounterNotes = [], loading = false, error = null } = encounterNoteState;
+  const { data: reduxEncounterNotes = [], status = 'idle', error: rawError = null } = encounterNoteState;
+
+  // ✅ Slice exposes `status`, not `loading` — derive it.
+  const loading = status === 'loading';
+
+  // ✅ Coerce error to a string so React never renders an object as a child (error #31).
+  const error =
+    rawError == null
+      ? null
+      : typeof rawError === 'string'
+        ? rawError
+        : rawError.message || rawError.error || JSON.stringify(rawError);
 
   // ✅ Simple computed values
   const isDevelopment = import.meta.env.MODE === 'development';
@@ -246,7 +257,11 @@ const EncounterNote = ({ clientID, exportMode }) => {
 
     } catch (err) {
       console.error("❌ Error updating note:", err);
-      setSaveError(`Failed to update note: ${err.message || err}`);
+      const msg =
+        typeof err === 'string'
+          ? err
+          : err?.message || err?.error || 'Unknown error';
+      setSaveError(`Failed to update note: ${msg}`);
     }
   };
 
@@ -302,7 +317,11 @@ const EncounterNote = ({ clientID, exportMode }) => {
 
     } catch (err) {
       console.error("❌ Error saving note:", err);
-      setSaveError(`Failed to save note: ${err.message || err}`);
+      const msg =
+        typeof err === 'string'
+          ? err
+          : err?.message || err?.error || 'Unknown error';
+      setSaveError(`Failed to save note: ${msg}`);
     }
   };
 
@@ -500,12 +519,13 @@ const EncounterNote = ({ clientID, exportMode }) => {
          <Dialog 
           open={modalOpen} 
           onClose={closeAddModal} 
-          maxWidth="md"  // ✅ Changed from "lg" to "md" for better proportions
+          maxWidth="lg"  // ✅ Bumped lg for a wider modal
           fullWidth
           // ✅ CRITICAL: Allow dropdown to overflow dialog boundaries
           sx={{
             '& .MuiDialog-paper': {
-              overflow: 'visible'
+              overflow: 'visible',
+              minHeight: '70vh'   // ✅ Make the dialog itself taller
             },
             '& .MuiDialogContent-root': {
               overflow: 'visible'
@@ -570,7 +590,7 @@ const EncounterNote = ({ clientID, exportMode }) => {
                 <TextField
                   fullWidth
                   multiline
-                  rows={10}  // ✅ Increased from 4 to 10 rows
+                  rows={14}  // ✅ Bumped to 14 rows for a taller editor
                   label="Note Content"
                   name="careNote"
                   value={formData.careNote}
@@ -579,7 +599,7 @@ const EncounterNote = ({ clientID, exportMode }) => {
                   required
                   sx={{
                     '& .MuiInputBase-root': {
-                      fontSize: '1rem',  // ✅ Slightly larger text
+                      fontSize: '1.05rem',  // ✅ Slightly larger text
                     }
                   }}
                 />
@@ -600,12 +620,13 @@ const EncounterNote = ({ clientID, exportMode }) => {
         <Dialog 
           open={editModalOpen} 
           onClose={closeEditModal} 
-          maxWidth="md"  // ✅ Changed from "lg" to "md" for better proportions
+          maxWidth="lg"  // ✅ Bumped to lg for a wider modal
           fullWidth
           // ✅ CRITICAL: Allow dropdown to overflow dialog boundaries
           sx={{
             '& .MuiDialog-paper': {
-              overflow: 'visible'
+              overflow: 'visible',
+              minHeight: '70vh'   // ✅ Make the dialog itself taller
             },
             '& .MuiDialogContent-root': {
               overflow: 'visible'
@@ -670,7 +691,7 @@ const EncounterNote = ({ clientID, exportMode }) => {
                 <TextField
                   fullWidth
                   multiline
-                  rows={10}  // ✅ Increased from 4 to 10 rows
+                  rows={14}  // ✅ Bumped to 14 rows for a taller editor
                   label="Note Content"
                   name="careNote"
                   value={formData.careNote}
@@ -679,7 +700,7 @@ const EncounterNote = ({ clientID, exportMode }) => {
                   required
                   sx={{
                     '& .MuiInputBase-root': {
-                      fontSize: '1rem',  // ✅ Slightly larger text
+                      fontSize: '1.05rem',  // ✅ Slightly larger text
                     }
                   }}
                 />

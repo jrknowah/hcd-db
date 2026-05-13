@@ -14,6 +14,7 @@ import {
   fetchClientDischarge,
   saveClientDischarge,
   updateDischargeField,
+  setError,
   clearError,
   clearSuccess,
   setCurrentClient,
@@ -25,9 +26,20 @@ import {
   selectDischargeDataLoaded
 } from "../../backend/store/slices/dischargeSlice";
 
+// Defensive coercion: ensures whatever lands in state.error renders as a string,
+// never as an object. Prevents React minified error #31.
+const toMessage = (val) => {
+  if (val == null) return "";
+  if (typeof val === "string") return val;
+  if (typeof val === "object") {
+    return val.message || val.error || JSON.stringify(val);
+  }
+  return String(val);
+};
+
 const Discharge = ({ exportMode }) => {
   const dispatch = useDispatch();
-  
+
   // ✅ Redux selectors
   const dischargeData = useSelector(selectDischargeData);
   const loading = useSelector(selectDischargeLoading);
@@ -35,7 +47,7 @@ const Discharge = ({ exportMode }) => {
   const error = useSelector(selectDischargeError);
   const successMessage = useSelector(selectDischargeSuccess);
   const dataLoaded = useSelector(selectDischargeDataLoaded);
-  
+
   // ✅ Get current client and user from Redux
   const currentClient = useSelector((state) => state?.clients?.selectedClient);
   const currentUser = useSelector((state) => state?.auth?.user);
@@ -76,9 +88,9 @@ const Discharge = ({ exportMode }) => {
         clientID: currentClient.clientID,
         dischargeData
       })).unwrap();
-    } catch (error) {
+    } catch (err) {
       // Error is handled by Redux
-      console.error('Save failed:', error);
+      console.error('Save failed:', err);
     }
   };
 
@@ -149,24 +161,24 @@ const Discharge = ({ exportMode }) => {
 
   return (
     <Box sx={{ p: 2 }}>
-      {/* ✅ Error display */}
+      {/* ✅ Error display - defensively coerced to string */}
       {error && (
         <Alert severity="error" sx={{ mb: 2 }} onClose={handleClearErrors}>
-          {error}
+          {toMessage(error)}
         </Alert>
       )}
 
       {/* ✅ Success message */}
       {successMessage && (
         <Alert severity="success" sx={{ mb: 2 }}>
-          {successMessage}
+          {toMessage(successMessage)}
         </Alert>
       )}
 
       <Typography variant="h6" gutterBottom>
         Client Discharge Summary
       </Typography>
-      
+
       <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
         Discharge planning for {currentClient.clientFirstName} {currentClient.clientLastName}
       </Typography>
@@ -223,9 +235,9 @@ const Discharge = ({ exportMode }) => {
 
       {/* ✅ Only show save button in non-export mode */}
       {!exportMode && (
-        <Button 
-          variant="contained" 
-          size="large" 
+        <Button
+          variant="contained"
+          size="large"
           onClick={handleSubmit}
           disabled={loading || saving}
         >

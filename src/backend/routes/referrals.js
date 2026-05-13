@@ -316,4 +316,63 @@ router.delete("/referralFiles/:fileID", async (req, res) => {
   }
 });
 
+// GET /referralFiles/download/:fileID - Stream blob through backend (auth-gated)
+router.get("/referralFiles/download/:fileID", async (req, res) => {
+  const { fileID } = req.params;
+
+  try {
+    const pool = await getPool();
+    const fileResult = await pool.request()
+      .input("fileID", sql.Int, fileID)
+      .query("SELECT fileName, filePath FROM ReferralFiles WHERE fileID = @fileID");
+
+    if (fileResult.recordset.length === 0) {
+      return res.status(404).json({ error: "File not found in database" });
+    }
+
+    const { fileName, filePath } = fileResult.recordset[0];
+
+    if (!blobServiceClient) {
+      return res.status(503).json({ error: "Blob storage not configured" });
+    }
+
+    const containerClient = blobServiceClient.getContainerClient(CONTAINER_NAME);
+    const blockBlobClient = containerClient.getBlockBlobClient(filePath);
+
+    // Download blob and stream to client
+    const downloadResponse = await blockBlobClient.download();
+
+    res.setHeader(
+      "Content-Type",
+      downloadResponse.contentType || "application/octet-stream"
+    );
+    res.setHeader(
+      "Content-Disposition",
+      `inline; filename="${encodeURIComponent(fileName)}"`
+    );
+    if (downloadResponse.contentLength) {
+      res.setHeader("Content-Length", downloadResponse.contentLength);
+    }
+
+    downloadResponse.readableStreamBody.pipe(res);
+
+    downloadResponse.readableStreamBody.on("error", (streamErr) => {
+      console.error("❌ Stream error during blob download:", streamErr);
+      if (!res.headersSent) {
+        res.status(500).json({ error: "Stream failed" });
+      }
+    });
+
+    console.log(`✅ Streamed blob ${filePath} for fileID ${fileID}`);
+  } catch (err) {
+    // Azure returns 404 BlobNotFound if the blob path is wrong
+    if (err.statusCode === 404) {
+      console.error(`❌ Blob not found in storage: fileID=${fileID}`);
+      return res.status(404).json({ error: "File not found in storage" });
+    }
+    console.error("❌ Error downloading file:", err);
+    res.status(500).json({ error: "Error downloading file", details: err.message });
+  }
+});
+
 module.exports = router;
