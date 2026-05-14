@@ -73,6 +73,7 @@ import HousingAgree from './HousingAgree';
 import ConsentPhoto from './ConsentPhoto';
 import AuthUseDiscHMHInfo from './AuthUseDiscHMHInfo';
 import AuthSigArchive from './AuthSigArchive';
+// import CalAIMVerbalOptIn from './CalAIMVerbalOptIn'; // TODO: uncomment when component is built
 
 // Mock component for forms not yet implemented
 const MockComponent = ({ title, clientID }) => (
@@ -261,6 +262,18 @@ const FORM_CONFIGS = [
     category: 'housing',
     priority: 'high',
     estimatedTime: '15 min'
+  },
+  {
+    id: 'calaimVerbalOptIn',
+    title: 'CalAIM Community Supports Verbal Opt-In',
+    description: 'Verbal consent to participate in LA County CalAIM Short-Term Post-Hospitalization Housing',
+    icon: VerifiedIcon,
+    component: MockComponent, // TODO: swap to CalAIMVerbalOptIn once component is built
+    hasLogo: false,
+    category: 'legal',
+    priority: 'high',
+    estimatedTime: '5 min',
+    programs: ['ODR', 'HSH']
   }
 ];
 
@@ -279,6 +292,16 @@ const PRIORITY_COLORS = {
   high: 'error',
   medium: 'warning', 
   low: 'success'
+};
+
+// Program/funder badge colors — ODR, HSH, JCM, LAHSA, etc.
+// Extend this map as new programs are added to FORM_CONFIGS entries.
+const PROGRAM_COLORS = {
+  ODR:   { bg: '#1565c0', fg: '#ffffff' }, // Office of Diversion and Reentry — blue
+  HSH:   { bg: '#2e7d32', fg: '#ffffff' }, // Health Services for the Homeless — green
+  JCM:   { bg: '#6a1b9a', fg: '#ffffff' }, // Justice Care Management — purple
+  LAHSA: { bg: '#ef6c00', fg: '#ffffff' }, // LA Homeless Services Authority — orange
+  JCOD:  { bg: '#283593', fg: '#ffffff' }, // Justice, Care and Opportunities — indigo
 };
 
 // ============================================================================
@@ -391,6 +414,23 @@ const FormCard = ({ form, onOpen }) => {
         </Box>
 
         <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mt: 'auto', mb: 2 }}>
+          {Array.isArray(form.programs) && form.programs.map((program) => {
+            const colors = PROGRAM_COLORS[program] || { bg: theme.palette.grey[700], fg: '#ffffff' };
+            return (
+              <Chip
+                key={program}
+                label={program}
+                size="small"
+                sx={{
+                  backgroundColor: colors.bg,
+                  color: colors.fg,
+                  fontWeight: 700,
+                  letterSpacing: '0.5px',
+                  fontSize: '0.7rem'
+                }}
+              />
+            );
+          })}
           <Chip 
             label={form.category}
             size="small"

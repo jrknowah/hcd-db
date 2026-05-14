@@ -22,7 +22,8 @@ const VALID_FORM_TYPES = [
   'grievances',          // ← Was 'grievanceProcedure' before
   'healthDisclosure',    // ← Was missing
   'consentPhoto',
-  'housingAgreement'     // ← Was missing
+  'housingAgreement',    // ← Was missing
+  'calaimVerbalOptIn'    // ← CalAIM Community Supports verbal consent (ODR/HSH)
 ];
 
 // ============================================================================
@@ -234,6 +235,7 @@ const FORM_METADATA = {
   healthDisclosure: { formNumber: 13, priority: 'medium' },
   consentPhoto:     { formNumber: 14, priority: 'medium' },
   housingAgreement: { formNumber: 15, priority: 'low'    },
+  calaimVerbalOptIn:{ formNumber: 16, priority: 'high'   },
 };
 
 /**
@@ -261,6 +263,7 @@ function isFormComplete(formType, formData, completionPercentage) {
     healthDisclosure: 'atrClientSign',
     consentPhoto:     'consentPhotoSign1',
     housingAgreement: 'housingAgreeeSign',
+    calaimVerbalOptIn:'signature',
   };
 
   const sigField = signatureFields[formType] || 'signature';

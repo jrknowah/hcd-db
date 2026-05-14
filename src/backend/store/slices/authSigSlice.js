@@ -158,6 +158,7 @@ export const saveFormData = createAsyncThunk(
                 advDirective: 'clientSignature', grievances: 'signature',
                 healthDisclosure: 'atrClientSign', consentPhoto: 'consentPhotoSign1',
                 housingAgreement: 'housingAgreeeSign',
+                calaimVerbalOptIn: 'signature',
             };
             const sigField = sigFields[formType] || 'signature';
             const hasSig   = !!(formData[sigField] && String(formData[sigField]).trim().length >= 2);
