@@ -73,7 +73,7 @@ import HousingAgree from './HousingAgree';
 import ConsentPhoto from './ConsentPhoto';
 import AuthUseDiscHMHInfo from './AuthUseDiscHMHInfo';
 import AuthSigArchive from './AuthSigArchive';
-// import CalAIMVerbalOptIn from './CalAIMVerbalOptIn'; // TODO: uncomment when component is built
+import CalAIMVerbalOptIn from './CalAIMVerbalOptIn';
 
 // Mock component for forms not yet implemented
 const MockComponent = ({ title, clientID }) => (
@@ -268,7 +268,7 @@ const FORM_CONFIGS = [
     title: 'CalAIM Community Supports Verbal Opt-In',
     description: 'Verbal consent to participate in LA County CalAIM Short-Term Post-Hospitalization Housing',
     icon: VerifiedIcon,
-    component: MockComponent, // TODO: swap to CalAIMVerbalOptIn once component is built
+    component: CalAIMVerbalOptIn,
     hasLogo: false,
     category: 'legal',
     priority: 'high',
