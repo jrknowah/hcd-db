@@ -73,7 +73,7 @@ import HousingAgree from './HousingAgree';
 import ConsentPhoto from './ConsentPhoto';
 import AuthUseDiscHMHInfo from './AuthUseDiscHMHInfo';
 import AuthSigArchive from './AuthSigArchive';
-import CalAIMVerbalOptIn from './CalAIMVerbalOptIn';
+import CalAIMVerbalOptIn from './Calaimverbaloptin';
 
 // Mock component for forms not yet implemented
 const MockComponent = ({ title, clientID }) => (
