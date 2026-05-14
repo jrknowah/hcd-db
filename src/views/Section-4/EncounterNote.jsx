@@ -519,7 +519,7 @@ const EncounterNote = ({ clientID, exportMode }) => {
          <Dialog 
           open={modalOpen} 
           onClose={closeAddModal} 
-          maxWidth="lg"  // ✅ Bumped lg for a wider modal
+          maxWidth="xl"  // ✅ Bumped to xl for wider input boxes
           fullWidth
           // ✅ CRITICAL: Allow dropdown to overflow dialog boundaries
           sx={{
@@ -620,7 +620,7 @@ const EncounterNote = ({ clientID, exportMode }) => {
         <Dialog 
           open={editModalOpen} 
           onClose={closeEditModal} 
-          maxWidth="lg"  // ✅ Bumped to lg for a wider modal
+          maxWidth="xl"  // ✅ Bumped to xl for wider input boxes
           fullWidth
           // ✅ CRITICAL: Allow dropdown to overflow dialog boundaries
           sx={{

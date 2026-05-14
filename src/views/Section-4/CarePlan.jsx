@@ -587,7 +587,7 @@ const CarePlan = ({ clientID, exportMode }) => {
         </Table>
 
         {/* Add/Edit Care Plan Modal */}
-        <Dialog open={modalOpen} onClose={toggleModal} maxWidth="lg" fullWidth>
+        <Dialog open={modalOpen} onClose={toggleModal} maxWidth="xl" fullWidth>
           <DialogTitle>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
               {editMode ? <EditIcon /> : <AddIcon />}
