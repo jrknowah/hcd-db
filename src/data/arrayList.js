@@ -384,7 +384,7 @@ export const cmNoteType = [
     { value: 'Summary', label: 'Summary' },
     { value: 'Individual', label: 'Individual' },
     { value: 'Intake', label: 'Intake' },
-    { value: 'Dicharge', label: 'Dicharge' },
+    { value: 'Discharge', label: 'Discharge' },
     { value: 'Crisis', label: 'Crisis' },
     { value: 'Case Conference', label: 'Case Conference' },
     { value: 'MHA', label: 'MHA' },
