@@ -618,12 +618,12 @@ try {
 // Note Archive Route
 let noteArchiveRouterLoaded = false;
 try {
-  const noteArchiveRouter = require('./routes/noteArchive.js');
+  const noteArchiveRouter = require('./routes/notesArchive.js');
   app.use('/api/note-archive', noteArchiveRouter);
   console.log('✅ Note Archive router loaded at /api/note-archive');
   noteArchiveRouterLoaded = true;
 } catch (err) {
-  console.log('⚠️  Could not load noteArchive.js:', err.message);
+  console.log('⚠️  Could not load notesArchive.js:', err.message);
 }
 
 let miscDocRouterLoaded = false;
