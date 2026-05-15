@@ -1,12 +1,26 @@
-// src/store/apps/notes/noteArchiveSlice.js - CREATE THIS FILE
+// src/store/apps/notes/noteArchiveSlice.js
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
+import { msalInstance } from "../../../auth/msalInstance"; // adjust path to your msal export
 
 // ✅ Helper function to check if we should use mock data
 const shouldUseMockData = () => {
   const isDevelopment = import.meta.env.MODE === 'development';
   const forceRealData = import.meta.env.VITE_USE_REAL_DATA === 'true';
-  
   return isDevelopment && !forceRealData;
+};
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+
+// Acquire an idToken from MSAL — your backend auth middleware expects idToken, not accessToken
+const getIdToken = async () => {
+  const account = msalInstance.getAllAccounts()[0];
+  if (!account) throw new Error("No MSAL account found — user not signed in");
+
+  const response = await msalInstance.acquireTokenSilent({
+    scopes: ["openid", "profile"],
+    account
+  });
+  return response.idToken;
 };
 
 // Mock response for development
@@ -23,13 +37,9 @@ const MOCK_UPLOAD_RESPONSE = {
 export const uploadNoteFile = createAsyncThunk(
   "noteArchive/uploadNoteFile",
   async (file, thunkAPI) => {
-    // ✅ PROTECTION: Return mock data in development
     if (shouldUseMockData()) {
       console.log("🔧 Mock mode: Simulating file upload for", file.name);
-      
-      // Simulate upload delay
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
+      await new Promise((resolve) => setTimeout(resolve, 2000));
       return {
         ...MOCK_UPLOAD_RESPONSE,
         fileName: file.name,
@@ -38,20 +48,26 @@ export const uploadNoteFile = createAsyncThunk(
     }
 
     try {
-      // Real API call would go here
+      const idToken = await getIdToken();
+
       const formData = new FormData();
       formData.append('noteFile', file);
-      
-      // Replace with your actual API endpoint
-      const response = await fetch('/api/notes/upload', {
+      // formData.append('clientID', clientID); // pass through if/when you wire it up
+
+      const response = await fetch(`${API_BASE_URL}/api/note-archive/upload`, {
         method: 'POST',
-        body: formData,
+        headers: {
+          Authorization: `Bearer ${idToken}`
+          // NOTE: do NOT set Content-Type — the browser sets the multipart boundary
+        },
+        body: formData
       });
-      
+
       if (!response.ok) {
-        throw new Error('Upload failed');
+        const errBody = await response.json().catch(() => ({}));
+        throw new Error(errBody.error || `Upload failed (${response.status})`);
       }
-      
+
       return await response.json();
     } catch (error) {
       console.error("❌ Error uploading file:", error);
@@ -61,24 +77,20 @@ export const uploadNoteFile = createAsyncThunk(
 );
 
 const initialState = {
-  // Upload state
   loading: false,
   error: null,
   successMessage: null,
   fileUrl: null,
   uploadProgress: 0,
-  
-  // Files list state
   uploadedFiles: [],
   filesLoading: false,
-  filesError: null,
+  filesError: null
 };
 
 const noteArchiveSlice = createSlice({
   name: "noteArchive",
   initialState,
   reducers: {
-    // Clear upload status
     clearUploadStatus(state) {
       state.loading = false;
       state.error = null;
@@ -86,15 +98,12 @@ const noteArchiveSlice = createSlice({
       state.fileUrl = null;
       state.uploadProgress = 0;
     },
-    
-    // Set upload progress
     setUploadProgress(state, action) {
       state.uploadProgress = action.payload;
-    },
+    }
   },
   extraReducers: (builder) => {
     builder
-      // Upload file
       .addCase(uploadNoteFile.pending, (state) => {
         state.loading = true;
         state.error = null;
@@ -114,13 +123,8 @@ const noteArchiveSlice = createSlice({
         state.successMessage = null;
         state.uploadProgress = 0;
       });
-  },
+  }
 });
 
-export const {
-  clearUploadStatus,
-  setUploadProgress,
-} = noteArchiveSlice.actions;
-
-// ✅ DEFAULT EXPORT
+export const { clearUploadStatus, setUploadProgress } = noteArchiveSlice.actions;
 export default noteArchiveSlice.reducer;
