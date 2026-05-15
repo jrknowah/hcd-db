@@ -619,7 +619,7 @@ try {
 let noteArchiveRouterLoaded = false;
 try {
   const noteArchiveRouter = require('./routes/noteArchive.js');
-  app.use('/api', noteArchiveRouter); 
+  app.use('/api/note-archive', noteArchiveRouter);
   console.log('✅ Note Archive router loaded at /api/note-archive');
   noteArchiveRouterLoaded = true;
 } catch (err) {
