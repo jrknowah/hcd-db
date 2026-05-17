@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Card,
   CardContent,
@@ -10,35 +10,77 @@ import {
   IconButton,
   Paper,
   LinearProgress,
-  Chip
+  Chip,
+  List,
+  ListItem,
+  ListItemIcon,
+  ListItemText,
+  ListItemSecondaryAction,
+  Divider,
+  Tooltip
 } from "@mui/material";
 import {
   CloudUpload as UploadIcon,
   Description as FileIcon,
   CheckCircle as SuccessIcon,
-  Error as ErrorIcon
+  Error as ErrorIcon,
+  Visibility as ViewIcon,
+  Refresh as RefreshIcon
 } from "@mui/icons-material";
 import { useDispatch, useSelector } from "react-redux";
-import { uploadNoteFile } from "../../backend/store/slices/noteArchiveSlice";
+import {
+  uploadNoteFile,
+  fetchNoteArchiveFiles
+} from "../../backend/store/slices/noteArchiveSlice";
 
-const CmNoteArchive = () => {
+const API = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+
+const CmNoteArchive = ({ clientID: clientIDProp }) => {
   const dispatch = useDispatch();
-  const { loading, error, successMessage, fileUrl } = useSelector((state) => state.noteArchive);
+
+  // Read clientID from prop or wherever your app stores the current client.
+  // Adjust this selector to match your store shape if needed.
+  const currentClientID = useSelector(
+    (state) => state.clients?.currentClientID || state.client?.currentClientID
+  );
+  const clientID = clientIDProp || currentClientID;
+
+  const {
+    loading,
+    error,
+    successMessage,
+    uploadProgress,
+    uploadedFiles,
+    filesLoading
+  } = useSelector((state) => state.noteArchive);
+
   const [selectedFile, setSelectedFile] = useState(null);
   const [dragOver, setDragOver] = useState(false);
 
+  // Load existing files when client changes
+  useEffect(() => {
+    if (clientID) {
+      dispatch(fetchNoteArchiveFiles(clientID));
+    }
+  }, [clientID, dispatch]);
+
+  // Refresh list after a successful upload
+  useEffect(() => {
+    if (successMessage && clientID) {
+      dispatch(fetchNoteArchiveFiles(clientID));
+      setSelectedFile(null);
+    }
+  }, [successMessage, clientID, dispatch]);
+
   const handleFileChange = (e) => {
-    const file = e.target.files[0];
-    setSelectedFile(file);
+    setSelectedFile(e.target.files[0]);
   };
 
   const handleDrop = (e) => {
     e.preventDefault();
     setDragOver(false);
     const file = e.dataTransfer.files[0];
-    if (file) {
-      setSelectedFile(file);
-    }
+    if (file) setSelectedFile(file);
   };
 
   const handleDragOver = (e) => {
@@ -53,23 +95,26 @@ const CmNoteArchive = () => {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!selectedFile) {
-      return;
-    }
-    dispatch(uploadNoteFile(selectedFile));
+    if (!selectedFile) return;
+    dispatch(uploadNoteFile({ file: selectedFile, clientID }));
   };
 
   const formatFileSize = (bytes) => {
-    if (bytes === 0) return '0 Bytes';
+    if (!bytes) return '0 Bytes';
     const k = 1024;
     const sizes = ['Bytes', 'KB', 'MB', 'GB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
-  const getFileTypeColor = (fileName) => {
-    const extension = fileName.split('.').pop().toLowerCase();
-    switch (extension) {
+  const formatDate = (iso) => {
+    if (!iso) return '';
+    return new Date(iso).toLocaleString();
+  };
+
+  const getFileTypeColor = (fileName = '') => {
+    const ext = fileName.split('.').pop().toLowerCase();
+    switch (ext) {
       case 'pdf': return 'error';
       case 'doc':
       case 'docx': return 'primary';
@@ -81,14 +126,14 @@ const CmNoteArchive = () => {
   };
 
   return (
-    <Card sx={{ width: '100%', maxWidth: 800, mx: 'auto' }}>
+    <Card sx={{ width: '100%', maxWidth: 900, mx: 'auto' }}>
       <CardContent>
         {/* Header */}
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 3 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
             <UploadIcon color="primary" fontSize="large" />
             <Typography variant="h5" component="h2">
-              Upload Notes Archive
+              Notes Archive
             </Typography>
           </Box>
         </Box>
@@ -145,14 +190,14 @@ const CmNoteArchive = () => {
                         {selectedFile.name}
                       </Typography>
                       <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
-                        <Chip 
-                          label={formatFileSize(selectedFile.size)} 
-                          size="small" 
-                          variant="outlined" 
+                        <Chip
+                          label={formatFileSize(selectedFile.size)}
+                          size="small"
+                          variant="outlined"
                         />
-                        <Chip 
-                          label={selectedFile.name.split('.').pop().toUpperCase()} 
-                          size="small" 
+                        <Chip
+                          label={selectedFile.name.split('.').pop().toUpperCase()}
+                          size="small"
                           color={getFileTypeColor(selectedFile.name)}
                         />
                       </Box>
@@ -174,63 +219,31 @@ const CmNoteArchive = () => {
               <Grid item xs={12}>
                 <Box sx={{ width: '100%' }}>
                   <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                    Uploading file...
+                    Uploading file... {uploadProgress > 0 ? `${uploadProgress}%` : ''}
                   </Typography>
-                  <LinearProgress />
+                  <LinearProgress
+                    variant={uploadProgress > 0 ? 'determinate' : 'indeterminate'}
+                    value={uploadProgress}
+                  />
                 </Box>
               </Grid>
             )}
 
-            {/* Success Message */}
-            {successMessage && (
+            {/* Success / Error */}
+            {successMessage && !loading && (
               <Grid item xs={12}>
-                <Alert 
-                  severity="success" 
-                  icon={<SuccessIcon />}
-                  sx={{ 
-                    '& .MuiAlert-message': { 
-                      width: '100%' 
-                    } 
-                  }}
-                >
-                  <Box>
-                    <Typography variant="body1" sx={{ fontWeight: 'medium' }}>
-                      {successMessage}
-                    </Typography>
-                    {fileUrl && (
-                      <Button
-                        variant="outlined"
-                        size="small"
-                        href={fileUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        sx={{ mt: 1 }}
-                        startIcon={<FileIcon />}
-                      >
-                        View Uploaded File
-                      </Button>
-                    )}
-                  </Box>
+                <Alert severity="success" icon={<SuccessIcon />}>
+                  <Typography variant="body1">{successMessage}</Typography>
                 </Alert>
               </Grid>
             )}
 
-            {/* Error Message */}
             {error && (
               <Grid item xs={12}>
                 <Alert severity="error">
                   <Typography variant="body1">
                     <strong>Upload Failed:</strong> {error}
                   </Typography>
-                </Alert>
-              </Grid>
-            )}
-
-            {/* Validation Error */}
-            {!selectedFile && (
-              <Grid item xs={12}>
-                <Alert severity="info">
-                  Please select a file to upload before saving.
                 </Alert>
               </Grid>
             )}
@@ -244,11 +257,7 @@ const CmNoteArchive = () => {
                   size="large"
                   disabled={loading || !selectedFile}
                   startIcon={loading ? undefined : <UploadIcon />}
-                  sx={{ 
-                    minWidth: 200,
-                    py: 1.5,
-                    px: 4
-                  }}
+                  sx={{ minWidth: 200, py: 1.5, px: 4 }}
                 >
                   {loading ? 'Uploading...' : 'Upload File'}
                 </Button>
@@ -257,12 +266,86 @@ const CmNoteArchive = () => {
           </Grid>
         </form>
 
-        {/* Instructions */}
-        <Paper sx={{ p: 2, mt: 3, bgcolor: 'info.light', color: 'info.contrastText' }}>
-          <Typography variant="body2" sx={{ textAlign: 'center' }}>
-            💡 <strong>Tip:</strong> You can drag and drop files directly onto the upload area for faster uploading.
+        <Divider sx={{ my: 4 }} />
+
+        {/* Uploaded Files List */}
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+          <Typography variant="h6">
+            Uploaded Files {uploadedFiles.length > 0 && `(${uploadedFiles.length})`}
           </Typography>
-        </Paper>
+          <Tooltip title="Refresh list">
+            <IconButton
+              size="small"
+              onClick={() => clientID && dispatch(fetchNoteArchiveFiles(clientID))}
+              disabled={filesLoading || !clientID}
+            >
+              <RefreshIcon />
+            </IconButton>
+          </Tooltip>
+        </Box>
+
+        {filesLoading && <LinearProgress sx={{ mb: 2 }} />}
+
+        {!filesLoading && uploadedFiles.length === 0 && (
+          <Alert severity="info">
+            No files uploaded yet{clientID ? ' for this client' : ''}.
+          </Alert>
+        )}
+
+        {uploadedFiles.length > 0 && (
+          <Paper variant="outlined">
+            <List dense disablePadding>
+              {uploadedFiles.map((file, idx) => (
+                <React.Fragment key={file.noteArchiveID || idx}>
+                  {idx > 0 && <Divider component="li" />}
+                  <ListItem>
+                    <ListItemIcon>
+                      <FileIcon color={getFileTypeColor(file.fileName)} />
+                    </ListItemIcon>
+                    <ListItemText
+                      primary={file.fileName}
+                      secondary={
+                        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
+                          <Typography variant="caption" color="text.secondary">
+                            {formatFileSize(file.fileSize)}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            •
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {formatDate(file.uploadedAt)}
+                          </Typography>
+                          {file.uploadedBy && (
+                            <>
+                              <Typography variant="caption" color="text.secondary">•</Typography>
+                              <Typography variant="caption" color="text.secondary">
+                                {file.uploadedBy}
+                              </Typography>
+                            </>
+                          )}
+                        </Box>
+                      }
+                    />
+                    <ListItemSecondaryAction>
+                      <Tooltip title="View / Download">
+                        <IconButton
+                          edge="end"
+                          size="small"
+                          component="a"
+                          href={`${API}${file.fileUrl}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          <ViewIcon />
+                        </IconButton>
+                      </Tooltip>
+                    </ListItemSecondaryAction>
+                  </ListItem>
+                </React.Fragment>
+              ))}
+            </List>
+          </Paper>
+        )}
       </CardContent>
     </Card>
   );

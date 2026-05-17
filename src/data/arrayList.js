@@ -1442,7 +1442,7 @@ export const medRisk2 = [
     { value: "I use condoms 100% of the time", label: "I use condoms 100% of the time"},
     { value: "I am monogamous – sex with 1 person", label: "I am monogamous – sex with 1 person"}
 ];
-export const clientLangList = [ "","English","Spanish","French","Italian","German","Greek","Polish","Portugese","Russian","Swedish",
+export const clientLangList = [ "", "Armenian","Arabic", "English","Spanish","French","Italian","German","Greek","Polish","Portugese","Russian","Swedish",
     "American Sign Language","Chinese", "Korean","Client Doesn’t Know","Client Rsefiused"];
 
     export const clientLang2 = [ 
