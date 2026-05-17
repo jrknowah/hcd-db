@@ -1459,6 +1459,10 @@ export const clientLangList = [ "","English","Spanish","French","Italian","Germa
         {value: "American Sign Language", label: "American Sign Language"},
         {value: "Chinese", label: "Chinese"},
         {value: "Korean", label: "Korean"}
+        {value: "Armenian", label: "Armenian"},
+        {value: "Arabic", label: "Arabic"}
+
+          
     ];
 
 export const lungSounds = [ 
