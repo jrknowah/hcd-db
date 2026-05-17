@@ -1458,7 +1458,7 @@ export const clientLangList = [ "","English","Spanish","French","Italian","Germa
         {value: "Swedish", label: "Swedish"},
         {value: "American Sign Language", label: "American Sign Language"},
         {value: "Chinese", label: "Chinese"},
-        {value: "Korean", label: "Korean"}
+        {value: "Korean", label: "Korean"},
         {value: "Armenian", label: "Armenian"},
         {value: "Arabic", label: "Arabic"}
 
