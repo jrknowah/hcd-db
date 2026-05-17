@@ -84,4 +84,85 @@ router.post('/upload', upload.single('noteFile'), async (req, res) => {
   }
 });
 
+// GET /api/note-archive/:id/download
+// Streams the blob back to the client. Uses Managed Identity — no SAS tokens needed.
+router.get('/:id/download', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // 1. Look up the blob path + filename from SQL
+    const pool = await getPool();
+    const result = await pool.request()
+      .input('NoteArchiveID', sql.Int, parseInt(id, 10))
+      .query(`
+        SELECT FileName, BlobPath, MimeType
+        FROM NoteArchive
+        WHERE NoteArchiveID = @NoteArchiveID
+      `);
+
+    if (result.recordset.length === 0) {
+      return res.status(404).json({ error: 'File not found' });
+    }
+
+    const { FileName, BlobPath, MimeType } = result.recordset[0];
+
+    // 2. Stream the blob
+    const containerClient = blobServiceClient.getContainerClient(CONTAINER_NAME);
+    const blockBlobClient = containerClient.getBlockBlobClient(BlobPath);
+
+    const downloadResponse = await blockBlobClient.download();
+
+    res.setHeader('Content-Type', MimeType || 'application/octet-stream');
+    res.setHeader(
+      'Content-Disposition',
+      `inline; filename="${FileName.replace(/"/g, '')}"`
+    );
+
+    downloadResponse.readableStreamBody.pipe(res);
+  } catch (error) {
+    console.error('❌ NoteArchive download error:', error);
+    if (error.statusCode === 404) {
+      return res.status(404).json({ error: 'Blob not found in storage' });
+    }
+    return res.status(500).json({ error: error.message || 'Download failed' });
+  }
+});
+
+// GET /api/note-archive/:clientID
+// List files for a client (used by the fetchNoteArchiveFiles thunk).
+// Note: registered AFTER /:id/download so 'download' isn't treated as a clientID.
+// But because :clientID and :id are both single segments, Express matches by
+// order — keep this BELOW the download route to avoid shadowing.
+router.get('/list/:clientID', async (req, res) => {
+  try {
+    const { clientID } = req.params;
+    const pool = await getPool();
+    const result = await pool.request()
+      .input('ClientID', sql.NVarChar(50), clientID)
+      .query(`
+        SELECT NoteArchiveID, ClientID, FileName, BlobPath, FileSize,
+               MimeType, UploadedBy, UploadedAt
+        FROM NoteArchive
+        WHERE ClientID = @ClientID
+        ORDER BY UploadedAt DESC
+      `);
+
+    const files = result.recordset.map(r => ({
+      noteArchiveID: r.NoteArchiveID,
+      clientID: r.ClientID,
+      fileName: r.FileName,
+      fileSize: r.FileSize,
+      mimeType: r.MimeType,
+      uploadedBy: r.UploadedBy,
+      uploadedAt: r.UploadedAt,
+      fileUrl: `/api/note-archive/${r.NoteArchiveID}/download`
+    }));
+
+    res.json(files);
+  } catch (error) {
+    console.error('❌ NoteArchive list error:', error);
+    res.status(500).json({ error: error.message || 'Failed to list files' });
+  }
+});
+
 module.exports = router;

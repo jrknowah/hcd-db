@@ -129,7 +129,8 @@ export const fetchNoteArchiveFiles = createAsyncThunk(
         return [];
       }
       const axiosInstance = createAxiosInstance(FETCH_TIMEOUT);
-      const { data } = await axiosInstance.get(`${API}/api/note-archive/${clientID}`);
+      //const { data } = await axiosInstance.get(`${API}/api/note-archive/${clientID}`);
+      const { data } = await axiosInstance.get(`${API}/api/note-archive/list/${clientID}`);
       return data;
     } catch (error) {
       return rejectWithValue(error.response?.data?.error || 'Failed to fetch note archive files');
