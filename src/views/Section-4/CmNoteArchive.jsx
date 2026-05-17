@@ -45,6 +45,8 @@ const CmNoteArchive = ({ clientID: clientIDProp }) => {
   );
   const clientID = clientIDProp || currentClientID;
 
+  console.log('🔍 CmNoteArchive clientID:', clientID, 'prop:', clientIDProp, 'fromStore:', currentClientID);
+
   const {
     loading,
     error,
