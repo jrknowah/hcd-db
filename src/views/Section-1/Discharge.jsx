@@ -54,13 +54,11 @@ const Discharge = ({ exportMode }) => {
 
   // ✅ Load data when client changes
   useEffect(() => {
-    if (currentClient?.clientID) {
-      dispatch(setCurrentClient(currentClient.clientID));
-      if (!dataLoaded) {
-        dispatch(fetchClientDischarge(currentClient.clientID));
-      }
-    }
-  }, [dispatch, currentClient?.clientID, dataLoaded]);
+  if (currentClient?.clientID) {
+    dispatch(setCurrentClient(currentClient.clientID));
+    dispatch(fetchClientDischarge(currentClient.clientID));
+  }
+}, [dispatch, currentClient?.clientID]);
 
   // ✅ Clear success message automatically
   useEffect(() => {

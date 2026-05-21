@@ -91,14 +91,12 @@ const Referrals = ({ exportMode }) => {
 
   // Load data when client changes
   useEffect(() => {
-    if (currentClient?.clientID) {
-      dispatch(setCurrentClient(currentClient.clientID));
-      if (!dataLoaded) {
-        dispatch(fetchReferralData(currentClient.clientID));
-      }
-      dispatch(fetchReferralFiles(currentClient.clientID));
-    }
-  }, [dispatch, currentClient?.clientID, dataLoaded]);
+  if (currentClient?.clientID) {
+    dispatch(setCurrentClient(currentClient.clientID));
+    dispatch(fetchReferralData(currentClient.clientID));
+    dispatch(fetchReferralFiles(currentClient.clientID));
+  }
+}, [dispatch, currentClient?.clientID]);
 
   // Clear success message automatically
   useEffect(() => {
@@ -109,6 +107,13 @@ const Referrals = ({ exportMode }) => {
       return () => clearTimeout(timer);
     }
   }, [successMessage, dispatch]);
+  useEffect(() => {
+  setFilesToUpload({});
+  setFileValidationErrors({});
+  setRetryCount({});
+  setUploadAttempts({});
+  setUploadingType(null);
+}, [currentClient?.clientID]);
 
   // ✅ NEW: File validation function
   const validateFile = (file) => {

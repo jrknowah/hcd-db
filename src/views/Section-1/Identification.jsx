@@ -65,6 +65,19 @@ const Identification = () => {
 
   const effectiveMockData = forceMockData || shouldUseMockData;
 
+  // ✅ Reset local state when client changes (prevents stale data from previous client)
+  useEffect(() => {
+    setFiles([]);
+    setFilesToUpload({});
+    setUploadProgress({});
+    setError(null);
+    setSuccessMessage('');
+    setFileToDelete(null);
+    setDeleteConfirmOpen(false);
+    setFilePreview(null);
+    setPreviewOpen(false);
+  }, [client?.clientID]);
+
   // Load files when client changes
   useEffect(() => {
     if (!client?.clientID) return;
