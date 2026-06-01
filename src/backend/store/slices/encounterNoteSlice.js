@@ -184,12 +184,23 @@ const initialState = {
   data: [],
   status: "idle", // idle | loading | succeeded | failed
   error: null,
+  // ✅ Track which client this slice currently holds data for so we can
+  //    wipe stale data the instant the selected client changes.
+  currentClientID: null,
 };
 
 const encounterNoteSlice = createSlice({
   name: "encounterNote",
   initialState,
   reducers: {
+    // ✅ Client-switch guard: when the selected client changes, reset ALL
+    //    state immediately so the previous client's notes can't linger in
+    //    the UI while the new fetch is in flight.
+    setCurrentClient(state, action) {
+      const incoming = action.payload ?? null;
+      if (state.currentClientID === incoming) return state;
+      return { ...initialState, currentClientID: incoming };
+    },
     clearEncounterNotes(state) {
       state.data = [];
       state.status = "idle";
@@ -229,6 +240,8 @@ const encounterNoteSlice = createSlice({
       })
       .addCase(fetchEncounterNotes.fulfilled, (state, action) => {
         state.status = "succeeded";
+        // ✅ REPLACE (not merge) so a new client's payload fully supplants
+        //    the prior client's notes.
         state.data = action.payload;
         state.error = null;
       })
@@ -273,6 +286,7 @@ const encounterNoteSlice = createSlice({
 });
 
 export const {
+  setCurrentClient,
   clearEncounterNotes,
   setEncounterNotes,
   addEncounterNoteLocal,

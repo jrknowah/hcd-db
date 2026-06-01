@@ -153,6 +153,22 @@ const CarePlan = ({ clientID, exportMode }) => {
     }
   }, [effectiveClientID, dispatch, shouldUseMockData]);
 
+  // ✅ CLIENT-SWITCH GUARD: this component holds the add/edit form and the
+  //    delete-confirm dialog in local state. Reset all of it when the client
+  //    changes so a half-filled form (or an open dialog targeting the prior
+  //    client's plan) can't carry over to the newly-selected client.
+  useEffect(() => {
+    setModalOpen(false);
+    setDeleteConfirmOpen(false);
+    setEditMode(false);
+    setEditingId(null);
+    setDeletingId(null);
+    setSaveSuccess(false);
+    setSaveError(null);
+    setFormData(initialFormState);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [effectiveClientID]);
+
   const resetForm = () => {
     setFormData(initialFormState);
     setSaveError(null);

@@ -351,26 +351,33 @@ export const autoSaveFormData = createAsyncThunk(
     }
 );
 
+// ✅ Helper: produce a fresh, empty forms object (used by initial state and client reset)
+const createEmptyForms = () => ({
+    orientation: {},
+    clientRights: {},
+    consentTreatment: {},
+    preScreen: {},
+    privacyPractice: {},
+    lahmis: {},
+    phiRelease: {},
+    residencePolicy: {},
+    authDisclosure: {},
+    termination: {},
+    advDirective: {},
+    grievances: {},
+    healthDisclosure: {},
+    consentPhoto: {},
+    housingAgreement: {},
+    calaimVerbalOptIn: {}
+});
+
 // ✅ Initial State
 const initialState = {
     // Form data by type
-    forms: {
-        orientation: {},
-        clientRights: {},
-        consentTreatment: {},
-        preScreen: {},
-        privacyPractice: {},
-        lahmis: {},
-        phiRelease: {},
-        residencePolicy: {},
-        authDisclosure: {},
-        termination: {},
-        advDirective: {},
-        grievances: {},
-        healthDisclosure: {},
-        consentPhoto: {},
-        housingAgreement: {}
-    },
+    forms: createEmptyForms(),
+    
+    // ✅ NEW: Track the current client so we can detect switches
+    currentClientID: null,
     
     // Loading states
     formsLoading: false,
@@ -421,6 +428,31 @@ const authSigSlice = createSlice({
     name: 'authSig',
     initialState,
     reducers: {
+        // ✅ NEW: Set the current client. If the client changes, wipe ALL form data
+        // so the new client's forms don't render with the previous client's values.
+        setCurrentClient: (state, action) => {
+            const newClientID = action.payload;
+            if (newClientID !== state.currentClientID) {
+                state.currentClientID    = newClientID;
+                state.forms              = createEmptyForms();
+                state.formLoading        = {};
+                state.formErrors         = {};
+                state.formsError         = null;
+                state.saveError          = null;
+                state.submitError        = null;
+                state.saveSuccess        = false;
+                state.submitSuccess      = false;
+                state.autoSaveSuccess    = false;
+                state.overallCompletion  = 0;
+                state.completedForms     = 0;
+                state.activeForm         = null;
+                state.unsavedChanges     = false;
+                state.lastAutoSave       = null;
+                state.submissionStatus   = 'draft';
+                state.lastSubmission     = null;
+            }
+        },
+
         // Clear all errors
         clearErrors: (state) => {
             state.formsError = null;
@@ -485,10 +517,7 @@ const authSigSlice = createSlice({
         
         // Reset all forms
         resetAllForms: (state) => {
-            state.forms = Object.keys(state.forms).reduce((acc, key) => {
-                acc[key] = {};
-                return acc;
-            }, {});
+            state.forms = createEmptyForms();
             state.formErrors = {};
             state.overallCompletion = 0;
             state.completedForms = 0;
@@ -545,19 +574,21 @@ const authSigSlice = createSlice({
                 if (formType) {
                     state.formLoading[formType] = false;
                     if (action.payload) {
-                    // ✅ FIX: Properly merge the form data
-                    state.forms[formType] = {
-                        ...state.forms[formType],
-                        ...action.payload,
-                        completionPercentage: action.payload.completionPercentage || 0,
-                        status: action.payload.status || 'draft'
-                    };
-                    
-                    console.log(`✅ Form ${formType} loaded with completion: ${action.payload.completionPercentage}%`);
+                        // ✅ FIX: Replace (don't merge) so a new client's null/missing fields
+                        // don't inherit the previous client's values.
+                        state.forms[formType] = {
+                            ...action.payload,
+                            completionPercentage: action.payload.completionPercentage || 0,
+                            status: action.payload.status || 'draft'
+                        };
+                        console.log(`✅ Form ${formType} loaded with completion: ${action.payload.completionPercentage}%`);
+                    } else {
+                        // Backend returned null (no record for this client) — empty it.
+                        state.forms[formType] = {};
                     }
                     state.formErrors[formType] = null;
                 }
-                })
+            })
             .addCase(fetchFormData.rejected, (state, action) => {
                 const formType = action.meta?.arg?.formType;
                 if (formType) {
@@ -685,6 +716,7 @@ const authSigSlice = createSlice({
 
 // ✅ Export Actions
 export const {
+    setCurrentClient,
     clearErrors,
     clearSuccessFlags,
     setActiveForm,
@@ -713,6 +745,7 @@ export const selectActiveForm = (state) => state.authSig.activeForm;
 export const selectUnsavedChanges = (state) => state.authSig.unsavedChanges;
 export const selectSubmissionStatus = (state) => state.authSig.submissionStatus;
 export const selectUseMockData = (state) => state.authSig.useMockData;
+export const selectCurrentClientID = (state) => state.authSig.currentClientID;
 
 // ✅ Export Reducer
 export default authSigSlice.reducer;

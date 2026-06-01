@@ -133,6 +133,7 @@ export const updateArrestData = createAsyncThunk(
 
 const initialState = {
   arrests: [],
+  currentClientID: null,
   status: "idle",
   error: null,
 };
@@ -141,6 +142,16 @@ const arrestSlice = createSlice({
   name: "arrests",
   initialState,
   reducers: {
+    // ✅ NEW: Wipe the arrests list when the selected client changes.
+    setCurrentClient(state, action) {
+      const newClientID = action.payload;
+      if (newClientID !== state.currentClientID) {
+        state.currentClientID = newClientID;
+        state.arrests         = [];
+        state.status          = "idle";
+        state.error           = null;
+      }
+    },
     clearArrestData(state) {
       state.arrests = [];
       state.status = "idle";
@@ -217,6 +228,7 @@ const arrestSlice = createSlice({
 });
 
 export const {
+  setCurrentClient,
   clearArrestData,
   setArrestData,
   addArrestLocal,

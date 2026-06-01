@@ -245,6 +245,9 @@ const initialState = {
     // Development settings
     useMockData: import.meta.env.MODE === 'development',
 
+    // ✅ Track which client this slice currently holds data for.
+    currentClientID: null,
+
     // Cache management
     lastFetched: null,
     cacheValid: false,
@@ -256,6 +259,19 @@ const assessCarePlansSlice = createSlice({
     name: 'assessCarePlans',
     initialState,
     reducers: {
+        // ✅ Client-switch guard: when the selected client changes, reset ALL
+        //    assessment state immediately so the previous client's data can't
+        //    linger while new fetches are in flight. Preserves useMockData.
+        setCurrentClient: (state, action) => {
+            const incoming = action.payload ?? null;
+            if (state.currentClientID === incoming) return state;
+            return {
+                ...initialState,
+                useMockData: state.useMockData,
+                currentClientID: incoming,
+            };
+        },
+
         // Reset state
         resetAssessmentState: (state) => {
             return { ...initialState, useMockData: state.useMockData };
@@ -478,6 +494,7 @@ const assessCarePlansSlice = createSlice({
 
 // ✅ Export actions
 export const {
+    setCurrentClient,
     resetAssessmentState,
     clearErrors,
     setMockDataMode,

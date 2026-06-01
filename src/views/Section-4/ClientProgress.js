@@ -31,9 +31,19 @@ import EncounterNote from "./EncounterNote";
 import CarePlan from "./CarePlan";
 import CmNoteArchive from "./CmNoteArchive";
 import { useClientPersistence } from '../../hooks/useClientPersistence';
-import { fetchCarePlans } from '../../backend/store/slices/carePlanSlice';
-import { fetchEncounterNotes } from '../../backend/store/slices/encounterNoteSlice';
-import { fetchAssessmentData, fetchAssessmentMilestones } from '../../backend/store/slices/assessCarePlansSlice';
+import {
+  fetchCarePlans,
+  setCurrentClient as setCarePlanClient
+} from '../../backend/store/slices/carePlanSlice';
+import {
+  fetchEncounterNotes,
+  setCurrentClient as setEncounterNoteClient
+} from '../../backend/store/slices/encounterNoteSlice';
+import {
+  fetchAssessmentData,
+  fetchAssessmentMilestones,
+  setCurrentClient as setAssessmentClient
+} from '../../backend/store/slices/assessCarePlansSlice';
 
 const ClientProgress = () => {
   const dispatch = useDispatch();
@@ -62,7 +72,15 @@ const ClientProgress = () => {
   useEffect(() => {
     if (effectiveClientID) {
       console.log('Loading Section 4 data for client:', effectiveClientID);
-      
+
+      // ✅ CLIENT-SWITCH GUARD: wipe each slice's prior-client data the moment
+      //    the selected client changes, BEFORE kicking off the new fetches.
+      //    This prevents the previous client's plans/notes/assessment data
+      //    from lingering in the UI while the new requests are in flight.
+      dispatch(setCarePlanClient(effectiveClientID));
+      dispatch(setEncounterNoteClient(effectiveClientID));
+      dispatch(setAssessmentClient(effectiveClientID));
+
       setIsLoading(true);
       
       // Dispatch all actions - use Promise.allSettled to handle failures gracefully

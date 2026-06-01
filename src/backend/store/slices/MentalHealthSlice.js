@@ -176,6 +176,7 @@ export const removeMedication = createAsyncThunk(
 
 const initialState = {
   data: {},
+  currentClientID: null,
   status: "idle",
   error: null,
   saveStatus: "idle",
@@ -186,6 +187,19 @@ const mentalHealthSlice = createSlice({
   name: "mentalHealth",
   initialState,
   reducers: {
+    // ✅ NEW: Wipe the slice when the selected client changes so stale provider/hosp/med
+    // arrays and the data blob from the previous client don't bleed into the new one.
+    setCurrentClient(state, action) {
+      const newClientID = action.payload;
+      if (newClientID !== state.currentClientID) {
+        state.currentClientID = newClientID;
+        state.data           = {};
+        state.status         = "idle";
+        state.error          = null;
+        state.saveStatus     = "idle";
+        state.saveError      = null;
+      }
+    },
     clearMentalHealthData(state) {
       state.data = {};
       state.status = "idle";
@@ -235,7 +249,9 @@ const mentalHealthSlice = createSlice({
       })
       .addCase(fetchMentalHealthData.fulfilled, (state, action) => {
         state.status = "succeeded";
-        state.data = action.payload;
+        // ✅ REPLACE (don't merge) — a new client's null/missing fields must not
+        // inherit values from a previous client's data.
+        state.data = action.payload || {};
         state.error = null;
       })
       .addCase(fetchMentalHealthData.rejected, (state, action) => {
@@ -298,6 +314,7 @@ const mentalHealthSlice = createSlice({
 });
 
 export const {
+  setCurrentClient,
   clearMentalHealthData,
   addProviderLocal,
   removeProviderLocal,

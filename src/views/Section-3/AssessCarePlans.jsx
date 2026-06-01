@@ -41,8 +41,17 @@ import { useDispatch, useSelector } from "react-redux";
 import {
     fetchAssessmentData,
     fetchAssessmentStatus,
-    fetchAssessmentMetrics
+    fetchAssessmentMetrics,
+    setCurrentClient as setAssessCarePlansClient
 } from "../../backend/store/slices/assessCarePlansSlice";
+
+// ✅ NEW: setCurrentClient imports for the other Section 3 slices
+import { setCurrentClient as setMentalHealthClient } from "../../backend/store/slices/MentalHealthSlice";
+import { setCurrentClient as setArrestsClient }      from "../../backend/store/slices/arrestActions";
+import { setCurrentClient as setBioSocialClient }    from "../../backend/store/slices/bioSocialSlice";
+import { setCurrentClient as setReassessmentClient } from "../../backend/store/slices/reassessmentSlice";
+import { setCurrentClient as setNoteArchiveClient } from "../../backend/store/slices/noteArchiveSlice";
+
 import { acpList } from "../../data/arrayList";
 
 // Import child components
@@ -63,6 +72,21 @@ const AssessCarePlans = () => {
     } = useSelector((state) => state.assessCarePlans || {});
 
     const [activeTab, setActiveTab] = useState(0);
+
+    // ✅ FIX: When the selected client changes, wipe ALL Section 3 Redux state
+    // BEFORE the per-form fetches kick in. Without this, switching clients
+    // briefly shows the previous client's mental-health blob, formData,
+    // arrests, milestones, etc.
+    useEffect(() => {
+        if (clientID) {
+            dispatch(setMentalHealthClient(clientID));
+            dispatch(setArrestsClient(clientID));
+            dispatch(setBioSocialClient(clientID));
+            dispatch(setReassessmentClient(clientID));
+            dispatch(setAssessCarePlansClient(clientID));
+            dispatch(setNoteArchiveClient(clientID));
+        }
+    }, [dispatch, clientID]);
 
     // ✅ Add loading state
     if (loading) {
@@ -230,174 +254,6 @@ const AssessCarePlans = () => {
 
         return (
             <Grid container spacing={3}>
-                {/* Assessment Overview */}
-                {/*<Grid item xs={12}>
-                    <Card elevation={2}>
-                        <CardContent>
-                             <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-                                <Typography variant="h5" color="primary">
-                                    Assessment & Care Plans - {data.assessmentNumber}
-                                </Typography>
-                                <Tooltip title="Refresh Data">
-                                    <IconButton color="primary">
-                                        <RefreshIcon />
-                                    </IconButton>
-                                </Tooltip>
-                            </Box> */}
-                            
-                            {/*<Grid container spacing={2}>
-                                 <Grid item xs={12} sm={6} md={3}>
-                                    <Box textAlign="center">
-                                        <Typography variant="body2" color="textSecondary">Assessment Status</Typography>
-                                        <Chip 
-                                            label={data.assessmentStatus} 
-                                            color={data.assessmentStatus === 'Complete' ? 'success' : 'warning'}
-                                            size="large"
-                                        />
-                                    </Box>
-                                </Grid> 
-                                <Grid item xs={12} sm={6} md={3}>
-                                    <Box textAlign="center">
-                                        <Typography variant="body2" color="textSecondary">Completion</Typography>
-                                        <Typography variant="h6" color={getCompletionColor(data.completionPercentage)}>
-                                            {data.completionPercentage}%
-                                        </Typography>
-                                        <LinearProgress 
-                                            variant="determinate" 
-                                            value={data.completionPercentage}
-                                            color={getCompletionColor(data.completionPercentage)}
-                                            sx={{ mt: 1 }}
-                                        />
-                                    </Box>
-                                </Grid>
-                                <Grid item xs={12} sm={6} md={3}>
-                                    <Box textAlign="center">
-                                        <Typography variant="body2" color="textSecondary">Risk Level</Typography>
-                                        <Chip 
-                                            label={data.riskLevel} 
-                                            color={getRiskColor(data.riskLevel)}
-                                        />
-                                    </Box>
-                                </Grid>
-                                <Grid item xs={12} sm={6} md={3}>
-                                    <Box textAlign="center">
-                                        <Typography variant="body2" color="textSecondary">Priority</Typography>
-                                        <Chip 
-                                            label={data.priorityLevel} 
-                                            color={getPriorityColor(data.priorityLevel)}
-                                        />
-                                    </Box>
-                                </Grid>
-                            </Grid>
-                        </CardContent>
-                    </Card>
-                </Grid>*/}
-
-                {/* Key Assessment Metrics 
-                <Grid item xs={12} md={6}>
-                    <Card elevation={2}>
-                        <CardContent>
-                            <Typography variant="h6" gutterBottom>
-                                <AssessmentIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
-                                Assessment Metrics
-                            </Typography>
-                            <Grid container spacing={2}>
-                                <Grid item xs={6}>
-                                    <Box textAlign="center" py={2}>
-                                        <Typography variant="h4" color="primary">
-                                            {data.daysInProgress}
-                                        </Typography>
-                                        <Typography variant="body2" color="textSecondary">
-                                            Days in Progress
-                                        </Typography>
-                                        <Typography variant="caption" color="textSecondary">
-                                            Target: {data.targetDays} days
-                                        </Typography>
-                                    </Box>
-                                </Grid>
-                                <Grid item xs={6}>
-                                    <Box textAlign="center" py={2}>
-                                        <Typography variant="h4" color="secondary">
-                                            {data.complexityScore}/10
-                                        </Typography>
-                                        <Typography variant="body2" color="textSecondary">
-                                            Complexity Score
-                                        </Typography>
-                                    </Box>
-                                </Grid>
-                                <Grid item xs={6}>
-                                    <Box textAlign="center" py={2}>
-                                        <Typography variant="h4" color="success.main">
-                                            {metrics.documentsComplete}/{metrics.documentsTotal}
-                                        </Typography>
-                                        <Typography variant="body2" color="textSecondary">
-                                            Documents Complete
-                                        </Typography>
-                                    </Box>
-                                </Grid>
-                                <Grid item xs={6}>
-                                    <Box textAlign="center" py={2}>
-                                        <Typography variant="h4" color="info.main">
-                                            {metrics.assessmentScore}/10
-                                        </Typography>
-                                        <Typography variant="body2" color="textSecondary">
-                                            Assessment Score
-                                        </Typography>
-                                    </Box>
-                                </Grid>
-                            </Grid>
-                        </CardContent>
-                    </Card>
-                </Grid>*/}
-
-                {/* Assessment Information 
-                <Grid item xs={12} md={6}>
-                    <Card elevation={2}>
-                        <CardContent>
-                            <Typography variant="h6" gutterBottom>
-                                <PersonIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
-                                Assessment Information
-                            </Typography>
-                            <List dense>
-                                <ListItem>
-                                    <ListItemText 
-                                        primary="Primary Assessor"
-                                        secondary={data.primaryAssessor}
-                                    />
-                                </ListItem>
-                                <ListItem>
-                                    <ListItemText 
-                                        primary="Assessment Type"
-                                        secondary={data.assessmentType}
-                                    />
-                                </ListItem>
-                                <ListItem>
-                                    <ListItemText 
-                                        primary="Start Date"
-                                        secondary={new Date(data.startDate).toLocaleDateString()}
-                                    />
-                                </ListItem>
-                                <ListItem>
-                                    <ListItemText 
-                                        primary="Expected Completion"
-                                        secondary={
-                                            <Box>
-                                                {new Date(data.expectedCompletionDate).toLocaleDateString()}
-                                                <Chip 
-                                                    label={`${getDaysRemaining(data.expectedCompletionDate)} days remaining`}
-                                                    size="small"
-                                                    color={getDaysRemaining(data.expectedCompletionDate) < 3 ? 'error' : 'info'}
-                                                    sx={{ ml: 1 }}
-                                                />
-                                            </Box>
-                                        }
-                                    />
-                                </ListItem>
-                            </List>
-                        </CardContent>
-                    </Card>
-                </Grid>*/}
-
                 {/* Assessment Progress */}
                 <Grid item xs={12}>
                     <Card elevation={2}>
@@ -463,45 +319,6 @@ const AssessCarePlans = () => {
                         </CardContent>
                     </Card>
                 </Grid>
-
-                {/* Additional Metrics 
-                <Grid item xs={12} md={6}>
-                    <Card elevation={2}>
-                        <CardContent>
-                            <Typography variant="h6" gutterBottom color="success.main">
-                                <TrendingUpIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
-                                Strengths Identified
-                            </Typography>
-                            <Box textAlign="center" py={2}>
-                                <Typography variant="h3" color="success.main">
-                                    {metrics.strengthsIdentified}
-                                </Typography>
-                                <Typography variant="body2" color="textSecondary">
-                                    Client Strengths
-                                </Typography>
-                            </Box>
-                        </CardContent>
-                    </Card>
-                </Grid>
-
-                <Grid item xs={12} md={6}>
-                    <Card elevation={2}>
-                        <CardContent>
-                            <Typography variant="h6" gutterBottom color="warning.main">
-                                <WarningIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
-                                Risk Factors
-                            </Typography>
-                            <Box textAlign="center" py={2}>
-                                <Typography variant="h3" color="warning.main">
-                                    {metrics.riskFactors}
-                                </Typography>
-                                <Typography variant="body2" color="textSecondary">
-                                    Identified Risks
-                                </Typography>
-                            </Box>
-                        </CardContent>
-                    </Card>
-                </Grid>*/}
             </Grid>
         );
     };
@@ -518,7 +335,7 @@ const AssessCarePlans = () => {
             {
                 label: "Mental Health Assessment", 
                 icon: <PsychologyIcon />,
-                component: <MentalHealth clientID={clientID} />, // Replace with actual component
+                component: <MentalHealth clientID={clientID} />,
                 completed: mockAssessmentMilestones[1]?.completed || false
             },
             {

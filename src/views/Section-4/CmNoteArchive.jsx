@@ -74,6 +74,17 @@ const CmNoteArchive = ({ clientID: clientIDProp }) => {
     }
   }, [successMessage, clientID, dispatch]);
 
+  // ✅ CLIENT-SWITCH GUARD: clear any file staged in local state when the
+  //    client changes, so a file picked for one client can't be uploaded
+  //    against another. NOTE: the uploadedFiles LIST itself lives in
+  //    noteArchiveSlice — that slice needs a `setCurrentClient` reducer (see
+  //    handoff note) for the previous client's file list to be wiped instantly
+  //    rather than lingering until fetchNoteArchiveFiles resolves.
+  useEffect(() => {
+    setSelectedFile(null);
+    setDragOver(false);
+  }, [clientID]);
+
   const handleFileChange = (e) => {
     setSelectedFile(e.target.files[0]);
   };

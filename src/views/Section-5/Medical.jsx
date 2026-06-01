@@ -307,7 +307,7 @@ const Medical = () => {
             )}
 */}
             {/* Nursing Archive Tab */}
-            {activeTab === 9 && (
+            {activeTab === 8 && (
               <Box>
                 <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                   <ArchiveIcon color="primary" />

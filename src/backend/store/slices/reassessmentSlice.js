@@ -114,10 +114,95 @@ export const searchReassessments = createAsyncThunk(
     }
 );
 
+// ✅ Empty-form helper so client-switch resets and initialState stay in sync
+const emptyFormData = () => ({
+    // Assessment Timeline
+    dateFullAssess: "",
+    dateLastReAssess: "",
+    reassessmentSources: "",
+    culturalCons: "",
+    physicalChall: "",
+    accessIssues: "",
+    
+    // Reason for Referral
+    reasonForRef: "",
+    currentSymp: "",
+    suicHomiThou: "",
+    columbiaSR: "",
+    columbiaSRComp: "",
+    
+    // Self Harm & Medical History
+    selfHarm: "",
+    selfHarmSummary: "",
+    psyHosp: "",
+    psyHospSummary: "",
+    outPatSummart: "",
+    traumaExp: "",
+    traumaExpSummary: "",
+    
+    // Medications & Substance Use
+    medReAssess: "",
+    medReAssessSummary: "",
+    subAbuseReAssess: "",
+    subAbuseReAssessDate: "",
+    subAbuseReAssessSummary: "",
+    
+    // Medical History
+    medHistReAssess: "",
+    medHistReAssessDate: "",
+    medHistReAssessSummary: "",
+    
+    // Education & Employment
+    eduHistoryReAssess: "",
+    eduHistoryReAssessSummary: "",
+    empHistReAssess: "",
+    empHistReAssessSummary: "",
+    
+    // Legal & Living Situation
+    legalReAssess: "",
+    legalReAssessSummary: "",
+    livingArrReAssess: "",
+    livingArrReAssessSummary: "",
+    homelessReAssess: "",
+    homelessReAssessDate: "",
+    
+    // Dependent Care & Family
+    depCareReAssess: "",
+    depCareReAssessSummary: "",
+    famReAssess: "",
+    famReAssessSummary: "",
+    
+    // Mental Status Exam
+    cmOb1: [],
+    cmOb2: [],
+    cmOb3: [],
+    cmOb4: [],
+    cmOb5: [],
+    cmOb6: [],
+    cmOb7: [],
+    cmOb8: [],
+    cmOb9: [],
+    cmOb10: [],
+    cmOb11: [],
+    cmObNone: [],
+    cmObvSum: "",
+    
+    // Clinical Summary
+    clientStrengthReAssessSummary: "",
+    clientFormReAssessSummary: "",
+    diagDescript: "",
+    diagDescriptCodeChoice: "",
+    diagDescriptCode: ""
+});
+
 // ✅ Initial State - Production Ready
 const initialState = {
     // Main reassessment data
     data: {},
+
+    // ✅ NEW: track current client for client-switch wipe
+    currentClientID: null,
+
     loading: false,
     error: null,
 
@@ -152,85 +237,7 @@ const initialState = {
     updateSuccess: false,
 
     // Form state for real-time updates
-    formData: {
-        // Assessment Timeline
-        dateFullAssess: "",
-        dateLastReAssess: "",
-        reassessmentSources: "",
-        culturalCons: "",
-        physicalChall: "",
-        accessIssues: "",
-        
-        // Reason for Referral
-        reasonForRef: "",
-        currentSymp: "",
-        suicHomiThou: "",
-        columbiaSR: "",
-        columbiaSRComp: "",
-        
-        // Self Harm & Medical History
-        selfHarm: "",
-        selfHarmSummary: "",
-        psyHosp: "",
-        psyHospSummary: "",
-        outPatSummart: "",
-        traumaExp: "",
-        traumaExpSummary: "",
-        
-        // Medications & Substance Use
-        medReAssess: "",
-        medReAssessSummary: "",
-        subAbuseReAssess: "",
-        subAbuseReAssessDate: "",
-        subAbuseReAssessSummary: "",
-        
-        // Medical History
-        medHistReAssess: "",
-        medHistReAssessDate: "",
-        medHistReAssessSummary: "",
-        
-        // Education & Employment
-        eduHistoryReAssess: "",
-        eduHistoryReAssessSummary: "",
-        empHistReAssess: "",
-        empHistReAssessSummary: "",
-        
-        // Legal & Living Situation
-        legalReAssess: "",
-        legalReAssessSummary: "",
-        livingArrReAssess: "",
-        livingArrReAssessSummary: "",
-        homelessReAssess: "",
-        homelessReAssessDate: "",
-        
-        // Dependent Care & Family
-        depCareReAssess: "",
-        depCareReAssessSummary: "",
-        famReAssess: "",
-        famReAssessSummary: "",
-        
-        // Mental Status Exam
-        cmOb1: [],
-        cmOb2: [],
-        cmOb3: [],
-        cmOb4: [],
-        cmOb5: [],
-        cmOb6: [],
-        cmOb7: [],
-        cmOb8: [],
-        cmOb9: [],
-        cmOb10: [],
-        cmOb11: [],
-        cmObNone: [],
-        cmObvSum: "",
-        
-        // Clinical Summary
-        clientStrengthReAssessSummary: "",
-        clientFormReAssessSummary: "",
-        diagDescript: "",
-        diagDescriptCodeChoice: "",  // Empty = NULL in database (now allowed by constraint)
-        diagDescriptCode: ""
-    },
+    formData: emptyFormData(),
 
     // Cache management
     lastFetched: null,
@@ -243,6 +250,29 @@ const reassessmentSlice = createSlice({
     name: 'reassessment',
     initialState,
     reducers: {
+        // ✅ NEW: Wipe both `data` and `formData` when the selected client changes.
+        // ReAssessment.jsx reads from formData via selectFormData, so resetting only `data` isn't enough.
+        setCurrentClient: (state, action) => {
+            const newClientID = action.payload;
+            if (newClientID !== state.currentClientID) {
+                state.currentClientID      = newClientID;
+                state.data                 = {};
+                state.formData             = emptyFormData();
+                state.completionStatus     = 'Not Started';
+                state.completionPercentage = 0;
+                state.isCompleted          = false;
+                state.summary              = {};
+                state.error                = null;
+                state.summaryError         = null;
+                state.saveError            = null;
+                state.updateError          = null;
+                state.saveSuccess          = false;
+                state.updateSuccess        = false;
+                state.lastFetched          = null;
+                state.cacheValid           = false;
+            }
+        },
+
         // Reset state
         resetReassessmentState: (state) => {
             return initialState;
@@ -312,7 +342,6 @@ const reassessmentSlice = createSlice({
             const data = action.payload;
 
             // cmOb* fields must be arrays of { value, label } objects.
-            // From the DB they may arrive as JSON strings or plain string arrays.
             const cmObFields = [
                 'cmOb1','cmOb2','cmOb3','cmOb4','cmOb5','cmOb6',
                 'cmOb7','cmOb8','cmOb9','cmOb10','cmOb11','cmObNone'
@@ -323,12 +352,10 @@ const reassessmentSlice = createSlice({
                 let val = data[field];
                 if (!val) { normalized[field] = []; return; }
 
-                // Deserialize JSON string from DB
                 if (typeof val === 'string') {
                     try { val = JSON.parse(val); } catch { val = []; }
                 }
 
-                // Ensure every element is a { value, label } object with plain string values
                 const toStr = (v) => {
                     if (typeof v === 'string') return v;
                     if (v && typeof v === 'object') return v.value ?? v.label ?? '';
@@ -375,14 +402,19 @@ const reassessmentSlice = createSlice({
             })
             .addCase(fetchReassessmentData.fulfilled, (state, action) => {
                 state.loading = false;
-                state.data = action.payload;
+                // ✅ REPLACE (don't carry forward previous client's data)
+                state.data = action.payload || {};
                 state.lastFetched = new Date().toISOString();
                 state.cacheValid = true;
                 
-                // Load data into form if available
                 if (state.data && Object.keys(state.data).length > 0) {
                     reassessmentSlice.caseReducers.loadDataIntoForm(state, { payload: state.data });
                     reassessmentSlice.caseReducers.calculateCompletionPercentage(state);
+                } else {
+                    // No record for this client — reset form to empty
+                    state.formData             = emptyFormData();
+                    state.completionStatus     = 'Not Started';
+                    state.completionPercentage = 0;
                 }
             })
             .addCase(fetchReassessmentData.rejected, (state, action) => {
@@ -402,7 +434,7 @@ const reassessmentSlice = createSlice({
                 state.saving = false;
                 state.saveSuccess = true;
                 state.data = { ...state.data, ...action.payload };
-                state.cacheValid = false; // Invalidate cache
+                state.cacheValid = false;
             })
             .addCase(saveReassessmentData.rejected, (state, action) => {
                 state.saving = false;
@@ -494,6 +526,7 @@ const reassessmentSlice = createSlice({
 
 // ✅ Export actions
 export const {
+    setCurrentClient,
     resetReassessmentState,
     clearErrors,
     updateFormData,

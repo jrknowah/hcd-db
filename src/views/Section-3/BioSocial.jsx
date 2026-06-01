@@ -57,6 +57,71 @@ import {
 
 const HCD_API = `${import.meta.env.VITE_API_URL}/api`;
 
+// ✅ Empty form helper — used by both initial state and the client-switch reset
+const emptyBioSocialForm = () => ({
+    // Financial Information
+    clientCalWorks: "",
+    clientEmployment: "",
+    clientFoodStamps: "",
+    clientWidowBen: "",
+    clientCS: "",
+    clientGenRelief: "",
+    clientSSI: "",
+    clientSSDI: "",
+    clientTANF: "",
+    clientWorkComp: "",
+    clientUnEmp: "",
+    clientVetBen: "",
+    clientStDis: "",
+    clientInherit: "",
+    clientOtherInc: "",
+
+    // Payee Information
+    payeeChoice: "",
+    payeeName: "",
+    payeePhone: "",
+
+    // Employment History
+    clientBeenEmployed: "",
+    clientEmpIntr: "",
+    clientEmployed: "",
+    clientEmployer: "",
+
+    // Debt Information
+    clientDebt: "",
+    clientBankrupt: "",
+
+    // Housing Screening
+    clientGovHousingApp: [],
+    clientGovHousingLive: [],
+    clientPastRenter: "",
+    clientPastRenterLate: "",
+    clientEvicted: "",
+    clientLandlordProb: "",
+    clientUtilityBill: "",
+    clientCreditRating: "",
+    clientHousingSummary: "",
+
+    // Functional Screening
+    clientAmbulatory: [],
+    clientAmbulatorySummary: "",
+
+    // Activities of Daily Living
+    clientEating: "",
+    clientBathing: "",
+    clientBrushing: "",
+    clientToileting: "",
+    clientCooking: "",
+    clientCleaning: "",
+    clientLaundry: "",
+    clientTakingMeds: "",
+    clientFunctionalAssist: "",
+
+    // Communication
+    clientCommunication: [],
+    clientBioSocialNotes: ""
+});
+
 const BioSocial = () => {
     // ✅ Redux selectors - try multiple possible locations
     const selectedClient = useSelector((state) => 
@@ -76,70 +141,8 @@ const BioSocial = () => {
     // ✅ Use selectedClient or local mock client
     const currentClient = selectedClient || localMockClient;
     
-    // ✅ Complete form state with ALL fields from your original component
-    const [bioSocialForm, setBioSocialForm] = useState({
-        // Financial Information
-        clientCalWorks: "",
-        clientEmployment: "",
-        clientFoodStamps: "",
-        clientWidowBen: "",
-        clientCS: "",
-        clientGenRelief: "",
-        clientSSI: "",
-        clientSSDI: "",
-        clientTANF: "",
-        clientWorkComp: "",
-        clientUnEmp: "",
-        clientVetBen: "",
-        clientStDis: "",
-        clientInherit: "",
-        clientOtherInc: "",
-        
-        // Payee Information
-        payeeChoice: "",
-        payeeName: "",
-        payeePhone: "",
-        
-        // Employment History
-        clientBeenEmployed: "",
-        clientEmpIntr: "",
-        clientEmployed: "",
-        clientEmployer: "",
-        
-        // Debt Information
-        clientDebt: "",
-        clientBankrupt: "",
-        
-        // Housing Screening
-        clientGovHousingApp: [],
-        clientGovHousingLive: [],
-        clientPastRenter: "",
-        clientPastRenterLate: "",
-        clientEvicted: "",
-        clientLandlordProb: "",
-        clientUtilityBill: "",
-        clientCreditRating: "",
-        clientHousingSummary: "",
-        
-        // Functional Screening
-        clientAmbulatory: [],
-        clientAmbulatorySummary: "",
-        
-        // Activities of Daily Living
-        clientEating: "",
-        clientBathing: "",
-        clientBrushing: "",
-        clientToileting: "",
-        clientCooking: "",
-        clientCleaning: "",
-        clientLaundry: "",
-        clientTakingMeds: "",
-        clientFunctionalAssist: "",
-        
-        // Communication
-        clientCommunication: [],
-        clientBioSocialNotes: ""
-    });
+    // ✅ Form state — initialized via helper so client-switch reset stays in sync
+    const [bioSocialForm, setBioSocialForm] = useState(emptyBioSocialForm());
 
     // ✅ Load mock client function
     const loadMockClient = () => {
@@ -152,6 +155,18 @@ const BioSocial = () => {
         setSaveStatus({ type: 'info', message: `Mock client "${mockClient.clientName}" loaded successfully!` });
     };
 
+    // ✅ FIX: Reset local form state immediately when client changes.
+    // This component uses local useState (not Redux) for form data, so the Redux
+    // slice's setCurrentClient alone doesn't clear it. Without this reset, switching
+    // clients would briefly show the previous client's bio-social values until the
+    // axios fetch below resolves (or forever, if that client has no record).
+    useEffect(() => {
+        if (currentClient?.clientID) {
+            setBioSocialForm(emptyBioSocialForm());
+            setSaveStatus(null);
+        }
+    }, [currentClient?.clientID]);
+
    // ✅ Fetch client's bio-social data when a client is selected
     useEffect(() => {
         if (currentClient?.clientID) {
@@ -159,8 +174,11 @@ const BioSocial = () => {
             axios.get(`${HCD_API}/bio-social/${currentClient.clientID}`)
                 .then((res) => {
                     if (res.data) {
+                        // ✅ Build a fresh form from empty + server data — NEVER spread the
+                        // existing bioSocialForm here. Spreading would re-introduce values
+                        // from a previously-loaded client.
                         setBioSocialForm({
-                            ...bioSocialForm,
+                            ...emptyBioSocialForm(),
                             ...res.data,
                             // Convert comma-separated strings back to arrays
                             clientGovHousingApp: res.data.clientGovHousingApp ? res.data.clientGovHousingApp.split(", ") : [],
@@ -172,17 +190,16 @@ const BioSocial = () => {
                     setLoading(false);
                 })
                 .catch((err) => {
-                    // ✅ ADD THIS: Handle 404 as expected (no data yet)
                     if (err.response?.status === 404) {
                         console.log("ℹ️ No bio-social data exists yet for this client - form ready to fill out");
-                        // Keep empty form - user can fill it out and save
+                        // Form was already reset by the effect above — nothing to do
                     } else {
                         console.error("❌ Error fetching client bio-social data:", err);
                     }
                     setLoading(false);
                 });
         }
-    }, [currentClient]);
+    }, [currentClient?.clientID]);
 
     // ✅ Handle Input Change
     const handleChange = (e) => {
@@ -404,201 +421,80 @@ const BioSocial = () => {
                         </AccordionSummary>
                         <AccordionDetails>
                             <Grid container spacing={3}>
-                                {/* Map through finList for all financial fields */}
                                 <Grid item xs={12} md={4}>
-                                    <TextField
-                                        fullWidth
-                                        label="CalWorks"
-                                        type="number"
-                                        name="clientCalWorks"
-                                        value={bioSocialForm.clientCalWorks}
-                                        onChange={handleChange}
-                                        InputProps={{
-                                            startAdornment: <InputAdornment position="start">$</InputAdornment>
-                                        }}
-                                    />
+                                    <TextField fullWidth label="CalWorks" type="number" name="clientCalWorks"
+                                        value={bioSocialForm.clientCalWorks} onChange={handleChange}
+                                        InputProps={{ startAdornment: <InputAdornment position="start">$</InputAdornment> }} />
                                 </Grid>
                                 <Grid item xs={12} md={4}>
-                                    <TextField
-                                        fullWidth
-                                        label="Employment"
-                                        type="number"
-                                        name="clientEmployment"
-                                        value={bioSocialForm.clientEmployment}
-                                        onChange={handleChange}
-                                        InputProps={{
-                                            startAdornment: <InputAdornment position="start">$</InputAdornment>
-                                        }}
-                                    />
+                                    <TextField fullWidth label="Employment" type="number" name="clientEmployment"
+                                        value={bioSocialForm.clientEmployment} onChange={handleChange}
+                                        InputProps={{ startAdornment: <InputAdornment position="start">$</InputAdornment> }} />
                                 </Grid>
                                 <Grid item xs={12} md={4}>
-                                    <TextField
-                                        fullWidth
-                                        label="Food Stamps"
-                                        type="number"
-                                        name="clientFoodStamps"
-                                        value={bioSocialForm.clientFoodStamps}
-                                        onChange={handleChange}
-                                        InputProps={{
-                                            startAdornment: <InputAdornment position="start">$</InputAdornment>
-                                        }}
-                                    />
+                                    <TextField fullWidth label="Food Stamps" type="number" name="clientFoodStamps"
+                                        value={bioSocialForm.clientFoodStamps} onChange={handleChange}
+                                        InputProps={{ startAdornment: <InputAdornment position="start">$</InputAdornment> }} />
                                 </Grid>
                                 <Grid item xs={12} md={4}>
-                                    <TextField
-                                        fullWidth
-                                        label="Widow Benefits"
-                                        type="number"
-                                        name="clientWidowBen"
-                                        value={bioSocialForm.clientWidowBen}
-                                        onChange={handleChange}
-                                        InputProps={{
-                                            startAdornment: <InputAdornment position="start">$</InputAdornment>
-                                        }}
-                                    />
+                                    <TextField fullWidth label="Widow Benefits" type="number" name="clientWidowBen"
+                                        value={bioSocialForm.clientWidowBen} onChange={handleChange}
+                                        InputProps={{ startAdornment: <InputAdornment position="start">$</InputAdornment> }} />
                                 </Grid>
                                 <Grid item xs={12} md={4}>
-                                    <TextField
-                                        fullWidth
-                                        label="Child Support"
-                                        type="number"
-                                        name="clientCS"
-                                        value={bioSocialForm.clientCS}
-                                        onChange={handleChange}
-                                        InputProps={{
-                                            startAdornment: <InputAdornment position="start">$</InputAdornment>
-                                        }}
-                                    />
+                                    <TextField fullWidth label="Child Support" type="number" name="clientCS"
+                                        value={bioSocialForm.clientCS} onChange={handleChange}
+                                        InputProps={{ startAdornment: <InputAdornment position="start">$</InputAdornment> }} />
                                 </Grid>
                                 <Grid item xs={12} md={4}>
-                                    <TextField
-                                        fullWidth
-                                        label="General Relief"
-                                        type="number"
-                                        name="clientGenRelief"
-                                        value={bioSocialForm.clientGenRelief}
-                                        onChange={handleChange}
-                                        InputProps={{
-                                            startAdornment: <InputAdornment position="start">$</InputAdornment>
-                                        }}
-                                    />
+                                    <TextField fullWidth label="General Relief" type="number" name="clientGenRelief"
+                                        value={bioSocialForm.clientGenRelief} onChange={handleChange}
+                                        InputProps={{ startAdornment: <InputAdornment position="start">$</InputAdornment> }} />
                                 </Grid>
                                 <Grid item xs={12} md={4}>
-                                    <TextField
-                                        fullWidth
-                                        label="SSI"
-                                        type="number"
-                                        name="clientSSI"
-                                        value={bioSocialForm.clientSSI}
-                                        onChange={handleChange}
-                                        InputProps={{
-                                            startAdornment: <InputAdornment position="start">$</InputAdornment>
-                                        }}
-                                    />
+                                    <TextField fullWidth label="SSI" type="number" name="clientSSI"
+                                        value={bioSocialForm.clientSSI} onChange={handleChange}
+                                        InputProps={{ startAdornment: <InputAdornment position="start">$</InputAdornment> }} />
                                 </Grid>
                                 <Grid item xs={12} md={4}>
-                                    <TextField
-                                        fullWidth
-                                        label="SSDI"
-                                        type="number"
-                                        name="clientSSDI"
-                                        value={bioSocialForm.clientSSDI}
-                                        onChange={handleChange}
-                                        InputProps={{
-                                            startAdornment: <InputAdornment position="start">$</InputAdornment>
-                                        }}
-                                    />
+                                    <TextField fullWidth label="SSDI" type="number" name="clientSSDI"
+                                        value={bioSocialForm.clientSSDI} onChange={handleChange}
+                                        InputProps={{ startAdornment: <InputAdornment position="start">$</InputAdornment> }} />
                                 </Grid>
                                 <Grid item xs={12} md={4}>
-                                    <TextField
-                                        fullWidth
-                                        label="TANF"
-                                        type="number"
-                                        name="clientTANF"
-                                        value={bioSocialForm.clientTANF}
-                                        onChange={handleChange}
-                                        InputProps={{
-                                            startAdornment: <InputAdornment position="start">$</InputAdornment>
-                                        }}
-                                    />
+                                    <TextField fullWidth label="TANF" type="number" name="clientTANF"
+                                        value={bioSocialForm.clientTANF} onChange={handleChange}
+                                        InputProps={{ startAdornment: <InputAdornment position="start">$</InputAdornment> }} />
                                 </Grid>
                                 <Grid item xs={12} md={4}>
-                                    <TextField
-                                        fullWidth
-                                        label="Workers Comp"
-                                        type="number"
-                                        name="clientWorkComp"
-                                        value={bioSocialForm.clientWorkComp}
-                                        onChange={handleChange}
-                                        InputProps={{
-                                            startAdornment: <InputAdornment position="start">$</InputAdornment>
-                                        }}
-                                    />
+                                    <TextField fullWidth label="Workers Comp" type="number" name="clientWorkComp"
+                                        value={bioSocialForm.clientWorkComp} onChange={handleChange}
+                                        InputProps={{ startAdornment: <InputAdornment position="start">$</InputAdornment> }} />
                                 </Grid>
                                 <Grid item xs={12} md={4}>
-                                    <TextField
-                                        fullWidth
-                                        label="Unemployment"
-                                        type="number"
-                                        name="clientUnEmp"
-                                        value={bioSocialForm.clientUnEmp}
-                                        onChange={handleChange}
-                                        InputProps={{
-                                            startAdornment: <InputAdornment position="start">$</InputAdornment>
-                                        }}
-                                    />
+                                    <TextField fullWidth label="Unemployment" type="number" name="clientUnEmp"
+                                        value={bioSocialForm.clientUnEmp} onChange={handleChange}
+                                        InputProps={{ startAdornment: <InputAdornment position="start">$</InputAdornment> }} />
                                 </Grid>
                                 <Grid item xs={12} md={4}>
-                                    <TextField
-                                        fullWidth
-                                        label="Veterans Benefits"
-                                        type="number"
-                                        name="clientVetBen"
-                                        value={bioSocialForm.clientVetBen}
-                                        onChange={handleChange}
-                                        InputProps={{
-                                            startAdornment: <InputAdornment position="start">$</InputAdornment>
-                                        }}
-                                    />
+                                    <TextField fullWidth label="Veterans Benefits" type="number" name="clientVetBen"
+                                        value={bioSocialForm.clientVetBen} onChange={handleChange}
+                                        InputProps={{ startAdornment: <InputAdornment position="start">$</InputAdornment> }} />
                                 </Grid>
                                 <Grid item xs={12} md={4}>
-                                    <TextField
-                                        fullWidth
-                                        label="State Disability"
-                                        type="number"
-                                        name="clientStDis"
-                                        value={bioSocialForm.clientStDis}
-                                        onChange={handleChange}
-                                        InputProps={{
-                                            startAdornment: <InputAdornment position="start">$</InputAdornment>
-                                        }}
-                                    />
+                                    <TextField fullWidth label="State Disability" type="number" name="clientStDis"
+                                        value={bioSocialForm.clientStDis} onChange={handleChange}
+                                        InputProps={{ startAdornment: <InputAdornment position="start">$</InputAdornment> }} />
                                 </Grid>
                                 <Grid item xs={12} md={4}>
-                                    <TextField
-                                        fullWidth
-                                        label="Inheritance"
-                                        type="number"
-                                        name="clientInherit"
-                                        value={bioSocialForm.clientInherit}
-                                        onChange={handleChange}
-                                        InputProps={{
-                                            startAdornment: <InputAdornment position="start">$</InputAdornment>
-                                        }}
-                                    />
+                                    <TextField fullWidth label="Inheritance" type="number" name="clientInherit"
+                                        value={bioSocialForm.clientInherit} onChange={handleChange}
+                                        InputProps={{ startAdornment: <InputAdornment position="start">$</InputAdornment> }} />
                                 </Grid>
                                 <Grid item xs={12} md={4}>
-                                    <TextField
-                                        fullWidth
-                                        label="Other Income"
-                                        type="number"
-                                        name="clientOtherInc"
-                                        value={bioSocialForm.clientOtherInc}
-                                        onChange={handleChange}
-                                        InputProps={{
-                                            startAdornment: <InputAdornment position="start">$</InputAdornment>
-                                        }}
-                                    />
+                                    <TextField fullWidth label="Other Income" type="number" name="clientOtherInc"
+                                        value={bioSocialForm.clientOtherInc} onChange={handleChange}
+                                        InputProps={{ startAdornment: <InputAdornment position="start">$</InputAdornment> }} />
                                 </Grid>
                             </Grid>
                         </AccordionDetails>
@@ -617,35 +513,20 @@ const BioSocial = () => {
                                 <Grid item xs={12} md={4}>
                                     <InputLabel>Do you have a payee?</InputLabel>
                                     <FormControl fullWidth>
-                                        <Select
-                                            value={bioSocialForm.payeeChoice}
+                                        <Select value={bioSocialForm.payeeChoice}
                                             onChange={(e) => setBioSocialForm(prev => ({...prev, payeeChoice: e.target.value}))}
-                                            label="Do you have a payee?"
-                                        >
-                                            {ynd.map((option) => (
-                                                <MenuItem key={option} value={option}>{option}</MenuItem>
-                                            ))}
+                                            label="Do you have a payee?">
+                                            {ynd.map((option) => (<MenuItem key={option} value={option}>{option}</MenuItem>))}
                                         </Select>
                                     </FormControl>
                                 </Grid>
                                 <Grid item xs={12} md={4}>
                                     <InputLabel>Payee Name</InputLabel>
-                                    <TextField
-                                        fullWidth
-                                        name="payeeName"
-                                        value={bioSocialForm.payeeName}
-                                        onChange={handleChange}
-                                    />
+                                    <TextField fullWidth name="payeeName" value={bioSocialForm.payeeName} onChange={handleChange} />
                                 </Grid>
                                 <Grid item xs={12} md={4}>
                                     <InputLabel>Payee Phone</InputLabel>
-                                    <TextField
-                                        fullWidth
-                                        type="tel"
-                                        name="payeePhone"
-                                        value={bioSocialForm.payeePhone}
-                                        onChange={handleChange}
-                                    />
+                                    <TextField fullWidth type="tel" name="payeePhone" value={bioSocialForm.payeePhone} onChange={handleChange} />
                                 </Grid>
                             </Grid>
                         </AccordionDetails>
@@ -664,53 +545,36 @@ const BioSocial = () => {
                                 <Grid item xs={12} md={6}>
                                     <InputLabel>Have you ever been employed?</InputLabel>
                                     <FormControl fullWidth>
-                                        <Select
-                                            value={bioSocialForm.clientBeenEmployed}
+                                        <Select value={bioSocialForm.clientBeenEmployed}
                                             onChange={(e) => setBioSocialForm(prev => ({...prev, clientBeenEmployed: e.target.value}))}
-                                            label="Have you ever been employed?"
-                                        >
-                                            {ynd.map((option) => (
-                                                <MenuItem key={option} value={option}>{option}</MenuItem>
-                                            ))}
+                                            label="Have you ever been employed?">
+                                            {ynd.map((option) => (<MenuItem key={option} value={option}>{option}</MenuItem>))}
                                         </Select>
                                     </FormControl>
                                 </Grid>
                                 <Grid item xs={12} md={6}>
                                     <InputLabel>Interested in obtaining employment?</InputLabel>
                                     <FormControl fullWidth>
-                                        <Select
-                                            value={bioSocialForm.clientEmpIntr}
+                                        <Select value={bioSocialForm.clientEmpIntr}
                                             onChange={(e) => setBioSocialForm(prev => ({...prev, clientEmpIntr: e.target.value}))}
-                                            label="Interested in obtaining employment?"
-                                        >
-                                            {ynd.map((option) => (
-                                                <MenuItem key={option} value={option}>{option}</MenuItem>
-                                            ))}
+                                            label="Interested in obtaining employment?">
+                                            {ynd.map((option) => (<MenuItem key={option} value={option}>{option}</MenuItem>))}
                                         </Select>
                                     </FormControl>
                                 </Grid>
                                 <Grid item xs={12} md={6}>
                                     <InputLabel>Currently employed?</InputLabel>
                                     <FormControl fullWidth>
-                                        <Select
-                                            value={bioSocialForm.clientEmployed}
+                                        <Select value={bioSocialForm.clientEmployed}
                                             onChange={(e) => setBioSocialForm(prev => ({...prev, clientEmployed: e.target.value}))}
-                                            label="Currently employed?"
-                                        >
-                                            {ynd.map((option) => (
-                                                <MenuItem key={option} value={option}>{option}</MenuItem>
-                                            ))}
+                                            label="Currently employed?">
+                                            {ynd.map((option) => (<MenuItem key={option} value={option}>{option}</MenuItem>))}
                                         </Select>
                                     </FormControl>
                                 </Grid>
                                 <Grid item xs={12} md={6}>
                                     <InputLabel>Name of Employer</InputLabel>
-                                    <TextField
-                                        fullWidth
-                                        name="clientEmployer"
-                                        value={bioSocialForm.clientEmployer}
-                                        onChange={handleChange}
-                                    />
+                                    <TextField fullWidth name="clientEmployer" value={bioSocialForm.clientEmployer} onChange={handleChange} />
                                 </Grid>
                             </Grid>
                         </AccordionDetails>
@@ -729,28 +593,20 @@ const BioSocial = () => {
                                 <Grid item xs={12} md={6}>
                                     <InputLabel>Owe debt to public agency?</InputLabel>
                                     <FormControl fullWidth>
-                                        <Select
-                                            value={bioSocialForm.clientDebt}
+                                        <Select value={bioSocialForm.clientDebt}
                                             onChange={(e) => setBioSocialForm(prev => ({...prev, clientDebt: e.target.value}))}
-                                            label="Owe debt to public agency?"
-                                        >
-                                            {ynd.map((option) => (
-                                                <MenuItem key={option} value={option}>{option}</MenuItem>
-                                            ))}
+                                            label="Owe debt to public agency?">
+                                            {ynd.map((option) => (<MenuItem key={option} value={option}>{option}</MenuItem>))}
                                         </Select>
                                     </FormControl>
                                 </Grid>
                                 <Grid item xs={12} md={6}>
                                     <InputLabel>Ever filed for bankruptcy?</InputLabel>
                                     <FormControl fullWidth>
-                                        <Select
-                                            value={bioSocialForm.clientBankrupt}
+                                        <Select value={bioSocialForm.clientBankrupt}
                                             onChange={(e) => setBioSocialForm(prev => ({...prev, clientBankrupt: e.target.value}))}
-                                            label="Ever filed for bankruptcy?"
-                                        >
-                                            {ynd.map((option) => (
-                                                <MenuItem key={option} value={option}>{option}</MenuItem>
-                                            ))}
+                                            label="Ever filed for bankruptcy?">
+                                            {ynd.map((option) => (<MenuItem key={option} value={option}>{option}</MenuItem>))}
                                         </Select>
                                     </FormControl>
                                 </Grid>
@@ -770,148 +626,94 @@ const BioSocial = () => {
                             <Grid container spacing={3}>
                                 <Grid item xs={12} md={6}>
                                     <InputLabel>Ever applied for government housing?</InputLabel>
-                                    <Autocomplete
-                                        multiple
-                                        options={housingOptions}
+                                    <Autocomplete multiple options={housingOptions}
                                         getOptionLabel={(option) => option.label}
-                                        value={housingOptions.filter(option => 
-                                            bioSocialForm.clientGovHousingApp.includes(option.value)
-                                        )}
+                                        value={housingOptions.filter(option => bioSocialForm.clientGovHousingApp.includes(option.value))}
                                         onChange={(event, newValue) => handleMultiSelectChange('clientGovHousingApp', newValue.map(v => v.value))}
-                                        renderInput={(params) => (
-                                            <TextField {...params}/>
-                                        )}
+                                        renderInput={(params) => (<TextField {...params}/>)}
                                         renderTags={(value, getTagProps) =>
                                             value.map((option, index) => (
-                                                <Chip
-                                                    key={option.value}
-                                                    label={option.label}
-                                                    {...getTagProps({ index })}
-                                                    size="small"
-                                                />
+                                                <Chip key={option.value} label={option.label} {...getTagProps({ index })} size="small" />
                                             ))
-                                        }
-                                    />
+                                        } />
                                 </Grid>
                                 <Grid item xs={12} md={6}>
                                     <label>Ever lived in government housing?</label>
-                                    <Autocomplete
-                                        multiple
-                                        options={housingOptions}
+                                    <Autocomplete multiple options={housingOptions}
                                         getOptionLabel={(option) => option.label}
-                                        value={housingOptions.filter(option => 
-                                            bioSocialForm.clientGovHousingLive.includes(option.value)
-                                        )}
+                                        value={housingOptions.filter(option => bioSocialForm.clientGovHousingLive.includes(option.value))}
                                         onChange={(event, newValue) => handleMultiSelectChange('clientGovHousingLive', newValue.map(v => v.value))}
-                                        renderInput={(params) => (
-                                            <TextField {...params}  />
-                                        )}
+                                        renderInput={(params) => (<TextField {...params}/>)}
                                         renderTags={(value, getTagProps) =>
                                             value.map((option, index) => (
-                                                <Chip
-                                                    key={option.value}
-                                                    label={option.label}
-                                                    {...getTagProps({ index })}
-                                                    size="small"
-                                                />
+                                                <Chip key={option.value} label={option.label} {...getTagProps({ index })} size="small" />
                                             ))
-                                        }
-                                    />
+                                        } />
                                 </Grid>
                                 <Grid item xs={12} md={6}>
                                     <InputLabel>Have you ever rented before?</InputLabel>
                                     <FormControl fullWidth>
-                                        <Select
-                                            value={bioSocialForm.clientPastRenter}
+                                        <Select value={bioSocialForm.clientPastRenter}
                                             onChange={(e) => setBioSocialForm(prev => ({...prev, clientPastRenter: e.target.value}))}
-                                            label="Have you ever rented before?"
-                                        >
-                                            {ynd.map((option) => (
-                                                <MenuItem key={option} value={option}>{option}</MenuItem>
-                                            ))}
+                                            label="Have you ever rented before?">
+                                            {ynd.map((option) => (<MenuItem key={option} value={option}>{option}</MenuItem>))}
                                         </Select>
                                     </FormControl>
                                 </Grid>
                                 <Grid item xs={12} md={6}>
                                     <InputLabel>Ever been served a late notice?</InputLabel>
                                     <FormControl fullWidth>
-                                        <Select
-                                            value={bioSocialForm.clientPastRenterLate}
+                                        <Select value={bioSocialForm.clientPastRenterLate}
                                             onChange={(e) => setBioSocialForm(prev => ({...prev, clientPastRenterLate: e.target.value}))}
-                                            label="Ever been served a late notice?"
-                                        >
-                                            {ynd.map((option) => (
-                                                <MenuItem key={option} value={option}>{option}</MenuItem>
-                                            ))}
+                                            label="Ever been served a late notice?">
+                                            {ynd.map((option) => (<MenuItem key={option} value={option}>{option}</MenuItem>))}
                                         </Select>
                                     </FormControl>
                                 </Grid>
                                 <Grid item xs={12} md={6}>
                                     <InputLabel>Ever been evicted?</InputLabel>
                                     <FormControl fullWidth>
-                                        <Select
-                                            value={bioSocialForm.clientEvicted}
+                                        <Select value={bioSocialForm.clientEvicted}
                                             onChange={(e) => setBioSocialForm(prev => ({...prev, clientEvicted: e.target.value}))}
-                                            label="Ever been evicted?"
-                                        >
-                                            {ynd.map((option) => (
-                                                <MenuItem key={option} value={option}>{option}</MenuItem>
-                                            ))}
+                                            label="Ever been evicted?">
+                                            {ynd.map((option) => (<MenuItem key={option} value={option}>{option}</MenuItem>))}
                                         </Select>
                                     </FormControl>
                                 </Grid>
                                 <Grid item xs={12} md={6}>
                                     <InputLabel>Problems with previous landlords?</InputLabel>
                                     <FormControl fullWidth>
-                                        <Select
-                                            value={bioSocialForm.clientLandlordProb}
+                                        <Select value={bioSocialForm.clientLandlordProb}
                                             onChange={(e) => setBioSocialForm(prev => ({...prev, clientLandlordProb: e.target.value}))}
-                                            label="Problems with previous landlords?"
-                                        >
-                                            {ynd.map((option) => (
-                                                <MenuItem key={option} value={option}>{option}</MenuItem>
-                                            ))}
+                                            label="Problems with previous landlords?">
+                                            {ynd.map((option) => (<MenuItem key={option} value={option}>{option}</MenuItem>))}
                                         </Select>
                                     </FormControl>
                                 </Grid>
                                 <Grid item xs={12} md={6}>
                                     <InputLabel>Outstanding utility bills?</InputLabel>
                                     <FormControl fullWidth>
-                                        <Select
-                                            value={bioSocialForm.clientUtilityBill}
+                                        <Select value={bioSocialForm.clientUtilityBill}
                                             onChange={(e) => setBioSocialForm(prev => ({...prev, clientUtilityBill: e.target.value}))}
-                                            label="Outstanding utility bills?"
-                                        >
-                                            {ynd.map((option) => (
-                                                <MenuItem key={option} value={option}>{option}</MenuItem>
-                                            ))}
+                                            label="Outstanding utility bills?">
+                                            {ynd.map((option) => (<MenuItem key={option} value={option}>{option}</MenuItem>))}
                                         </Select>
                                     </FormControl>
                                 </Grid>
                                 <Grid item xs={12} md={6}>
                                     <InputLabel>Rate your credit</InputLabel>
                                     <FormControl fullWidth>
-                                        <Select
-                                            value={bioSocialForm.clientCreditRating}
+                                        <Select value={bioSocialForm.clientCreditRating}
                                             onChange={(e) => setBioSocialForm(prev => ({...prev, clientCreditRating: e.target.value}))}
-                                            label="Rate your credit"
-                                        >
-                                            {gfp.map((option) => (
-                                                <MenuItem key={option} value={option}>{option}</MenuItem>
-                                            ))}
+                                            label="Rate your credit">
+                                            {gfp.map((option) => (<MenuItem key={option} value={option}>{option}</MenuItem>))}
                                         </Select>
                                     </FormControl>
                                 </Grid>
                                 <Grid item xs={12}>
                                     <label>Housing Summary Notes</label>
-                                    <TextField
-                                        fullWidth
-                                        name="clientHousingSummary"
-                                        value={bioSocialForm.clientHousingSummary}
-                                        onChange={handleChange}
-                                        multiline
-                                        rows={3}
-                                    />
+                                    <TextField fullWidth name="clientHousingSummary" value={bioSocialForm.clientHousingSummary}
+                                        onChange={handleChange} multiline rows={3} />
                                 </Grid>
                             </Grid>
                         </AccordionDetails>
@@ -927,47 +729,23 @@ const BioSocial = () => {
                         </AccordionSummary>
                         <AccordionDetails>
                             <Grid container spacing={3}>
-                                {/* <Grid item xs={12}>
-                                    <Typography variant="subtitle1" gutterBottom>Ambulatory Status</Typography>
-                                </Grid> */}
                                 <Grid item xs={12} md={8}>
                                     <label>Ambulatory Status</label>
-                                    <Autocomplete
-                                        multiple
-                                        options={ambulatoryOptions}
+                                    <Autocomplete multiple options={ambulatoryOptions}
                                         getOptionLabel={(option) => option.label}
-                                        value={ambulatoryOptions.filter(option => 
-                                            bioSocialForm.clientAmbulatory.includes(option.value)
-                                        )}
+                                        value={ambulatoryOptions.filter(option => bioSocialForm.clientAmbulatory.includes(option.value))}
                                         onChange={(event, newValue) => handleMultiSelectChange('clientAmbulatory', newValue.map(v => v.value))}
-                                        renderInput={(params) => (
-                                            <TextField {...params}/>
-                                        )}
+                                        renderInput={(params) => (<TextField {...params}/>)}
                                         renderTags={(value, getTagProps) =>
                                             value.map((option, index) => (
-                                                <Chip
-                                                    key={option.value}
-                                                    label={option.label}
-                                                    {...getTagProps({ index })}
-                                                    size="small"
-                                                />
+                                                <Chip key={option.value} label={option.label} {...getTagProps({ index })} size="small" />
                                             ))
-                                        }
-                                    />
+                                        } />
                                 </Grid>
                                 <Grid item xs={12}>
-                                    <TextField
-                                        fullWidth
-                                        label="Ambulatory Status Notes"
-                                        name="clientAmbulatorySummary"
-                                        value={bioSocialForm.clientAmbulatorySummary}
-                                        onChange={handleChange}
-                                        multiline
-                                        rows={3}
-                                    />
+                                    <TextField fullWidth label="Ambulatory Status Notes" name="clientAmbulatorySummary"
+                                        value={bioSocialForm.clientAmbulatorySummary} onChange={handleChange} multiline rows={3} />
                                 </Grid>
-                                
-                                {/* Activities of Daily Living */}
                                 
                                 {[
                                     { field: 'clientEating', label: 'Eating' },
@@ -983,32 +761,20 @@ const BioSocial = () => {
                                         <label>{label}</label>
                                         <FormControl fullWidth>
                                             <InputLabel>{label}</InputLabel>
-                                            <Select
-                                                value={bioSocialForm[field]}
+                                            <Select value={bioSocialForm[field]}
                                                 onChange={(e) => setBioSocialForm(prev => ({...prev, [field]: e.target.value}))}
-                                                label={label}
-                                            >
-                                                {assistList.map((option) => (
-                                                    <MenuItem key={option} value={option}>{option}</MenuItem>
-                                                ))}
+                                                label={label}>
+                                                {assistList.map((option) => (<MenuItem key={option} value={option}>{option}</MenuItem>))}
                                             </Select>
                                         </FormControl>
                                     </Grid>
                                 ))}
                                 
                                 <Grid item xs={12}>
-                                    <TextField
-                                        fullWidth
-                                        label="If any assistance please specify:"
-                                        name="clientFunctionalAssist"
-                                        value={bioSocialForm.clientFunctionalAssist}
-                                        onChange={handleChange}
-                                        multiline
-                                        rows={3}
-                                    />
+                                    <TextField fullWidth label="If any assistance please specify:" name="clientFunctionalAssist"
+                                        value={bioSocialForm.clientFunctionalAssist} onChange={handleChange} multiline rows={3} />
                                 </Grid>
                             </Grid>
-
                         </AccordionDetails>
                     </Accordion>
 
@@ -1024,39 +790,21 @@ const BioSocial = () => {
                             <Grid container spacing={3}>
                                 <Grid item xs={12}>
                                     <label>How does patient communicate / express themselves?</label>
-                                    <Autocomplete
-                                        multiple
-                                        options={communicationOptions}
+                                    <Autocomplete multiple options={communicationOptions}
                                         getOptionLabel={(option) => option.label}
-                                        value={communicationOptions.filter(option => 
-                                            bioSocialForm.clientCommunication.includes(option.value)
-                                        )}
+                                        value={communicationOptions.filter(option => bioSocialForm.clientCommunication.includes(option.value))}
                                         onChange={(event, newValue) => handleMultiSelectChange('clientCommunication', newValue.map(v => v.value))}
-                                        renderInput={(params) => (
-                                            <TextField {...params} />
-                                        )}
+                                        renderInput={(params) => (<TextField {...params} />)}
                                         renderTags={(value, getTagProps) =>
                                             value.map((option, index) => (
-                                                <Chip
-                                                    key={option.value}
-                                                    label={option.label}
-                                                    {...getTagProps({ index })}
-                                                    size="small"
-                                                />
+                                                <Chip key={option.value} label={option.label} {...getTagProps({ index })} size="small" />
                                             ))
-                                        }
-                                    />
+                                        } />
                                 </Grid>
                                 <Grid item xs={12}>
                                     <label>Bio-Social Summary Notes</label>
-                                    <TextField
-                                        fullWidth
-                                        name="clientBioSocialNotes"
-                                        value={bioSocialForm.clientBioSocialNotes}
-                                        onChange={handleChange}
-                                        multiline
-                                        rows={4}
-                                    />
+                                    <TextField fullWidth name="clientBioSocialNotes" value={bioSocialForm.clientBioSocialNotes}
+                                        onChange={handleChange} multiline rows={4} />
                                 </Grid>
                             </Grid>
                         </AccordionDetails>
@@ -1064,14 +812,10 @@ const BioSocial = () => {
 
                     {/* Save Button */}
                     <Box sx={{ mt: 4, display: 'flex', justifyContent: 'center' }}>
-                        <Button
-                            type="submit"
-                            variant="contained"
-                            size="large"
+                        <Button type="submit" variant="contained" size="large"
                             startIcon={loading ? <CircularProgress size={20} color="inherit" /> : <SaveIcon />}
                             disabled={loading || !currentClient}
-                            sx={{ minWidth: 200, py: 1.5 }}
-                        >
+                            sx={{ minWidth: 200, py: 1.5 }}>
                             {loading ? 'Saving...' : 'Save Bio-Social Data'}
                         </Button>
                     </Box>

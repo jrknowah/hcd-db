@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
   Box,
   Grid,
@@ -51,7 +51,8 @@ import {
   selectSaving,
   selectAutoSaving,
   selectSaveError,
-  clearErrors
+  clearErrors,
+  setCurrentClient  // ✅ NEW: wipes stale form data on client switch
 } from '../../backend/store/slices/authSigSlice';
 
 // ✅ Client persistence hook
@@ -131,17 +132,6 @@ const FORM_CONFIGS = [
     priority: 'high',
     estimatedTime: '7 min'
   },
-  // {
-  //   id: 'preScreen',
-  //   title: 'Housing Pre-Screen Form', 
-  //   description: 'Initial housing assessment questionnaire',
-  //   icon: HomeIcon,
-  //   component: MockComponent,
-  //   hasLogo: false,
-  //   category: 'housing',
-  //   priority: 'medium',
-  //   estimatedTime: '10 min'
-  // },
   {
     id: 'privacyPractice',
     title: 'LA County Notice Of Private Practices',
@@ -294,14 +284,12 @@ const PRIORITY_COLORS = {
   low: 'success'
 };
 
-// Program/funder badge colors — ODR, HSH, JCM, LAHSA, etc.
-// Extend this map as new programs are added to FORM_CONFIGS entries.
 const PROGRAM_COLORS = {
-  ODR:   { bg: '#1565c0', fg: '#ffffff' }, // Office of Diversion and Reentry — blue
-  HSH:   { bg: '#2e7d32', fg: '#ffffff' }, // Health Services for the Homeless — green
-  JCM:   { bg: '#6a1b9a', fg: '#ffffff' }, // Justice Care Management — purple
-  LAHSA: { bg: '#ef6c00', fg: '#ffffff' }, // LA Homeless Services Authority — orange
-  JCOD:  { bg: '#283593', fg: '#ffffff' }, // Justice, Care and Opportunities — indigo
+  ODR:   { bg: '#1565c0', fg: '#ffffff' },
+  HSH:   { bg: '#2e7d32', fg: '#ffffff' },
+  JCM:   { bg: '#6a1b9a', fg: '#ffffff' },
+  LAHSA: { bg: '#ef6c00', fg: '#ffffff' },
+  JCOD:  { bg: '#283593', fg: '#ffffff' },
 };
 
 // ============================================================================
@@ -477,30 +465,26 @@ const FormCard = ({ form, onOpen }) => {
 };
 
 // ============================================================================
-// FORM MODAL COMPONENT - PRODUCTION READY WITH ALL TODOS COMPLETED
+// FORM MODAL COMPONENT
 // ============================================================================
 const FormModal = ({ form, open, onClose, clientID }) => {
   const theme = useTheme();
   const fullScreen = useMediaQuery(theme.breakpoints.down('md'));
   const dispatch = useDispatch();
   
-  // ✅ Redux state
   const saving = useSelector(selectSaving);
   const autoSaving = useSelector(selectAutoSaving);
   const saveError = useSelector(selectSaveError);
   
-  // ✅ Local UI state
   const [saveType, setSaveType] = useState(null);
   const [showFormContent, setShowFormContent] = useState(false);
   
-  // ✅ Snackbar state
   const [snackbar, setSnackbar] = useState({
     open: false,
     message: '',
     severity: 'success'
   });
   
-  // ✅ CRITICAL: Ref to access child form component's data
   const formRef = useRef(null);
   
   if (!form) return null;
@@ -508,7 +492,6 @@ const FormModal = ({ form, open, onClose, clientID }) => {
   const FormComponent = form.component;
   const IconComponent = form.icon;
   
-  // ✅ Helper to show notifications
   const showNotification = (message, severity = 'success') => {
     setSnackbar({
       open: true,
@@ -517,12 +500,10 @@ const FormModal = ({ form, open, onClose, clientID }) => {
     });
   };
   
-  // ✅ Close snackbar
   const handleCloseSnackbar = () => {
     setSnackbar(prev => ({ ...prev, open: false }));
   };
   
-  // ✅ Reset state when modal closes
   const handleClose = () => {
     setShowFormContent(false);
     setSaveType(null);
@@ -530,12 +511,10 @@ const FormModal = ({ form, open, onClose, clientID }) => {
     onClose();
   };
   
-  // ✅ COMPLETE - Save progress (autosave) with actual form data
   const handleSaveProgress = async () => {
     setSaveType('progress');
     
     try {
-      // ✅ Get actual form data from child component via ref
       const formData = formRef.current?.getFormData?.();
       
       if (!formData) {
@@ -545,7 +524,6 @@ const FormModal = ({ form, open, onClose, clientID }) => {
       console.log('📝 Autosaving form:', form.id, 'Client:', clientID);
       console.log('📦 Form data:', formData);
       
-      // ✅ Dispatch Redux action with actual form data
       await dispatch(autoSaveFormData({
         clientID: clientID,
         formType: form.id,
@@ -554,7 +532,6 @@ const FormModal = ({ form, open, onClose, clientID }) => {
       
       console.log('✅ Progress saved successfully');
       
-      // ✅ Show success notification
       showNotification('Progress saved successfully', 'success');
       
       setSaveType(null);
@@ -562,7 +539,6 @@ const FormModal = ({ form, open, onClose, clientID }) => {
     } catch (error) {
       console.error('❌ Failed to save progress:', error);
       
-      // ✅ Show error notification
       showNotification(
         error.message || 'Failed to save progress. Please try again.',
         'error'
@@ -572,57 +548,50 @@ const FormModal = ({ form, open, onClose, clientID }) => {
     }
   };
   
-  // ✅ COMPLETE - Submit complete form with validation
   const handleSubmitForm = async () => {
-  setSaveType('submit');
-  
-  try {
-    // ✅ Get actual form data from child component via ref
-    const formData = formRef.current?.getFormData?.();
+    setSaveType('submit');
     
-    if (!formData) {
-      throw new Error('Unable to get form data. Make sure the form component exposes getFormData()');
+    try {
+      const formData = formRef.current?.getFormData?.();
+      
+      if (!formData) {
+        throw new Error('Unable to get form data. Make sure the form component exposes getFormData()');
+      }
+      
+      console.log('🚀 Submitting form:', form.id, 'Client:', clientID);
+      console.log('📦 Form data:', formData);
+      
+      const dataToSubmit = {
+        ...formData,
+        completionPercentage: formData.completionPercentage || 100,
+        status: 'completed'
+      };
+      
+      const result = await dispatch(saveFormData({
+        clientID: clientID,
+        formType: form.id,
+        formData: dataToSubmit
+      })).unwrap();
+      
+      console.log('✅ Form submitted successfully:', result);
+      
+      showNotification('Form submitted successfully', 'success');
+      
+      setSaveType(null);
+      
+      setTimeout(() => {
+        handleClose();
+      }, 1000);
+      
+    } catch (error) {
+      console.error('❌ Failed to submit form:', error);
+      
+      const errorMessage = error.message || error || 'Failed to submit form. Please check all required fields.';
+      showNotification(errorMessage, 'error');
+      
+      setSaveType(null);
     }
-    
-    console.log('🚀 Submitting form:', form.id, 'Client:', clientID);
-    console.log('📦 Form data:', formData);
-    
-    // ✅ Ensure completion percentage is included
-    const dataToSubmit = {
-      ...formData,
-      completionPercentage: formData.completionPercentage || 100,
-      status: 'completed'
-    };
-    
-    // ✅ Dispatch Redux action with actual form data
-    const result = await dispatch(saveFormData({
-      clientID: clientID,
-      formType: form.id,
-      formData: dataToSubmit
-    })).unwrap();
-    
-    console.log('✅ Form submitted successfully:', result);
-    
-    // ✅ Show success notification
-    showNotification('Form submitted successfully', 'success');
-    
-    setSaveType(null);
-    
-    // ✅ Close modal after successful submission
-    setTimeout(() => {
-      handleClose();
-    }, 1000);
-    
-  } catch (error) {
-    console.error('❌ Failed to submit form:', error);
-    
-    // ✅ Show error notification with detailed message
-    const errorMessage = error.message || error || 'Failed to submit form. Please check all required fields.';
-    showNotification(errorMessage, 'error');
-    
-    setSaveType(null);
-  }
-};
+  };
   
   const handleViewForm = () => {
     setShowFormContent(true);
@@ -669,7 +638,6 @@ const FormModal = ({ form, open, onClose, clientID }) => {
         
         <DialogContent sx={{ p: 0 }}>
           {!showFormContent ? (
-            // ========== FORM PREVIEW VIEW ==========
             <Box sx={{ p: 4 }}>
               <Box sx={{ display: 'flex', alignItems: 'flex-start', mb: 3 }}>
                 <IconComponent sx={{ fontSize: 60, color: 'primary.main', mr: 2 }} />
@@ -750,9 +718,7 @@ const FormModal = ({ form, open, onClose, clientID }) => {
               )}
             </Box>
           ) : (
-            // ========== ACTUAL FORM CONTENT VIEW ==========
             <Box sx={{ p: 3 }}>
-              {/* ✅ CRITICAL: Pass ref to form component to access its data */}
               <FormComponent 
                 ref={formRef}
                 clientID={clientID}
@@ -770,7 +736,6 @@ const FormModal = ({ form, open, onClose, clientID }) => {
           background: alpha(theme.palette.grey[50], 0.5)
         }}>
           {!showFormContent ? (
-            // ========== PREVIEW MODE BUTTONS ==========
             <>
               <Button 
                 onClick={handleClose} 
@@ -791,7 +756,6 @@ const FormModal = ({ form, open, onClose, clientID }) => {
               </Button>
             </>
           ) : (
-            // ========== FORM EDITING MODE BUTTONS ==========
             <>
               <Button 
                 onClick={() => setShowFormContent(false)} 
@@ -839,7 +803,6 @@ const FormModal = ({ form, open, onClose, clientID }) => {
         </DialogActions>
       </Dialog>
       
-      {/* ✅ COMPLETE - Snackbar notifications */}
       <Snackbar
         open={snackbar.open}
         autoHideDuration={4000}
@@ -950,12 +913,25 @@ const TabPanel = ({ children, value, index }) => (
 // ============================================================================
 const AuthSig = () => {
   const theme = useTheme();
+  const dispatch = useDispatch();
   const [activeModal, setActiveModal] = useState(null);
   const [categoryFilter, setCategoryFilter] = useState('all');
-  const [activeTab, setActiveTab] = useState(0); // ✅ NEW: Tab state
+  const [activeTab, setActiveTab] = useState(0);
   
   // ✅ Get client from URL/persistence
   const { clientID, client, loading: clientLoading } = useClientPersistence();
+  
+  // ✅ FIX: When clientID changes, wipe ALL stale form data in Redux.
+  // Without this, switching clients shows the previous client's signatures,
+  // checkboxes, etc. — and the broken refs in many Section 2 forms
+  // (hasLoadedData, isInitialized, dataLoaded) can skip the refetch entirely.
+  // Also close any open modal since its formRef points at the OLD client's data.
+  useEffect(() => {
+    if (clientID) {
+      dispatch(setCurrentClient(clientID));
+      setActiveModal(null);
+    }
+  }, [dispatch, clientID]);
   
   // Get unique categories from the configuration
   const categories = [...new Set(FORM_CONFIGS.map(form => form.category))];
@@ -978,7 +954,6 @@ const AuthSig = () => {
     return acc + minutes;
   }, 0);
   
-  // Clean event handlers using useCallback for performance
   const handleOpenModal = useCallback((form) => {
     setActiveModal(form);
   }, []);
@@ -995,7 +970,6 @@ const AuthSig = () => {
     setActiveTab(newValue);
   }, []);
   
-  // ✅ Handle loading state
   if (clientLoading) {
     return (
       <Container maxWidth="xl" sx={{ py: 4 }}>
@@ -1006,7 +980,6 @@ const AuthSig = () => {
     );
   }
   
-  // ✅ Handle no client selected
   if (!clientID) {
     return (
       <Container maxWidth="xl" sx={{ py: 4 }}>
@@ -1035,7 +1008,6 @@ const AuthSig = () => {
 
   return (
     <Container maxWidth="xl" sx={{ py: 4 }}>
-      {/* Hero Header with gradient background */}
       <Paper 
         elevation={4}
         sx={{ 
@@ -1121,7 +1093,6 @@ const AuthSig = () => {
         </Box>
       </Paper>
 
-      {/* ✅ NEW: Tabs for Forms and Archive */}
       <Paper elevation={2} sx={{ mb: 3 }}>
         <Tabs 
           value={activeTab} 
@@ -1152,16 +1123,13 @@ const AuthSig = () => {
         </Tabs>
       </Paper>
 
-      {/* ✅ Tab Panel: Forms View */}
       <TabPanel value={activeTab} index={0}>
-        {/* Category Filter */}
         <CategoryFilter 
           categories={categories}
           activeCategory={categoryFilter}
           onChange={handleCategoryChange}
         />
 
-        {/* Forms Grid organized by priority with better visual hierarchy */}
         {['high', 'medium', 'low'].map(priority => {
           const priorityForms = formsByPriority[priority];
           if (!priorityForms || priorityForms.length === 0) return null;
@@ -1186,7 +1154,6 @@ const AuthSig = () => {
           );
         })}
 
-        {/* No forms message */}
         {filteredForms.length === 0 && (
           <Paper sx={{ p: 6, textAlign: 'center' }}>
             <DocumentIcon sx={{ fontSize: 80, color: 'text.secondary', mb: 2 }} />
@@ -1207,12 +1174,10 @@ const AuthSig = () => {
         )}
       </TabPanel>
 
-      {/* ✅ Tab Panel: Archive View */}
       <TabPanel value={activeTab} index={1}>
         <AuthSigArchive clientID={clientID} />
       </TabPanel>
 
-      {/* ✅ Enhanced Modal with clientID prop and all TODOs completed */}
       <FormModal 
         form={activeModal}
         open={Boolean(activeModal)}

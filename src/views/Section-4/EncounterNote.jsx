@@ -158,6 +158,20 @@ const EncounterNote = ({ clientID, exportMode }) => {
     }
   }, [effectiveClientID, dispatch, shouldUseMockData]);
 
+  // ✅ CLIENT-SWITCH GUARD: the add/edit note dialogs live in local state.
+  //    Reset all of it when the client changes so a half-written note (or an
+  //    edit dialog pointed at the prior client's note) can't carry over to
+  //    the newly-selected client.
+  useEffect(() => {
+    setModalOpen(false);
+    setEditModalOpen(false);
+    setEditNoteId(null);
+    setSaveSuccess(false);
+    setSaveError(null);
+    setFormData(initialFormState);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [effectiveClientID]);
+
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({
