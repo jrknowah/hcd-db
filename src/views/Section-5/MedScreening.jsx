@@ -76,6 +76,48 @@ const formatDateForInput = (dateValue) => {
   }
 };
 
+// 🔁 Section-switch fix: hoisted to module scope so the same blank-form shape
+// can be used both for the initial useState AND for resetting the form when the
+// selected client changes to one with no saved screening (see the load effect).
+const INITIAL_MED_SCREENING_FORM = {
+  clientMedConditions: [],
+  clientHepAB: [],
+  clientAlcoholRisk: "",
+  clientAlcoholRiskMed: "",
+  clientLastTBTest: "",
+  clientLastTBTestResults: "",
+  clientLastTBTestResultsTreatment: "",
+  clientLastTBTestResultsTreatmentOutcome: "",
+  tbCough: "",
+  tbCoughBlood: "",
+  medSweat: "",
+  clientFever: "",
+  clientWeightLoss: "",
+  clientMedName: "",
+  clientMedDose: "",
+  clientMedSideEffects: "",
+  clientMedTaking: "",
+  clientSurgeryType: "",
+  clientSurgeryDate: "",
+  clientBC: "",
+  clientBCName: "",
+  clientBCDate: "",
+  clientBCLoc: "",
+  clientBCPreg: "",
+  clientBCPregDate: "",
+  clientBCPap: "",
+  clientBCMam: "",
+  clientSexLastYear: "",
+  clientSexLastMonth: "",
+  clientLastSexDate: "",
+  clientSexRelations: "",
+  clientRiskFactors: [],
+  clientSTDDate: "",
+  clientSTDStatus: [],
+  clientMedications: [],
+  clientSurgeries: [],
+};
+
 // Custom styles for react-select to match Material-UI theme
 const customSelectStyles = {
   control: (provided, state) => ({
@@ -130,44 +172,7 @@ const MedScreening = ({ clientID }) => {
   }, [clientID, dispatch, shouldUseMockData]);
 
   // ✅ State for Form Data
-  const [formData, setFormData] = useState({
-    clientMedConditions: [],
-    clientHepAB: [],
-    clientAlcoholRisk: "",
-    clientAlcoholRiskMed: "",
-    clientLastTBTest: "",
-    clientLastTBTestResults: "",
-    clientLastTBTestResultsTreatment: "",
-    clientLastTBTestResultsTreatmentOutcome: "",
-    tbCough: "",
-    tbCoughBlood: "",
-    medSweat: "",
-    clientFever: "",
-    clientWeightLoss: "",
-    clientMedName: "",
-    clientMedDose: "",
-    clientMedSideEffects: "",
-    clientMedTaking: "",
-    clientSurgeryType: "",
-    clientSurgeryDate: "",
-    clientBC: "",
-    clientBCName: "",
-    clientBCDate: "",
-    clientBCLoc: "",
-    clientBCPreg: "",
-    clientBCPregDate: "",
-    clientBCPap: "",
-    clientBCMam: "",
-    clientSexLastYear: "",
-    clientSexLastMonth: "",
-    clientLastSexDate: "",
-    clientSexRelations: "",
-    clientRiskFactors: [],
-    clientSTDDate: "",
-    clientSTDStatus: [],
-    clientMedications: [],
-    clientSurgeries: [],
-  });
+  const [formData, setFormData] = useState(INITIAL_MED_SCREENING_FORM);
   const isSaving = useRef(false);
   const [justSaved, setJustSaved] = useState(false);
 
@@ -185,7 +190,13 @@ const MedScreening = ({ clientID }) => {
     }
 
     if (!savedMedData || savedMedData.length === 0) {
-      console.log('⏭️ No saved data to load');
+      // 🔁 Section-switch fix: previously this early-returned, which LEFT the
+      // previous client's answers in the form after switching to a client with
+      // no saved screening. Reset to a blank form instead so stale PHI never
+      // lingers. (Runs because setCurrentClient wipes savedMedData to [] on
+      // client change.)
+      console.log('🧹 No saved data to load - resetting form to blank');
+      setFormData(INITIAL_MED_SCREENING_FORM);
       return;
     }
 

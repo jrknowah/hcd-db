@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useDispatch } from 'react-redux';
 import { useClientPersistence } from '../../hooks/useClientPersistence';
 import {
   Card,
@@ -43,11 +44,44 @@ import MedicalObservationRecord from './MedicalObservationRecord';
 // ✅ ADDED: Discharge component from Section 1
 // import Discharge from '../Section-1/Discharge';
 
+// 🔁 Section-switch fix: import each slice's setCurrentClient (aliased) so we
+// can wipe ALL Section-5 Redux state the instant the selected client changes.
+// This prevents the previous client's medical data from lingering in any tab
+// while that tab's own fetch is still in flight.
+import { setCurrentClient as setIdtNursingClient } from "../../backend/store/slices/idtNursingSlice";
+import { setCurrentClient as setIdtProviderClient } from "../../backend/store/slices/idtProviderSlice";
+import { setCurrentClient as setMedFaceSheetClient } from "../../backend/store/slices/medFaceSheetSlice";
+import { setCurrentClient as setMedObservationClient } from "../../backend/store/slices/medObservationSlice";
+import { setCurrentClient as setMedScreeningClient } from "../../backend/store/slices/medScreeningSlice";
+import { setCurrentClient as setNursingAdmissionClient } from "../../backend/store/slices/nursingAdmissionSlice";
+import { setCurrentClient as setProgressNoteClient } from "../../backend/store/slices/progressNoteSlice";
+
 const Medical = () => {
   // ✅ ALIGNED: Match Identification.jsx pattern exactly
   const { clientID, client, hasClient, user, shouldUseMockData, isDevelopment } = useClientPersistence();
-  
+  const dispatch = useDispatch();
+
   const [activeTab, setActiveTab] = useState(0);
+
+  // 🔁 Section-switch fix: whenever the selected client changes, wipe every
+  // Section-5 slice immediately. Each child tab (MedFaceSheet, MedScreening,
+  // NursingAdmission, ProgressNote, IDT notes, MedicalObservationRecord) runs
+  // its OWN fetch effect; without this reset the prior client's data stays on
+  // screen until each of those fetches resolves. Child effects run before this
+  // parent effect, so the wipe lands just after the new fetches start (in the
+  // pending phase) and is then replaced by the fulfilled payloads.
+  // NOTE: NursingArchive.jsx does not use Redux (azureBlobService + local state
+  // via useClientPersistence); it resets its own local state on clientID change.
+  useEffect(() => {
+    if (!clientID) return;
+    dispatch(setIdtNursingClient(clientID));
+    dispatch(setIdtProviderClient(clientID));
+    dispatch(setMedFaceSheetClient(clientID));
+    dispatch(setMedObservationClient(clientID));
+    dispatch(setMedScreeningClient(clientID));
+    dispatch(setNursingAdmissionClient(clientID));
+    dispatch(setProgressNoteClient(clientID));
+  }, [clientID, dispatch]);
 
   const handleTabChange = (event, newValue) => {
     setActiveTab(newValue);

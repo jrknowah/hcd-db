@@ -503,6 +503,15 @@ const medObservationSlice = createSlice({
   name: "medObservation",
   initialState,
   reducers: {
+    // 🔁 Section-switch fix: wipe ALL medical-observation state when the
+    // selected client changes so the previous client's MAR, vitals, and
+    // observations can't linger while new fetches are in flight. No-ops on a
+    // redundant re-set.
+    setCurrentClient(state, action) {
+      const incoming = action.payload ?? null;
+      if (state.currentClientID === incoming) return state;
+      return { ...initialState, currentClientID: incoming };
+    },
     clearMedicationError(state) {
       state.medicationError = null;
       state.error = null;
@@ -691,6 +700,7 @@ const medObservationSlice = createSlice({
 // ============================================================================
 
 export const {
+  setCurrentClient,
   clearMedicationError,
   clearVitalSignsError,
   clearObservationsError,

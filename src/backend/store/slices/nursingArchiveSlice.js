@@ -397,6 +397,23 @@ const nursingArchiveSlice = createSlice({
     name: 'nursingArchive',
     initialState,
     reducers: {
+        // 🔁 Section-switch fix: wipe ALL nursing-archive state when the
+        // selected client changes so the previous client's documents can't
+        // linger while new fetches are in flight. Preserves useMockData and
+        // settings, and no-ops on a redundant re-set.
+        setCurrentClient: (state, action) => {
+            const incoming = action.payload ?? null;
+            if (state.currentClientID === incoming) return state;
+            return {
+                ...initialState,
+                useMockData: state.useMockData,
+                maxFileSize: state.maxFileSize,
+                allowedFileTypes: state.allowedFileTypes,
+                categories: state.categories, // category list is client-independent
+                currentClientID: incoming,
+            };
+        },
+
         // Clear all errors
         clearErrors: (state) => {
             state.documentsError = null;
@@ -603,6 +620,7 @@ const nursingArchiveSlice = createSlice({
 
 // ✅ Export Actions
 export const {
+    setCurrentClient,
     clearErrors,
     clearUploadSuccess,
     clearShareSuccess,

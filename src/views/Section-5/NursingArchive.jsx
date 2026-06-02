@@ -140,13 +140,31 @@ const NursingArchive = () => {
   const [viewDialog, setViewDialog] = useState({ open: false, file: null });
 
   // ✅ Fetch files when component mounts (matches AuthSigArchive)
+  // 🔁 Section-switch fix: this component is NOT backed by Redux, so the
+  // Section-5 slice wipe in Medical.jsx can't clear it. When the selected
+  // client changes we therefore reset ALL local state ourselves BEFORE the
+  // refetch — otherwise the previous client's file list, staged upload, and
+  // any banners would linger on screen until the new fetch resolves.
   useEffect(() => {
+    // Always clear the prior client's local state on a client change.
+    setFiles([]);
+    setError(null);
+    setSuccess(null);
+    setSelectedFile(null);
+    setSelectedDocType('');
+    setConfidentialityLevel('Standard');
+    setDescription('');
+    setDocumentDate('');
+    setDeleteDialog({ open: false, file: null });
+    setViewDialog({ open: false, file: null });
+
     if (clientID) {
       console.log('🏥 Fetching nursing documents for client:', clientID);
       fetchFiles();
     } else {
       console.log('⚠️ No clientID available, skipping file fetch');
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientID]);
 
   /**

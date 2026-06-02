@@ -71,6 +71,111 @@ import {
 import frontBodyImage from '../../data/front.png';
 import rearBodyImage from '../../data/rear.png';
 
+// 🔁 Section-switch fix: hoisted to module scope so the same blank-form shape
+// can be used both for the initial useState AND for resetting the form when the
+// selected client changes to one with no saved admission (see the savedData
+// effect's else-branch). Keeps the nested body-inspection objects fully shaped
+// so controlled inputs never receive undefined.
+const INITIAL_NURSING_FORM = {
+  // Basic Assessment
+  loc: [],
+  orientedToList: [],
+  orientedToRoomList: [],
+  
+  // Cardio-Pulmonary
+  cpT: '',
+  cpP: '',
+  cpR: '',
+  cpBP: '',
+  tList: [],
+  pList: [],
+  rList: [],
+  historyOf: [],
+  edema: [],
+  edemaLocation: '',
+  
+  // Pain Assessment
+  clientPain: [],
+  painHistory: [],
+  lungSounds: [],
+  
+  // Bowel & Bladder
+  bowelBladder: [],
+  cathType: '',
+  cathSize: '',
+  cathDiag: '',
+  elimMethUsed: [],
+  lastBowelDate: '',
+  lastVoidDate: '',
+  abdomen: [],
+  
+  // Physical & Functional Status
+  physicalFuncStat: [],
+  clientPhysicalFuncNotes: '',
+  weightBearing: [],
+  transfers: [],
+  ambulation: [],
+  mobDevices: [],
+  
+  // Nutrition & Communication
+  nutrHyd: [],
+  enteral: [],
+  oral: [],
+  hearing: [],
+  vision: [],
+  communication: [],
+  
+  // ADL Levels
+  bathing: [],
+  eating: [],
+  toileting: [],
+  bedMobility: [],
+  
+  // Body Inspection - Front
+  frontBodyInspection: {
+    clientBodyFace: '',
+    clientBodyChest: '',
+    clientBodyRUQ: '',
+    clientBodyLUQ: '',
+    clientBodyRLO: '',
+    clientBodyLLQ: '',
+    clientBodyLUA: '',
+    clientBodyLLA: '',
+    clientBodyRUA: '',
+    clientBodyRLA: '',
+    clientBodyLT: '',
+    clientBodyRT: '',
+    clientBodyLK: '',
+    clientBodyRK: '',
+    clientBodyLS: '',
+    clientBodyRS: '',
+    clientBodyLA: '',
+    clientBodyRA: '',
+    clientBodyLF: '',
+    clientBodyRF: ''
+  },
+  
+  // Body Inspection - Rear
+  rearBodyInspection: {
+    clientBodyHead: '',
+    clientBodyNeck: '',
+    clientBodyUB: '',
+    clientBodyLB: '',
+    clientBodyRearLUA: '',
+    clientBodyRearRUA: '',
+    clientBodyLG: '',
+    clientBodyRG: '',
+    clientBodyLUT: '',
+    clientBodyRUT: '',
+    clientBodyLLC: '',
+    clientBodyRLC: '',
+    clientBodyRearLA: '',
+    clientBodyRearRA: '',
+    clientBodyRearLF: '',
+    clientBodyRearRF: ''
+  }
+};
+
 const NursingAdmission = ({ clientID }) => {
   const dispatch = useDispatch();
   const user = useSelector((state) => state.auth.user);
@@ -88,105 +193,7 @@ const NursingAdmission = ({ clientID }) => {
   } = nursingAdmissionState;
 
   // Component state
-  const [formData, setFormData] = useState({
-    // Basic Assessment
-    loc: [],
-    orientedToList: [],
-    orientedToRoomList: [],
-    
-    // Cardio-Pulmonary
-    cpT: '',
-    cpP: '',
-    cpR: '',
-    cpBP: '',
-    tList: [],
-    pList: [],
-    rList: [],
-    historyOf: [],
-    edema: [],
-    edemaLocation: '',
-    
-    // Pain Assessment
-    clientPain: [],
-    painHistory: [],
-    lungSounds: [],
-    
-    // Bowel & Bladder
-    bowelBladder: [],
-    cathType: '',
-    cathSize: '',
-    cathDiag: '',
-    elimMethUsed: [],
-    lastBowelDate: '',
-    lastVoidDate: '',
-    abdomen: [],
-    
-    // Physical & Functional Status
-    physicalFuncStat: [],
-    clientPhysicalFuncNotes: '',
-    weightBearing: [],
-    transfers: [],
-    ambulation: [],
-    mobDevices: [],
-    
-    // Nutrition & Communication
-    nutrHyd: [],
-    enteral: [],
-    oral: [],
-    hearing: [],
-    vision: [],
-    communication: [],
-    
-    // ADL Levels
-    bathing: [],
-    eating: [],
-    toileting: [],
-    bedMobility: [],
-    
-    // Body Inspection - Front
-    frontBodyInspection: {
-      clientBodyFace: '',
-      clientBodyChest: '',
-      clientBodyRUQ: '',
-      clientBodyLUQ: '',
-      clientBodyRLO: '',
-      clientBodyLLQ: '',
-      clientBodyLUA: '',
-      clientBodyLLA: '',
-      clientBodyRUA: '',
-      clientBodyRLA: '',
-      clientBodyLT: '',
-      clientBodyRT: '',
-      clientBodyLK: '',
-      clientBodyRK: '',
-      clientBodyLS: '',
-      clientBodyRS: '',
-      clientBodyLA: '',
-      clientBodyRA: '',
-      clientBodyLF: '',
-      clientBodyRF: ''
-    },
-    
-    // Body Inspection - Rear
-    rearBodyInspection: {
-      clientBodyHead: '',
-      clientBodyNeck: '',
-      clientBodyUB: '',
-      clientBodyLB: '',
-      clientBodyRearLUA: '',
-      clientBodyRearRUA: '',
-      clientBodyLG: '',
-      clientBodyRG: '',
-      clientBodyLUT: '',
-      clientBodyRUT: '',
-      clientBodyLLC: '',
-      clientBodyRLC: '',
-      clientBodyRearLA: '',
-      clientBodyRearRA: '',
-      clientBodyRearLF: '',
-      clientBodyRearRF: ''
-    }
-  });
+  const [formData, setFormData] = useState(INITIAL_NURSING_FORM);
 
   // Mock data for development
   const mockAdmissionData = {
@@ -286,6 +293,13 @@ const NursingAdmission = ({ clientID }) => {
           ...(savedData.rearBodyInspection || {})  // Merge saved data if exists
         }
       }));
+    } else {
+      // 🔁 Section-switch fix: when the slice is wiped on a client change,
+      // savedData becomes {} — previously this branch did nothing, leaving the
+      // PREVIOUS client's answers in every field. Reset to a fully-shaped blank
+      // form so stale PHI never carries across clients.
+      console.log('🧹 No saved admission data - resetting form to blank');
+      setFormData(INITIAL_NURSING_FORM);
     }
   }, [savedData]);
 

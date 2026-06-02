@@ -144,6 +144,14 @@ const idtProviderSlice = createSlice({
   name: "idtProvider",
   initialState,
   reducers: {
+    // 🔁 Section-switch fix: wipe ALL IDT provider state when the selected
+    // client changes so the previous client's notes can't linger while the
+    // new client's fetch is in flight. No-ops on a redundant re-set.
+    setCurrentClient: (state, action) => {
+      const incoming = action.payload ?? null;
+      if (state.currentClientID === incoming) return state;
+      return { ...initialState, currentClientID: incoming };
+    },
     clearErrors: (state) => {
       state.error = null;
     },
@@ -255,5 +263,5 @@ const idtProviderSlice = createSlice({
   },
 });
 
-export const { clearErrors, clearSaveSuccess, setCurrentNote, clearCurrentNote } = idtProviderSlice.actions;
+export const { setCurrentClient, clearErrors, clearSaveSuccess, setCurrentNote, clearCurrentNote } = idtProviderSlice.actions;
 export default idtProviderSlice.reducer;

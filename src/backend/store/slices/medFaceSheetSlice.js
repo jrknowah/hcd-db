@@ -275,6 +275,15 @@ const medFaceSheetSlice = createSlice({
   name: "medFaceSheet",
   initialState,
   reducers: {
+    // 🔁 Section-switch fix: wipe ALL medical face-sheet state when the
+    // selected client changes so the previous client's medical info,
+    // appointments, and allergies can't linger while new fetches are in
+    // flight. No-ops on a redundant re-set.
+    setCurrentClient(state, action) {
+      const incoming = action.payload ?? null;
+      if (state.currentClientID === incoming) return state;
+      return { ...initialState, currentClientID: incoming };
+    },
     clearMedicalError(state) {
       state.medicalError = null;
       state.error = null;
@@ -503,6 +512,7 @@ const medFaceSheetSlice = createSlice({
 // ===== EXPORTS =====
 
 export const {
+  setCurrentClient,
   clearMedicalError,
   clearAppointmentsError,
   clearAllergiesError,

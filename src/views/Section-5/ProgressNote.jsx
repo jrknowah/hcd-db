@@ -153,6 +153,29 @@ const ProgressNote = ({ clientID }) => {
     }
   }, [clientID, dispatch]);
 
+  // 🔁 Section-switch fix (parity): the notes table and summary read Redux
+  // state, which Medical.jsx already wipes via setCurrentClient on a client
+  // change — so stale notes never render. This effect additionally clears the
+  // component's LOCAL state when the client changes: search/filter selections,
+  // any open dialog, the edit/delete targets, and the in-progress form. Without
+  // it, a filter set for the previous client (or an edit dialog still holding
+  // the previous client's note) could linger after switching clients.
+  // Depends only on [clientID]; initialFormState is recreated each render, so
+  // including it would re-run on every render and wipe in-progress edits.
+  useEffect(() => {
+    setSearchTerm('');
+    setFilterSite('');
+    setFilterCategory('');
+    setFilterPriority('');
+    setDialogOpen(false);
+    setEditDialogOpen(false);
+    setEditNoteId(null);
+    setDeleteDialogOpen(false);
+    setDeleteNoteId(null);
+    setFormData(initialFormState);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clientID]);
+
   const handleInputChange = (field, value) => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };

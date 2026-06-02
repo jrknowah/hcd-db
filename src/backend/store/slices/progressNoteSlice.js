@@ -359,6 +359,16 @@ const progressNoteSlice = createSlice({
   name: 'progressNote',
   initialState,
   reducers: {
+    // 🔁 Section-switch fix: wipe ALL progress-note state when the selected
+    // client changes so the previous client's notes can't linger while the
+    // new client's fetch is in flight. Preserves useMockData and no-ops on a
+    // redundant re-set.
+    setCurrentClient(state, action) {
+      const incoming = action.payload ?? null;
+      if (state.currentClientID === incoming) return state;
+      return { ...initialState, useMockData: state.useMockData, currentClientID: incoming };
+    },
+
     // Clear errors
     clearErrors(state) {
       state.error = null;
@@ -586,6 +596,7 @@ const progressNoteSlice = createSlice({
 // ===== EXPORTS =====
 
 export const {
+  setCurrentClient,
   clearErrors,
   clearSuccess,
   updateFilters,

@@ -223,6 +223,15 @@ const medScreeningSlice = createSlice({
   name: "medScreening",
   initialState,
   reducers: {
+    // 🔁 Section-switch fix: wipe ALL medical-screening state when the
+    // selected client changes so the previous client's screening can't
+    // linger while the new client's fetch is in flight. No-ops on a
+    // redundant re-set.
+    setCurrentClient(state, action) {
+      const incoming = action.payload ?? null;
+      if (state.currentClientID === incoming) return state;
+      return { ...initialState, currentClientID: incoming };
+    },
     clearMedScreeningError(state) {
       state.error = null;
       state.saveError = null;
@@ -381,6 +390,7 @@ const medScreeningSlice = createSlice({
 });
 
 export const {
+  setCurrentClient,
   clearMedScreeningError,
   clearSaveSuccess,
   resetMedScreeningState,

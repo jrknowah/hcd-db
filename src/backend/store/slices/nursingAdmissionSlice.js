@@ -341,6 +341,16 @@ const nursingAdmissionSlice = createSlice({
   name: "nursingAdmission",
   initialState,
   reducers: {
+    // 🔁 Section-switch fix: wipe ALL nursing-admission state when the
+    // selected client changes so the previous client's assessment can't
+    // linger while new fetches are in flight. Preserves useMockData and
+    // no-ops on a redundant re-set.
+    setCurrentClient(state, action) {
+      const incoming = action.payload ?? null;
+      if (state.currentClientID === incoming) return state;
+      return { ...initialState, useMockData: state.useMockData, currentClientID: incoming };
+    },
+
     clearAdmissionError(state) {
       state.error = null;
       state.saveError = null;
@@ -550,6 +560,7 @@ const nursingAdmissionSlice = createSlice({
 // ===== EXPORTS =====
 
 export const {
+  setCurrentClient,
   clearAdmissionError,
   clearAdmissionSuccess,
   resetAdmissionState,
