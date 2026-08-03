@@ -12,7 +12,7 @@ import  store  from './backend/store/store';
 import AdminErrors from './views/Dashboard/AdminErrors';
 // import { ProtectedAdminRoute } from './views/Dashboard/ProtectedAdminRoute';
 import ProtectedRoute from './components/Auth/ProtectedRoute';
-import AdminLayout from './views/Dashboard/AdminLayout';
+import AdminLayout from './views/admin/AdminLayout';
 
 // At the very top of App.jsx, before any other code:
 if (typeof window !== 'undefined') {
@@ -37,8 +37,8 @@ const Medical = React.lazy(() => import('./views/Section-5/Medical'));
 const Section6 = React.lazy(() => import('./views/Section-6/Section6'));
 
 // ✅ Admin pages (lazy — these are heavy and only IT loads them)
-const AdminAudit = React.lazy(() => import('./views/Dashboard/AdminAudit'));
-const AdminAnalytics = React.lazy(() => import('./views/Dashboard/AdminAnalytics'));
+const AdminAudit = React.lazy(() => import('./views/admin/AdminAudit'));
+const AdminAnalytics = React.lazy(() => import('./views/admin/AdminAnalytics'));
 
 // ✅ Simple loading fallback
 const LoadingFallback = ({ name }) => (
