@@ -44,9 +44,30 @@ export const loginWithAzure = createAsyncThunk(
         .flatMap(role => ROLE_PERMISSIONS[role] || [])
         .filter((permission, index, array) => array.indexOf(permission) === index);
 
-      // If no roles, use default for development
-      const finalRoles = userRoles.length > 0 ? userRoles : ['IT_ADMIN'];
-      const finalPermissions = permissions.length > 0 ? permissions : ROLE_PERMISSIONS['IT_ADMIN'];
+      // FAIL CLOSED. A user whose Azure AD groups do not map to a known role
+      // gets NO roles and NO permissions — not IT_ADMIN.
+      //
+      // The previous default granted full administrative access (including
+      // audit_logs and all_sections) to anyone who authenticated but whose
+      // group membership did not resolve. Controlled by an explicit env flag so
+      // local development can opt in deliberately; it is never on in a build
+      // unless VITE_AUTH_DEV_BYPASS is literally 'true'.
+      const devBypass = import.meta.env.VITE_AUTH_DEV_BYPASS === 'true';
+
+      let finalRoles = userRoles;
+      let finalPermissions = permissions;
+
+      if (userRoles.length === 0) {
+        if (devBypass) {
+          console.warn('⚠️ AuthSlice: DEV BYPASS ACTIVE — granting IT_ADMIN. Never enable in production.');
+          finalRoles = ['IT_ADMIN'];
+          finalPermissions = ROLE_PERMISSIONS['IT_ADMIN'];
+        } else {
+          console.warn('🔒 AuthSlice: No mapped roles for this account. Access denied (fail-closed).');
+          finalRoles = [];
+          finalPermissions = [];
+        }
+      }
 
       // Create user object from Azure account
       const user = {

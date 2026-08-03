@@ -92,13 +92,24 @@ const AuthGuard = ({ children }) => {
         console.log('👤 AuthGuard: User Roles:', userRoles);
         console.log('🔑 AuthGuard: Permissions:', permissions);
 
+        // FAIL CLOSED — see the matching change in authSlice.js.
+        // These values are computed for logging only (loginWithAzure recomputes
+        // them from the account), but they must not imply a permissive default.
+        const devBypass = import.meta.env.VITE_AUTH_DEV_BYPASS === 'true';
+
         let finalRoles = userRoles;
         let finalPermissions = permissions;
-        
+
         if (userRoles.length === 0) {
-          console.warn('⚠️ AuthGuard: No roles found, using development bypass');
-          finalRoles = ['IT_ADMIN'];
-          finalPermissions = ROLE_PERMISSIONS['IT_ADMIN'] || ['read', 'write', 'all_sections'];
+          if (devBypass) {
+            console.warn('⚠️ AuthGuard: DEV BYPASS ACTIVE — granting IT_ADMIN. Never enable in production.');
+            finalRoles = ['IT_ADMIN'];
+            finalPermissions = ROLE_PERMISSIONS['IT_ADMIN'] || [];
+          } else {
+            console.warn('🔒 AuthGuard: No mapped roles for this account (fail-closed).');
+            finalRoles = [];
+            finalPermissions = [];
+          }
         }
 
         // Graph token (User.Read scope) — backend auth.js now accepts both
