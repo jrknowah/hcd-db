@@ -47,16 +47,20 @@ app.use(express.json());
 
 try {
   const adminErrorsRouter = require('./routes/admin/errors.cjs');
+  const adminAuditRouter = require('./routes/admin/audit.cjs');
+  const adminAnalyticsRouter = require('./routes/admin/analytics.cjs');
   // const adminAccessRouter = require('./routes/admin/access.cjs');
   // const adminHealthRouter = require('./routes/admin/health.cjs');
 
   // requireAdmin applied once at mount — covers all sub-routes
   app.use('/api/admin/errors', authMiddleware, requireAdmin, adminErrorsRouter);
+  app.use('/api/admin/audit', authMiddleware, requireAdmin, adminAuditRouter);
+  app.use('/api/admin/analytics', authMiddleware, requireAdmin, adminAnalyticsRouter);
   // app.use('/api/admin/access', requireAdmin, adminAccessRouter);
   // app.use('/api/admin/health', requireAdmin, adminHealthRouter);
 
   adminRoutesLoaded = true;
-  console.log('✓ Admin routes loaded');
+  console.log('✓ Admin routes loaded (errors, audit, analytics)');
 } catch (err) {
   console.error('✗ Failed to load admin routes:', err.message);
 }
@@ -694,6 +698,9 @@ app.get('/api/health', (req, res) => {
       miscDoc: miscDocRouterLoaded ? 'Real Azure SQL router' : 'Not loaded',
       personalInventory: personalInventoryRouterLoaded ? 'Real Azure SQL router' : 'Not loaded',
       clientExport: clientExportRouterLoaded ? 'Real Azure SQL router' : 'Not loaded',
+
+      // Admin (errors, audit, analytics) — all mounted together
+      admin: adminRoutesLoaded ? 'Real Azure SQL router' : 'Not loaded',
 
     },
     section3Endpoints: {

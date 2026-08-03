@@ -36,6 +36,10 @@ const ClientProgress = React.lazy(() => import('./views/Section-4/ClientProgress
 const Medical = React.lazy(() => import('./views/Section-5/Medical'));
 const Section6 = React.lazy(() => import('./views/Section-6/Section6'));
 
+// ✅ Admin pages (lazy — these are heavy and only IT loads them)
+const AdminAudit = React.lazy(() => import('./views/Dashboard/AdminAudit'));
+const AdminAnalytics = React.lazy(() => import('./views/Dashboard/AdminAnalytics'));
+
 // ✅ Simple loading fallback
 const LoadingFallback = ({ name }) => (
   <Box sx={{ 
@@ -338,12 +342,47 @@ const AppRoutes = () => {
               } />
               
             </Route>
-            <Route path="/admin" element={<Navigate to="/admin/errors" replace />} />
-            <Route path="/admin/errors" element={
+
+            {/* ========================================
+                ✅ ADMIN — its own layout branch, sibling to FullLayout.
+                Guard is applied ONCE on the parent, so every child route
+                inherits it. AdminLayout renders the admin sidebar + <Outlet />.
+                No client-scoped section state applies here.
+                ======================================== */}
+            <Route path="/admin" element={
               <ProtectedRoute requiredRoles={['ITAdmin']}>
-                <AdminErrors />
+                <ComponentErrorBoundary name="AdminLayout">
+                  <AdminLayout />
+                </ComponentErrorBoundary>
               </ProtectedRoute>
-            } />
+            }>
+              <Route index element={<Navigate to="/admin/errors" replace />} />
+
+              <Route path="errors" element={
+                <ComponentErrorBoundary name="Admin Errors">
+                  <AdminErrors />
+                </ComponentErrorBoundary>
+              } />
+
+              <Route path="audit" element={
+                <ComponentErrorBoundary name="Admin Audit">
+                  <Suspense fallback={<LoadingFallback name="Audit Trail" />}>
+                    <AdminAudit />
+                  </Suspense>
+                </ComponentErrorBoundary>
+              } />
+
+              <Route path="analytics" element={
+                <ComponentErrorBoundary name="Admin Analytics">
+                  <Suspense fallback={<LoadingFallback name="Reports & Analytics" />}>
+                    <AdminAnalytics />
+                  </Suspense>
+                </ComponentErrorBoundary>
+              } />
+
+              <Route path="*" element={<Navigate to="/admin/errors" replace />} />
+            </Route>
+
             <Route path="/unauthorized" element={
               <Box sx={{ p: 4, textAlign: 'center' }}>
                 <Typography variant="h4" gutterBottom>Access Denied</Typography>
