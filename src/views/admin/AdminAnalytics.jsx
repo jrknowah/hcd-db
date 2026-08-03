@@ -1,4 +1,8 @@
-// src/pages/admin/AdminAnalytics.jsx
+// src/views/admin/AdminAnalytics.jsx
+//
+// No charting library. The trend line is a native <svg><polyline>, and the
+// report chart is MUI Boxes sized by percentage. Nothing to install.
+
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import axios from 'axios';
 import { useMsal } from '@azure/msal-react';
@@ -21,25 +25,16 @@ import {
   Card,
   CardContent,
   Divider,
+  Tooltip,
   CircularProgress,
   Alert,
   ListSubheader,
+  useTheme,
 } from '@mui/material';
 import {
   Refresh as RefreshIcon,
   Download as DownloadIcon,
 } from '@mui/icons-material';
-import {
-  ResponsiveContainer,
-  BarChart,
-  Bar,
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip as RechartsTooltip,
-} from 'recharts';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
 
@@ -48,6 +43,195 @@ function isoDaysAgo(days) {
   d.setDate(d.getDate() - days);
   return d.toISOString().slice(0, 10);
 }
+
+// ---------------------------------------------------------------------------
+// TrendLine — native SVG line chart. viewBox + preserveAspectRatio="none" lets
+// it stretch to any container width without a resize observer.
+// ---------------------------------------------------------------------------
+function TrendLine({ data, xKey, yKey, height = 220 }) {
+  const theme = useTheme();
+
+  const geometry = useMemo(() => {
+    if (!data?.length) return null;
+
+    const values = data.map((d) => Number(d[yKey]) || 0);
+    const max = Math.max(...values, 1);
+    const W = 1000;
+    const H = 300;
+    const padY = 20;
+
+    const step = data.length > 1 ? W / (data.length - 1) : 0;
+    const points = values.map((v, i) => {
+      const x = data.length > 1 ? i * step : W / 2;
+      const y = H - padY - (v / max) * (H - padY * 2);
+      return { x, y, v, label: data[i][xKey] };
+    });
+
+    const polyline = points.map((p) => `${p.x},${p.y}`).join(' ');
+    // Close the shape along the baseline for the fill underneath.
+    const area = `${points[0].x},${H} ${polyline} ${points[points.length - 1].x},${H}`;
+
+    // Horizontal gridlines at 0 / 50% / 100% of max.
+    const gridlines = [0, 0.5, 1].map((f) => ({
+      y: H - padY - f * (H - padY * 2),
+      value: Math.round(max * f),
+    }));
+
+    return { points, polyline, area, gridlines, max, W, H };
+  }, [data, xKey, yKey]);
+
+  if (!geometry) return null;
+
+  const { points, polyline, area, gridlines, W, H } = geometry;
+
+  return (
+    <Box>
+      <Box sx={{ display: 'flex' }}>
+        {/* Y axis labels sit outside the stretched SVG so they don't distort */}
+        <Box
+          sx={{
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'space-between',
+            pr: 1,
+            py: '4px',
+            height,
+          }}
+        >
+          {[...gridlines].reverse().map((g) => (
+            <Typography key={g.y} variant="caption" color="text.secondary">
+              {g.value}
+            </Typography>
+          ))}
+        </Box>
+
+        <Box sx={{ flexGrow: 1, height }}>
+          <svg
+            viewBox={`0 0 ${W} ${H}`}
+            preserveAspectRatio="none"
+            style={{ width: '100%', height: '100%', display: 'block', overflow: 'visible' }}
+          >
+            {gridlines.map((g) => (
+              <line
+                key={g.y}
+                x1="0"
+                x2={W}
+                y1={g.y}
+                y2={g.y}
+                stroke={theme.palette.divider}
+                strokeWidth="1"
+                vectorEffect="non-scaling-stroke"
+              />
+            ))}
+
+            <polygon points={area} fill={theme.palette.primary.main} opacity="0.12" />
+
+            <polyline
+              points={polyline}
+              fill="none"
+              stroke={theme.palette.primary.main}
+              strokeWidth="2"
+              strokeLinejoin="round"
+              strokeLinecap="round"
+              vectorEffect="non-scaling-stroke"
+            />
+
+            {points.map((p) => (
+              <circle
+                key={p.x}
+                cx={p.x}
+                cy={p.y}
+                r="4"
+                fill={theme.palette.background.paper}
+                stroke={theme.palette.primary.main}
+                strokeWidth="2"
+                vectorEffect="non-scaling-stroke"
+              >
+                <title>{`${p.label}: ${p.v}`}</title>
+              </circle>
+            ))}
+          </svg>
+        </Box>
+      </Box>
+
+      {/* X axis labels — thinned so they never collide */}
+      <Box sx={{ display: 'flex', pl: 4, mt: 0.5 }}>
+        {points.map((p, i) => (
+          <Box key={p.label} sx={{ flex: 1, textAlign: 'center', minWidth: 0 }}>
+            {i % Math.ceil(points.length / 8) === 0 && (
+              <Typography variant="caption" color="text.secondary" noWrap>
+                {p.label}
+              </Typography>
+            )}
+          </Box>
+        ))}
+      </Box>
+    </Box>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// BarList — horizontal bars. Labels read inline, which beats rotated axis text.
+// Suppressed values (null) render as a hatched stub rather than an empty row.
+// ---------------------------------------------------------------------------
+function BarList({ rows, labelKey, valueKey, minCellSize }) {
+  const theme = useTheme();
+
+  const max = useMemo(
+    () => Math.max(...rows.map((r) => Number(r[valueKey]) || 0), 1),
+    [rows, valueKey]
+  );
+
+  return (
+    <Stack spacing={1.25}>
+      {rows.map((row, i) => {
+        const raw = row[valueKey];
+        const suppressed = raw === null || raw === undefined;
+        const value = Number(raw) || 0;
+        const pct = suppressed ? 100 : (value / max) * 100;
+
+        return (
+          <Box key={`${row[labelKey]}-${i}`}>
+            <Stack direction="row" justifyContent="space-between" sx={{ mb: 0.25 }}>
+              <Typography variant="body2" noWrap sx={{ pr: 2 }}>
+                {row[labelKey]}
+              </Typography>
+              <Typography variant="body2" fontWeight={600} color={suppressed ? 'text.secondary' : 'text.primary'}>
+                {suppressed ? `<${minCellSize}` : value.toLocaleString()}
+              </Typography>
+            </Stack>
+
+            <Tooltip title={suppressed ? `Suppressed (cohort under ${minCellSize})` : String(value)}>
+              <Box
+                sx={{
+                  height: 10,
+                  borderRadius: 1,
+                  bgcolor: 'action.hover',
+                  overflow: 'hidden',
+                }}
+              >
+                <Box
+                  sx={{
+                    height: '100%',
+                    width: `${suppressed ? 8 : Math.max(pct, 1)}%`,
+                    borderRadius: 1,
+                    bgcolor: suppressed ? 'transparent' : 'primary.main',
+                    backgroundImage: suppressed
+                      ? `repeating-linear-gradient(45deg, ${theme.palette.text.disabled} 0 4px, transparent 4px 8px)`
+                      : 'none',
+                    transition: 'width 300ms ease',
+                  }}
+                />
+              </Box>
+            </Tooltip>
+          </Box>
+        );
+      })}
+    </Stack>
+  );
+}
+
+// ---------------------------------------------------------------------------
 
 export default function AdminAnalytics() {
   const { instance, accounts } = useMsal();
@@ -148,7 +332,6 @@ export default function AdminAnalytics() {
     fetchSummary();
   }, [fetchCatalog, fetchSummary]);
 
-  // Group catalog entries by category for the picker
   const groupedCatalog = useMemo(() => {
     const groups = {};
     catalog.forEach((r) => {
@@ -157,16 +340,18 @@ export default function AdminAnalytics() {
     return groups;
   }, [catalog]);
 
-  // Derive chart shape from the report result: first string column is the
-  // label axis, first numeric column is the value.
+  // Derive chart shape from the result: first string column is the label,
+  // first numeric (or suppressed-null) column is the value.
   const chart = useMemo(() => {
     if (!report?.rows?.length) return null;
     const sample = report.rows[0];
     const keys = Object.keys(sample).filter((k) => k !== '__suppressed');
     const labelKey = keys.find((k) => typeof sample[k] === 'string');
-    const valueKey = keys.find((k) => typeof sample[k] === 'number' || sample[k] === null);
+    const valueKey = keys.find(
+      (k) => k !== labelKey && (typeof sample[k] === 'number' || sample[k] === null)
+    );
     if (!labelKey || !valueKey) return null;
-    return { labelKey, valueKey, data: report.rows };
+    return { labelKey, valueKey };
   }, [report]);
 
   const columns = report?.rows?.length
@@ -233,20 +418,15 @@ export default function AdminAnalytics() {
 
           {summary.admissionsTrend?.length > 0 && (
             <Paper sx={{ p: 2, mb: 2 }}>
-              <Typography variant="subtitle1" sx={{ mb: 1 }}>
+              <Typography variant="subtitle1" sx={{ mb: 2 }}>
                 Admissions, last 12 months
               </Typography>
-              <Box sx={{ height: 260 }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={summary.admissionsTrend}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="period" />
-                    <YAxis allowDecimals={false} />
-                    <RechartsTooltip />
-                    <Line type="monotone" dataKey="admissions" strokeWidth={2} />
-                  </LineChart>
-                </ResponsiveContainer>
-              </Box>
+              <TrendLine
+                data={summary.admissionsTrend}
+                xKey="period"
+                yKey="admissions"
+                height={220}
+              />
             </Paper>
           )}
         </>
@@ -325,17 +505,14 @@ export default function AdminAnalytics() {
             </Alert>
           )}
 
-          {chart && (
-            <Box sx={{ height: 300, mb: 2 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={chart.data}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey={chart.labelKey} />
-                  <YAxis allowDecimals={false} />
-                  <RechartsTooltip />
-                  <Bar dataKey={chart.valueKey} />
-                </BarChart>
-              </ResponsiveContainer>
+          {chart && report.rows.length > 0 && (
+            <Box sx={{ mb: 3 }}>
+              <BarList
+                rows={report.rows}
+                labelKey={chart.labelKey}
+                valueKey={chart.valueKey}
+                minCellSize={report.minCellSize}
+              />
             </Box>
           )}
 
