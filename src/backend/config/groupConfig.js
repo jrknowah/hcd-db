@@ -1,6 +1,9 @@
 export const GROUP_MAPPINGS = {
   // ✅ Your actual IT group from Azure AD
-  'HOPE_it': '5937eaf5-1e32-4fcc-b2a6-2cc6e518ddd6',        // Your IT group -> IT Admin
+  // Verified against Entra > Groups > HOPE_it > Object Id (Aug 2026).
+  // The previous value (5937eaf5-...) was stale and matched no group in the
+  // token, which is why IT_ADMIN never resolved.
+  'HOPE_it': '47e60a70-aeab-4f3e-80bd-940cc951622f',
   
   // Keep the original IDs for future use (in case other groups are created later)
   'HOPE_case': '59b40286-56c6-4b1e-8de2-854c7d91179b',
