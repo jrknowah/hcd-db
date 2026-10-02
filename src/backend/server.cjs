@@ -147,7 +147,7 @@ app.post('/saveClientAllergies', async (req, res) => {
 app.use((req, res, next) => {
   console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
   if (req.body && Object.keys(req.body).length > 0) {
-    console.log('📤 Request body:', req.body);
+    //console.log('📤 Request body:', req.body);
   }
   next();
 });
@@ -750,36 +750,36 @@ app.get('/api/health', (req, res) => {
 });
 
 // Update the debug endpoint as well
-app.get('/api/debug/database', async (req, res) => {
-  try {
-    if (!dbConnected || !dbModule) {
-      return res.json({
-        status: 'Database not connected',
-        usingMockData: true,
-        routes: {
-          clients: clientsRouterLoaded ? 'Real router loaded but DB not connected' : 'Mock router',
-          clientFace: clientFaceRouterLoaded ? 'Real router loaded but DB not connected' : 'Not loaded',
+// app.get('/api/debug/database', async (req, res) => {
+//   try {
+//     if (!dbConnected || !dbModule) {
+//       return res.json({
+//         status: 'Database not connected',
+//         usingMockData: true,
+//         routes: {
+//           clients: clientsRouterLoaded ? 'Real router loaded but DB not connected' : 'Mock router',
+//           clientFace: clientFaceRouterLoaded ? 'Real router loaded but DB not connected' : 'Not loaded',
           
-          // Section 3
-          bioSocial: bioSocialRouterLoaded ? 'Real router loaded but DB not connected' : 'Not loaded',
-          mentalHealth: mentalHealthRouterLoaded ? 'Real router loaded but DB not connected' : 'Not loaded',
-          reassessment: reassessmentRouterLoaded ? 'Real router loaded but DB not connected' : 'Not loaded',
-          mentalArchive: mentalArchiveRouterLoaded ? 'Real router loaded but DB not connected' : 'Not loaded',
+//           // Section 3
+//           bioSocial: bioSocialRouterLoaded ? 'Real router loaded but DB not connected' : 'Not loaded',
+//           mentalHealth: mentalHealthRouterLoaded ? 'Real router loaded but DB not connected' : 'Not loaded',
+//           reassessment: reassessmentRouterLoaded ? 'Real router loaded but DB not connected' : 'Not loaded',
+//           mentalArchive: mentalArchiveRouterLoaded ? 'Real router loaded but DB not connected' : 'Not loaded',
           
-          // Section 4
-          carePlans: carePlansRouterLoaded ? 'Real router loaded but DB not connected' : 'Mock router',
-          encounterNotes: encounterNotesRouterLoaded ? 'Real router loaded but DB not connected' : 'Mock router',
+//           // Section 4
+//           carePlans: carePlansRouterLoaded ? 'Real router loaded but DB not connected' : 'Mock router',
+//           encounterNotes: encounterNotesRouterLoaded ? 'Real router loaded but DB not connected' : 'Mock router',
           
-          // Section 5
-          medFaceSheet: medFaceSheetRouterLoaded ? 'Real router loaded but DB not connected' : 'Mock router',
+//           // Section 5
+//           medFaceSheet: medFaceSheetRouterLoaded ? 'Real router loaded but DB not connected' : 'Mock router',
           
-          // File Management
-          files: filesRouterLoaded ? 'Real router loaded but DB not connected' : 'Mock router',
-          referrals: referralsRouterLoaded ? 'Real router loaded but DB not connected' : 'Mock router',
-          discharge: dischargeRouterLoaded ? 'Real router loaded but DB not connected' : 'Mock router'
-        }
-      });
-    }
+//           // File Management
+//           files: filesRouterLoaded ? 'Real router loaded but DB not connected' : 'Mock router',
+//           referrals: referralsRouterLoaded ? 'Real router loaded but DB not connected' : 'Mock router',
+//           discharge: dischargeRouterLoaded ? 'Real router loaded but DB not connected' : 'Mock router'
+//         }
+//       });
+//     }
 
     console.log('🔍 Getting database information...');
     
@@ -1231,14 +1231,14 @@ try {
 }
 
 
-app.get('/api/debug/storage', (req, res) => {
-  res.json({
-    hasConnectionString: !!process.env.AZURE_STORAGE_CONNECTION_STRING,
-    connectionStringLength: process.env.AZURE_STORAGE_CONNECTION_STRING?.length || 0,
-    startsCorrectly: process.env.AZURE_STORAGE_CONNECTION_STRING?.startsWith('DefaultEndpointsProtocol='),
-    containerName: process.env.AZURE_CONTAINER_NAME || 'not set'
-  });
-});
+// app.get('/api/debug/storage', (req, res) => {
+//   res.json({
+//     hasConnectionString: !!process.env.AZURE_STORAGE_CONNECTION_STRING,
+//     connectionStringLength: process.env.AZURE_STORAGE_CONNECTION_STRING?.length || 0,
+//     startsCorrectly: process.env.AZURE_STORAGE_CONNECTION_STRING?.startsWith('DefaultEndpointsProtocol='),
+//     containerName: process.env.AZURE_CONTAINER_NAME || 'not set'
+//   });
+// });
 app.get('/api/test-storage', async (req, res) => {
   try {
     const { BlobServiceClient } = require('@azure/storage-blob');
@@ -1318,7 +1318,7 @@ if (process.env.NODE_ENV !== 'test') {
       console.log(`📝 Environment: ${process.env.NODE_ENV || 'development'}`);
       console.log(`💾 Database: ${dbConnected ? '✅ Azure SQL Connected' : '⚠️  Mock Data Only'}`);
       console.log(`☁️  Azure Storage: ${process.env.AZURE_STORAGE_CONNECTION_STRING ? '✅ Configured' : '⚠️  Not configured'}`);
-      console.log('STORAGE STRING:', process.env.AZURE_STORAGE_CONNECTION_STRING);
+      //console.log('STORAGE STRING:', process.env.AZURE_STORAGE_CONNECTION_STRING);
       // const connStr = process.env.AZURE_STORAGE_CONNECTION_STRING;
       // console.log('Using connection string:', connStr); // add this temporarily
       console.log(`🔗 Health check: http://localhost:${PORT}/api/health`);

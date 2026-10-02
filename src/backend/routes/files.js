@@ -127,6 +127,17 @@ function sanitizeSegment(s) {
     .replace(/\s+/g, '_');
 }
 
+// Content type to send with inline previews, so the browser displays
+// the file instead of downloading it
+function contentTypeFor(name = '') {
+  const n = name.toLowerCase();
+  if (n.endsWith('.pdf')) return 'application/pdf';
+  if (n.endsWith('.png')) return 'image/png';
+  if (/\.jpe?g$/.test(n)) return 'image/jpeg';
+  if (n.endsWith('.gif')) return 'image/gif';
+  return undefined;
+}
+
 function timestamp() {
   return new Date().toISOString().replace(/[:.]/g, '-');
 }
@@ -279,12 +290,21 @@ router.get('/file/download-url', async (req, res) => {
   console.log('🔗 download-url called with:', req.query);
   try {
     const { blobName, expiryHours = 1 } = req.query;
+    const inline = req.query.inline === 'true';
 
     if (!blobName) {
       return res.status(400).json({ message: 'blobName is required' });
     }
 
-    console.log(`🔗 Generating download URL for: ${blobName}`);
+    console.log(`🔗 Generating ${inline ? 'preview' : 'download'} URL for: ${blobName}`);
+
+    // Previews get a short 5-minute link; downloads keep expiryHours
+    const expiresOn = inline
+      ? new Date(Date.now() + 5 * 60 * 1000)
+      : new Date(Date.now() + Number(expiryHours) * 60 * 60 * 1000);
+    const inlineHeaders = inline
+      ? { contentDisposition: 'inline', contentType: contentTypeFor(blobName) }
+      : {};
 
     if (blobServiceClient) {
       try {
@@ -302,7 +322,6 @@ router.get('/file/download-url', async (req, res) => {
 
           if (accountName && accountKey) {
             const sharedKeyCredential = new StorageSharedKeyCredential(accountName, accountKey);
-            const expiresOn = new Date(Date.now() + Number(expiryHours) * 60 * 60 * 1000);
 
             const sasToken = generateBlobSASQueryParameters(
               {
@@ -310,19 +329,47 @@ router.get('/file/download-url', async (req, res) => {
                 blobName,
                 permissions: BlobSASPermissions.parse('r'),
                 expiresOn,
+                ...inlineHeaders,
               },
               sharedKeyCredential
             ).toString();
 
             const signedUrl = `${blobClient.url}?${sasToken}`;
-            console.log(`   ✅ SAS URL generated (expires in ${expiryHours}h)`);
+            console.log('   ✅ SAS URL generated (account key)');
             return res.json({ url: signedUrl, expiresOn });
           }
         }
 
-        // Managed Identity: proxy stream through backend
-        const proxyUrl = `${req.protocol}://${req.get('host')}/api/file/stream/${encodeURIComponent(blobName)}`;
-        console.log(`   ℹ️  Managed Identity in use — returning proxy URL`);
+        // Managed Identity: user delegation SAS (signed by Entra ID, no account key)
+        if (HAS_MANAGED_IDENTITY) {
+          try {
+            const startsOn = new Date(Date.now() - 5 * 60 * 1000); // clock-skew buffer
+            const delegationKey = await blobServiceClient.getUserDelegationKey(startsOn, expiresOn);
+
+            const sasToken = generateBlobSASQueryParameters(
+              {
+                containerName: CONTAINER_NAME,
+                blobName,
+                permissions: BlobSASPermissions.parse('r'),
+                startsOn,
+                expiresOn,
+                ...inlineHeaders,
+              },
+              delegationKey,
+              STORAGE_ACCOUNT
+            ).toString();
+
+            console.log('   ✅ User delegation SAS generated (Managed Identity)');
+            return res.json({ url: `${blobClient.url}?${sasToken}`, expiresOn });
+          } catch (udkErr) {
+            console.error('❌ User delegation SAS failed:', udkErr.code || udkErr.message);
+            // fall through to the proxy below
+          }
+        }
+
+        // Last resort: proxy stream through backend (always https behind App Service)
+        const proxyUrl = `https://${req.get('host')}/api/file/stream/${encodeURIComponent(blobName)}${inline ? '?inline=true' : ''}`;
+        console.log('   ℹ️  Returning proxy URL');
         return res.json({ url: proxyUrl });
 
       } catch (azureErr) {
@@ -784,7 +831,8 @@ router.get('/file/stream/*blobPath', async (req, res) => {
     const contentType = downloadResponse.contentType || 'application/octet-stream';
     const contentLength = downloadResponse.contentLength;
     res.setHeader('Content-Type', contentType);
-    res.setHeader('Content-Disposition', `attachment; filename="${path.basename(blobName)}"`);
+    const disposition = req.query.inline === 'true' ? 'inline' : 'attachment';
+    res.setHeader('Content-Disposition', `${disposition}; filename="${path.basename(blobName)}"`);
     if (contentLength) res.setHeader('Content-Length', contentLength);
 
     downloadResponse.readableStreamBody.pipe(res);

@@ -230,30 +230,22 @@ class AzureBlobService {
    * @param {number} expiryHours - Hours until expiry (default: 1)
    * @returns {Promise<string>} Temporary download URL
    */
-  async generateDownloadUrl(blobName, expiryHours = 1) {
+    async generateDownloadUrl(blobName, expiryHours = 1, { inline = false } = {}) {
     try {
-      // For mock mode, return a mock URL
       if (this.useMockMode) {
         const mockUrl = `${window.location.origin}/mock/downloads/${encodeURIComponent(blobName)}`;
         console.log(`Mock download URL: ${mockUrl}`);
         return mockUrl;
       }
 
-      // Real API call
-      console.log(`Getting download URL for ${blobName} from backend...`);
-      
       const response = await axios.get(`${this.apiUrl}/api/file/download-url`, {
-        params: { blobName, expiryHours }
+        params: { blobName, expiryHours, inline }
       });
-      
+
       return response.data.url;
-      
     } catch (error) {
       console.error(`Failed to generate download URL for ${blobName}:`, error);
-      
-      // Fallback to direct backend download endpoint
       const fallbackUrl = `${this.apiUrl}/api/file/download/${encodeURIComponent(blobName)}`;
-      console.log(`Using fallback download URL: ${fallbackUrl}`);
       return fallbackUrl;
     }
   }

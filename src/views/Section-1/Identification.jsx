@@ -319,11 +319,47 @@ const Identification = () => {
     }
   };
 
-  const handlePreviewFile = (file) => {
-    setFilePreview(file);
-    setPreviewOpen(true);
-  };
+  const handlePreviewFile = async (file) => {
+    const name = file.fileName.toLowerCase();
+    const isPdf = name.endsWith('.pdf');
+    const isImage = /\.(jpe?g|png|gif)$/.test(name);
 
+    // Mock mode or unsupported types: keep the existing dialog (download fallback)
+    if (effectiveMockData || (!isPdf && !isImage)) {
+      setFilePreview(file);
+      setPreviewOpen(true);
+      return;
+    }
+
+    // Open the tab immediately, inside the click, or the popup blocker kills it
+    const tab = window.open('', '_blank');
+
+    try {
+      const url = await azureBlobService.generateDownloadUrl(
+        file.blobName || file.fileName,
+        1,
+        { inline: true }
+      );
+      if (tab) {
+        tab.opener = null;
+        tab.location.href = url;
+      } else {
+        window.location.assign(url); // popup blocked: open in same tab
+      }
+
+      if (user && user.id !== 'mock-user-123') {
+        logUserAction(user, 'VIEW_DOCUMENT', {
+          clientID: client.clientID,
+          fileName: file.fileName,
+          blobName: file.blobName
+        }).catch(() => {});
+      }
+    } catch (err) {
+      tab?.close();
+      console.error('❌ Preview failed:', err);
+      setError(`Failed to open ${file.fileName}: ${err.message}`);
+    }
+  };
   const getFileIcon = (file) => {
     const fileName = file.fileName.toLowerCase();
     if (fileName.endsWith('.pdf')) return <PdfIcon color="error" />;
