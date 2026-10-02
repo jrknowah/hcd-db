@@ -48,7 +48,6 @@ const SECTIONS = [
 export default function ClientExportPDF({ clientID: propClientID }) {
   const { instance, accounts } = useMsal();
   const selectedClient = useSelector((state) => state.clients?.selectedClient);
-  const azureToken     = useSelector((state) => state.auth?.azureToken);
 
   const clientID   = propClientID || selectedClient?.clientID;
   const clientName = selectedClient
@@ -65,51 +64,37 @@ export default function ClientExportPDF({ clientID: propClientID }) {
   // Using scopes ['openid', 'profile'] forces MSAL to return result.idToken
   // instead of an access token. Never use 'User.Read' here — that returns a
   // Graph access token (aud = 00000003-...) which the backend cannot verify.
-  const getAuthToken = async () => {
-    if (accounts && accounts.length > 0) {
-      try {
-        const result = await instance.acquireTokenSilent({
-          scopes: ['openid', 'profile'],
-          account: accounts[0],
-        });
-        if (result?.idToken) {
-          console.log('✅ Export: got idToken from MSAL');
-          return result.idToken;
-        }
-      } catch (e) {
-        console.warn('acquireTokenSilent failed:', e.message);
-        // Try interactive fallback
-        try {
-          const result = await instance.acquireTokenPopup({
-            scopes: ['openid', 'profile'],
-            account: accounts[0],
-          });
-          if (result?.idToken) {
-            console.log('✅ Export: got idToken from popup');
-            return result.idToken;
-          }
-        } catch (popupErr) {
-          console.warn('acquireTokenPopup failed:', popupErr.message);
-        }
-      }
+  // Only MSAL ID tokens are accepted. The token saved in Redux/localStorage at
+  // login is a Graph access token, which the backend can never verify, so it
+  // is deliberately not used as a fallback.
+  const getAuthToken = async ({ forceRefresh = false } = {}) => {
+    const account = instance.getActiveAccount() || accounts?.[0];
+    if (!account) return null;
+
+    const request = { scopes: ['openid', 'profile'], account, forceRefresh };
+    try {
+      const result = await instance.acquireTokenSilent(request);
+      if (result?.idToken) return result.idToken;
+    } catch (e) {
+      console.warn('acquireTokenSilent failed:', e.message);
     }
 
-    // Fall back to Redux store (may already be an idToken stored at login)
-    if (azureToken && azureToken !== 'no-token') {
-      console.log('✅ Export: using Redux azureToken');
-      return azureToken;
+    // Interactive fallback (e.g. session expired)
+    try {
+      const result = await instance.acquireTokenPopup({ scopes: ['openid', 'profile'], account });
+      if (result?.idToken) return result.idToken;
+    } catch (popupErr) {
+      console.warn('acquireTokenPopup failed:', popupErr.message);
     }
 
-    // Fall back to localStorage
-    const stored = localStorage.getItem('azureToken');
-    if (stored && stored !== 'no-token') {
-      console.log('✅ Export: using localStorage azureToken');
-      return stored;
-    }
-
-    console.warn('⚠️ Export: no token available');
     return null;
   };
+
+  const fetchExport = (token) =>
+    fetch(`${API_BASE}/api/export/client/${encodeURIComponent(clientID)}/pdf`, {
+      method: 'GET',
+      headers: { 'Authorization': `Bearer ${token}` },
+    });
 
   // ── Export handler ──────────────────────────────────────────────────────────
   const handleExport = async () => {
@@ -134,19 +119,13 @@ export default function ClientExportPDF({ clientID: propClientID }) {
         throw new Error('Could not acquire authentication token. Please sign out and sign back in.');
       }
 
-      console.log('📤 Fetching:', `${API_BASE}/api/export/client/${clientID}/pdf`);
-      console.log('🔑 Token prefix:', authToken?.substring(0, 20));
+      let response = await fetchExport(authToken);
 
-      const response = await fetch(
-        `${API_BASE}/api/export/client/${encodeURIComponent(clientID)}/pdf`,
-        {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${authToken}`,
-          },
-        }
-      );
+      // A cached ID token can be stale (e.g. after Microsoft rotates signing keys) — retry once with a fresh one
+      if (response.status === 401) {
+        const freshToken = await getAuthToken({ forceRefresh: true });
+        if (freshToken) response = await fetchExport(freshToken);
+      }
 
       clearInterval(ticker);
 
