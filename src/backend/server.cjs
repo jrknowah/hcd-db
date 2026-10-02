@@ -41,7 +41,8 @@ app.use(cors({
     'http://localhost:5173',
     'https://zealous-river-09541d21e.1.azurestaticapps.net' 
   ],
-  credentials: true
+  credentials: true,
+  exposedHeaders: ['Content-Disposition']
 }));
 app.use(express.json());
 
