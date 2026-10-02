@@ -1690,21 +1690,21 @@ function drawS4MetaGrid(doc, pairs) {
 
     // Left label
     doc.fillColor('#666666').font('Helvetica-Bold').fontSize(7)
-       .text(`${left[0]}:`, ml + pad, y + 3, { width: lblW, lineBreak: false });
+       .text(`${left[0]}:`, ml + pad, y + 3, { width: lblW, height: rowH - 3, ellipsis: true, lineBreak: false });
     doc.y = y + rowH;
     // Left value
     doc.fillColor('#000000').font('Helvetica').fontSize(7.5)
-       .text(safeStr(left[1]), ml + pad + lblW + 2, y + 3, { width: colW - pad - lblW - 6, lineBreak: false });
+       .text(safeStr(left[1]), ml + pad + lblW + 2, y + 3, { width: colW - pad - lblW - 6, height: rowH - 3, ellipsis: true, lineBreak: false });
     doc.y = y + rowH;
 
     if (right) {
       // Right label
       doc.fillColor('#666666').font('Helvetica-Bold').fontSize(7)
-         .text(`${right[0]}:`, ml + colW + pad, y + 3, { width: lblW, lineBreak: false });
+         .text(`${right[0]}:`, ml + colW + pad, y + 3, { width: lblW, height: rowH - 3, ellipsis: true, lineBreak: false });
       doc.y = y + rowH;
       // Right value
       doc.fillColor('#000000').font('Helvetica').fontSize(7.5)
-         .text(safeStr(right[1]), ml + colW + pad + lblW + 2, y + 3, { width: colW - pad - lblW - 6, lineBreak: false });
+         .text(safeStr(right[1]), ml + colW + pad + lblW + 2, y + 3, { width: colW - pad - lblW - 6, height: rowH - 3, ellipsis: true, lineBreak: false });
       doc.y = y + rowH;
     }
 
@@ -2009,8 +2009,7 @@ async function renderSection5(doc, pool, clientID) {
   // ══════════════════════════════════════════════════════════════════════════
   // 4 — Nursing Admission Assessment
   // ══════════════════════════════════════════════════════════════════════════
-  doc.addPage();
-  doc.y = 40;
+  doc.y += 12;                               // banner adds a page only if needed
   drawS4SubsectionBanner(doc, 4, 'Nursing Admission Assessment');
   try {
     const r = await pool.request()
@@ -2064,8 +2063,7 @@ async function renderSection5(doc, pool, clientID) {
   // ══════════════════════════════════════════════════════════════════════════
   // 5 — Vital Signs Log
   // ══════════════════════════════════════════════════════════════════════════
-  doc.addPage();
-  doc.y = 40;
+  doc.y += 12;                               // banner adds a page only if needed
   drawS4SubsectionBanner(doc, 5, 'Vital Signs Log (Most Recent 20)');
   try {
     const r = await pool.request()
@@ -2096,8 +2094,7 @@ async function renderSection5(doc, pool, clientID) {
   // ══════════════════════════════════════════════════════════════════════════
   // 6 — Medication Administration Record
   // ══════════════════════════════════════════════════════════════════════════
-  doc.addPage();
-  doc.y = 40;
+  doc.y += 12;                               // banner adds a page only if needed
   drawS4SubsectionBanner(doc, 6, 'Medication Administration Record (Most Recent 30)');
   try {
     const r = await pool.request()
@@ -2128,8 +2125,7 @@ async function renderSection5(doc, pool, clientID) {
   // ══════════════════════════════════════════════════════════════════════════
   // 7 — Medical Appointments
   // ══════════════════════════════════════════════════════════════════════════
-  doc.addPage();
-  doc.y = 40;
+  doc.y += 12;                               // banner adds a page only if needed
   drawS4SubsectionBanner(doc, 7, 'Medical Appointments');
   try {
     const r = await pool.request()
@@ -2162,8 +2158,7 @@ async function renderSection5(doc, pool, clientID) {
   // ══════════════════════════════════════════════════════════════════════════
   // 8 — Nursing Archive Index
   // ══════════════════════════════════════════════════════════════════════════
-  doc.addPage();
-  doc.y = 40;
+  doc.y += 12;                               // banner adds a page only if needed
   drawS4SubsectionBanner(doc, 8, 'Nursing Archive Index');
   try {
     const r = await pool.request()
