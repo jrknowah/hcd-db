@@ -99,6 +99,17 @@ export const getUserPermissionLevel = (userRoles) => {
 };
 
 // Role display names for UI
+// Admin console (/admin/*) access. The app assigns roles through group
+// membership, so HOPE_it members are admins; the 'ITAdmin' Entra app role is
+// also honoured. Must stay in sync with requireAdmin in middleware/auth.js.
+export const ADMIN_APP_ROLE = 'ITAdmin';
+
+export const isAdminAccount = (account) => {
+  const claims = account?.idTokenClaims || {};
+  return (claims.roles || []).includes(ADMIN_APP_ROLE) ||
+         (claims.groups || []).includes(GROUP_MAPPINGS.HOPE_it);
+};
+
 export const ROLE_DISPLAY_NAMES = {
   IT_ADMIN: 'IT Administrator',
   LEVEL1: 'Level 1 Staff',
