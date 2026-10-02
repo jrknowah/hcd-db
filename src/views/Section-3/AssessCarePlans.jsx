@@ -37,6 +37,7 @@ import {
     Assignment as AssignmentIcon
 } from '@mui/icons-material';
 import { useClientPersistence } from '../../hooks/useClientPersistence';
+import ClientInfoBanner from '../../components/shared/ClientInfoBanner';
 import { useDispatch, useSelector } from "react-redux";
 import {
     fetchAssessmentData,
@@ -407,6 +408,7 @@ const AssessCarePlans = () => {
 
             {/* Tab Content */}
             <Box sx={{ p: 3 }}>
+                <ClientInfoBanner />
                 <TabPanel value={activeTab} index={0}>
                     <AssessmentFaceSheetDashboard />
                 </TabPanel>

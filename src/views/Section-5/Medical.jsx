@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useDispatch } from 'react-redux';
 import { useClientPersistence } from '../../hooks/useClientPersistence';
+import ClientInfoBanner from '../../components/shared/ClientInfoBanner';
 import {
   Card,
   CardContent,
@@ -171,6 +172,7 @@ const Medical = () => {
 
           {/* Tab Content */}
           <Box sx={{ p: 3 }}>
+            <ClientInfoBanner sx={{ mb: 3 }} />
             {/* Main/Timeline Tab */}
             {activeTab === 0 && (
               <Box>

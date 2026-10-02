@@ -19,6 +19,7 @@ import logUserAction from '../../backend/config/logAction';
 import ClientFace from './ClientFace';
 import Referrals from './Referrals';
 import ClientExportPDF from '../../components/ClientExportPDF';
+import ClientInfoBanner from '../../components/shared/ClientInfoBanner';
 
 const DOC_TYPES = [
   "Identification Card", "Driver's License", "Social Security Card", "Permanent Resident Alien Card",
@@ -417,6 +418,8 @@ const Identification = () => {
         <Tab label="Referrals" />
         <Tab label="Export Complete Chart" />
       </Tabs>
+
+      <ClientInfoBanner sx={{ mb: 2 }} />
 
       {/* Tab 0: Client Face Sheet */}
       {tabIndex === 0 && <Box p={3}><ClientFace /></Box>}

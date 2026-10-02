@@ -31,6 +31,7 @@ import EncounterNote from "./EncounterNote";
 import CarePlan from "./CarePlan";
 import CmNoteArchive from "./CmNoteArchive";
 import { useClientPersistence } from '../../hooks/useClientPersistence';
+import ClientInfoBanner from '../../components/shared/ClientInfoBanner';
 import {
   fetchCarePlans,
   setCurrentClient as setCarePlanClient
@@ -257,6 +258,7 @@ const ClientProgress = () => {
 
           {/* Tab Content */}
           <Box sx={{ p: 3 }}>
+            <ClientInfoBanner sx={{ mb: 3 }} />
             {/* Timeline Tab */}
             <Box role="tabpanel" hidden={activeTab !== 0}>
               {activeTab === 0 && (

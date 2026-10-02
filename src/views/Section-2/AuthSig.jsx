@@ -57,6 +57,7 @@ import {
 
 // ✅ Client persistence hook
 import { useClientPersistence } from '../../hooks/useClientPersistence';
+import ClientInfoBanner from '../../components/shared/ClientInfoBanner';
 
 // Form component imports
 import ClientOrientation from './ClientOrientation';
@@ -1122,6 +1123,8 @@ const AuthSig = () => {
           />
         </Tabs>
       </Paper>
+
+      <ClientInfoBanner sx={{ mb: 3 }} />
 
       <TabPanel value={activeTab} index={0}>
         <CategoryFilter 
