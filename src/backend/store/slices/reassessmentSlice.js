@@ -61,6 +61,45 @@ export const updateReassessmentData = createAsyncThunk(
     }
 );
 
+export const fetchReassessmentList = createAsyncThunk(
+    'reassessment/fetchReassessmentList',
+    async (clientID, { rejectWithValue }) => {
+        try {
+            const response = await axios.get(`${HCD_API}/api/reassessment/${clientID}/records`);
+            return Array.isArray(response.data) ? response.data : [];
+        } catch (error) {
+            console.error('Error fetching reassessment list:', error);
+            return rejectWithValue(error.response?.data || 'Failed to fetch reassessments');
+        }
+    }
+);
+
+export const createReassessment = createAsyncThunk(
+    'reassessment/createReassessment',
+    async ({ clientID, reassessmentData }, { rejectWithValue }) => {
+        try {
+            const response = await axios.post(`${HCD_API}/api/reassessment/${clientID}/records`, reassessmentData);
+            return response.data;
+        } catch (error) {
+            console.error('Error creating reassessment:', error);
+            return rejectWithValue(error.response?.data || 'Failed to create reassessment');
+        }
+    }
+);
+
+export const deleteReassessment = createAsyncThunk(
+    'reassessment/deleteReassessment',
+    async (reassessmentID, { rejectWithValue }) => {
+        try {
+            await axios.delete(`${HCD_API}/api/reassessment/record/${reassessmentID}`);
+            return reassessmentID;
+        } catch (error) {
+            console.error('Error deleting reassessment:', error);
+            return rejectWithValue(error.response?.data || 'Failed to delete reassessment');
+        }
+    }
+);
+
 export const completeReassessment = createAsyncThunk(
     'reassessment/completeReassessment',
     async ({ clientID, completionData }, { rejectWithValue }) => {
@@ -203,6 +242,11 @@ const initialState = {
     // ✅ NEW: track current client for client-switch wipe
     currentClientID: null,
 
+    // All reassessments for the current client (list view)
+    records: [],
+    recordsLoading: false,
+    recordsError: null,
+
     loading: false,
     error: null,
 
@@ -257,6 +301,8 @@ const reassessmentSlice = createSlice({
             if (newClientID !== state.currentClientID) {
                 state.currentClientID      = newClientID;
                 state.data                 = {};
+                state.records              = [];
+                state.recordsError         = null;
                 state.formData             = emptyFormData();
                 state.completionStatus     = 'Not Started';
                 state.completionPercentage = 0;
@@ -286,6 +332,14 @@ const reassessmentSlice = createSlice({
             state.searchError = null;
             state.saveError = null;
             state.updateError = null;
+        },
+
+        // Clear the form for a new reassessment (or before loading one to edit)
+        resetForm: (state) => {
+            state.formData             = emptyFormData();
+            state.completionStatus     = 'Not Started';
+            state.completionPercentage = 0;
+            state.isCompleted          = false;
         },
 
         // Update form data
@@ -441,6 +495,43 @@ const reassessmentSlice = createSlice({
                 state.saveError = action.payload;
             })
 
+        // ✅ Reassessment List
+        builder
+            .addCase(fetchReassessmentList.pending, (state) => {
+                state.recordsLoading = true;
+                state.recordsError = null;
+            })
+            .addCase(fetchReassessmentList.fulfilled, (state, action) => {
+                state.recordsLoading = false;
+                state.records = action.payload;
+            })
+            .addCase(fetchReassessmentList.rejected, (state, action) => {
+                state.recordsLoading = false;
+                state.recordsError = action.payload;
+            })
+
+        // ✅ Create Reassessment
+        builder
+            .addCase(createReassessment.pending, (state) => {
+                state.saving = true;
+                state.saveError = null;
+                state.saveSuccess = false;
+            })
+            .addCase(createReassessment.fulfilled, (state) => {
+                state.saving = false;
+                state.saveSuccess = true;
+            })
+            .addCase(createReassessment.rejected, (state, action) => {
+                state.saving = false;
+                state.saveError = action.payload;
+            })
+
+        // ✅ Delete Reassessment
+        builder
+            .addCase(deleteReassessment.fulfilled, (state, action) => {
+                state.records = state.records.filter(r => r.reassessmentID !== action.payload);
+            })
+
         // ✅ Update Reassessment Data
         builder
             .addCase(updateReassessmentData.pending, (state) => {
@@ -528,6 +619,7 @@ const reassessmentSlice = createSlice({
 export const {
     setCurrentClient,
     resetReassessmentState,
+    resetForm,
     clearErrors,
     updateFormData,
     updateFormField,
@@ -539,8 +631,12 @@ export const {
 } = reassessmentSlice.actions;
 
 // ✅ Selectors
+const EMPTY_RECORDS = [];
 export const selectReassessmentData = (state) => state.reassessment?.data || {};
 export const selectFormData = (state) => state.reassessment?.formData || {};
+export const selectReassessmentRecords = (state) => state.reassessment?.records || EMPTY_RECORDS;
+export const selectRecordsLoading = (state) => state.reassessment?.recordsLoading || false;
+export const selectRecordsError = (state) => state.reassessment?.recordsError || null;
 export const selectSummary = (state) => state.reassessment?.summary || {};
 export const selectAllReassessments = (state) => state.reassessment?.allReassessments || [];
 export const selectSearchResults = (state) => state.reassessment?.searchResults || [];

@@ -727,6 +727,9 @@ app.get('/api/health', (req, res) => {
       ],
       reassessment: [
         'GET /api/reassessment/:clientID',
+        'GET /api/reassessment/:clientID/records',
+        'POST /api/reassessment/:clientID/records',
+        'DELETE /api/reassessment/record/:reassessmentID',
         'GET /api/reassessment/assessment/:assessmentID',
         'POST /api/reassessment/:clientID',
         'PUT /api/reassessment/:clientID',
