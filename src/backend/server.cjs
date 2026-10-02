@@ -749,103 +749,6 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// Update the debug endpoint as well
-// app.get('/api/debug/database', async (req, res) => {
-//   try {
-//     if (!dbConnected || !dbModule) {
-//       return res.json({
-//         status: 'Database not connected',
-//         usingMockData: true,
-//         routes: {
-//           clients: clientsRouterLoaded ? 'Real router loaded but DB not connected' : 'Mock router',
-//           clientFace: clientFaceRouterLoaded ? 'Real router loaded but DB not connected' : 'Not loaded',
-          
-//           // Section 3
-//           bioSocial: bioSocialRouterLoaded ? 'Real router loaded but DB not connected' : 'Not loaded',
-//           mentalHealth: mentalHealthRouterLoaded ? 'Real router loaded but DB not connected' : 'Not loaded',
-//           reassessment: reassessmentRouterLoaded ? 'Real router loaded but DB not connected' : 'Not loaded',
-//           mentalArchive: mentalArchiveRouterLoaded ? 'Real router loaded but DB not connected' : 'Not loaded',
-          
-//           // Section 4
-//           carePlans: carePlansRouterLoaded ? 'Real router loaded but DB not connected' : 'Mock router',
-//           encounterNotes: encounterNotesRouterLoaded ? 'Real router loaded but DB not connected' : 'Mock router',
-          
-//           // Section 5
-//           medFaceSheet: medFaceSheetRouterLoaded ? 'Real router loaded but DB not connected' : 'Mock router',
-          
-//           // File Management
-//           files: filesRouterLoaded ? 'Real router loaded but DB not connected' : 'Mock router',
-//           referrals: referralsRouterLoaded ? 'Real router loaded but DB not connected' : 'Mock router',
-//           discharge: dischargeRouterLoaded ? 'Real router loaded but DB not connected' : 'Mock router'
-//         }
-//       });
-//     }
-
-    console.log('🔍 Getting database information...');
-    
-    const tables = await dbModule.getTables();
-    console.log('📋 Found tables:', tables);
-    
-    const debugInfo = {
-      status: 'Connected',
-      tables: tables,
-      tableStructures: {},
-      routes: {
-        // Section 1 & 2
-        clients: clientsRouterLoaded ? 'Real Azure SQL router' : 'Mock router',
-        clientFace: clientFaceRouterLoaded ? 'Real Azure SQL router' : 'Not loaded',
-        
-        // Section 3
-        bioSocial: bioSocialRouterLoaded ? 'Real Azure SQL router' : 'Not loaded',
-        mentalHealth: mentalHealthRouterLoaded ? 'Real Azure SQL router' : 'Not loaded',
-        reassessment: reassessmentRouterLoaded ? 'Real Azure SQL router' : 'Not loaded',
-        mentalArchive: mentalArchiveRouterLoaded ? 'Real Azure SQL router' : 'Not loaded',
-        
-        // Section 4
-        carePlans: carePlansRouterLoaded ? 'Real Azure SQL router' : 'Mock router',
-        encounterNotes: encounterNotesRouterLoaded ? 'Real Azure SQL router' : 'Mock router',
-        
-        // Section 5
-        medFaceSheet: medFaceSheetRouterLoaded ? 'Real Azure SQL router' : 'Mock router',
-        
-        // File Management
-        files: filesRouterLoaded ? 'Real Azure Blob router' : 'Mock router',
-        referrals: referralsRouterLoaded ? 'Real Azure SQL router' : 'Mock router',
-        discharge: dischargeRouterLoaded ? 'Real Azure SQL router' : 'Mock router'
-      }
-    };
-
-    // Get structure for all relevant tables
-    for (const table of tables) {
-      if (table.toLowerCase().includes('client') || 
-          table.toLowerCase().includes('careplan') || 
-          table.toLowerCase().includes('encounter') ||
-          table.toLowerCase().includes('biosocial') ||
-          table.toLowerCase().includes('mentalhealth') ||
-          table.toLowerCase().includes('reassessment') ||
-          table.toLowerCase().includes('mental') ||
-          table.toLowerCase().includes('archive')) {
-        debugInfo.tableStructures[table] = await dbModule.getTableStructure(table);
-      }
-    }
-
-    res.json(debugInfo);
-  } catch (error) {
-    console.error('❌ Debug endpoint error:', error);
-    res.status(500).json({
-      error: error.message,
-      stack: error.stack,
-      routes: {
-        // All routes status here...
-        clients: clientsRouterLoaded ? 'Real router loaded' : 'Mock router',
-        bioSocial: bioSocialRouterLoaded ? 'Real router loaded' : 'Not loaded',
-        mentalHealth: mentalHealthRouterLoaded ? 'Real router loaded' : 'Not loaded',
-        reassessment: reassessmentRouterLoaded ? 'Real router loaded' : 'Not loaded',
-        // ... etc
-      }
-    });
-  }
-});
 
 
 
@@ -1231,54 +1134,6 @@ try {
 }
 
 
-// app.get('/api/debug/storage', (req, res) => {
-//   res.json({
-//     hasConnectionString: !!process.env.AZURE_STORAGE_CONNECTION_STRING,
-//     connectionStringLength: process.env.AZURE_STORAGE_CONNECTION_STRING?.length || 0,
-//     startsCorrectly: process.env.AZURE_STORAGE_CONNECTION_STRING?.startsWith('DefaultEndpointsProtocol='),
-//     containerName: process.env.AZURE_CONTAINER_NAME || 'not set'
-//   });
-// });
-app.get('/api/test-storage', async (req, res) => {
-  try {
-    const { BlobServiceClient } = require('@azure/storage-blob');
-    const connectionString = process.env.AZURE_STORAGE_CONNECTION_STRING;
-    
-    if (!connectionString) {
-      return res.json({
-        success: false,
-        error: 'AZURE_STORAGE_CONNECTION_STRING not found in environment'
-      });
-    }
-
-    // Try to create a client
-    const blobServiceClient = BlobServiceClient.fromConnectionString(connectionString);
-    
-    // Try to list containers (this will fail if credentials are wrong)
-    const containerName = process.env.AZURE_CONTAINER_NAME || 'uploads';
-    const containerClient = blobServiceClient.getContainerClient(containerName);
-    
-    // This operation will throw if not authorized
-    const exists = await containerClient.exists();
-    
-    res.json({
-      success: true,
-      connectionStringConfigured: true,
-      containerName: containerName,
-      containerExists: exists,
-      message: exists ? 'Azure Storage connection successful!' : 'Connection OK but container does not exist'
-    });
-    
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      error: error.message,
-      code: error.code,
-      statusCode: error.statusCode,
-      details: 'Azure Storage connection failed'
-    });
-  }
-});
 
 // Add this debug middleware to catch all requests
 app.use((req, res, next) => {
@@ -1322,7 +1177,6 @@ if (process.env.NODE_ENV !== 'test') {
       // const connStr = process.env.AZURE_STORAGE_CONNECTION_STRING;
       // console.log('Using connection string:', connStr); // add this temporarily
       console.log(`🔗 Health check: http://localhost:${PORT}/api/health`);
-      console.log(`🔍 Debug endpoint: http://localhost:${PORT}/api/debug/database`);
       
       console.log('📋 Routes loaded:');
       console.log('  📁 Section 1 - Client Information:');
