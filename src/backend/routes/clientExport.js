@@ -45,6 +45,7 @@ function drawSectionHeader(doc, title, color = '#1565C0') {
     .font('Helvetica-Bold')
     .text(title, 40, 16, { width: doc.page.width - 80 });
   doc.fillColor('#000000').moveDown(2);
+  doc.x = doc.page.margins.left;
 }
 
 function drawSubHeader(doc, title) {
@@ -77,18 +78,28 @@ function drawField(doc, label, value, opts = {}) {
 }
 
 function drawTwoColumn(doc, pairs) {
-  const colWidth = (doc.page.width - doc.page.margins.left - doc.page.margins.right) / 2;
+  const ml = doc.page.margins.left;
+  const colWidth = (doc.page.width - ml - doc.page.margins.right) / 2;
   let i = 0;
   while (i < pairs.length) {
     const left = pairs[i];
     const right = pairs[i + 1];
+    ensureSpace(doc, 30);
     const yStart = doc.y;
-    doc.font('Helvetica-Bold').fontSize(9).text(`${left[0]}:`, doc.page.margins.left, yStart, { width: colWidth });
-    doc.font('Helvetica').fontSize(9).text(safeStr(left[1]), doc.page.margins.left + 5, doc.y, { width: colWidth - 10 });
+    const startPage = doc.page;
+    doc.font('Helvetica-Bold').fontSize(9).text(`${left[0]}:`, ml, yStart, { width: colWidth });
+    doc.font('Helvetica').fontSize(9).text(safeStr(left[1]), ml + 5, doc.y, { width: colWidth - 10 });
+    let yEnd = doc.y;
     if (right) {
-      doc.font('Helvetica-Bold').fontSize(9).text(`${right[0]}:`, doc.page.margins.left + colWidth, yStart, { width: colWidth });
-      doc.font('Helvetica').fontSize(9).text(safeStr(right[1]), doc.page.margins.left + colWidth + 5, doc.y, { width: colWidth - 10 });
+      // If the left value wrapped onto a new page, continue the right column below it
+      const rightY = doc.page === startPage ? yStart : doc.y;
+      const rightPage = doc.page;
+      doc.font('Helvetica-Bold').fontSize(9).text(`${right[0]}:`, ml + colWidth, rightY, { width: colWidth });
+      doc.font('Helvetica').fontSize(9).text(safeStr(right[1]), ml + colWidth + 5, doc.y, { width: colWidth - 10 });
+      yEnd = doc.page === rightPage ? Math.max(yEnd, doc.y) : doc.y;
     }
+    doc.x = ml;
+    doc.y = yEnd;
     doc.moveDown(0.6);
     i += 2;
   }
@@ -96,6 +107,59 @@ function drawTwoColumn(doc, pairs) {
 
 function noData(doc, msg = 'No records found.') {
   doc.font('Helvetica').fontSize(9).fillColor('#666666').text(msg).fillColor('#000000').moveDown(0.5);
+}
+
+// Adds a page if fewer than `needed` points remain above the bottom margin.
+function ensureSpace(doc, needed) {
+  if (doc.y + needed > doc.page.height - doc.page.margins.bottom) {
+    doc.addPage();
+    doc.x = doc.page.margins.left;
+    doc.y = doc.page.margins.top;
+  }
+}
+
+// Draws a simple table using explicit coordinates so the cursor never drifts.
+// rows: array of arrays of { text, color?, bold? } (or plain strings)
+function drawGridTable(doc, { headers, widths, rows, headerColor, altColor, rowH = 18 }) {
+  const ml = doc.page.margins.left;
+  const w  = widths.reduce((a, b) => a + b, 0);
+
+  const drawHeader = () => {
+    const y = doc.y;
+    doc.rect(ml, y, w, rowH).fill(headerColor);
+    let x = ml;
+    headers.forEach((h, i) => {
+      doc.fillColor('white').font('Helvetica-Bold').fontSize(8)
+         .text(h, x + 3, y + 5, { width: widths[i] - 6, height: rowH - 5, ellipsis: true, lineBreak: false });
+      x += widths[i];
+    });
+    doc.y = y + rowH;
+  };
+
+  ensureSpace(doc, rowH * 2);
+  drawHeader();
+
+  rows.forEach((cells, idx) => {
+    if (doc.y + rowH > doc.page.height - doc.page.margins.bottom) {
+      doc.addPage();
+      doc.y = doc.page.margins.top;
+      drawHeader();
+    }
+    const y = doc.y;
+    doc.rect(ml, y, w, rowH).fill(idx % 2 === 0 ? '#FFFFFF' : altColor);
+    let x = ml;
+    cells.forEach((cell, i) => {
+      const c = typeof cell === 'object' && cell !== null ? cell : { text: cell };
+      doc.fillColor(c.color || '#000000').font(c.bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(7.5)
+         .text(safeStr(c.text), x + 3, y + 5, { width: widths[i] - 6, height: rowH - 5, ellipsis: true, lineBreak: false });
+      x += widths[i];
+    });
+    doc.y = y + rowH;
+  });
+
+  doc.fillColor('#000000');
+  doc.x = ml;
+  doc.y += 10;
 }
 
 // ─── Cover Page ─────────────────────────────────────────────────────────────
@@ -121,7 +185,7 @@ function drawCoverPage(doc, client, exportedBy) {
     .text(`${safeStr(client.clientLastName)}, ${safeStr(client.clientFirstName)}`, 40, 160, { align: 'center', width: pageWidth - 80 });
 
   // Info box
-  doc.rect(80, 210, pageWidth - 160, 160).fill('#F5F5F5').stroke('#CCCCCC');
+  doc.rect(80, 210, pageWidth - 160, 160).fillAndStroke('#F5F5F5', '#CCCCCC');
   doc.fillColor('#000000').fontSize(10).font('Helvetica');
 
   const infoItems = [
@@ -136,20 +200,19 @@ function drawCoverPage(doc, client, exportedBy) {
   let infoY = 225;
   infoItems.forEach(([label, value]) => {
     doc.font('Helvetica-Bold').text(`${label}:`, 110, infoY, { width: 140 });
-    doc.font('Helvetica').text(value, 260, infoY, { width: pageWidth - 360 });
+    doc.font('Helvetica').text(value, 260, infoY, { width: pageWidth - 360, height: 14, ellipsis: true, lineBreak: false });
     infoY += 20;
   });
 
   // HIPAA notice
   doc
     .rect(40, 400, pageWidth - 80, 60)
-    .fill('#FFF3E0')
-    .stroke('#FF9800');
+    .fillAndStroke('#FFF3E0', '#FF9800');
   doc
     .fillColor('#E65100')
     .fontSize(9)
     .font('Helvetica-Bold')
-    .text('⚠  CONFIDENTIAL – HIPAA PROTECTED HEALTH INFORMATION', 50, 412, { width: pageWidth - 100 });
+    .text('CONFIDENTIAL – HIPAA PROTECTED HEALTH INFORMATION', 50, 412, { width: pageWidth - 100 });
   doc
     .font('Helvetica')
     .fillColor('#BF360C')
@@ -166,6 +229,7 @@ function drawCoverPage(doc, client, exportedBy) {
     .text(`Generated: ${new Date().toLocaleString('en-US')}   |   Exported by: ${safeStr(exportedBy)}`, 40, pageHeight - 60, {
       width: pageWidth - 80,
       align: 'center',
+      lineBreak: false,
     });
 
   // TOC
@@ -173,6 +237,7 @@ function drawCoverPage(doc, client, exportedBy) {
   doc.rect(0, 0, pageWidth, 50).fill('#1565C0');
   doc.fillColor('white').fontSize(16).font('Helvetica-Bold').text('Table of Contents', 40, 16);
   doc.fillColor('#000000').moveDown(2);
+  doc.x = doc.page.margins.left;
 
   const sections = [
     'Section 1 – Identification & Referrals',
@@ -566,24 +631,30 @@ const S2_FORM_RENDERERS = {
 // ─── Section 2 — per-form block renderer ─────────────────────────────────────
 
 function renderS2FormBlock(doc, cfg, rec) {
-  // Numbered header banner
-  doc.addPage();
+  // Started forms get their own page; not-started forms are a single banner line
+  if (rec) {
+    doc.addPage();
+  } else {
+    ensureSpace(doc, 60);
+    doc.moveDown(0.5);
+  }
   const pw = doc.page.width;
   const ml = doc.page.margins.left;
   const mr = doc.page.margins.right;
   const w  = pw - ml - mr;
 
-  doc.rect(ml, doc.y, w, 20).fill('#E3F2FD');
-  const bannerY = doc.y - 20;
+  // Numbered header banner
+  const bannerY = doc.y;
+  doc.rect(ml, bannerY, w, 20).fill('#E3F2FD');
 
   // Number badge
   doc.rect(ml, bannerY, 22, 20).fill('#1976D2');
   doc.fillColor('white').fontSize(9).font('Helvetica-Bold')
-     .text(String(cfg.number), ml + 1, bannerY + 6, { width: 22, align: 'center' });
+     .text(String(cfg.number), ml + 1, bannerY + 6, { width: 22, align: 'center', lineBreak: false });
 
   // Label
   doc.fillColor('#1976D2').fontSize(10).font('Helvetica-Bold')
-     .text(cfg.label, ml + 26, bannerY + 5, { width: w - 115 });
+     .text(cfg.label, ml + 26, bannerY + 5, { width: w - 125, height: 14, ellipsis: true, lineBreak: false });
 
   // Status badge
   const statusColors = {
@@ -600,10 +671,12 @@ function renderS2FormBlock(doc, cfg, rec) {
      .text(
        (rec?.status || 'NOT STARTED').toUpperCase().replace('_', ' '),
        ml + w - badgeW, bannerY + 7,
-       { width: badgeW, align: 'center' }
+       { width: badgeW, align: 'center', lineBreak: false }
      );
 
-  doc.fillColor('#000000').moveDown(0.4);
+  doc.x = ml;
+  doc.y = bannerY + 26;
+  doc.fillColor('#000000');
 
   if (!rec) {
     noData(doc, 'This form has not been started for this client.');
@@ -639,11 +712,11 @@ function renderS2FormBlock(doc, cfg, rec) {
   drawSubHeader(doc, 'Electronic Signature');
   if (sigVal && String(sigVal).trim().length >= 2) {
     doc.font('Helvetica-Bold').fontSize(9).fillColor('#2E7D32')
-       .text(`✓  ${String(sigVal).trim()}`)
+       .text(`Signed:  ${String(sigVal).trim()}`)
        .fillColor('#000000');
   } else {
     doc.font('Helvetica').fontSize(9).fillColor('#C62828')
-       .text('✗  Not yet signed')
+       .text('Not yet signed')
        .fillColor('#000000');
   }
   doc.moveDown(0.4);
@@ -663,7 +736,7 @@ function renderS2FormBlock(doc, cfg, rec) {
       drawSubHeader(doc, 'Checkboxes');
       entries.forEach(([key, val]) => {
         const label = key.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase());
-        doc.font('Helvetica').fontSize(9).text(`${val ? '☑' : '☐'}  ${label}`);
+        doc.font('Helvetica').fontSize(9).text(`${val ? '[X]' : '[  ]'}  ${label}`);
       });
       doc.moveDown(0.3);
     }
@@ -679,60 +752,34 @@ function renderS2FormBlock(doc, cfg, rec) {
 // ─── Section 2 — summary table ───────────────────────────────────────────────
 
 function renderS2SummaryTable(doc, byType) {
-  const pw   = doc.page.width;
-  const ml   = doc.page.margins.left;
-  const mr   = doc.page.margins.right;
-  const w    = pw - ml - mr;
-  const rowH = 18;
+  const w = doc.page.width - doc.page.margins.left - doc.page.margins.right;
 
   drawSubHeader(doc, 'Authorization Forms — Completion Summary');
 
-  // Header row
-  const cols    = ['#', 'Form Name', 'Status', 'Completion %', 'Completed At'];
-  const colWs   = [22, w * 0.46, w * 0.17, w * 0.14, w * 0.18];
-  let xOff      = ml;
+  const statusColors = {
+    completed:   '#2E7D32',
+    submitted:   '#1565C0',
+    in_progress: '#E65100',
+    draft:       '#5D4037',
+    not_started: '#757575',
+  };
 
-  doc.rect(ml, doc.y, w, rowH).fill('#1976D2');
-  cols.forEach((h, i) => {
-    doc.fillColor('white').font('Helvetica-Bold').fontSize(8)
-       .text(h, xOff + 3, doc.y - rowH + 5, { width: colWs[i] - 3 });
-    xOff += colWs[i];
+  drawGridTable(doc, {
+    headers:     ['#', 'Form Name', 'Status', 'Completion %', 'Completed At'],
+    widths:      [22, (w - 22) * 0.50, (w - 22) * 0.18, (w - 22) * 0.14, (w - 22) * 0.18],
+    headerColor: '#1976D2',
+    altColor:    '#E3F2FD',
+    rows: S2_FORM_CONFIGS.map(cfg => {
+      const rec = byType[cfg.typeID];
+      return [
+        String(cfg.number),
+        cfg.label,
+        { text: rec ? (rec.status || 'N/A') : 'not_started', color: statusColors[rec?.status || 'not_started'] || '#424242', bold: true },
+        rec ? `${Number(rec.completionPercentage || 0).toFixed(0)}%` : '0%',
+        rec ? formatDate(rec.completedAt) : 'N/A',
+      ];
+    }),
   });
-  doc.moveDown(0.05);
-
-  S2_FORM_CONFIGS.forEach((cfg, idx) => {
-    const rec      = byType[cfg.typeID];
-    const rowColor = idx % 2 === 0 ? '#FFFFFF' : '#E3F2FD';
-    doc.rect(ml, doc.y, w, rowH).fill(rowColor);
-
-    const statusColors = {
-      completed:   '#2E7D32',
-      submitted:   '#1565C0',
-      in_progress: '#E65100',
-      draft:       '#5D4037',
-      not_started: '#757575',
-    };
-
-    xOff = ml;
-    const cells = [
-      { text: String(cfg.number),                                                             color: '#000000',                              bold: false },
-      { text: cfg.label,                                                                       color: '#000000',                              bold: false },
-      { text: rec ? (rec.status || 'N/A') : 'not_started',                                   color: statusColors[rec?.status || 'not_started'] || '#424242', bold: true  },
-      { text: rec ? `${Number(rec.completionPercentage || 0).toFixed(0)}%` : '0%',           color: '#000000',                              bold: false },
-      { text: rec ? formatDate(rec.completedAt) : 'N/A',                                     color: '#000000',                              bold: false },
-    ];
-
-    cells.forEach((cell, i) => {
-      doc.fillColor(cell.color)
-         .font(cell.bold ? 'Helvetica-Bold' : 'Helvetica')
-         .fontSize(7.5)
-         .text(cell.text, xOff + 3, doc.y - rowH + 5, { width: colWs[i] - 4 });
-      xOff += colWs[i];
-    });
-    doc.moveDown(0.05);
-  });
-
-  doc.moveDown(0.8);
 }
 
 // ─── Section 2 — main renderer ───────────────────────────────────────────────
@@ -934,7 +981,7 @@ function renderCmObChecklist(doc, row) {
   }
   checks.forEach(({ label, checked }) => {
     doc.font('Helvetica').fontSize(9)
-       .text(`${checked ? '☑' : '☐'}  ${label}`);
+       .text(`${checked ? '[X]' : '[  ]'}  ${label}`);
   });
   doc.moveDown(0.4);
 }
@@ -1017,45 +1064,27 @@ async function renderSection3(doc, pool, clientID) {
     { key: 'progressNotes',       label: 'Progress / Nurse Notes'          },
   ];
 
-  const pw   = doc.page.width;
-  const ml   = doc.page.margins.left;
-  const mr   = doc.page.margins.right;
-  const w    = pw - ml - mr;
-  const rowH = 18;
+  const w = doc.page.width - doc.page.margins.left - doc.page.margins.right;
 
   drawSubHeader(doc, 'Assessment & Care Plans — Section Summary');
-  const cols  = ['Subsection', 'Records', 'Status'];
-  const colWs = [w * 0.60, w * 0.15, w * 0.25];
-  let xOff    = ml;
-  doc.rect(ml, doc.y, w, rowH).fill('#388E3C');
-  cols.forEach((h, i) => {
-    doc.fillColor('white').font('Helvetica-Bold').fontSize(8)
-       .text(h, xOff + 3, doc.y - rowH + 5, { width: colWs[i] - 3 });
-    xOff += colWs[i];
+  drawGridTable(doc, {
+    headers:     ['Subsection', 'Records', 'Status'],
+    widths:      [w * 0.60, w * 0.15, w * 0.25],
+    headerColor: '#388E3C',
+    altColor:    '#E8F5E9',
+    rows: S3_SUMMARY.map(({ key, label }) => {
+      const rows    = fetched[key];
+      const count   = Array.isArray(rows) ? rows.length : 0;
+      const hasData = count > 0;
+      const errMsg  = fetched[key + '_error'];
+      return [
+        label,
+        { text: String(count), bold: true, color: hasData ? '#1B5E20' : '#757575' },
+        { text: errMsg ? `Error: ${errMsg}` : hasData ? 'Found' : 'No records',
+          bold: true, color: errMsg ? '#C62828' : hasData ? '#2E7D32' : '#757575' },
+      ];
+    }),
   });
-  doc.moveDown(0.05);
-
-  S3_SUMMARY.forEach(({ key, label }, idx) => {
-    const rows    = fetched[key];
-    const count   = Array.isArray(rows) ? rows.length : 0;
-    const hasData = count > 0;
-    const errMsg  = fetched[key + '_error'];
-    doc.rect(ml, doc.y, w, rowH).fill(idx % 2 === 0 ? '#FFFFFF' : '#E8F5E9');
-    xOff = ml;
-    const cells = [
-      { text: label,                                              bold: false, color: '#000000'  },
-      { text: String(count),                                      bold: true,  color: hasData ? '#1B5E20' : '#757575' },
-      { text: errMsg ? `Error: ${errMsg}` : hasData ? 'Found' : 'No records',
-        bold: true, color: errMsg ? '#C62828' : hasData ? '#2E7D32' : '#757575' },
-    ];
-    cells.forEach((cell, i) => {
-      doc.fillColor(cell.color).font(cell.bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(7.5)
-         .text(cell.text, xOff + 3, doc.y - rowH + 5, { width: colWs[i] - 4 });
-      xOff += colWs[i];
-    });
-    doc.moveDown(0.05);
-  });
-  doc.moveDown(0.8);
 
   // ══════════════════════════════════════════════════════════════════════════
   // 1 — Bio-Social Assessment
@@ -1100,7 +1129,7 @@ async function renderSection3(doc, pool, clientID) {
       BSA_INCOME_COLS.forEach(([col, label]) => {
         const val = bs[col];
         const checked = val && val !== '0' && val !== 'No' && val !== 'false';
-        doc.font('Helvetica').fontSize(9).text(`${checked ? '☑' : '☐'}  ${label}`);
+        doc.font('Helvetica').fontSize(9).text(`${checked ? '[X]' : '[  ]'}  ${label}`);
       });
       doc.moveDown(0.4);
     }
@@ -1223,7 +1252,7 @@ async function renderSection3(doc, pool, clientID) {
     ]);
     if (mh.mhSummary) drawField(doc, 'MH Summary', mh.mhSummary);
 
-    drawSubHeader(doc, '⚠  Suicide, Self-Harm & Risk');
+    drawSubHeader(doc, 'Suicide, Self-Harm & Risk');
     drawTwoColumn(doc, [
       ['Self-Harm',              mh.mhSelfHarm],
       ['Self-Harm Occurrence',   mh.mhSelfHarmOccurrence],
@@ -1587,6 +1616,7 @@ function drawS4SubsectionBanner(doc, number, title) {
   const ml = doc.page.margins.left;
   const w  = doc.page.width - ml - doc.page.margins.right;
   const h  = 22;
+  ensureSpace(doc, h + 40);                  // keep banner with its first content line
   const y  = doc.y;                          // snapshot cursor before any drawing
 
   // Background + badge
@@ -1652,6 +1682,7 @@ function drawS4MetaGrid(doc, pairs) {
   for (let i = 0; i < pairs.length; i += 2) {
     const left  = pairs[i];
     const right = pairs[i + 1];
+    ensureSpace(doc, rowH);
     const y     = doc.y;
     const shade = (i / 2) % 2 === 0 ? '#FFFFFF' : '#F9F9F9';
 
@@ -1931,7 +1962,7 @@ async function renderSection5(doc, pool, clientID) {
         const checked = String(val || '').toLowerCase() === 'yes';
         const y = doc.y;
         doc.fillColor(checked ? '#2E7D32' : '#757575').font('Helvetica').fontSize(8.5)
-           .text(`${checked ? '☑' : '☐'}  ${label}`, ml + 20, y, { lineBreak: false });
+           .text(`${checked ? '[X]' : '[  ]'}  ${label}`, ml + 20, y, { lineBreak: false });
         doc.y = y + 13;
       });
       doc.y = doc.y + 8;
@@ -1959,7 +1990,7 @@ async function renderSection5(doc, pool, clientID) {
       const shW = doc.page.width - ml - doc.page.margins.right;
       doc.rect(ml, shY, shW, 14).fill('#EDE7F6');
       doc.fillColor('#4A148C').font('Helvetica-Bold').fontSize(8)
-         .text('⚕  Sexual Health — PHI', ml + 6, shY + 3, { lineBreak: false });
+         .text('Sexual Health — PHI', ml + 6, shY + 3, { lineBreak: false });
       doc.y = shY + 14;
       drawS4MetaGrid(doc, [
         ['Partners – Last Year',  sc.clientSexLastYear],
@@ -2234,6 +2265,7 @@ router.get('/client/:clientID/pdf', authenticateToken, async (req, res) => {
   }
 
   let pool;
+  let doc;
   try {
     pool = await getPool();
   } catch (err) {
@@ -2269,7 +2301,7 @@ router.get('/client/:clientID/pdf', authenticateToken, async (req, res) => {
     }
 
     // Build PDF
-    const doc = new PDFDocument({
+    doc = new PDFDocument({
       size: 'LETTER',
       margins: { top: 40, bottom: 40, left: 50, right: 50 },
       info: {
@@ -2282,9 +2314,16 @@ router.get('/client/:clientID/pdf', authenticateToken, async (req, res) => {
     });
 
     const filename = `${safeStr(client.clientLastName)}_${safeStr(client.clientFirstName)}_Complete_Record_${new Date().toISOString().slice(0, 10)}.pdf`;
+    const asciiFilename = filename
+      .normalize('NFKD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^A-Za-z0-9._-]+/g, '_');
 
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${asciiFilename}"; filename*=UTF-8''${encodeURIComponent(filename)}`
+    );
     doc.pipe(res);
 
     // Cover + TOC
@@ -2313,6 +2352,17 @@ router.get('/client/:clientID/pdf', authenticateToken, async (req, res) => {
     console.error('PDF export error:', err);
     if (!res.headersSent) {
       res.status(500).json({ error: `Export failed: ${err.message}` });
+    } else if (doc) {
+      // Headers already sent — finish the document so the download doesn't hang
+      try {
+        doc.addPage();
+        doc.fillColor('#C62828').fontSize(10).text(`Export incomplete: ${err.message}`);
+        doc.end();
+      } catch {
+        res.end();
+      }
+    } else {
+      res.end();
     }
   }
 });
