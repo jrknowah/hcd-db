@@ -6,8 +6,8 @@ import { IconCaretDownFilled } from '@tabler/icons-react';
 import { useContext, useState } from 'react';
 import { useSelector } from 'react-redux';
 import { useMsal } from '@azure/msal-react';
+import { useAuth } from 'src/hooks/useAuth';
 import { Icon } from '@iconify/react';
-import { Link } from 'react-router-dom';
 import ProfileImg from 'src/assets/images/profile/user-1.jpg';
 import SidebarProfileBgImg from 'src/assets/images/backgrounds/sidebar-profile-bg.jpg';
 import { CustomizerContext } from "src/context/CustomizerContext";
@@ -59,6 +59,7 @@ export const Profile = () => {
   
   // Get MSAL data directly
   const { accounts } = useMsal();
+  const { logout } = useAuth();
   const msalAccount = accounts?.[0];
   
   // Debug logging
@@ -93,6 +94,11 @@ export const Profile = () => {
   
   const handleClose = () => {
     setAnchorEl(null);
+  };
+
+  const handleLogout = () => {
+    setAnchorEl(null);
+    logout();
   };
 
   // ✅ Determine what to display based on available data
@@ -388,15 +394,13 @@ export const Profile = () => {
       
       <Divider />
       
-      <MenuItem onClick={handleClose} disableRipple>
+      <MenuItem onClick={handleLogout} disableRipple>
         <Box color="error.main" display="flex" alignItems="center">
           <Icon icon="solar:logout-2-line-duotone" height={21} />
         </Box>
-        <Link to="/auth/auth1/login">
-          <Typography fontSize="15px" ml={1} color="textPrimary">
-            Logout
-          </Typography>
-        </Link>
+        <Typography fontSize="15px" ml={1} color="textPrimary">
+          Logout
+        </Typography>
       </MenuItem>
       
       <Divider />

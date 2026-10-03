@@ -49,7 +49,6 @@ import {
 // ✅ NEW: setCurrentClient imports for the other Section 3 slices
 import { setCurrentClient as setMentalHealthClient } from "../../backend/store/slices/MentalHealthSlice";
 import { setCurrentClient as setArrestsClient }      from "../../backend/store/slices/arrestActions";
-import { setCurrentClient as setBioSocialClient }    from "../../backend/store/slices/bioSocialSlice";
 import { setCurrentClient as setReassessmentClient } from "../../backend/store/slices/reassessmentSlice";
 import { setCurrentClient as setNoteArchiveClient } from "../../backend/store/slices/noteArchiveSlice";
 
@@ -82,7 +81,6 @@ const AssessCarePlans = () => {
         if (clientID) {
             dispatch(setMentalHealthClient(clientID));
             dispatch(setArrestsClient(clientID));
-            dispatch(setBioSocialClient(clientID));
             dispatch(setReassessmentClient(clientID));
             dispatch(setAssessCarePlansClient(clientID));
             dispatch(setNoteArchiveClient(clientID));

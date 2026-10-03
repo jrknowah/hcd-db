@@ -1,8 +1,7 @@
 // src/hooks/useClientPersistence.js
 import { useEffect, useMemo } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom'; // ✅ Changed from useSearchParams
-import { useSelector, useDispatch } from 'react-redux';
-import { fetchClientById, setSelectedClient } from '../backend/store/slices/clientSlice';
+import { useSelector } from 'react-redux';
 
 /**
  * Centralized hook for managing client selection and persistence across all sections
@@ -14,15 +13,12 @@ import { fetchClientById, setSelectedClient } from '../backend/store/slices/clie
  * This hook handles:
  * - Reading clientID from URL path parameters
  * - Falling back to Redux state
- * - Restoring client from sessionStorage cache
- * - Fetching client data from server if needed
  * - Mock data for development
  * 
  * @returns {Object} Client state and utilities
  */
 export const useClientPersistence = () => {
   const navigate = useNavigate();
-  const dispatch = useDispatch();
   const location = useLocation();
   const { clientID: urlClientID } = useParams(); // ✅ Changed from searchParams.get('clientID')
 
@@ -66,39 +62,9 @@ export const useClientPersistence = () => {
     return 'Section1'; // default
   };
 
-  // Restore client from URL if needed
-  useEffect(() => {
-    if (urlClientID && urlClientID !== 'undefined' && !reduxSelectedClient) {
-      console.log('🔄 Restoring client from URL:', urlClientID);
-
-      // Try sessionStorage first for quick restoration
-      const cacheKey = `client_${urlClientID}`;
-      const cached = sessionStorage.getItem(cacheKey);
-
-      if (cached) {
-        try {
-          const clientData = JSON.parse(cached);
-          dispatch(setSelectedClient(clientData));
-          console.log('✅ Restored from cache:', clientData);
-        } catch (error) {
-          console.log('📡 Cache invalid, fetching from server');
-          dispatch(fetchClientById(urlClientID));
-        }
-      } else {
-        console.log('📡 No cache, fetching from server');
-        dispatch(fetchClientById(urlClientID));
-      }
-    }
-  }, [urlClientID, reduxSelectedClient, dispatch]);
-
-  // Cache client data to sessionStorage when it changes
-  useEffect(() => {
-    if (currentClient?.clientID && !shouldUseMockData) {
-      const cacheKey = `client_${currentClient.clientID}`;
-      sessionStorage.setItem(cacheKey, JSON.stringify(currentClient));
-      console.log('💾 Cached client data:', currentClient.clientID);
-    }
-  }, [currentClient, shouldUseMockData]);
+  // Syncing the URL client into Redux is done by ClientRouteGate, which
+  // renders a section only once Redux holds the client named in the URL.
+  // Client records are never cached in web storage (PHI).
 
   // ✅ NEW: If no URL clientID but we have Redux client, update URL
   useEffect(() => {

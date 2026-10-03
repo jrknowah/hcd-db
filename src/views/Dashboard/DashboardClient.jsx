@@ -136,32 +136,16 @@ const DashboardClient = () => {
     }
   }, [location.pathname, searchParams, dispatch, clients]);
 
-  // Restore client from cache on page refresh
+  // Restore client on page refresh
   useEffect(() => {
     const clientIDFromURL = searchParams.get('clientID');
     
     if (clientIDFromURL && !selectedClient && !loading) {
       console.log('Attempting to restore client:', clientIDFromURL);
       
-      // Check sessionStorage first
-      const cachedClient = sessionStorage.getItem(`client_${clientIDFromURL}`);
-      
-      if (cachedClient) {
-        try {
-          const clientData = JSON.parse(cachedClient);
-          console.log('Restoring from cache:', clientData);
-          dispatch(setSelectedClient(clientData));
-          setSelectedClientID(clientIDFromURL);
-        } catch (e) {
-          console.error('Failed to parse cached client:', e);
-          dispatch(fetchClientById(clientIDFromURL));
-        }
-      } else {
-        // No cache, fetch from server
-        console.log('No cache found, fetching from server');
-        dispatch(fetchClientById(clientIDFromURL));
-        setSelectedClientID(clientIDFromURL);
-      }
+      // Client records are never cached in web storage (PHI); always fetch.
+      dispatch(fetchClientById(clientIDFromURL));
+      setSelectedClientID(clientIDFromURL);
     }
   }, [searchParams, selectedClient, loading, dispatch]);
 
@@ -302,9 +286,7 @@ const DashboardClient = () => {
     
     // Update URL to include clientID
     // setSearchParams({ clientID });
-    
-    // Also store in localStorage as backup
-    localStorage.setItem('selectedClientID', clientID);
+
   }, []);
 
   // Edit handler - opens modal only

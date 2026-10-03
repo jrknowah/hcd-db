@@ -36,6 +36,18 @@ const stringifyArrayField = (field) => {
   return Array.isArray(field) ? JSON.stringify(field) : field;
 };
 
+const CM_OB_FIELDS = [
+  'cmOb1', 'cmOb2', 'cmOb3', 'cmOb4', 'cmOb5', 'cmOb6',
+  'cmOb7', 'cmOb8', 'cmOb9', 'cmOb10', 'cmOb11', 'cmObNone'
+];
+
+// Parse the JSON-encoded Mental Status Exam fields on a DB row
+const parseRow = (row) => {
+  const parsed = { ...row };
+  CM_OB_FIELDS.forEach(field => { parsed[field] = parseJsonField(row[field]); });
+  return parsed;
+};
+
 // ✅ Validate client exists in database
 const validateClientExists = async (clientID) => {
   const pool = await getPool();
@@ -68,32 +80,45 @@ const getByClientId = async (clientID) => {
       return null;
     }
 
-    const reassessment = result.recordset[0];
-
-    // Parse JSON fields
-    const parsedData = {
-      ...reassessment,
-      cmOb1: parseJsonField(reassessment.cmOb1),
-      cmOb2: parseJsonField(reassessment.cmOb2),
-      cmOb3: parseJsonField(reassessment.cmOb3),
-      cmOb4: parseJsonField(reassessment.cmOb4),
-      cmOb5: parseJsonField(reassessment.cmOb5),
-      cmOb6: parseJsonField(reassessment.cmOb6),
-      cmOb7: parseJsonField(reassessment.cmOb7),
-      cmOb8: parseJsonField(reassessment.cmOb8),
-      cmOb9: parseJsonField(reassessment.cmOb9),
-      cmOb10: parseJsonField(reassessment.cmOb10),
-      cmOb11: parseJsonField(reassessment.cmOb11),
-      cmObNone: parseJsonField(reassessment.cmObNone)
-    };
-
     console.log(`✅ Reassessment retrieved for client ${clientID}`);
-    return parsedData;
+    return parseRow(result.recordset[0]);
     
   } catch (error) {
     console.error('⚠️ Error fetching reassessment:', error);
     throw error;
   }
+};
+
+// Get every reassessment for a client, newest first
+const getAllByClientId = async (clientID) => {
+  try {
+    const pool = await getPool();
+
+    const result = await pool.request()
+      .input('clientID', sql.VarChar, clientID)
+      .query(`
+        SELECT *
+        FROM ReassessmentData
+        WHERE clientID = @clientID
+        ORDER BY COALESCE(dateLastReAssess, CAST(createdAt AS DATE)) DESC, createdAt DESC
+      `);
+
+    return result.recordset.map(parseRow);
+  } catch (error) {
+    console.error('⚠️ Error fetching reassessment list:', error);
+    throw error;
+  }
+};
+
+// Get a single reassessment by its ID
+const getById = async (reassessmentID) => {
+  const pool = await getPool();
+
+  const result = await pool.request()
+    .input('reassessmentID', sql.VarChar, reassessmentID)
+    .query('SELECT * FROM ReassessmentData WHERE reassessmentID = @reassessmentID');
+
+  return result.recordset.length ? parseRow(result.recordset[0]) : null;
 };
 
 // Get reassessment by assessment ID
@@ -206,88 +231,96 @@ const create = async (reassessmentData) => {
   }
 };
 
-// Update reassessment by client ID
+// Shared UPDATE for a single reassessment row
+const updateRow = async (reassessmentID, updateData) => {
+  const pool = await getPool();
+
+  await pool.request()
+    .input('reassessmentID', sql.VarChar, reassessmentID)
+    .input('dateFullAssess', sql.Date, updateData.dateFullAssess || null)
+    .input('dateLastReAssess', sql.Date, updateData.dateLastReAssess || null)
+    .input('reassessmentSources', sql.NVarChar, updateData.reassessmentSources || null)
+    .input('culturalCons', sql.NVarChar, updateData.culturalCons || null)
+    .input('physicalChall', sql.NVarChar, updateData.physicalChall || null)
+    .input('accessIssues', sql.NVarChar, updateData.accessIssues || null)
+    .input('reasonForRef', sql.NVarChar, updateData.reasonForRef || null)
+    .input('currentSymp', sql.NVarChar, updateData.currentSymp || null)
+    .input('suicHomiThou', sql.NVarChar, updateData.suicHomiThou || null)
+    .input('columbiaSR', sql.NVarChar, updateData.columbiaSR || null)
+    .input('columbiaSRComp', sql.VarChar, updateData.columbiaSRComp || null)
+    .input('cmOb1', sql.NVarChar, stringifyArrayField(updateData.cmOb1))
+    .input('cmOb2', sql.NVarChar, stringifyArrayField(updateData.cmOb2))
+    .input('cmOb3', sql.NVarChar, stringifyArrayField(updateData.cmOb3))
+    .input('cmOb4', sql.NVarChar, stringifyArrayField(updateData.cmOb4))
+    .input('cmOb5', sql.NVarChar, stringifyArrayField(updateData.cmOb5))
+    .input('cmOb6', sql.NVarChar, stringifyArrayField(updateData.cmOb6))
+    .input('cmOb7', sql.NVarChar, stringifyArrayField(updateData.cmOb7))
+    .input('cmOb8', sql.NVarChar, stringifyArrayField(updateData.cmOb8))
+    .input('cmOb9', sql.NVarChar, stringifyArrayField(updateData.cmOb9))
+    .input('cmOb10', sql.NVarChar, stringifyArrayField(updateData.cmOb10))
+    .input('cmOb11', sql.NVarChar, stringifyArrayField(updateData.cmOb11))
+    .input('cmObNone', sql.NVarChar, stringifyArrayField(updateData.cmObNone))
+    .input('cmObvSum', sql.NVarChar, updateData.cmObvSum || null)
+    .input('clientStrengthReAssessSummary', sql.NVarChar, updateData.clientStrengthReAssessSummary || null)
+    .input('clientFormReAssessSummary', sql.NVarChar, updateData.clientFormReAssessSummary || null)
+    .input('diagDescript', sql.NVarChar, updateData.diagDescript || null)
+    .input('diagDescriptCodeChoice', sql.VarChar, updateData.diagDescriptCodeChoice || null)  // ✅ NULL now allowed
+    .input('diagDescriptCode', sql.VarChar, updateData.diagDescriptCode || null)
+    .input('completionStatus', sql.VarChar, updateData.completionStatus || 'In Progress')
+    .input('completionPercentage', sql.Decimal, updateData.completionPercentage || 0)
+    .input('updatedBy', sql.VarChar, updateData.updatedBy || 'system')
+    .query(`
+      UPDATE ReassessmentData SET
+        dateFullAssess = @dateFullAssess,
+        dateLastReAssess = @dateLastReAssess,
+        reassessmentSources = @reassessmentSources,
+        culturalCons = @culturalCons,
+        physicalChall = @physicalChall,
+        accessIssues = @accessIssues,
+        reasonForRef = @reasonForRef,
+        currentSymp = @currentSymp,
+        suicHomiThou = @suicHomiThou,
+        columbiaSR = @columbiaSR,
+        columbiaSRComp = @columbiaSRComp,
+        cmOb1 = @cmOb1,
+        cmOb2 = @cmOb2,
+        cmOb3 = @cmOb3,
+        cmOb4 = @cmOb4,
+        cmOb5 = @cmOb5,
+        cmOb6 = @cmOb6,
+        cmOb7 = @cmOb7,
+        cmOb8 = @cmOb8,
+        cmOb9 = @cmOb9,
+        cmOb10 = @cmOb10,
+        cmOb11 = @cmOb11,
+        cmObNone = @cmObNone,
+        cmObvSum = @cmObvSum,
+        clientStrengthReAssessSummary = @clientStrengthReAssessSummary,
+        clientFormReAssessSummary = @clientFormReAssessSummary,
+        diagDescript = @diagDescript,
+        diagDescriptCodeChoice = @diagDescriptCodeChoice,
+        diagDescriptCode = @diagDescriptCode,
+        completionStatus = @completionStatus,
+        completionPercentage = @completionPercentage,
+        updatedBy = @updatedBy,
+        updatedAt = GETDATE()
+      WHERE reassessmentID = @reassessmentID
+    `);
+};
+
+// Update the client's most recent reassessment
 const update = async (clientID, updateData) => {
   try {
-    const pool = await getPool();
-    
     console.log(`🔄 Updating reassessment for client: ${clientID}`);
-    
-    await pool.request()
-      .input('clientID', sql.VarChar, clientID)
-      .input('dateFullAssess', sql.Date, updateData.dateFullAssess || null)
-      .input('dateLastReAssess', sql.Date, updateData.dateLastReAssess || null)
-      .input('reassessmentSources', sql.NVarChar, updateData.reassessmentSources || null)
-      .input('culturalCons', sql.NVarChar, updateData.culturalCons || null)
-      .input('physicalChall', sql.NVarChar, updateData.physicalChall || null)
-      .input('accessIssues', sql.NVarChar, updateData.accessIssues || null)
-      .input('reasonForRef', sql.NVarChar, updateData.reasonForRef || null)
-      .input('currentSymp', sql.NVarChar, updateData.currentSymp || null)
-      .input('suicHomiThou', sql.NVarChar, updateData.suicHomiThou || null)
-      .input('columbiaSR', sql.NVarChar, updateData.columbiaSR || null)
-      .input('columbiaSRComp', sql.VarChar, updateData.columbiaSRComp || null)
-      .input('cmOb1', sql.NVarChar, stringifyArrayField(updateData.cmOb1))
-      .input('cmOb2', sql.NVarChar, stringifyArrayField(updateData.cmOb2))
-      .input('cmOb3', sql.NVarChar, stringifyArrayField(updateData.cmOb3))
-      .input('cmOb4', sql.NVarChar, stringifyArrayField(updateData.cmOb4))
-      .input('cmOb5', sql.NVarChar, stringifyArrayField(updateData.cmOb5))
-      .input('cmOb6', sql.NVarChar, stringifyArrayField(updateData.cmOb6))
-      .input('cmOb7', sql.NVarChar, stringifyArrayField(updateData.cmOb7))
-      .input('cmOb8', sql.NVarChar, stringifyArrayField(updateData.cmOb8))
-      .input('cmOb9', sql.NVarChar, stringifyArrayField(updateData.cmOb9))
-      .input('cmOb10', sql.NVarChar, stringifyArrayField(updateData.cmOb10))
-      .input('cmOb11', sql.NVarChar, stringifyArrayField(updateData.cmOb11))
-      .input('cmObNone', sql.NVarChar, stringifyArrayField(updateData.cmObNone))
-      .input('cmObvSum', sql.NVarChar, updateData.cmObvSum || null)
-      .input('clientStrengthReAssessSummary', sql.NVarChar, updateData.clientStrengthReAssessSummary || null)
-      .input('clientFormReAssessSummary', sql.NVarChar, updateData.clientFormReAssessSummary || null)
-      .input('diagDescript', sql.NVarChar, updateData.diagDescript || null)
-      .input('diagDescriptCodeChoice', sql.VarChar, updateData.diagDescriptCodeChoice || null)  // ✅ NULL now allowed
-      .input('diagDescriptCode', sql.VarChar, updateData.diagDescriptCode || null)
-      .input('completionStatus', sql.VarChar, updateData.completionStatus || 'In Progress')
-      .input('completionPercentage', sql.Decimal, updateData.completionPercentage || 0)
-      .input('updatedBy', sql.VarChar, updateData.updatedBy || 'system')
-      .query(`
-        UPDATE ReassessmentData SET
-          dateFullAssess = @dateFullAssess,
-          dateLastReAssess = @dateLastReAssess,
-          reassessmentSources = @reassessmentSources,
-          culturalCons = @culturalCons,
-          physicalChall = @physicalChall,
-          accessIssues = @accessIssues,
-          reasonForRef = @reasonForRef,
-          currentSymp = @currentSymp,
-          suicHomiThou = @suicHomiThou,
-          columbiaSR = @columbiaSR,
-          columbiaSRComp = @columbiaSRComp,
-          cmOb1 = @cmOb1,
-          cmOb2 = @cmOb2,
-          cmOb3 = @cmOb3,
-          cmOb4 = @cmOb4,
-          cmOb5 = @cmOb5,
-          cmOb6 = @cmOb6,
-          cmOb7 = @cmOb7,
-          cmOb8 = @cmOb8,
-          cmOb9 = @cmOb9,
-          cmOb10 = @cmOb10,
-          cmOb11 = @cmOb11,
-          cmObNone = @cmObNone,
-          cmObvSum = @cmObvSum,
-          clientStrengthReAssessSummary = @clientStrengthReAssessSummary,
-          clientFormReAssessSummary = @clientFormReAssessSummary,
-          diagDescript = @diagDescript,
-          diagDescriptCodeChoice = @diagDescriptCodeChoice,
-          diagDescriptCode = @diagDescriptCode,
-          completionStatus = @completionStatus,
-          completionPercentage = @completionPercentage,
-          updatedBy = @updatedBy,
-          updatedAt = GETDATE()
-        WHERE clientID = @clientID
-      `);
+
+    const latest = await getByClientId(clientID);
+    if (!latest) return null;
+
+    await updateRow(latest.reassessmentID, updateData);
 
     console.log(`✅ Reassessment updated for client ${clientID}`);
     
-    return await getByClientId(clientID);
+    return await getById(latest.reassessmentID);
     
   } catch (error) {
     console.error('Error updating reassessment:', error);
@@ -298,12 +331,13 @@ const update = async (clientID, updateData) => {
 // Update by reassessment ID
 const updateById = async (reassessmentID, updateData) => {
   try {
-    const pool = await getPool();
-    
-    // Similar to update but uses reassessmentID instead
-    // ... (implement similar to update function)
-    
-    return { reassessmentID, ...updateData };
+    const existing = await getById(reassessmentID);
+    if (!existing) return null;
+
+    await updateRow(reassessmentID, updateData);
+
+    console.log(`✅ Reassessment updated: ${reassessmentID}`);
+    return await getById(reassessmentID);
     
   } catch (error) {
     console.error('Error updating reassessment by ID:', error);
@@ -337,6 +371,22 @@ const deleteReassessment = async (clientID) => {
     return true;
   } catch (error) {
     console.error('Error deleting reassessment:', error);
+    throw error;
+  }
+};
+
+// Delete a single reassessment by ID
+const deleteById = async (reassessmentID) => {
+  try {
+    const pool = await getPool();
+
+    const result = await pool.request()
+      .input('reassessmentID', sql.VarChar, reassessmentID)
+      .query('DELETE FROM ReassessmentData WHERE reassessmentID = @reassessmentID');
+
+    return result.rowsAffected[0] > 0;
+  } catch (error) {
+    console.error('Error deleting reassessment by ID:', error);
     throw error;
   }
 };
@@ -382,12 +432,15 @@ const generateSummary = async (clientID) => {
 
 module.exports = {
   getByClientId,
+  getAllByClientId,
+  getById,
   getByAssessmentId,
   create,
   update,
   updateById,
   complete,
   delete: deleteReassessment,
+  deleteById,
   getAll,
   search,
   generateSummary

@@ -453,25 +453,26 @@ const EncounterNote = ({ clientID, exportMode }) => {
               <TableCell>Type</TableCell>
               <TableCell>Site</TableCell>
               <TableCell>Note</TableCell>
+              <TableCell>Added By</TableCell>
               {!exportMode && <TableCell>Actions</TableCell>}
             </TableRow>
           </TableHead>
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={exportMode ? 4 : 5} align="center">
+                <TableCell colSpan={exportMode ? 5 : 6} align="center">
                   <Alert severity="info">Loading encounter notes...</Alert>
                 </TableCell>
               </TableRow>
             ) : error ? (
               <TableRow>
-                <TableCell colSpan={exportMode ? 4 : 5} align="center">
+                <TableCell colSpan={exportMode ? 5 : 6} align="center">
                   <Alert severity="error">Error: {error}</Alert>
                 </TableCell>
               </TableRow>
             ) : encounterNotes.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={exportMode ? 4 : 5} align="center">
+                <TableCell colSpan={exportMode ? 5 : 6} align="center">
                   <Alert severity="info">No encounter notes available.</Alert>
                 </TableCell>
               </TableRow>
@@ -510,6 +511,9 @@ const EncounterNote = ({ clientID, exportMode }) => {
                     >
                       {note.careNote}
                     </Typography>
+                  </TableCell>
+                  <TableCell>
+                    <Typography variant="body2">{note.createdBy || 'N/A'}</Typography>
                   </TableCell>
                   {!exportMode && (
                     <TableCell>

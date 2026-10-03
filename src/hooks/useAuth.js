@@ -14,6 +14,8 @@ import {
   selectAuthError,
   selectIsLoadingGroups
 } from '../backend/store/slices/authSlice';
+import { msalConfig } from '../backend/config/authConfig';
+import { broadcastLogout } from '../utils/secureSession';
 
 export const useAuth = () => {
   const dispatch = useDispatch();
@@ -66,18 +68,30 @@ export const useAuth = () => {
   }
 };
 
-  // Logout function (local function, not imported)
+  // Logout: wipe all client data and auth state from memory and web storage,
+  // tell other open tabs to do the same, then end the Microsoft session.
   const logoutUser = async () => {
+    const account = instance.getActiveAccount() || accounts[0] || null;
+
+    // Root reducer resets the whole store on this action (see clientScope.js).
+    dispatch(logout());
+    broadcastLogout();
+
     try {
-      // Clear Redux state
-      dispatch(logout()); // ✅ Using the 'logout' action from authSlice
-      
-      // Clear MSAL session
-      await instance.logoutPopup();
+      await instance.logoutRedirect({
+        account,
+        logoutHint: account?.idTokenClaims?.login_hint,
+        postLogoutRedirectUri: msalConfig.auth.redirectUri,
+      });
     } catch (error) {
       console.error('Logout failed:', error);
-      // Even if MSAL logout fails, clear local state
-      dispatch(logout());
+      // Microsoft sign-out failed (e.g. offline): still drop the local MSAL
+      // session so this browser cannot re-enter without signing in.
+      try {
+        await instance.clearCache({ account });
+      } finally {
+        window.location.assign('/');
+      }
     }
   };
 

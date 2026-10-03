@@ -13,7 +13,9 @@ import {
   ListItem,
   ListItemIcon,
   ListItemText,
-  Paper
+  Paper,
+  Tooltip,
+  LinearProgress
 } from '@mui/material';
 import {
   CheckCircle as CheckCircleIcon,
@@ -23,7 +25,8 @@ import {
   Notes as NotesIcon,
   Assignment as CarePlanIcon,
   Archive as ArchiveIcon,
-  Info as InfoIcon
+  Info as InfoIcon,
+  Warning as WarningIcon
 } from '@mui/icons-material';
 import { useDispatch, useSelector } from "react-redux";
 import { section4List } from "../../data/arrayList";
@@ -32,6 +35,7 @@ import CarePlan from "./CarePlan";
 import CmNoteArchive from "./CmNoteArchive";
 import { useClientPersistence } from '../../hooks/useClientPersistence';
 import ClientInfoBanner from '../../components/shared/ClientInfoBanner';
+import { getWeeklyNoteCompliance, NOTES_PER_WEEK } from '../../utils/noteCompliance';
 import {
   fetchCarePlans,
   setCurrentClient as setCarePlanClient
@@ -68,6 +72,98 @@ const ClientProgress = () => {
   const assessmentError = assessmentState.error;
 
   const effectiveClientID = clientID || selectedClient?.clientID;
+
+  // ✅ Weekly note compliance (notes are required twice a week)
+  const noteCompliance = getWeeklyNoteCompliance(encounterNotes, {
+    startDate: selectedClient?.clientAdmitDate
+  });
+
+  const NOTE_STATUS = {
+    'on-track': { label: 'On Track', color: 'success' },
+    behind: { label: 'Behind Schedule', color: 'error' },
+    none: { label: 'No Notes Yet', color: 'default' }
+  };
+  const WEEK_STATUS = {
+    complete: { color: 'success', variant: 'filled' },
+    'in-progress': { color: 'info', variant: 'outlined' },
+    partial: { color: 'warning', variant: 'filled' },
+    missed: { color: 'error', variant: 'filled' }
+  };
+
+  // Timeline items: "Notes" reflects real note compliance, others use section4List
+  const timelineItems = (section4List || []).map(item =>
+    item.section4Title === 'Notes'
+      ? { ...item, isNotes: true, isComplete: noteCompliance.overallStatus === 'on-track' }
+      : { ...item, isComplete: Boolean(item.section4Date) }
+  );
+
+  const formatWeek = (d) => d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+
+  const renderNoteStatus = () => {
+    const status = NOTE_STATUS[noteCompliance.overallStatus];
+    const { currentWeek, lastNoteDate, daysSinceLastNote, complianceRate,
+            compliantWeeks, totalPastWeeks, notesNeededThisWeek } = noteCompliance;
+
+    return (
+      <Box component="span" sx={{ display: 'block', mt: 0.5 }}>
+        <Box component="span" sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, alignItems: 'center' }}>
+          <Chip label={status.label} color={status.color} size="small" />
+          {currentWeek && (
+            <Chip
+              label={`This week: ${currentWeek.count} of ${NOTES_PER_WEEK}`}
+              color={currentWeek.count >= NOTES_PER_WEEK ? 'success' : 'info'}
+              variant="outlined"
+              size="small"
+            />
+          )}
+          {complianceRate !== null && (
+            <Chip
+              label={`${compliantWeeks}/${totalPastWeeks} weeks compliant (${complianceRate}%)`}
+              variant="outlined"
+              size="small"
+            />
+          )}
+        </Box>
+
+        <Typography component="span" variant="body2" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
+          Requirement: {NOTES_PER_WEEK} notes per week (Mon–Sun).{' '}
+          {lastNoteDate
+            ? `Last note: ${lastNoteDate.toLocaleDateString()} (${daysSinceLastNote === 0 ? 'today' : `${daysSinceLastNote} day${daysSinceLastNote === 1 ? '' : 's'} ago`}).`
+            : 'No notes recorded.'}{' '}
+          {notesNeededThisWeek > 0 &&
+            `${notesNeededThisWeek} more note${notesNeededThisWeek === 1 ? '' : 's'} due by Sunday.`}
+        </Typography>
+
+        {currentWeek && (
+          <LinearProgress
+            variant="determinate"
+            value={Math.min(100, (currentWeek.count / NOTES_PER_WEEK) * 100)}
+            color={currentWeek.count >= NOTES_PER_WEEK ? 'success' : 'info'}
+            sx={{ mt: 1, height: 6, borderRadius: 3, maxWidth: 320 }}
+          />
+        )}
+
+        <Box component="span" sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75, mt: 1.5 }}>
+          {noteCompliance.weeks.map(week => {
+            const style = WEEK_STATUS[week.status];
+            return (
+              <Tooltip
+                key={week.weekStart.toISOString()}
+                title={`Week of ${formatWeek(week.weekStart)} – ${formatWeek(week.weekEnd)}: ${week.count} of ${week.required} notes${week.isCurrent ? ' (current week)' : ''}`}
+              >
+                <Chip
+                  label={`${formatWeek(week.weekStart)}: ${week.count}/${week.required}`}
+                  color={style.color}
+                  variant={style.variant}
+                  size="small"
+                />
+              </Tooltip>
+            );
+          })}
+        </Box>
+      </Box>
+    );
+  };
 
   // ✅ Load data when client changes
   useEffect(() => {
@@ -268,33 +364,38 @@ const ClientProgress = () => {
                     Client Progress Timeline
                   </Typography>
                   
-                  {section4List && section4List.length > 0 ? (
+                  {timelineItems.length > 0 ? (
                     <>
                       <Paper sx={{ p: 3, mt: 2 }}>
                         <List>
-                          {section4List.map((item, index) => (
-                            <ListItem key={index} sx={{ mb: 2 }}>
-                              <ListItemIcon>
-                                {item.section4Date ? (
+                          {timelineItems.map((item, index) => (
+                            <ListItem key={index} sx={{ mb: 2, alignItems: 'flex-start' }}>
+                              <ListItemIcon sx={{ mt: 0.5 }}>
+                                {item.isComplete ? (
                                   <CheckCircleIcon color="success" fontSize="large" />
+                                ) : item.isNotes && noteCompliance.overallStatus === 'behind' ? (
+                                  <WarningIcon color="error" fontSize="large" />
                                 ) : (
                                   <UncheckedIcon color="disabled" fontSize="large" />
                                 )}
                               </ListItemIcon>
                               <ListItemText
+                                secondaryTypographyProps={{ component: 'div' }}
                                 primary={
                                   <Typography 
                                     variant="subtitle1" 
                                     sx={{ 
                                       fontWeight: 'medium',
-                                      color: item.section4Date ? 'success.main' : 'text.secondary' 
+                                      color: item.isComplete ? 'success.main' : 'text.secondary' 
                                     }}
                                   >
                                     {item.section4Title}
                                   </Typography>
                                 }
                                 secondary={
-                                  item.section4Date ? (
+                                  item.isNotes ? (
+                                    renderNoteStatus()
+                                  ) : item.section4Date ? (
                                     <Chip
                                       label={`Completed: ${new Date(item.section4Date).toLocaleDateString()}`}
                                       color="success"
@@ -322,7 +423,7 @@ const ClientProgress = () => {
                         <Grid item xs={12} sm={6}>
                           <Paper sx={{ p: 2, textAlign: 'center', bgcolor: 'success.light' }}>
                             <Typography variant="h4" color="success.contrastText">
-                              {section4List.filter(item => item.section4Date).length}
+                              {timelineItems.filter(item => item.isComplete).length}
                             </Typography>
                             <Typography variant="body2" color="success.contrastText">
                               Completed Tasks
@@ -332,7 +433,7 @@ const ClientProgress = () => {
                         <Grid item xs={12} sm={6}>
                           <Paper sx={{ p: 2, textAlign: 'center', bgcolor: 'warning.light' }}>
                             <Typography variant="h4" color="warning.contrastText">
-                              {section4List.filter(item => !item.section4Date).length}
+                              {timelineItems.filter(item => !item.isComplete).length}
                             </Typography>
                             <Typography variant="body2" color="warning.contrastText">
                               Pending Tasks
