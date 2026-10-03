@@ -544,6 +544,8 @@ const MentalHealth = ({ exportMode }) => {
       return;
     }
 
+    if (!window.confirm("Remove this item? This cannot be undone.")) return;
+
     try {
       if (shouldUseMockData) {
         // Use local actions for mock mode
@@ -556,7 +558,7 @@ const MentalHealth = ({ exportMode }) => {
         // Use async thunks for real mode
         switch (arrayName) {
           case 'currentProvider':
-            await dispatch(removeProvider({ clientID: currentClient.clientID, providerID: itemId }));
+            await dispatch(removeProvider({ clientID: currentClient.clientID, providerID: itemId })).unwrap();
             break;
           case 'hospitalizations':
             await dispatch(removeHospitalization({ clientID: currentClient.clientID, hospitalizationID: itemId }));
