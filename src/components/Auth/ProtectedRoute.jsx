@@ -1,13 +1,18 @@
 import React from 'react';
 import { useIsAuthenticated, useMsal } from '@azure/msal-react';
 import { Navigate } from 'react-router-dom';
+import { isAdminAccount } from '../../backend/config/groupConfig';
 
-const ProtectedRoute = ({ children, requiredRoles = [] }) => {
+const ProtectedRoute = ({ children, requiredRoles = [], adminOnly = false }) => {
   const isAuthenticated = useIsAuthenticated();
   const { accounts } = useMsal();
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
+  }
+
+  if (adminOnly && !isAdminAccount(accounts[0])) {
+    return <Navigate to="/unauthorized" replace />;
   }
 
   // Optional: Check user roles/permissions

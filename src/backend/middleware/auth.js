@@ -3,6 +3,10 @@ const jwt = require('jsonwebtoken');
 const jwksClient = require('jwks-rsa');
 const TENANT_ID = '2fca3a49-cd1a-4717-bccc-5dbd1ea86b64';
 const APP_CLIENT_ID = '0b3e6463-bea7-4521-a36a-a32edb6af7a1';
+// HOPE_it — the group the frontend maps to IT_ADMIN (config/groupConfig.js).
+// Roles are assigned by group membership, so this is what makes IT staff admins.
+const IT_ADMIN_GROUP_ID = '47e60a70-aeab-4f3e-80bd-940cc951622f';
+const ADMIN_GROUP_IDS = [IT_ADMIN_GROUP_ID, process.env.ADMIN_GROUP_ID].filter(Boolean);
 
 // ID tokens are signed with tenant-specific keys.
 // We use the tenant JWKS endpoint — ID tokens do not have a nonce
@@ -88,7 +92,7 @@ jwt.verify(token, getKey, {
         tenantId: decoded.tid,
         isAdmin:  (decoded.roles  || []).includes('Admin') ||
                   (decoded.roles  || []).includes('ITAdmin') ||
-                  (decoded.groups || []).includes(process.env.ADMIN_GROUP_ID) ||
+                  (decoded.groups || []).some(g => ADMIN_GROUP_IDS.includes(g)) ||
                   (decoded.wids   || []).includes('62e90394-69f5-4237-9190-012177145e10'),
       };
 

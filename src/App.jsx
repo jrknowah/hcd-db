@@ -350,7 +350,7 @@ const AppRoutes = () => {
                 No client-scoped section state applies here.
                 ======================================== */}
             <Route path="/admin" element={
-              <ProtectedRoute requiredRoles={['ITAdmin']}>
+              <ProtectedRoute adminOnly>
                 <ComponentErrorBoundary name="AdminLayout">
                   <AdminLayout />
                 </ComponentErrorBoundary>
