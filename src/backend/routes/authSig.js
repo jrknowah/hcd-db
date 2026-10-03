@@ -640,6 +640,11 @@ router.get('/:clientID/form/:formType', async (req, res) => {
     let formData   = {};
     try { formData = JSON.parse(form.formData || '{}'); } catch (_) {}
 
+    let checkboxData = formData.checkboxes || null;
+    if (form.checkboxData) {
+      try { checkboxData = JSON.parse(form.checkboxData); } catch (_) {}
+    }
+
     // Dedicated columns are authoritative — they were written explicitly on save.
     // formData JSON is supplementary (contains the actual field values for the form UI).
     logUserAction(getCurrentUser(req), 'GET', 'AuthorizationForm');
@@ -651,7 +656,9 @@ router.get('/:clientID/form/:formType', async (req, res) => {
       formID:              form.formID,
       clientID:            form.clientID,
       formType:            form.formType,
-      checkboxData:        form.checkboxData ? JSON.parse(form.checkboxData) : formData.checkboxes || null,
+      checkboxData,
+      // Forms (e.g. orientation) read their checkbox state back as `checkboxes`
+      checkboxes:          checkboxData,
       signature:           form.signature    || formData.signature || null,
       completionPercentage: Number(form.completionPercentage ?? formData.completionPercentage ?? 0),
       status:              form.status,

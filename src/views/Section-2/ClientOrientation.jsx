@@ -94,7 +94,7 @@ const ClientOrientation = forwardRef(({ clientID: propClientID, title, formType 
   // Update local state when Redux form data changes
   useEffect(() => {
     if (orientationForm && Object.keys(orientationForm).length > 0) {
-      setCheckboxes(orientationForm.checkboxes || {});
+      setCheckboxes(orientationForm.checkboxes || orientationForm.checkboxData || {});
       setPatientRightsSig(orientationForm.signature || "");
     }
   }, [orientationForm]);

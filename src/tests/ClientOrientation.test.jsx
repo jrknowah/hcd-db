@@ -208,6 +208,19 @@ describe('ClientOrientation - Patient Orientation Acknowledgment', () => {
       expect(checkbox2).not.toBeChecked();
     });
 
+    it('should load saved checkbox states returned by the API as checkboxData', () => {
+      const { checkboxes, ...rest } = mockOrientationData;
+      const preloadedState = createPreloadedState({
+        forms: { orientation: { ...rest, checkboxData: checkboxes } }
+      });
+
+      renderWithProviders(<ClientOrientation clientID={mockClientID} />, { preloadedState });
+
+      expect(screen.getByLabelText('Document 1')).toBeChecked();
+      expect(screen.getByLabelText('Document 2')).toBeChecked();
+      expect(screen.getByLabelText('Document 3')).not.toBeChecked();
+    });
+
     it('should update checkbox state when clicked', async () => {
       const user = userEvent.setup();
       const preloadedState = createPreloadedState();
