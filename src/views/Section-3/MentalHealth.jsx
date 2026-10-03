@@ -26,6 +26,7 @@ import {
 } from '../../backend/store/slices/MentalHealthSlice';
 import { fetchArrestData, saveArrestData, updateArrestData, deleteArrestRecord } from '../../backend/store/slices/arrestActions';
 import logUserAction from "../../backend/config/logAction";
+import { formatDateOnly } from "../../utils/dateOnly";
 import {
   cmOb1, cmOb2, cmOb3, cmOb4, cmOb5, cmOb6, cmOb7, cmOb8, cmOb9, cmOb10, cmOb11, cmObNone,
   legalList, energyLevelList, gadList, mhList, sleepPatternList, substanceAbuseOften, 
@@ -543,6 +544,8 @@ const MentalHealth = ({ exportMode }) => {
       return;
     }
 
+    if (!window.confirm("Remove this item? This cannot be undone.")) return;
+
     try {
       if (shouldUseMockData) {
         // Use local actions for mock mode
@@ -555,7 +558,7 @@ const MentalHealth = ({ exportMode }) => {
         // Use async thunks for real mode
         switch (arrayName) {
           case 'currentProvider':
-            await dispatch(removeProvider({ clientID: currentClient.clientID, providerID: itemId }));
+            await dispatch(removeProvider({ clientID: currentClient.clientID, providerID: itemId })).unwrap();
             break;
           case 'hospitalizations':
             await dispatch(removeHospitalization({ clientID: currentClient.clientID, hospitalizationID: itemId }));
@@ -913,8 +916,8 @@ const MentalHealth = ({ exportMode }) => {
                       <TableCell>{item.agency}</TableCell>
                       <TableCell>{item.worker}</TableCell>
                       <TableCell>{item.phone}</TableCell>
-                      <TableCell>{item.lastAppointment}</TableCell>
-                      <TableCell>{item.nextAppointment}</TableCell>
+                      <TableCell>{formatDateOnly(item.lastAppointment)}</TableCell>
+                      <TableCell>{formatDateOnly(item.nextAppointment)}</TableCell>
                       <TableCell>
                         <IconButton onClick={() => removeItem('currentProvider', item.providerID, idx)} color="error" size="small">
                           <DeleteIcon />

@@ -56,6 +56,7 @@ import {
   clearSaveSuccess
 } from "../../backend/store/slices/idtNursingSlice";
 import logUserAction from "../../backend/config/logAction";
+import { formatDateOnly } from "../../utils/dateOnly";
 
 const initialFormState = {
   idtNursingAppointYN: "",
@@ -373,7 +374,7 @@ const IDTNoteNursing = ({ clientID }) => {
                 />
                 {formData.goalTargetDate && (
                   <Typography variant="body2" color="text.secondary">
-                    Target: {new Date(formData.goalTargetDate).toLocaleDateString()}
+                    Target: {formatDateOnly(formData.goalTargetDate)}
                   </Typography>
                 )}
               </Box>

@@ -530,16 +530,21 @@ router.post('/mental-health/:clientID/providers', async (req, res) => {
 });
 
 // DELETE /api/mental-health/:clientID/providers/:providerID
-router.delete('/:clientID/providers/:providerID', async (req, res) => {
+router.delete('/mental-health/:clientID/providers/:providerID', async (req, res) => {
   try {
     const pool = await getPool();
-    const { providerID } = req.params;
+    const { clientID, providerID } = req.params;
     
     console.log(`🗑️ Removing provider: ${providerID}`);
     
-    await pool.request()
+    const result = await pool.request()
+      .input('clientID', sql.VarChar, clientID)
       .input('providerID', sql.VarChar, providerID)
-      .query('UPDATE MentalHealthProviders SET active = 0 WHERE providerID = @providerID');
+      .query('UPDATE MentalHealthProviders SET active = 0 WHERE providerID = @providerID AND clientID = @clientID');
+
+    if (result.rowsAffected[0] === 0) {
+      return res.status(404).json({ error: 'Provider not found' });
+    }
     
     console.log(`✅ Provider ${providerID} deactivated`);
     res.json({ success: true });
