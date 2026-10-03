@@ -39,6 +39,7 @@ import {
   Home as HomeIcon,
 } from '@mui/icons-material';
 import { fetchClientById } from '../../backend/store/slices/clientSlice';
+import { formatDateOnly } from '../../utils/dateOnly';
 
 const ClientProfileCard = ({ 
   clientID, 
@@ -264,7 +265,7 @@ const ClientProfileCard = ({
                 <ListItemIcon><CalendarIcon fontSize="small" /></ListItemIcon>
                 <ListItemText 
                   primary="Date of Birth" 
-                  secondary={selectedClient.clientDOB ? new Date(selectedClient.clientDOB).toLocaleDateString() : 'Not provided'} 
+                  secondary={formatDateOnly(selectedClient.clientDOB, 'Not provided')} 
                 />
               </ListItem>
               <ListItem>
@@ -355,7 +356,7 @@ const ClientProfileCard = ({
               <ListItem>
                 <ListItemText 
                   primary="Admit Date" 
-                  secondary={selectedClient.clientAdmitDate ? new Date(selectedClient.clientAdmitDate).toLocaleDateString() : 'Not provided'} 
+                  secondary={formatDateOnly(selectedClient.clientAdmitDate, 'Not provided')} 
                 />
               </ListItem>
               <ListItem>

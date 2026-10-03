@@ -41,6 +41,7 @@ import {
   ContactPage as ContactPageIcon, // ✅ Add this import for View Chart
 } from '@mui/icons-material';
 import { visuallyHidden } from '@mui/utils';
+import { formatDateOnly } from '../../utils/dateOnly';
 
 // Table column definitions
 const headCells = [
@@ -605,7 +606,7 @@ const ClientTable = ({
 
                     <TableCell>
                       <Typography variant="body2">
-                        {client.clientDOB ? new Date(client.clientDOB).toLocaleDateString() : 'N/A'}
+                        {formatDateOnly(client.clientDOB, 'N/A')}
                       </Typography>
                     </TableCell>
 
