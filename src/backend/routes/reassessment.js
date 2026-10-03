@@ -60,6 +60,85 @@ router.get('/reassessment/:clientID',
     }
 );
 
+// ✅ GET /api/reassessment/:clientID/records - All reassessments for a client
+router.get('/reassessment/:clientID/records',
+    async (req, res) => {
+        try {
+            const { clientID } = req.params;
+
+            logUserAction('GET_REASSESSMENT_LIST', {
+                clientID,
+                timestamp: new Date().toISOString()
+            });
+
+            const records = await ReassessmentService.getAllByClientId(clientID);
+            res.json(records);
+        } catch (error) {
+            console.error('Error fetching reassessment list:', error);
+            res.status(500).json({ message: error.message || 'Internal server error' });
+        }
+    }
+);
+
+// ✅ POST /api/reassessment/:clientID/records - Always create a new reassessment
+router.post('/reassessment/:clientID/records',
+    reassessmentValidation,
+    async (req, res) => {
+        try {
+            const errors = validationResult(req);
+            if (!errors.isEmpty()) {
+                return res.status(400).json({ 
+                    message: 'Validation errors', 
+                    errors: errors.array() 
+                });
+            }
+
+            const { clientID } = req.params;
+            const reassessmentData = req.body;
+
+            logUserAction('CREATE_REASSESSMENT_RECORD', {
+                clientID,
+                timestamp: new Date().toISOString()
+            });
+
+            const newRecord = await ReassessmentService.create({
+                ...reassessmentData,
+                clientID,
+                createdBy: reassessmentData.createdBy || reassessmentData.updatedBy || 'system'
+            });
+
+            res.status(201).json(newRecord);
+        } catch (error) {
+            console.error('Error creating reassessment record:', error);
+            res.status(500).json({ message: error.message || 'Internal server error' });
+        }
+    }
+);
+
+// ✅ DELETE /api/reassessment/record/:reassessmentID
+router.delete('/reassessment/record/:reassessmentID',
+    async (req, res) => {
+        try {
+            const { reassessmentID } = req.params;
+
+            logUserAction('DELETE_REASSESSMENT_BY_ID', {
+                reassessmentID,
+                timestamp: new Date().toISOString()
+            });
+
+            const deleted = await ReassessmentService.deleteById(reassessmentID);
+            if (!deleted) {
+                return res.status(404).json({ message: 'Reassessment record not found' });
+            }
+
+            res.json({ message: 'Reassessment record deleted successfully', reassessmentID });
+        } catch (error) {
+            console.error('Error deleting reassessment record:', error);
+            res.status(500).json({ message: 'Internal server error' });
+        }
+    }
+);
+
 // ✅ GET /api/reassessment/assessment/:assessmentID
 router.get('/reassessment/assessment/:assessmentID',
     async (req, res) => {
@@ -200,6 +279,14 @@ router.put('/reassessment/record/:reassessmentID',
     reassessmentValidation,
     async (req, res) => {
         try {
+            const errors = validationResult(req);
+            if (!errors.isEmpty()) {
+                return res.status(400).json({ 
+                    message: 'Validation errors', 
+                    errors: errors.array() 
+                });
+            }
+
             const { reassessmentID } = req.params;
             const updateData = req.body;
 
