@@ -549,19 +549,24 @@ router.get('/list', async (_req, res) => {
  */
 router.get('/files/:clientID', async (req, res) => {
   try {
-    // Do NOT sanitize clientID — it must match the exact prefix used during upload
     const clientID = req.params.clientID;
     console.log(`📂 Listing files for client: ${clientID}`);
-    
-    const prefix = `${clientID}/`;
+
+    // Upload writes blobs under the sanitized clientID (see buildBlobName), so
+    // list that prefix; also list the raw one to pick up any blobs written
+    // before sanitizing, for IDs where the two differ
+    const prefixes = [...new Set([`${sanitizeSegment(clientID)}/`, `${clientID}/`])];
 
     // Try Azure first
     if (blobServiceClient) {
       try {
         const containerClient = await getContainerClient();
         const files = [];
+        const seen = new Set();
 
-        for await (const blob of containerClient.listBlobsFlat({ prefix })) {
+        for (const prefix of prefixes) for await (const blob of containerClient.listBlobsFlat({ prefix })) {
+          if (seen.has(blob.name)) continue;
+          seen.add(blob.name);
           files.push({
             id: blob.name,
             blobName: blob.name,
