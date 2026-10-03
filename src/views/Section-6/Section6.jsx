@@ -38,6 +38,7 @@ import {
 } from '@mui/icons-material';
 import { useDispatch, useSelector } from "react-redux";
 import { useClientPersistence } from '../../hooks/useClientPersistence';
+import ClientInfoBanner from '../../components/shared/ClientInfoBanner';
 
 // ✅ FIXED: Correct imports for Section 6
 import {
@@ -190,6 +191,7 @@ const Section6 = () => {
 
             {/* Tab Content */}
             <Box sx={{ p: 3 }}>
+                <ClientInfoBanner />
                 {filteredSections.map((section, index) => (
                     <TabPanel key={index} value={activeTab} index={index}>
                         {section.section6Title === "Case Manager IDT Note" && (
