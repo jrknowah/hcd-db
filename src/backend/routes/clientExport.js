@@ -3,7 +3,10 @@
  * Backend route: Full client record PDF export (all 6 sections)
  * Uses PDFKit for server-side PDF generation
  *
- * Route: GET /api/export/client/:clientID/pdf
+ * Routes:
+ *   GET /api/export/client/:clientID/pdf                   – full record (all 6 sections)
+ *   GET /api/export/client/:clientID/pdf?sections=1,5      – only the listed sections
+ *   GET /api/export/client/:clientID/pdf/med-face-sheet    – Section 5 Medical Face Sheet only
  * Auth: Required (JWT middleware)
  * HIPAA: Audit log on every export
  */
@@ -25,6 +28,21 @@ function safeStr(val, fallback = 'N/A') {
 function formatDate(val) {
   if (!val) return 'N/A';
   try { return new Date(val).toLocaleDateString('en-US'); } catch { return 'N/A'; }
+}
+
+// Face sheet multi-selects are stored as JSON arrays of react-select options
+// ({ value, label }) or plain strings. Render them as a readable list.
+function formatList(val, fallback = 'N/A') {
+  if (val === null || val === undefined || val === '') return fallback;
+  let arr = val;
+  if (typeof val === 'string') {
+    try { arr = JSON.parse(val); } catch { return val; }
+  }
+  if (!Array.isArray(arr)) return safeStr(arr, fallback);
+  const items = arr
+    .map((x) => (x && typeof x === 'object' ? (x.label ?? x.value) : x))
+    .filter((x) => x !== null && x !== undefined && x !== '');
+  return items.length ? items.join(', ') : fallback;
 }
 
 function formatBool(val) {
@@ -162,9 +180,18 @@ function drawGridTable(doc, { headers, widths, rows, headerColor, altColor, rowH
   doc.y += 10;
 }
 
+const SECTION_TITLES = {
+  1: 'Section 1 – Identification & Referrals',
+  2: 'Section 2 – Authorization & Signature Forms',
+  3: 'Section 3 – Assessment & Care Plans',
+  4: 'Section 4 – Client Progress',
+  5: 'Section 5 – Medical Information & Screenings',
+  6: 'Section 6 – Case Management',
+};
+
 // ─── Cover Page ─────────────────────────────────────────────────────────────
 
-function drawCoverPage(doc, client, exportedBy) {
+function drawCoverPage(doc, client, exportedBy, sectionNums = [1, 2, 3, 4, 5, 6]) {
   const pageWidth = doc.page.width;
   const pageHeight = doc.page.height;
 
@@ -178,7 +205,7 @@ function drawCoverPage(doc, client, exportedBy) {
   doc
     .fontSize(14)
     .font('Helvetica')
-    .text('Complete Client Record', 40, 70, { width: pageWidth - 80, align: 'center' });
+    .text(sectionNums.length === 6 ? 'Complete Client Record' : 'Client Record – Selected Sections', 40, 70, { width: pageWidth - 80, align: 'center' });
 
   // Client name
   doc.fillColor('#1565C0').fontSize(22).font('Helvetica-Bold')
@@ -239,17 +266,9 @@ function drawCoverPage(doc, client, exportedBy) {
   doc.fillColor('#000000').moveDown(2);
   doc.x = doc.page.margins.left;
 
-  const sections = [
-    'Section 1 – Identification & Referrals',
-    'Section 2 – Authorization & Signature Forms',
-    'Section 3 – Assessment & Care Plans',
-    'Section 4 – Client Progress',
-    'Section 5 – Medical Information & Screenings',
-    'Section 6 – Case Management',
-  ];
   doc.fontSize(11).font('Helvetica');
-  sections.forEach((s, i) => {
-    doc.text(`${i + 1}.  ${s}`, { indent: 20 }).moveDown(0.4);
+  sectionNums.forEach((n) => {
+    doc.text(`${n}.  ${SECTION_TITLES[n]}`, { indent: 20 }).moveDown(0.4);
   });
 }
 
@@ -1880,11 +1899,11 @@ async function renderSection5(doc, pool, clientID) {
         ['Client ID',    mfs.clientID],
         ['Last Updated', formatDate(mfs.updatedAt || mfs.createdAt)],
       ]);
-      drawS5Narrative(doc, 'Medical Conditions',         mfs.clientMedConditions);
+      drawS5Narrative(doc, 'Medical Conditions',         formatList(mfs.clientMedConditions, null));
       drawS5Narrative(doc, 'Additional Medical History', mfs.clientAddMedHistory);
       drawS5Narrative(doc, 'Pertinent Medical Info',     mfs.clientMedPertinent);
       drawS5Narrative(doc, 'Previous Lab Results',       mfs.clientPreviousLab);
-      drawS5Narrative(doc, 'Allergies',                  mfs.clientAllergies);
+      drawS5Narrative(doc, 'Allergies',                  formatList(mfs.clientAllergies, null));
     } else {
       noData(doc);
     }
@@ -2249,9 +2268,190 @@ async function renderSection6(doc, pool, clientID) {
   } catch {}
 }
 
-// ─── Main Export Route ──────────────────────────────────────────────────────
+// ─── Medical Face Sheet (standalone) ────────────────────────────────────────
 
-router.get('/client/:clientID/pdf', authenticateToken, async (req, res) => {
+const MFS_COLOR = '#7B1FA2';
+
+function drawMfsHeading(doc, title) {
+  ensureSpace(doc, 50);
+  const ml = doc.page.margins.left;
+  const w  = doc.page.width - ml - doc.page.margins.right;
+  const y  = doc.y;
+  doc.rect(ml, y, w, 18).fill('#F3E5F5');
+  doc.rect(ml, y, 4, 18).fill(MFS_COLOR);
+  doc.fillColor(MFS_COLOR).font('Helvetica-Bold').fontSize(10)
+     .text(title, ml + 10, y + 5, { width: w - 14, lineBreak: false });
+  doc.fillColor('#000000');
+  doc.x = ml;
+  doc.y = y + 24;
+}
+
+function drawMfsBody(doc, text, emptyMsg = 'None recorded.') {
+  const ml = doc.page.margins.left;
+  const w  = doc.page.width - ml - doc.page.margins.right;
+  const empty = text === null || text === undefined || String(text).trim() === '';
+  doc.font('Helvetica').fontSize(9).fillColor(empty ? '#777777' : '#222222')
+     .text(empty ? emptyMsg : String(text), ml + 10, doc.y, { width: w - 14 });
+  doc.fillColor('#000000');
+  doc.x = ml;
+  doc.y += 10;
+}
+
+async function renderMedFaceSheetDocument(doc, pool, client, exportedBy) {
+  const clientID   = client.clientID;
+  const pageWidth  = doc.page.width;
+  const ml         = doc.page.margins.left;
+
+  // Title bar
+  doc.rect(0, 0, pageWidth, 64).fill(MFS_COLOR);
+  doc.fillColor('white').font('Helvetica-Bold').fontSize(18)
+     .text('Medical Face Sheet', 40, 14, { width: pageWidth - 80, lineBreak: false });
+  doc.font('Helvetica').fontSize(9)
+     .text('Section 5 – Medical Information  |  HOPE Client Database', 40, 40, { width: pageWidth - 80, lineBreak: false });
+  doc.fillColor('#000000');
+  doc.x = ml;
+  doc.y = 80;
+
+  // Client identification
+  drawMfsHeading(doc, 'Client');
+  drawS4MetaGrid(doc, [
+    ['Name',          `${safeStr(client.clientLastName, '')}, ${safeStr(client.clientFirstName, '')}`],
+    ['Client ID',     clientID],
+    ['Date of Birth', formatDate(client.dob)],
+    ['Status',        client.clientStatus],
+    ['Program',       client.program],
+    ['Site',          client.site || client.clientSite],
+  ]);
+  doc.y += 6;
+
+  // Face sheet record
+  let mfs = null;
+  try {
+    const r = await pool.request()
+      .input('clientID', sql.NVarChar, clientID)
+      .query('SELECT TOP 1 * FROM dbo.medical_face_sheet WHERE clientID = @clientID');
+    mfs = r.recordset[0] || null;
+  } catch (e) {
+    noData(doc, `Medical face sheet unavailable: ${e.message}`);
+  }
+
+  // Allergies: face sheet selections merged with the shared allergy list
+  const allergies = [];
+  const addAllergy = (a) => {
+    const v = a && String(a).trim();
+    if (v && !allergies.some((x) => x.toLowerCase() === v.toLowerCase())) allergies.push(v);
+  };
+  if (mfs) formatList(mfs.clientAllergies, '').split(', ').forEach(addAllergy);
+  try {
+    const r = await pool.request()
+      .input('clientID', sql.NVarChar, clientID)
+      .query('SELECT allergyName FROM dbo.ClientAllergies WHERE clientID = @clientID');
+    r.recordset.forEach((row) => addAllergy(row.allergyName));
+  } catch {}
+
+  drawMfsHeading(doc, 'Allergies');
+  if (allergies.length) {
+    doc.font('Helvetica-Bold').fontSize(9.5).fillColor('#C62828')
+       .text(allergies.join(', '), ml + 10, doc.y, { width: doc.page.width - ml - doc.page.margins.right - 14 });
+    doc.fillColor('#000000');
+    doc.x = ml;
+    doc.y += 10;
+  } else {
+    drawMfsBody(doc, null, 'No known allergies recorded.');
+  }
+
+  drawMfsHeading(doc, 'Medical Conditions');
+  drawMfsBody(doc, mfs ? formatList(mfs.clientMedConditions, '') : null);
+
+  drawMfsHeading(doc, 'Additional Medical History');
+  drawMfsBody(doc, mfs?.clientAddMedHistory);
+
+  drawMfsHeading(doc, 'Pertinent Medical Information');
+  drawMfsBody(doc, mfs?.clientMedPertinent);
+
+  drawMfsHeading(doc, 'Previous Lab Results');
+  drawMfsBody(doc, mfs?.clientPreviousLab);
+
+  // Appointments
+  drawMfsHeading(doc, 'Client Appointments');
+  try {
+    const r = await pool.request()
+      .input('clientID', sql.NVarChar, clientID)
+      .query(`SELECT medApptDate, medApptLoc, medApptType, medApptProv, medApptTranport
+              FROM dbo.medical_appointments
+              WHERE clientID = @clientID
+              ORDER BY medApptDate DESC`);
+    if (r.recordset.length) {
+      const tw = doc.page.width - ml - doc.page.margins.right;
+      drawGridTable(doc, {
+        headers:     ['Date', 'Location', 'Type', 'Provider', 'Transport'],
+        widths:      [tw * 0.14, tw * 0.28, tw * 0.2, tw * 0.26, tw * 0.12],
+        rows:        r.recordset.map((a) => [
+          formatDate(a.medApptDate),
+          a.medApptLoc,
+          a.medApptType,
+          a.medApptProv,
+          a.medApptTranport,
+        ]),
+        headerColor: MFS_COLOR,
+        altColor:    '#F3E5F5',
+      });
+    } else {
+      drawMfsBody(doc, null, 'No appointments on record.');
+    }
+  } catch (e) {
+    noData(doc, `Appointments unavailable: ${e.message}`);
+  }
+
+  // Record metadata + confidentiality footer
+  ensureSpace(doc, 50);
+  doc.y += 6;
+  if (mfs) {
+    doc.font('Helvetica').fontSize(7.5).fillColor('#555555').text(
+      `Face sheet last updated ${formatDate(mfs.updatedAt || mfs.createdAt)}` +
+      `${mfs.updatedBy || mfs.createdBy ? ` by ${mfs.updatedBy || mfs.createdBy}` : ''}`,
+      ml, doc.y
+    );
+  }
+  doc.font('Helvetica').fontSize(7).fillColor('#888888').text(
+    `CONFIDENTIAL – HIPAA PHI. Generated ${new Date().toLocaleString('en-US')} by ${safeStr(exportedBy)}.`,
+    ml, doc.y + 2
+  );
+  doc.fillColor('#000000');
+}
+
+// ─── Shared PDF response plumbing ───────────────────────────────────────────
+
+const SECTION_RENDERERS = {
+  1: renderSection1,
+  2: renderSection2,
+  3: renderSection3,
+  4: renderSection4,
+  5: renderSection5,
+  6: renderSection6,
+};
+
+// Parses ?sections=1,5 → [1, 5]. Missing/empty → all sections.
+// Returns null if any value is not a valid section number.
+function parseSections(raw) {
+  if (raw === undefined || raw === null || String(raw).trim() === '') return [1, 2, 3, 4, 5, 6];
+  const nums = String(raw).split(',').map((x) => x.trim()).filter(Boolean).map(Number);
+  if (!nums.length || nums.some((n) => !SECTION_RENDERERS[n])) return null;
+  return [...new Set(nums)].sort((a, b) => a - b);
+}
+
+function asciiFilename(filename) {
+  return filename
+    .normalize('NFKD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^A-Za-z0-9._-]+/g, '_');
+}
+
+/**
+ * Loads the client, writes the audit row, sets download headers and streams a
+ * PDF whose body is produced by `render(doc, pool, client)`.
+ */
+async function streamClientPdf(req, res, { auditAction, auditDetails, title, fileLabel, render }) {
   const { clientID } = req.params;
   const exportedBy = req.user?.username || req.user?.email || 'Unknown';
 
@@ -2269,7 +2469,6 @@ router.get('/client/:clientID/pdf', authenticateToken, async (req, res) => {
   }
 
   try {
-    // Fetch base client info
     const clientResult = await pool.request()
       .input('clientID', sql.NVarChar, clientID)
       .query('SELECT TOP 1 * FROM dbo.Clients WHERE clientID = @clientID');
@@ -2284,10 +2483,10 @@ router.get('/client/:clientID/pdf', authenticateToken, async (req, res) => {
     try {
       await pool.request()
         .input('userID',     sql.NVarChar,  exportedBy)
-        .input('action',     sql.NVarChar,  'EXPORT_FULL_PDF')
+        .input('action',     sql.NVarChar,  auditAction)
         .input('tableName',  sql.NVarChar,  'Clients')
         .input('recordID',   sql.NVarChar,  clientID)
-        .input('newValues',  sql.NVarChar,  JSON.stringify({ sections: 'all', exportType: 'PDF' }))
+        .input('newValues',  sql.NVarChar,  JSON.stringify({ ...auditDetails, exportType: 'PDF' }))
         .input('timestamp',  sql.DateTime2, new Date())
         .query(`INSERT INTO dbo.AuditLog (userID, action, tableName, recordID, newValues, timestamp)
                 VALUES (@userID, @action, @tableName, @recordID, @newValues, @timestamp)`);
@@ -2295,12 +2494,11 @@ router.get('/client/:clientID/pdf', authenticateToken, async (req, res) => {
       console.warn('Audit log failed (non-fatal):', auditErr.message);
     }
 
-    // Build PDF
     doc = new PDFDocument({
       size: 'LETTER',
       margins: { top: 40, bottom: 40, left: 50, right: 50 },
       info: {
-        Title: `${client.clientLastName}, ${client.clientFirstName} – Complete Client Record`,
+        Title: `${client.clientLastName}, ${client.clientFirstName} – ${title}`,
         Author: exportedBy,
         Subject: 'HOPE Client Database Export',
         Keywords: 'HIPAA, PHI, Client Record',
@@ -2308,38 +2506,16 @@ router.get('/client/:clientID/pdf', authenticateToken, async (req, res) => {
       },
     });
 
-    const filename = `${safeStr(client.clientLastName)}_${safeStr(client.clientFirstName)}_Complete_Record_${new Date().toISOString().slice(0, 10)}.pdf`;
-    const asciiFilename = filename
-      .normalize('NFKD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .replace(/[^A-Za-z0-9._-]+/g, '_');
+    const filename = `${safeStr(client.clientLastName)}_${safeStr(client.clientFirstName)}_${fileLabel}_${new Date().toISOString().slice(0, 10)}.pdf`;
 
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader(
       'Content-Disposition',
-      `attachment; filename="${asciiFilename}"; filename*=UTF-8''${encodeURIComponent(filename)}`
+      `attachment; filename="${asciiFilename(filename)}"; filename*=UTF-8''${encodeURIComponent(filename)}`
     );
     doc.pipe(res);
 
-    // Cover + TOC
-    drawCoverPage(doc, client, exportedBy);
-
-    // All 6 sections
-    await renderSection1(doc, pool, clientID);
-    await renderSection2(doc, pool, clientID);
-    await renderSection3(doc, pool, clientID);
-    await renderSection4(doc, pool, clientID);
-    await renderSection5(doc, pool, clientID);
-    await renderSection6(doc, pool, clientID);
-
-    // Final footer on last page
-    doc
-      .fillColor('#888888')
-      .fontSize(7)
-      .text(
-        `End of record for ${client.clientLastName}, ${client.clientFirstName} (ID: ${clientID}) — Generated ${new Date().toLocaleString()} by ${exportedBy}`,
-        { align: 'center' }
-      );
+    await render(doc, pool, client, exportedBy);
 
     doc.end();
 
@@ -2360,6 +2536,50 @@ router.get('/client/:clientID/pdf', authenticateToken, async (req, res) => {
       res.end();
     }
   }
+}
+
+// ─── Routes ─────────────────────────────────────────────────────────────────
+
+// Full record, or a subset of sections via ?sections=1,5
+router.get('/client/:clientID/pdf', authenticateToken, async (req, res) => {
+  const sectionNums = parseSections(req.query.sections);
+  if (!sectionNums) {
+    return res.status(400).json({ error: 'sections must be a comma-separated list of 1–6' });
+  }
+  const isFull = sectionNums.length === 6;
+
+  return streamClientPdf(req, res, {
+    auditAction:  isFull ? 'EXPORT_FULL_PDF' : 'EXPORT_SECTION_PDF',
+    auditDetails: { sections: isFull ? 'all' : sectionNums },
+    title:        isFull ? 'Complete Client Record' : `Client Record (Section ${sectionNums.join(', ')})`,
+    fileLabel:    isFull ? 'Complete_Record' : `Section_${sectionNums.join('-')}`,
+    render: async (doc, pool, client, exportedBy) => {
+      drawCoverPage(doc, client, exportedBy, sectionNums);
+      for (const n of sectionNums) {
+        await SECTION_RENDERERS[n](doc, pool, client.clientID);
+      }
+      doc
+        .fillColor('#888888')
+        .fontSize(7)
+        .text(
+          `End of record for ${client.clientLastName}, ${client.clientFirstName} (ID: ${client.clientID}) — Generated ${new Date().toLocaleString()} by ${exportedBy}`,
+          { align: 'center' }
+        );
+    },
+  });
 });
+
+// Section 5 – Medical Face Sheet only (single document, no cover/TOC)
+router.get('/client/:clientID/pdf/med-face-sheet', authenticateToken, async (req, res) => {
+  return streamClientPdf(req, res, {
+    auditAction:  'EXPORT_MED_FACE_SHEET_PDF',
+    auditDetails: { sections: [5], form: 'medical_face_sheet' },
+    title:        'Medical Face Sheet',
+    fileLabel:    'Medical_Face_Sheet',
+    render:       renderMedFaceSheetDocument,
+  });
+});
+
+router._test = { parseSections, formatList };
 
 module.exports = router;

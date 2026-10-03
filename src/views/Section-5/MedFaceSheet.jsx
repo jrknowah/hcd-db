@@ -50,6 +50,7 @@ import {
   fetchClientAllergies,
 } from "../../backend/store/slices/medFaceSheetSlice";
 import logUserAction from "../../backend/config/logAction";
+import ExportPdfButton from "../../components/shared/ExportPdfButton";
 import { medCond, allergyList } from "../../data/arrayList";
 
 // ✅ ENHANCED: Custom styles for react-select with better dropdown visibility
@@ -322,11 +323,19 @@ const MedFaceSheet = ({ clientID }) => {
       {/* Medical Information Card */}
       <Card sx={{ mb: 3 }}>
         <CardContent>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
-            <MedicalIcon color="primary" />
-            <Typography variant="h6">
-              Medical Information
-            </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2, mb: 3 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              <MedicalIcon color="primary" />
+              <Typography variant="h6">
+                Medical Information
+              </Typography>
+            </Box>
+            <ExportPdfButton
+              clientID={clientID}
+              kind="med-face-sheet"
+              label="Export Face Sheet PDF"
+              tooltip="Downloads the saved face sheet (medical info, allergies, appointments). Save changes first."
+            />
           </Box>
 
           <Grid container spacing={3}>
