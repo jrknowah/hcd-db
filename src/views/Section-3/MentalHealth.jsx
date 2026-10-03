@@ -2,10 +2,12 @@ import React, { useState, useEffect } from 'react';
 import {
   Box, Button, Card, Dialog, DialogActions, DialogContent, DialogTitle, Grid, 
   TextField, Typography, Alert, IconButton, Table, TableBody, TableCell, 
-  TableHead, TableRow, Divider
+  TableHead, TableRow, Divider, Checkbox, FormControlLabel
 } from '@mui/material';
 import { Delete as DeleteIcon, Add as AddIcon, Edit as EditIcon } from '@mui/icons-material';
 import { useSelector, useDispatch } from 'react-redux';
+import { useMsal } from '@azure/msal-react';
+import { isAdminAccount } from '../../backend/config/groupConfig';
 import Select from 'react-select';
 import { 
   fetchMentalHealthData, 
@@ -161,8 +163,19 @@ const customSelectStyles = {
   }),
 };
 
+const REMOVE_DIALOG_CLOSED = { open: false, arrayName: null, itemId: null, index: null, reason: '', permanent: false, submitting: false };
+
+const REMOVE_LABELS = {
+  currentProvider: 'mental health provider',
+  hospitalizations: 'hospitalization',
+  medications: 'medication',
+};
+
 const MentalHealth = ({ exportMode }) => {
   const dispatch = useDispatch();
+  const { instance, accounts } = useMsal();
+  const isAdmin = isAdminAccount(accounts?.[0]);
+  const [removeDialog, setRemoveDialog] = useState(REMOVE_DIALOG_CLOSED);
   
   // ✅ Safe selectors
   const reduxSelectedClient = useSelector((state) => state?.clients?.selectedClient);
@@ -538,14 +551,30 @@ const MentalHealth = ({ exportMode }) => {
     }
   };
 
-  const removeItem = async (arrayName, itemId, index) => {
+  const removeItem = (arrayName, itemId, index) => {
     if (!currentClient?.clientID) {
       alert("⚠️ No client selected.");
       return;
     }
+    setRemoveDialog({ ...REMOVE_DIALOG_CLOSED, open: true, arrayName, itemId, index });
+  };
 
-    if (!window.confirm("Remove this item? This cannot be undone.")) return;
+  const closeRemoveDialog = () => {
+    if (!removeDialog.submitting) setRemoveDialog(REMOVE_DIALOG_CLOSED);
+  };
 
+  // Backend verifies admin from the ID token (audience = this app), so ask
+  // MSAL for openid/profile — never a Graph scope.
+  const getIdToken = async () => {
+    const result = await instance.acquireTokenSilent({ scopes: ['openid', 'profile'], account: accounts[0] });
+    return result?.idToken;
+  };
+
+  const confirmRemove = async () => {
+    const { arrayName, itemId, index, reason, permanent } = removeDialog;
+    if (permanent && !reason.trim()) return;
+
+    setRemoveDialog(prev => ({ ...prev, submitting: true }));
     try {
       if (shouldUseMockData) {
         // Use local actions for mock mode
@@ -555,23 +584,32 @@ const MentalHealth = ({ exportMode }) => {
           case 'medications': dispatch(removeMedicationLocal(index)); break;
         }
       } else {
+        const options = {
+          clientID: currentClient.clientID,
+          deletedBy: currentUser?.email || 'unknown',
+          reason: reason.trim(),
+          permanent,
+          token: permanent ? await getIdToken() : undefined,
+        };
         // Use async thunks for real mode
         switch (arrayName) {
           case 'currentProvider':
-            await dispatch(removeProvider({ clientID: currentClient.clientID, providerID: itemId })).unwrap();
+            await dispatch(removeProvider({ ...options, providerID: itemId })).unwrap();
             break;
           case 'hospitalizations':
-            await dispatch(removeHospitalization({ clientID: currentClient.clientID, hospitalizationID: itemId }));
+            await dispatch(removeHospitalization({ ...options, hospitalizationID: itemId })).unwrap();
             break;
           case 'medications':
-            await dispatch(removeMedication({ clientID: currentClient.clientID, medicationID: itemId }));
+            await dispatch(removeMedication({ ...options, medicationID: itemId })).unwrap();
             break;
         }
       }
-      alert("✅ Item removed successfully!");
+      setRemoveDialog(REMOVE_DIALOG_CLOSED);
+      alert(permanent ? "✅ Record permanently deleted." : "✅ Item removed successfully!");
     } catch (error) {
       console.error("❌ Error removing item:", error);
-      alert("❌ Failed to remove item.");
+      setRemoveDialog(prev => ({ ...prev, submitting: false }));
+      alert(`❌ Failed to remove item.${error?.error ? ` ${error.error}` : ''}`);
     }
   };
 
@@ -1650,6 +1688,51 @@ const MentalHealth = ({ exportMode }) => {
         )}
 
         {/* Modals */}
+        {/* Remove Provider / Hospitalization / Medication */}
+        <Dialog open={removeDialog.open} onClose={closeRemoveDialog} maxWidth="sm" fullWidth>
+          <DialogTitle>Remove {REMOVE_LABELS[removeDialog.arrayName] || 'item'}</DialogTitle>
+          <DialogContent>
+            <Typography variant="body2" sx={{ mb: 2 }}>
+              {removeDialog.permanent
+                ? 'This permanently erases the record. Use only for entries made in error, such as duplicates. The deletion and your reason are recorded in the audit log.'
+                : "The record will be removed from this client's chart but kept in the history for compliance. The removal is recorded in the audit log."}
+            </Typography>
+            <TextField
+              fullWidth
+              multiline
+              minRows={2}
+              label={removeDialog.permanent ? 'Reason (required)' : 'Reason (optional)'}
+              value={removeDialog.reason}
+              onChange={(e) => setRemoveDialog(prev => ({ ...prev, reason: e.target.value }))}
+              inputProps={{ maxLength: 500 }}
+              error={removeDialog.permanent && !removeDialog.reason.trim()}
+            />
+            {isAdmin && !shouldUseMockData && (
+              <FormControlLabel
+                sx={{ mt: 1 }}
+                control={
+                  <Checkbox
+                    checked={removeDialog.permanent}
+                    onChange={(e) => setRemoveDialog(prev => ({ ...prev, permanent: e.target.checked }))}
+                  />
+                }
+                label="Duplicate or entered in error: permanently delete (admin)"
+              />
+            )}
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={closeRemoveDialog} disabled={removeDialog.submitting}>Cancel</Button>
+            <Button
+              onClick={confirmRemove}
+              variant="contained"
+              color="error"
+              disabled={removeDialog.submitting || (removeDialog.permanent && !removeDialog.reason.trim())}
+            >
+              {removeDialog.permanent ? 'Permanently Delete' : 'Remove'}
+            </Button>
+          </DialogActions>
+        </Dialog>
+
         {/* Add Provider Modal */}
         <Dialog open={modalOpen.addProvider} onClose={() => toggleModal('addProvider')} maxWidth="md" fullWidth>
           <DialogTitle>Add Mental Health Provider</DialogTitle>
