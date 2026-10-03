@@ -29,3 +29,6 @@ dist-ssr
 .env
 .env.development
 .env.production
+
+# Files written by backend upload tests
+src/backend/uploads/
