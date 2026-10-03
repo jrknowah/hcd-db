@@ -55,6 +55,7 @@ import {
 } from "../../backend/store/slices/progressNoteSlice";
 import logUserAction from "../../backend/config/logAction";
 import { hhhSiteList } from "../../data/arrayList";
+import { formatDateOnly, toDateInputValue } from "../../utils/dateOnly";
 
 const ProgressNote = ({ clientID }) => {
   const dispatch = useDispatch();
@@ -182,13 +183,13 @@ const ProgressNote = ({ clientID }) => {
 
   const openEditDialog = (note) => {
     setFormData({
-      nurseNoteDate: note.nurseNoteDate,
+      nurseNoteDate: toDateInputValue(note.nurseNoteDate),
       nurseNoteSite: note.nurseNoteSite,
       nurseNote: note.nurseNote,
       noteCategory: note.noteCategory || 'General',
       notePriority: note.notePriority || 'Medium',
       requiresFollowUp: note.requiresFollowUp || false,
-      followUpDate: note.followUpDate || '',
+      followUpDate: toDateInputValue(note.followUpDate),
     });
     setEditNoteId(note._id);
     setEditDialogOpen(true);
@@ -489,7 +490,7 @@ const ProgressNote = ({ clientID }) => {
                 ) : (
                   filteredNotes.map((note) => (
                     <TableRow key={note._id} hover>
-                      <TableCell>{new Date(note.nurseNoteDate).toLocaleDateString()}</TableCell>
+                      <TableCell>{formatDateOnly(note.nurseNoteDate)}</TableCell>
                       <TableCell>{note.nurseNoteSite}</TableCell>
                       <TableCell>
                         <Chip 
@@ -513,7 +514,7 @@ const ProgressNote = ({ clientID }) => {
                       <TableCell>
                         {note.requiresFollowUp && (
                           <Chip
-                            label={note.followUpDate ? new Date(note.followUpDate).toLocaleDateString() : 'Required'}
+                            label={formatDateOnly(note.followUpDate, 'Required')}
                             size="small"
                             color="warning"
                             variant="outlined"

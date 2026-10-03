@@ -51,6 +51,7 @@ import {
 } from "../../backend/store/slices/medFaceSheetSlice";
 import logUserAction from "../../backend/config/logAction";
 import { medCond, allergyList } from "../../data/arrayList";
+import { formatDateOnly, toDateInputValue } from "../../utils/dateOnly";
 
 // ✅ ENHANCED: Custom styles for react-select with better dropdown visibility
 const customSelectStyles = {
@@ -252,7 +253,7 @@ const MedFaceSheet = ({ clientID }) => {
   };
 
   const handleEditClick = (appt) => {
-    setMedApptData({ ...appt });
+    setMedApptData({ ...appt, medApptDate: toDateInputValue(appt.medApptDate) });
     setEditingApptId(appt.appointmentID);
     setEditMode(true);
     setMedAppt(true);
@@ -495,7 +496,7 @@ const MedFaceSheet = ({ clientID }) => {
                 ) : (
                   appointments.map((item) => (
                     <TableRow key={item.appointmentID} hover>
-                      <TableCell>{item.medApptDate}</TableCell>
+                      <TableCell>{formatDateOnly(item.medApptDate)}</TableCell>
                       <TableCell>{item.medApptLoc}</TableCell>
                       <TableCell>{item.medApptType}</TableCell>
                       <TableCell>{item.medApptProv}</TableCell>
