@@ -68,8 +68,26 @@ const Section6 = () => {
         activeTab,
         useMockData 
     } = useSelector((state) => state.section6);
-    
-    
+
+
+    // Hooks must run before any early return (Rules of Hooks).
+    // ✅ FIXED: Proper data fetching on component mount
+    useEffect(() => {
+        if (clientID) {
+            dispatch(fetchFaceSheet(clientID));
+            dispatch(fetchCaseStatus(clientID));
+            dispatch(fetchCaseTimeline(clientID));
+            dispatch(fetchCaseMetrics(clientID));
+        }
+    }, [clientID, dispatch]);
+
+    // ✅ FIXED: Error handling
+    useEffect(() => {
+        if (faceSheetError) {
+            console.error('Section 6 Error:', faceSheetError);
+        }
+    }, [faceSheetError]);
+
     // ✅ Show loading state while client is loading
     if (loading) {
         return (
@@ -98,23 +116,6 @@ const Section6 = () => {
         );
     }
 
-
-    // ✅ FIXED: Proper data fetching on component mount
-    useEffect(() => {
-        if (clientID) {
-            dispatch(fetchFaceSheet(clientID));
-            dispatch(fetchCaseStatus(clientID));
-            dispatch(fetchCaseTimeline(clientID));
-            dispatch(fetchCaseMetrics(clientID));
-        }
-    }, [clientID, dispatch]);
-
-    // ✅ FIXED: Error handling
-    useEffect(() => {
-        if (faceSheetError) {
-            console.error('Section 6 Error:', faceSheetError);
-        }
-    }, [faceSheetError]);
 
     // ✅ FIXED: Proper tab change handling
     const handleTabChange = (event, newValue) => {

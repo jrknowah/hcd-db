@@ -7,6 +7,8 @@ import { CustomizerContext } from 'src/context/CustomizerContext';
 import { MsalProvider } from '@azure/msal-react';
 import { msalInstance, initializeMsal } from './backend/config/authConfig';
 import AuthGuard from './components/Auth/AuthGuard';
+import ClientRouteGate from './components/ClientRouteGate';
+import IdleLogout from './components/Auth/IdleLogout';
 import AssessCarePlans from './views/Section-3/AssessCarePlans';
 import  store  from './backend/store/store';
 import AdminErrors from './views/Dashboard/AdminErrors';
@@ -196,6 +198,7 @@ const AppRoutes = () => {
       <RTL direction={activeDir}>
         <CssBaseline />
         <AuthGuard>
+          <IdleLogout />
           <Routes>
             {/* ✅ Routes with FullLayout */}
             <Route path="/" element={
@@ -222,7 +225,7 @@ const AppRoutes = () => {
               <Route path="Section1/:clientID" element={
                 <ComponentErrorBoundary name="Identification">
                   <Suspense fallback={<LoadingFallback name="Section 1" />}>
-                    <Identification />
+                    <ClientRouteGate><Identification /></ClientRouteGate>
                   </Suspense>
                 </ComponentErrorBoundary>
               } />
@@ -231,7 +234,7 @@ const AppRoutes = () => {
               <Route path="Section1" element={
                 <ComponentErrorBoundary name="Identification">
                   <Suspense fallback={<LoadingFallback name="Section 1" />}>
-                    <Identification />
+                    <ClientRouteGate><Identification /></ClientRouteGate>
                   </Suspense>
                 </ComponentErrorBoundary>
               } />
@@ -243,7 +246,7 @@ const AppRoutes = () => {
               <Route path="Section2/:clientID" element={
                 <ComponentErrorBoundary name="Section 2">
                   <Suspense fallback={<LoadingFallback name="Section 2" />}>
-                    <AuthSig />
+                    <ClientRouteGate><AuthSig /></ClientRouteGate>
                   </Suspense>
                 </ComponentErrorBoundary>
               } />
@@ -252,7 +255,7 @@ const AppRoutes = () => {
               <Route path="Section2" element={
                 <ComponentErrorBoundary name="Section 2">
                   <Suspense fallback={<LoadingFallback name="Section 2" />}>
-                    <AuthSig />
+                    <ClientRouteGate><AuthSig /></ClientRouteGate>
                   </Suspense>
                 </ComponentErrorBoundary>
               } />
@@ -264,7 +267,7 @@ const AppRoutes = () => {
               <Route path="Section3/:clientID" element={
                 <ComponentErrorBoundary name="Section 3">
                   <Suspense fallback={<LoadingFallback name="Section 3" />}>
-                    <AssessCarePlans />
+                    <ClientRouteGate><AssessCarePlans /></ClientRouteGate>
                   </Suspense>
                 </ComponentErrorBoundary>
               } />
@@ -273,7 +276,7 @@ const AppRoutes = () => {
               <Route path="Section3" element={
                 <ComponentErrorBoundary name="Section 3">
                   <Suspense fallback={<LoadingFallback name="Section 3" />}>
-                    <AssessCarePlans />
+                    <ClientRouteGate><AssessCarePlans /></ClientRouteGate>
                   </Suspense>
                 </ComponentErrorBoundary>
               } />
@@ -285,7 +288,7 @@ const AppRoutes = () => {
               <Route path="Section4/:clientID" element={
                 <ComponentErrorBoundary name="Section 4">
                   <Suspense fallback={<LoadingFallback name="Section 4" />}>
-                    <ClientProgress />
+                    <ClientRouteGate><ClientProgress /></ClientRouteGate>
                   </Suspense>
                 </ComponentErrorBoundary>
               } />
@@ -294,7 +297,7 @@ const AppRoutes = () => {
               <Route path="Section4" element={
                 <ComponentErrorBoundary name="Section 4">
                   <Suspense fallback={<LoadingFallback name="Section 4" />}>
-                    <ClientProgress />
+                    <ClientRouteGate><ClientProgress /></ClientRouteGate>
                   </Suspense>
                 </ComponentErrorBoundary>
               } />
@@ -306,7 +309,7 @@ const AppRoutes = () => {
               <Route path="Section5/:clientID" element={
                 <ComponentErrorBoundary name="Section 5">
                   <Suspense fallback={<LoadingFallback name="Section 5" />}>
-                    <Medical />
+                    <ClientRouteGate><Medical /></ClientRouteGate>
                   </Suspense>
                 </ComponentErrorBoundary>
               } />
@@ -315,7 +318,7 @@ const AppRoutes = () => {
               <Route path="Section5" element={
                 <ComponentErrorBoundary name="Section 5">
                   <Suspense fallback={<LoadingFallback name="Section 5" />}>
-                    <Medical />
+                    <ClientRouteGate><Medical /></ClientRouteGate>
                   </Suspense>
                 </ComponentErrorBoundary>
               } />
@@ -327,7 +330,7 @@ const AppRoutes = () => {
               <Route path="Section6/:clientID" element={
                 <ComponentErrorBoundary name="Section 6">
                   <Suspense fallback={<LoadingFallback name="Section 6" />}>
-                    <Section6 />
+                    <ClientRouteGate><Section6 /></ClientRouteGate>
                   </Suspense>
                 </ComponentErrorBoundary>
               } />
@@ -336,7 +339,7 @@ const AppRoutes = () => {
               <Route path="Section6" element={
                 <ComponentErrorBoundary name="Section 6">
                   <Suspense fallback={<LoadingFallback name="Section 6" />}>
-                    <Section6 />
+                    <ClientRouteGate><Section6 /></ClientRouteGate>
                   </Suspense>
                 </ComponentErrorBoundary>
               } />
