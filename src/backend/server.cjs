@@ -2,6 +2,8 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const app = express();
+// Behind Azure App Service's front end: take req.ip from the X-Forwarded-For hop it appends.
+app.set('trust proxy', 1);
 require('dotenv').config({ path: '../.env' });
 const { BlobServiceClient } = require('@azure/storage-blob'); 
 // const { requireAdmin } = require('./middleware/requireAdmin.cjs');
