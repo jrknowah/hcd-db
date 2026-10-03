@@ -16,6 +16,7 @@ const { BlobServiceClient } = require('@azure/storage-blob');
 const authMiddleware = require('./middleware/auth.js');
 const { requireAdmin, requireApiAuth } = require('./middleware/auth.js');
 const auditTrail = require('./middleware/auditTrail.cjs');
+const errorLog = require('./middleware/errorLog.cjs');
 // ✅ FIXED: Better database connection handling
 let dbConnected = false;
 let dbModule = null;
@@ -54,10 +55,10 @@ app.use(cors({
 }));
 app.use(express.json());
 
-// Every call is recorded in the audit trail (including rejected ones), and every
-// /api route requires a signed-in member of an allowed group (or a signed download
-// link). Must run before any router.
-app.use('/api', auditTrail, requireApiAuth);
+// Server failures go to SystemErrors, every call is recorded in the audit trail
+// (including rejected ones), and every /api route requires a signed-in member of an
+// allowed group (or a signed download link). Must run before any router.
+app.use('/api', errorLog, auditTrail, requireApiAuth);
 
 try {
   const adminErrorsRouter = require('./routes/admin/errors.cjs');
@@ -1221,10 +1222,13 @@ if (process.env.NODE_ENV !== 'test') {
 // Error handling middleware
 app.use((error, req, res, next) => {
   console.error('Server error:', error);
+  errorLog.noteError(res, error);
+  // Error text can contain patient data; only show it to developers. App Service
+  // leaves NODE_ENV unset, so anything but development/test counts as production.
   res.status(500).json({ 
-    error: process.env.NODE_ENV === 'production' 
-      ? 'Internal server error' 
-      : error.message 
+    error: ['development', 'test'].includes(process.env.NODE_ENV)
+      ? error.message
+      : 'Internal server error'
   });
 });
 
