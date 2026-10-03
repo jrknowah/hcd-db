@@ -1,6 +1,6 @@
 // middleware/auditTrail.cjs
 // Writes one audit row per API request once the response is sent: who (from the
-// token, see optionalAuth), what (VIEW/CREATE/UPDATE/DELETE), which route, which
+// token, see requireApiAuth), what (VIEW/CREATE/UPDATE/DELETE), which route, which
 // client/record, and whether it succeeded.
 //
 // HIPAA: only identifiers and route patterns are recorded — never request bodies,

@@ -7,7 +7,7 @@ const { BlobServiceClient } = require('@azure/storage-blob');
 // const { requireAdmin } = require('./middleware/requireAdmin.cjs');
 
 const authMiddleware = require('./middleware/auth.js');
-const { requireAdmin, optionalAuth } = require('./middleware/auth.js');
+const { requireAdmin, requireApiAuth } = require('./middleware/auth.js');
 const auditTrail = require('./middleware/auditTrail.cjs');
 // ✅ FIXED: Better database connection handling
 let dbConnected = false;
@@ -47,9 +47,9 @@ app.use(cors({
 }));
 app.use(express.json());
 
-// Audit trail: identify the user from their token (without rejecting requests
-// that lack one) and record every API call. Must run before any router.
-app.use('/api', optionalAuth, auditTrail);
+// Every /api route requires a signed-in user (token, or a signed download link),
+// and every call is recorded in the audit trail. Must run before any router.
+app.use('/api', requireApiAuth, auditTrail);
 
 try {
   const adminErrorsRouter = require('./routes/admin/errors.cjs');

@@ -1,6 +1,7 @@
 // middleware/auth.js - Backend Authentication Middleware
 const jwt = require('jsonwebtoken');
 const jwksClient = require('jwks-rsa');
+const { verifySignedRequest } = require('../services/signedUrl.cjs');
 const TENANT_ID = '2fca3a49-cd1a-4717-bccc-5dbd1ea86b64';
 const APP_CLIENT_ID = '0b3e6463-bea7-4521-a36a-a32edb6af7a1';
 // HOPE_it — the group the frontend maps to IT_ADMIN (config/groupConfig.js).
@@ -119,21 +120,26 @@ const authMiddleware = async (req, res, next) => {
   }
 };
 
-// Identifies the user when a valid token is present but never rejects the request.
-// Used so routes that don't (yet) require auth can still attribute actions in the audit log.
-const optionalAuth = async (req, res, next) => {
-  if (req.user) return next();
+// Paths under /api reachable without signing in: health probes and the login/logout
+// handshake (which only echo data the caller sent).
+const PUBLIC_API_PATHS = ['/api/health', '/api/auth/'];
+
+// Gate for every /api route: a valid token, or a signed short-lived link (see
+// services/signedUrl.cjs) for GETs the browser opens directly.
+const requireApiAuth = (req, res, next) => {
+  if (req.method === 'OPTIONS') return next();
+  if (PUBLIC_API_PATHS.some((p) => req.originalUrl.startsWith(p))) return next();
   if (USE_MOCK_AUTH) return mockAuthMiddleware(req, res, next);
 
-  const [scheme, token] = (req.headers.authorization || '').split(' ');
-  if (scheme !== 'Bearer' || !token) return next();
-
-  try {
-    req.user = await verifyToken(token);
-  } catch (err) {
-    // Leave req.user unset; the route's own auth (if any) decides whether to reject.
+  if (req.method === 'GET') {
+    const signedBy = verifySignedRequest(req);
+    if (signedBy) {
+      req.user = { email: signedBy, viaSignedUrl: true, roles: [], groups: [], isAdmin: false };
+      return next();
+    }
   }
-  next();
+
+  return authMiddleware(req, res, next);
 };
 
 // Role-based authorization middleware
@@ -199,6 +205,6 @@ module.exports = USE_MOCK_AUTH
   : authMiddleware;
 
 module.exports.requireRole  = requireRole;
-module.exports.optionalAuth = optionalAuth;
+module.exports.requireApiAuth = requireApiAuth;
 module.exports.requireAdmin = requireAdmin;
 module.exports.mockAuth     = mockAuthMiddleware;

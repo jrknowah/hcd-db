@@ -1,4 +1,6 @@
 const express = require('express');
+const { signUrl } = require('../services/signedUrl.cjs');
+const { actorFrom } = require('../services/auditLog.cjs');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
@@ -287,7 +289,7 @@ router.post('/upload', upload.single('file'), async (req, res) => {
  * Query params: blobName (required), expiryHours (optional, default 1)
  */
 router.get('/file/download-url', async (req, res) => {
-  console.log('🔗 download-url called with:', req.query);
+  console.log('🔗 download-url called');
   try {
     const { blobName, expiryHours = 1 } = req.query;
     const inline = req.query.inline === 'true';
@@ -296,7 +298,7 @@ router.get('/file/download-url', async (req, res) => {
       return res.status(400).json({ message: 'blobName is required' });
     }
 
-    console.log(`🔗 Generating ${inline ? 'preview' : 'download'} URL for: ${blobName}`);
+    console.log(`🔗 Generating ${inline ? 'preview' : 'download'} URL`);
 
     // Previews get a short 5-minute link; downloads keep expiryHours
     const expiresOn = inline
@@ -368,7 +370,11 @@ router.get('/file/download-url', async (req, res) => {
         }
 
         // Last resort: proxy stream through backend (always https behind App Service)
-        const proxyUrl = `https://${req.get('host')}/api/file/stream/${encodeURIComponent(blobName)}${inline ? '?inline=true' : ''}`;
+        // Signed so the browser can open it directly without an Authorization header.
+        const proxyUrl = signUrl(
+          `https://${req.get('host')}/api/file/stream/${encodeURIComponent(blobName)}${inline ? '?inline=true' : ''}`,
+          actorFrom(req).userId
+        );
         console.log('   ℹ️  Returning proxy URL');
         return res.json({ url: proxyUrl });
 

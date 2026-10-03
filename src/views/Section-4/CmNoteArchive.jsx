@@ -28,6 +28,7 @@ import {
   Refresh as RefreshIcon
 } from "@mui/icons-material";
 import { useDispatch, useSelector } from "react-redux";
+import { openApiFile } from "../../backend/config/apiAuth";
 import {
   uploadNoteFile,
   fetchNoteArchiveFiles
@@ -343,10 +344,11 @@ const CmNoteArchive = ({ clientID: clientIDProp }) => {
                         <IconButton
                           edge="end"
                           size="small"
-                          component="a"
-                          href={`${API}${file.fileUrl}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
+                          onClick={() =>
+                            openApiFile(`${API}${file.fileUrl}`).catch((err) =>
+                              console.error('Failed to open note file:', err)
+                            )
+                          }
                         >
                           <ViewIcon />
                         </IconButton>
