@@ -71,11 +71,6 @@ export const fetchClientById = createAsyncThunk('clients/fetchClientById', async
     const response = await axios.get(`${API_BASE_URL}/api/clients/${clientID}`);
     console.log('✅ Client fetched by ID successfully:', response.data);
     
-    // Cache it immediately
-    if (response.data?.clientID) {
-      sessionStorage.setItem(`client_${response.data.clientID}`, JSON.stringify(response.data));
-    }
-    
     return response.data;
   } catch (error) {
     console.error('❌ Fetch client by ID error:', error);
@@ -121,11 +116,8 @@ const clientSlice = createSlice({
   },
   reducers: {
     setSelectedClient: (state, action) => {
+      // Client records are PHI: keep them in memory only, never in web storage.
       state.selectedClient = action.payload;
-      // Cache the selected client for persistence
-      if (action.payload?.clientID) {
-        sessionStorage.setItem(`client_${action.payload.clientID}`, JSON.stringify(action.payload));
-      }
     },
     clearSelectedClient: (state) => {
       state.selectedClient = null;

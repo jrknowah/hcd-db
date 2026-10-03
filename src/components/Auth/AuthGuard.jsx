@@ -5,7 +5,6 @@ import { useDispatch, useSelector } from 'react-redux';
 import { Box, CircularProgress, Typography, Alert } from '@mui/material';
 import { 
   loginWithAzure,
-  restoreAuthFromLocalStorage,
   setLoading,
   setError,
   selectAuthLoading,
@@ -14,6 +13,7 @@ import {
 } from '../../backend/store/slices/authSlice';
 import { GROUP_TO_ROLE, ROLE_PERMISSIONS } from '../../backend/config/groupConfig';
 import Login from '../../views/authentication/auth1/Login';
+import { clearSensitiveStorage } from '../../utils/secureSession';
 
 const extractAzureGroups = (account) => {
   if (account?.idTokenClaims?.groups) {
@@ -67,8 +67,10 @@ const AuthGuard = ({ children }) => {
           console.log('✅ AuthGuard: Active account set');
           await processExistingAuth(account);
         } else {
-          console.log('📦 AuthGuard: No MSAL accounts, trying localStorage...');
-          dispatch(restoreAuthFromLocalStorage());
+          // Fail closed: with no MSAL session the user must sign in again.
+          // Never resurrect auth from web storage, and purge any legacy copies.
+          console.log('🔒 AuthGuard: No MSAL session, showing login');
+          clearSensitiveStorage();
         }
         
       } catch (error) {

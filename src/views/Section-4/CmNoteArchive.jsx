@@ -38,10 +38,9 @@ const API = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
 const CmNoteArchive = ({ clientID: clientIDProp }) => {
   const dispatch = useDispatch();
 
-  // Read clientID from prop or wherever your app stores the current client.
-  // Adjust this selector to match your store shape if needed.
+  // Fall back to the selected client when no prop is passed.
   const currentClientID = useSelector(
-    (state) => state.clients?.currentClientID || state.client?.currentClientID
+    (state) => state.clients?.selectedClient?.clientID
   );
   const clientID = clientIDProp || currentClientID;
 

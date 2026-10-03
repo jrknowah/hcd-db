@@ -1,6 +1,6 @@
 // src/store/index.js
-import { configureStore } from '@reduxjs/toolkit';
-import rootReducer from './reducers'; // or combineReducers
+import { configureStore, combineReducers } from '@reduxjs/toolkit';
+import { withClientScopeReset, createClientScopeMiddleware } from './clientScope';
 // import { rehydrateState } from '../../utils/rehydrate';
 import auth from './slices/authSlice';
 import clients from './slices/clientSlice';
@@ -20,7 +20,6 @@ import idtCaseManager from './slices/idtNoteCmSlice';
 import personalInventory from './slices/personalInventorySlice';
 import miscDoc from './slices/miscDocSlice';
 import assessCarePlans from './slices/assessCarePlansSlice';
-import bioSocial from './slices/bioSocialSlice.js';
 import reassessment from './slices/reassessmentSlice';
 import clientFace from './slices/clientFaceSlice';
 import files from './slices/filesSlice';         // ✅ NEW: Files management slice
@@ -32,8 +31,7 @@ import medObservation from './slices/medObservationSlice';
 
 // const preloadedState = rehydrateState();
 
-const store = configureStore({
-  reducer: {
+const reducers = {
     auth: auth,
     authSig: authSigReducer,
     clients: clients,
@@ -52,7 +50,6 @@ const store = configureStore({
     personalInventory: personalInventory,
     miscDoc: miscDoc,
     assessCarePlans: assessCarePlans,
-    bioSocial: bioSocial,
     reassessment: reassessment,
     clientFace: clientFace,
     files: files,           // ✅ Files management
@@ -61,7 +58,14 @@ const store = configureStore({
     encounterNote: encounterNote, // ✅ Encounter notes
     carePlans: carePlans,   // ✅ Care plans management
     medObservation: medObservation, // ✅ Medication observation
-  },
+};
+
+// Per-client slices reset whenever the selected client changes; the whole
+// store resets on logout. See clientScope.js.
+const rootReducer = withClientScopeReset(combineReducers(reducers), Object.keys(reducers));
+
+const store = configureStore({
+  reducer: rootReducer,
   // preloadedState,
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({
@@ -81,7 +85,7 @@ const store = configureStore({
           'referrals.uploadProgress'       // Referral upload progress
         ]
       },
-    }),
+    }).concat(createClientScopeMiddleware()),
   devTools: process.env.NODE_ENV !== 'production',
 });
 
