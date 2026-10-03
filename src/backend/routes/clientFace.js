@@ -2,6 +2,14 @@ const express = require('express');
 const router = express.Router();
 const { getPool } = require('../store/azureSql');
 const sql = require('mssql');
+const { recordChangedFields, changedColumns } = require('../middleware/auditTrail.cjs');
+
+const FACE_FIELDS = [
+  'clientContactNum', 'clientContactAltNum', 'clientEmail', 'clientEmgContactName',
+  'clientEmgContactNum', 'clientEmgContactRel', 'clientEmgContactAddress', 'clientMedInsType',
+  'clientMedCarrier', 'clientMedInsNum', 'clientMedPrimaryPhy', 'clientMedPrimaryPhyFacility',
+  'clientMedPrimaryPhyPhone', 'clientAllergyComments',
+];
 
 // ✅ VALIDATION HELPERS
 const validatePhone = (phone) => {
@@ -42,7 +50,6 @@ router.get('/getClientFace/:clientID', async (req, res) => {
 router.post('/saveClientFace', async (req, res) => {
   const timestamp = new Date().toISOString();
   console.log(`${timestamp} - POST /api/saveClientFace`);
-  console.log('📤 Request body:', req.body);
 
   const { clientID } = req.body;
 
@@ -65,7 +72,7 @@ router.post('/saveClientFace', async (req, res) => {
 
   for (const { field, value } of phoneFields) {
     if (value && !validatePhone(value)) {
-      console.error(`❌ Invalid phone format: ${field} = ${value}`);
+      console.error(`❌ Invalid phone format: ${field}`);
       return res.status(400).json({ 
         error: 'Invalid phone number format. Must be 10 digits.',
         field: field,
@@ -76,7 +83,7 @@ router.post('/saveClientFace', async (req, res) => {
 
   // ✅ VALIDATION: Email
   if (req.body.clientEmail && !validateEmail(req.body.clientEmail)) {
-    console.error(`❌ Invalid email format: ${req.body.clientEmail}`);
+    console.error('❌ Invalid email format: clientEmail');
     return res.status(400).json({ 
       error: 'Invalid email format',
       field: 'clientEmail',
@@ -94,6 +101,11 @@ router.post('/saveClientFace', async (req, res) => {
       clientEmgContactAddress, clientMedCarrier, clientMedInsNum, clientMedPrimaryPhy,
       clientMedPrimaryPhyFacility, clientMedPrimaryPhyPhone
     } = req.body;
+
+    const existing = await pool.request()
+      .input('clientID', sql.NVarChar, clientID)
+      .query('SELECT * FROM ClientFace WHERE clientID = @clientID');
+    const before = existing.recordset[0];
 
     // ✅ Build MERGE query WITHOUT clientAllergies
     await pool.request()
@@ -146,6 +158,11 @@ router.post('/saveClientFace', async (req, res) => {
           @clientAllergyComments, GETDATE(), GETDATE()
         );
       `);
+
+    // Audit which fields changed — names only. Empty values don't overwrite (COALESCE above).
+    const submitted = FACE_FIELDS.filter((f) => req.body[f]);
+    recordChangedFields(res, before ? changedColumns(before, req.body, submitted) : submitted);
+    res.locals.auditAction = before ? 'UPDATE' : 'CREATE';
 
     console.log(`✅ ClientFace saved for: ${clientID}`);
     res.json({ message: 'Client face data saved successfully' });

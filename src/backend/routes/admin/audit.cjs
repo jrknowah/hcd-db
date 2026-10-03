@@ -10,32 +10,11 @@
 const express = require('express');
 const sql = require('mssql');
 const { getPool } = require('../../store/azureSql.js');
+const {
+  getSchema, readExprs, writeAuditEntry, successExpr, actorFrom, INT_TYPES,
+} = require('../../services/auditLog.cjs');
 
 const router = express.Router();
-
-// ---------------------------------------------------------------------------
-// SCHEMA RESOLUTION
-// The app writes audit rows to dbo.AuditLog (userID, action, tableName, recordID,
-// newValues, timestamp — see routes/clientExport.js). Rather than hardcode a
-// column list that drifts from the real table, resolve the table and columns
-// from INFORMATION_SCHEMA once and degrade gracefully when a column is absent.
-// ---------------------------------------------------------------------------
-const TABLE_CANDIDATES = ['AuditLog', 'UserActionLog'];
-
-// Logical field -> candidate physical column names (matched case-insensitively).
-const COLUMN_CANDIDATES = {
-  id: ['auditID', 'AuditLogID', 'LogID', 'ID'],
-  userId: ['userID'],
-  userName: ['userName', 'performedBy'],
-  action: ['action', 'ActionType'],
-  resourceType: ['ResourceType', 'tableName'],
-  resourceId: ['ResourceID', 'recordID'],
-  clientId: ['clientID'],
-  timestamp: ['timestamp', 'createdAt', 'createdDate'],
-  ip: ['IPAddress'],
-  userAgent: ['userAgent'],
-  success: ['success'],
-};
 
 // Whitelisted sort keys -> logical fields. Never interpolate raw user input into ORDER BY.
 const SORTABLE = {
@@ -46,68 +25,16 @@ const SORTABLE = {
   clientId: 'clientId',
 };
 
-const INT_TYPES = new Set(['int', 'bigint', 'smallint', 'tinyint']);
-
 const MAX_PAGE_SIZE = 200;
 const MAX_EXPORT_ROWS = 50000;
 
-const quote = (name) => `[${String(name).replace(/]/g, ']]')}]`;
-
-let schemaPromise = null;
-
-async function loadSchema() {
-  const pool = await getPool();
-  const result = await pool.request().query(`
-    SELECT TABLE_NAME, COLUMN_NAME, DATA_TYPE
-    FROM INFORMATION_SCHEMA.COLUMNS
-    WHERE TABLE_SCHEMA = 'dbo'
-      AND TABLE_NAME IN (${TABLE_CANDIDATES.map((t) => `'${t}'`).join(', ')})
-  `);
-
-  const byTable = {};
-  result.recordset.forEach((r) => {
-    (byTable[r.TABLE_NAME.toLowerCase()] ||= []).push(r);
-  });
-
-  const tableName = TABLE_CANDIDATES.find((t) => byTable[t.toLowerCase()]);
-  if (!tableName) {
-    throw new Error(`No audit table found (looked for dbo.${TABLE_CANDIDATES.join(', dbo.')})`);
-  }
-
-  const columns = byTable[tableName.toLowerCase()];
-  const cols = {};
-  const types = {};
-  Object.entries(COLUMN_CANDIDATES).forEach(([key, names]) => {
-    const match = names
-      .map((n) => columns.find((c) => c.COLUMN_NAME.toLowerCase() === n.toLowerCase()))
-      .find(Boolean);
-    cols[key] = match ? quote(match.COLUMN_NAME) : null;
-    types[key] = match ? match.DATA_TYPE.toLowerCase() : null;
-  });
-
-  if (!cols.timestamp) throw new Error(`dbo.${tableName} has no timestamp column`);
-
-  return { table: `dbo.${quote(tableName)}`, cols, types };
-}
-
-/** Cached schema lookup; a failed lookup is retried on the next request. */
-function getSchema() {
-  if (!schemaPromise) {
-    schemaPromise = loadSchema().catch((err) => {
-      schemaPromise = null;
-      throw err;
-    });
-  }
-  return schemaPromise;
-}
-
 /** SELECT expression for a logical field, NULL (or a default) when the column is absent. */
 function sel(S, key, fallback = 'NULL') {
-  return S.cols[key] || fallback;
+  return readExprs(S)[key] || fallback;
 }
 
 /** Column list shared by list/export/detail, aliased to the names the UI expects. */
-function selectList(S, { includeUserAgent = false } = {}) {
+function selectList(S, { includeDetail = false } = {}) {
   const fields = [
     `${sel(S, 'id')} AS LogID`,
     `${sel(S, 'timestamp')} AS Timestamp`,
@@ -119,9 +46,11 @@ function selectList(S, { includeUserAgent = false } = {}) {
     `${sel(S, 'clientId')} AS ClientID`,
     `${sel(S, 'ip')} AS IPAddress`,
   ];
-  if (includeUserAgent) fields.push(`${sel(S, 'userAgent')} AS UserAgent`);
-  // Tables without a success flag only record completed actions.
-  fields.push(`${sel(S, 'success', 'CAST(1 AS BIT)')} AS Success`);
+  if (includeDetail) {
+    fields.push(`${sel(S, 'userAgent')} AS UserAgent`);
+    fields.push(`${sel(S, 'details')} AS Details`);
+  }
+  fields.push(`${successExpr(S)} AS Success`);
   return fields.join(',\n        ');
 }
 
@@ -129,50 +58,20 @@ function selectList(S, { includeUserAgent = false } = {}) {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function actorFrom(req) {
-  return {
-    userId: req.user?.oid || req.user?.sub || req.user?.userID || 'unknown',
-    userName: req.user?.name || req.user?.preferred_username || null,
-  };
-}
-
 /**
  * Writes an audit row for the act of reading the audit log.
  * Fire-and-forget: a logging failure must never break the read path.
  */
 async function recordAuditAccess(req, action, resourceId) {
   try {
-    const S = await getSchema();
-    const pool = await getPool();
-    const actor = actorFrom(req);
-    const request = pool.request();
-
-    const values = [
-      ['userId', sql.NVarChar(255), actor.userId],
-      ['userName', sql.NVarChar(255), actor.userName],
-      ['action', sql.NVarChar(100), action],
-      ['resourceType', sql.NVarChar(100), 'AuditLog'],
-      ['resourceId', sql.NVarChar(255), resourceId || null],
-      ['ip', sql.NVarChar(64), req.ip || null],
-      ['userAgent', sql.NVarChar(500), (req.get('user-agent') || '').slice(0, 500)],
-    ].filter(([key]) => S.cols[key]);
-
-    const columns = values.map(([key]) => S.cols[key]);
-    const params = values.map(([key, type, value]) => {
-      request.input(key, type, value);
-      return `@${key}`;
+    await writeAuditEntry({
+      ...actorFrom(req),
+      action,
+      resourceType: 'AuditLog',
+      resourceId,
+      ip: req.ip,
+      userAgent: (req.get('user-agent') || '').slice(0, 500),
     });
-    columns.push(S.cols.timestamp);
-    params.push('SYSUTCDATETIME()');
-    if (S.cols.success) {
-      columns.push(S.cols.success);
-      params.push('1');
-    }
-
-    await request.query(`
-      INSERT INTO ${S.table} (${columns.join(', ')})
-      VALUES (${params.join(', ')})
-    `);
   } catch (err) {
     console.error('⚠️  Failed to record audit-log access:', err.message);
   }
@@ -186,7 +85,7 @@ async function recordAuditAccess(req, action, resourceId) {
 function buildFilters(S, q) {
   const clauses = [];
   const params = [];
-  const c = S.cols;
+  const c = readExprs(S);
 
   const add = (key, op, name, type, value) => {
     if (!c[key]) return;
@@ -202,12 +101,8 @@ function buildFilters(S, q) {
   if (q.startDate) add('timestamp', '>=', 'startDate', sql.DateTime2, new Date(q.startDate));
   if (q.endDate) add('timestamp', '<', 'endDate', sql.DateTime2, new Date(q.endDate));
   if (q.success === 'true' || q.success === 'false') {
-    if (c.success) {
-      add('success', '=', 'success', sql.Bit, q.success === 'true' ? 1 : 0);
-    } else if (q.success === 'false') {
-      // No success column means every recorded action succeeded.
-      clauses.push('1 = 0');
-    }
+    clauses.push(`${successExpr(S)} = @success`);
+    params.push({ name: 'success', type: sql.Bit, value: q.success === 'true' ? 1 : 0 });
   }
 
   // Free-text search across non-PHI metadata columns only.
@@ -292,7 +187,7 @@ router.get('/stats', async (req, res) => {
         COUNT(*) AS total,
         SUM(CASE WHEN ${ts} >= DATEADD(HOUR, -24, SYSUTCDATETIME()) THEN 1 ELSE 0 END) AS last24h,
         SUM(CASE WHEN ${ts} >= DATEADD(DAY, -7, SYSUTCDATETIME()) THEN 1 ELSE 0 END) AS last7d,
-        ${S.cols.success ? `SUM(CASE WHEN ${S.cols.success} = 0 THEN 1 ELSE 0 END)` : '0'} AS failures,
+        SUM(CASE WHEN ${successExpr(S)} = 0 THEN 1 ELSE 0 END) AS failures,
         ${S.cols.userId ? `COUNT(DISTINCT ${S.cols.userId})` : '0'} AS distinctUsers,
         MIN(${ts}) AS oldestEntry
       FROM ${S.table}
@@ -382,7 +277,7 @@ router.get('/', async (req, res) => {
     const offset = (page - 1) * pageSize;
 
     const S = await getSchema();
-    const sortCol = S.cols[SORTABLE[req.query.sortBy]] || S.cols.timestamp;
+    const sortCol = readExprs(S)[SORTABLE[req.query.sortBy]] || S.cols.timestamp;
     const sortDir = String(req.query.sortDir).toLowerCase() === 'asc' ? 'ASC' : 'DESC';
     const tieBreak = S.cols.id && S.cols.id !== sortCol ? `, ${S.cols.id} ${sortDir}` : '';
 
@@ -447,7 +342,7 @@ router.get('/:logID', async (req, res) => {
       .input('logID', idType, idValue)
       .query(`
         SELECT
-          ${selectList(S, { includeUserAgent: true })}
+          ${selectList(S, { includeDetail: true })}
         FROM ${S.table}
         WHERE ${S.cols.id} = @logID
       `);

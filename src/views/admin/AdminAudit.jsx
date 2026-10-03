@@ -66,6 +66,17 @@ function formatTimestamp(value) {
   return Number.isNaN(d.getTime()) ? String(value) : d.toLocaleString();
 }
 
+// Details is JSON written by the audit middleware: route, status, changed field NAMES.
+function parseDetails(value) {
+  if (!value) return null;
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === 'object' ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
 export default function AdminAudit() {
   const { instance, accounts } = useMsal();
 
@@ -524,6 +535,30 @@ export default function AdminAudit() {
                 <Typography variant="caption" color="text.secondary">IP address</Typography>
                 <Typography>{selectedEntry.IPAddress || '—'}</Typography>
               </Grid>
+              {(() => {
+                const details = parseDetails(selectedEntry.Details);
+                if (!details) return null;
+                return (
+                  <>
+                    {details.status && (
+                      <Grid item xs={6}>
+                        <Typography variant="caption" color="text.secondary">HTTP status</Typography>
+                        <Typography>{details.status}</Typography>
+                      </Grid>
+                    )}
+                    {Array.isArray(details.changedFields) && (
+                      <Grid item xs={12}>
+                        <Typography variant="caption" color="text.secondary">Changed fields</Typography>
+                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 0.5 }}>
+                          {details.changedFields.map((f) => (
+                            <Chip key={f} label={f} size="small" variant="outlined" />
+                          ))}
+                        </Box>
+                      </Grid>
+                    )}
+                  </>
+                );
+              })()}
               <Grid item xs={12}>
                 <Typography variant="caption" color="text.secondary">User agent</Typography>
                 <Typography variant="body2" sx={{ wordBreak: 'break-all' }}>

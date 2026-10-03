@@ -6,6 +6,7 @@ import { CssBaseline, ThemeProvider, Box, Typography, CircularProgress } from '@
 import { CustomizerContext } from 'src/context/CustomizerContext';
 import { MsalProvider } from '@azure/msal-react';
 import { msalInstance, initializeMsal } from './backend/config/authConfig';
+import { installApiAuth } from './backend/config/apiAuth';
 import AuthGuard from './components/Auth/AuthGuard';
 import ClientRouteGate from './components/ClientRouteGate';
 import IdleLogout from './components/Auth/IdleLogout';
@@ -426,6 +427,9 @@ function App() {
         
         // Make MSAL instance globally available for token refresh
         window.msalInstance = msalInstance;
+
+        // Send the user's token with every backend call so the audit trail knows who acted
+        installApiAuth(msalInstance);
         
         // Also make Redux store available if you have it
         window.__REDUX_STORE__ = store;

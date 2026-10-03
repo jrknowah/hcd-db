@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const sql = require('mssql');
+const { recordChangedFields, changedColumns } = require('../middleware/auditTrail.cjs');
 
 // ✅ FIXED: Try multiple paths to find azureSql module
 let getPool;
@@ -136,7 +137,7 @@ router.post('/', async (req, res) => {
     // Generate clientID if not provided
     const clientID = client.clientID || generateClientID();
     
-    console.log(`Creating client: ${clientID} - ${client.clientFirstName} ${client.clientLastName}`);
+    console.log(`Creating client: ${clientID}`);
     
     // Check if clientID already exists
     const existingClient = await pool.request()
@@ -253,7 +254,7 @@ router.get('/:clientID', async (req, res) => {
     // ✅ Map client for authorization forms compatibility
     const mappedClient = mapClientForAuthForms(result.recordset[0]);
     
-    console.log(`👤 Fetched client: ${req.params.clientID} - ${mappedClient.firstName} ${mappedClient.lastName}`);
+    console.log(`👤 Fetched client: ${req.params.clientID}`);
     res.json(mappedClient);
   } catch (err) {
     console.error('❌ Error fetching client:', err);
@@ -281,7 +282,6 @@ router.put('/:clientID', async (req, res) => {
     }
     
     console.log(`🔄 Updating client: ${clientID}`);
-    console.log(`🔄 Update data:`, updates);
     
     // First check if client exists
     const checkResult = await pool.request()
@@ -384,11 +384,15 @@ router.put('/:clientID', async (req, res) => {
     `;
     
     const updateResult = await request.query(updateQuery);
+
+    // Audit which fields actually changed — names only, never values.
+    const submittedColumns = updateFields.map((f) => f.split(' = ')[0]);
+    recordChangedFields(res, changedColumns(checkResult.recordset[0], updates, submittedColumns));
     
     // ✅ Map updated client for authorization forms compatibility
     const updatedClient = mapClientForAuthForms(updateResult.recordset[0]);
     
-    console.log(`✅ Client updated: ${clientID} - ${updatedClient.firstName} ${updatedClient.lastName}`);
+    console.log(`✅ Client updated: ${clientID}`);
     res.json(updatedClient);
   } catch (err) {
     console.error('❌ Error updating client:', err);

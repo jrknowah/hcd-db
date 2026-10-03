@@ -30,6 +30,52 @@ function getKey(header, callback) {
   });
 }
 
+const USE_MOCK_AUTH = process.env.NODE_ENV === 'development' && process.env.USE_MOCK_AUTH === 'true';
+
+const DEV_USER = {
+  email: 'dev@example.com',
+  name: 'Development User',
+  userId: 'dev-user-id',
+  roles: ['user'],
+  isAdmin: false
+};
+
+// Verifies an ID token and resolves to the req.user shape.
+function verifyToken(token) {
+  if (token === 'dev-bypass-token' && process.env.NODE_ENV !== 'production') {
+    return Promise.resolve({ ...DEV_USER });
+  }
+
+  // ID tokens have audience = your app's client ID.
+  // Access tokens for Graph have audience = 00000003-... and a nonce
+  // that prevents server-side signature verification — don't use those.
+  return new Promise((resolve, reject) => {
+    jwt.verify(token, getKey, {
+      audience: APP_CLIENT_ID,
+      issuer: [
+        `https://login.microsoftonline.com/${TENANT_ID}/v2.0`,
+        `https://sts.windows.net/${TENANT_ID}/`,
+      ],
+      algorithms: ['RS256']
+    }, (err, decoded) => {
+      if (err) return reject(err);
+
+      resolve({
+        userId:   decoded.sub || decoded.oid,
+        email:    decoded.email || decoded.preferred_username || decoded.upn || decoded.unique_name,
+        name:     decoded.name,
+        roles:    decoded.roles  || [],
+        groups:   decoded.groups || [],
+        tenantId: decoded.tid,
+        isAdmin:  (decoded.roles  || []).includes('Admin') ||
+                  (decoded.roles  || []).includes('ITAdmin') ||
+                  (decoded.groups || []).some(g => ADMIN_GROUP_IDS.includes(g)) ||
+                  (decoded.wids   || []).includes('62e90394-69f5-4237-9190-012177145e10'),
+      });
+    });
+  });
+}
+
 // Authentication middleware
 const authMiddleware = async (req, res, next) => {
   try {
@@ -51,53 +97,18 @@ const authMiddleware = async (req, res, next) => {
       });
     }
 
-    // Development bypass
-    if (token === 'dev-bypass-token' && process.env.NODE_ENV !== 'production') {
-      req.user = {
-        email: 'dev@example.com',
-        name: 'Development User',
-        userId: 'dev-user-id',
-        roles: ['user'],
-        isAdmin: false
-      };
-      return next();
+    try {
+      req.user = await verifyToken(token);
+    } catch (err) {
+      console.error('Token verification failed:', err.message);
+      return res.status(401).json({
+        error: 'Invalid token',
+        code: 'INVALID_TOKEN',
+        details: process.env.NODE_ENV !== 'production' ? err.message : undefined
+      });
     }
 
-    // ID tokens have audience = your app's client ID.
-    // Access tokens for Graph have audience = 00000003-... and a nonce
-    // that prevents server-side signature verification — don't use those.
-jwt.verify(token, getKey, {
-  audience: APP_CLIENT_ID,
-  issuer: [
-    `https://login.microsoftonline.com/${TENANT_ID}/v2.0`,
-    `https://sts.windows.net/${TENANT_ID}/`,
-  ],
-      algorithms: ['RS256']
-    }, (err, decoded) => {
-      if (err) {
-        console.error('Token verification failed:', err.message);
-        return res.status(401).json({
-          error: 'Invalid token',
-          code: 'INVALID_TOKEN',
-          details: process.env.NODE_ENV !== 'production' ? err.message : undefined
-        });
-      }
-
-      req.user = {
-        userId:   decoded.sub || decoded.oid,
-        email:    decoded.email || decoded.preferred_username || decoded.upn || decoded.unique_name,
-        name:     decoded.name,
-        roles:    decoded.roles  || [],
-        groups:   decoded.groups || [],
-        tenantId: decoded.tid,
-        isAdmin:  (decoded.roles  || []).includes('Admin') ||
-                  (decoded.roles  || []).includes('ITAdmin') ||
-                  (decoded.groups || []).some(g => ADMIN_GROUP_IDS.includes(g)) ||
-                  (decoded.wids   || []).includes('62e90394-69f5-4237-9190-012177145e10'),
-      };
-
-      next();
-    });
+    next();
 
   } catch (error) {
     console.error('Authentication middleware error:', error);
@@ -106,6 +117,23 @@ jwt.verify(token, getKey, {
       code: 'AUTH_ERROR'
     });
   }
+};
+
+// Identifies the user when a valid token is present but never rejects the request.
+// Used so routes that don't (yet) require auth can still attribute actions in the audit log.
+const optionalAuth = async (req, res, next) => {
+  if (req.user) return next();
+  if (USE_MOCK_AUTH) return mockAuthMiddleware(req, res, next);
+
+  const [scheme, token] = (req.headers.authorization || '').split(' ');
+  if (scheme !== 'Bearer' || !token) return next();
+
+  try {
+    req.user = await verifyToken(token);
+  } catch (err) {
+    // Leave req.user unset; the route's own auth (if any) decides whether to reject.
+  }
+  next();
 };
 
 // Role-based authorization middleware
@@ -166,10 +194,11 @@ const mockAuthMiddleware = (req, res, next) => {
   next();
 };
 
-module.exports = process.env.NODE_ENV === 'development' && process.env.USE_MOCK_AUTH === 'true'
+module.exports = USE_MOCK_AUTH
   ? mockAuthMiddleware
   : authMiddleware;
 
 module.exports.requireRole  = requireRole;
+module.exports.optionalAuth = optionalAuth;
 module.exports.requireAdmin = requireAdmin;
 module.exports.mockAuth     = mockAuthMiddleware;
