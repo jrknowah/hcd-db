@@ -595,6 +595,35 @@ router.post('/mental-health/:clientID/hospitalizations', async (req, res) => {
   }
 });
 
+// DELETE /api/mental-health/:clientID/hospitalizations/:hospitalizationID
+router.delete('/mental-health/:clientID/hospitalizations/:hospitalizationID', async (req, res) => {
+  try {
+    const pool = await getPool();
+    const { clientID, hospitalizationID } = req.params;
+
+    console.log(`🗑️ Removing hospitalization: ${hospitalizationID}`);
+
+    const result = await pool.request()
+      .input('clientID', sql.VarChar, clientID)
+      .input('hospitalizationID', sql.VarChar, hospitalizationID)
+      .query('DELETE FROM MentalHealthHospitalizations WHERE hospitalizationID = @hospitalizationID AND clientID = @clientID');
+
+    if (result.rowsAffected[0] === 0) {
+      return res.status(404).json({ error: 'Hospitalization not found' });
+    }
+
+    console.log(`✅ Hospitalization ${hospitalizationID} removed`);
+    res.json({ success: true });
+
+  } catch (error) {
+    console.error('⚠️ Error removing hospitalization:', error);
+    res.status(500).json({
+      error: 'Failed to remove hospitalization',
+      message: error.message
+    });
+  }
+});
+
 // POST /api/mental-health/:clientID/medications - Add medication
 router.post('/mental-health/:clientID/medications', async (req, res) => {
   try {
@@ -628,6 +657,35 @@ router.post('/mental-health/:clientID/medications', async (req, res) => {
     res.status(500).json({ 
       error: 'Failed to add medication',
       message: error.message 
+    });
+  }
+});
+
+// DELETE /api/mental-health/:clientID/medications/:medicationID
+router.delete('/mental-health/:clientID/medications/:medicationID', async (req, res) => {
+  try {
+    const pool = await getPool();
+    const { clientID, medicationID } = req.params;
+
+    console.log(`🗑️ Removing medication: ${medicationID}`);
+
+    const result = await pool.request()
+      .input('clientID', sql.VarChar, clientID)
+      .input('medicationID', sql.VarChar, medicationID)
+      .query('UPDATE MentalHealthMedications SET active = 0 WHERE medicationID = @medicationID AND clientID = @clientID');
+
+    if (result.rowsAffected[0] === 0) {
+      return res.status(404).json({ error: 'Medication not found' });
+    }
+
+    console.log(`✅ Medication ${medicationID} removed`);
+    res.json({ success: true });
+
+  } catch (error) {
+    console.error('⚠️ Error removing medication:', error);
+    res.status(500).json({
+      error: 'Failed to remove medication',
+      message: error.message
     });
   }
 });

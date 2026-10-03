@@ -561,10 +561,10 @@ const MentalHealth = ({ exportMode }) => {
             await dispatch(removeProvider({ clientID: currentClient.clientID, providerID: itemId })).unwrap();
             break;
           case 'hospitalizations':
-            await dispatch(removeHospitalization({ clientID: currentClient.clientID, hospitalizationID: itemId }));
+            await dispatch(removeHospitalization({ clientID: currentClient.clientID, hospitalizationID: itemId })).unwrap();
             break;
           case 'medications':
-            await dispatch(removeMedication({ clientID: currentClient.clientID, medicationID: itemId }));
+            await dispatch(removeMedication({ clientID: currentClient.clientID, medicationID: itemId })).unwrap();
             break;
         }
       }
