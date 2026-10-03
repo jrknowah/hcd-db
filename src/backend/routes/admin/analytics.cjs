@@ -53,8 +53,24 @@ function suppressSmallCells(rows) {
 // Each entry: label, category, params it accepts, and a SQL builder.
 // SQL must return aggregates only. Add new reports here — nothing else changes.
 //
-// ⚠️  The SQL below references Clients / Referrals / Discharge / EncounterNote.
-//     Adjust table and column names to match your schema; the shape is what matters.
+// Schema (matches the section routes):
+//   Clients          — clientID, clientAdmitDate (DATE), clientSite
+//   ClientDischarge  — clientID, clientDischargeDate (DATE), clientDischargII (destination, free text)
+//   ClientReferrals  — clientID, lahsaReferral, odrReferral, dhsReferral, dmhReferral
+//   EncounterNotes   — ClientID, CareNoteDate, CareNoteType
+// A client is active when they have no ClientDischarge row with a discharge date.
+
+const DISCHARGED = `
+  SELECT clientID, MAX(clientDischargeDate) AS clientDischargeDate
+  FROM dbo.ClientDischarge
+  WHERE clientDischargeDate IS NOT NULL
+  GROUP BY clientID
+`;
+
+const dateRange = (q) => [
+  { name: 'startDate', type: sql.Date, value: new Date(q.startDate) },
+  { name: 'endDate', type: sql.Date, value: new Date(q.endDate) },
+];
 
 const REPORTS = {
   census_by_facility: {
@@ -63,11 +79,12 @@ const REPORTS = {
     description: 'Active clients per facility as of today.',
     sql: () => `
       SELECT
-        ISNULL(c.Facility, 'Unassigned') AS facility,
-        COUNT(*)                          AS clientCount
+        ISNULL(NULLIF(c.clientSite, ''), 'Unassigned') AS facility,
+        COUNT(*)                                       AS clientCount
       FROM dbo.Clients c
-      WHERE c.DischargeDate IS NULL
-      GROUP BY c.Facility
+      LEFT JOIN (${DISCHARGED}) d ON d.clientID = c.clientID
+      WHERE d.clientID IS NULL
+      GROUP BY ISNULL(NULLIF(c.clientSite, ''), 'Unassigned')
       ORDER BY facility
     `,
     bind: () => [],
@@ -79,76 +96,69 @@ const REPORTS = {
     description: 'Monthly admission counts over the selected date range.',
     sql: () => `
       SELECT
-        FORMAT(c.AdmitDate, 'yyyy-MM') AS period,
-        COUNT(*)                       AS admissions
+        FORMAT(c.clientAdmitDate, 'yyyy-MM') AS period,
+        COUNT(*)                             AS admissions
       FROM dbo.Clients c
-      WHERE c.AdmitDate >= @startDate AND c.AdmitDate < @endDate
-      GROUP BY FORMAT(c.AdmitDate, 'yyyy-MM')
+      WHERE c.clientAdmitDate >= @startDate AND c.clientAdmitDate < @endDate
+      GROUP BY FORMAT(c.clientAdmitDate, 'yyyy-MM')
       ORDER BY period
     `,
-    bind: (q) => [
-      { name: 'startDate', type: sql.DateTime2, value: new Date(q.startDate) },
-      { name: 'endDate', type: sql.DateTime2, value: new Date(q.endDate) },
-    ],
+    bind: dateRange,
   },
 
   referral_source_breakdown: {
-    label: 'Referral Source Breakdown',
+    label: 'Referrals by Agency',
     category: 'Funder / Contract',
-    description: 'Referral volume by originating source.',
+    description: 'Clients with referral documentation on file, by agency (all time).',
     sql: () => `
-      SELECT
-        ISNULL(r.ReferralSource, 'Unknown') AS source,
-        COUNT(*)                            AS referralCount
-      FROM dbo.Referrals r
-      WHERE r.ReferralDate >= @startDate AND r.ReferralDate < @endDate
-      GROUP BY r.ReferralSource
+      SELECT source, referralCount
+      FROM (
+        SELECT 'LAHSA' AS source, SUM(CASE WHEN NULLIF(LTRIM(CAST(lahsaReferral AS NVARCHAR(4000))), '') IS NOT NULL THEN 1 ELSE 0 END) AS referralCount FROM dbo.ClientReferrals
+        UNION ALL
+        SELECT 'ODR', SUM(CASE WHEN NULLIF(LTRIM(CAST(odrReferral AS NVARCHAR(4000))), '') IS NOT NULL THEN 1 ELSE 0 END) FROM dbo.ClientReferrals
+        UNION ALL
+        SELECT 'DHS', SUM(CASE WHEN NULLIF(LTRIM(CAST(dhsReferral AS NVARCHAR(4000))), '') IS NOT NULL THEN 1 ELSE 0 END) FROM dbo.ClientReferrals
+        UNION ALL
+        SELECT 'DMH', SUM(CASE WHEN NULLIF(LTRIM(CAST(dmhReferral AS NVARCHAR(4000))), '') IS NOT NULL THEN 1 ELSE 0 END) FROM dbo.ClientReferrals
+      ) t
       ORDER BY referralCount DESC
     `,
-    bind: (q) => [
-      { name: 'startDate', type: sql.DateTime2, value: new Date(q.startDate) },
-      { name: 'endDate', type: sql.DateTime2, value: new Date(q.endDate) },
-    ],
+    bind: () => [],
   },
 
   discharge_disposition: {
-    label: 'Discharge Disposition',
+    label: 'Discharge Destination',
     category: 'Clinical Outcomes',
-    description: 'Where clients went at discharge — the core outcome measure.',
+    description: 'Where clients went at discharge (as entered on the discharge form).',
     sql: () => `
       SELECT
-        ISNULL(d.Disposition, 'Not recorded') AS disposition,
-        COUNT(*)                              AS clientCount
-      FROM dbo.Discharge d
-      WHERE d.DischargeDate >= @startDate AND d.DischargeDate < @endDate
-      GROUP BY d.Disposition
+        ISNULL(NULLIF(LTRIM(CAST(d.clientDischargII AS NVARCHAR(200))), ''), 'Not recorded') AS disposition,
+        COUNT(*) AS clientCount
+      FROM dbo.ClientDischarge d
+      WHERE d.clientDischargeDate >= @startDate AND d.clientDischargeDate < @endDate
+      GROUP BY ISNULL(NULLIF(LTRIM(CAST(d.clientDischargII AS NVARCHAR(200))), ''), 'Not recorded')
       ORDER BY clientCount DESC
     `,
-    bind: (q) => [
-      { name: 'startDate', type: sql.DateTime2, value: new Date(q.startDate) },
-      { name: 'endDate', type: sql.DateTime2, value: new Date(q.endDate) },
-    ],
+    bind: dateRange,
   },
 
   average_length_of_stay: {
     label: 'Average Length of Stay',
     category: 'Clinical Outcomes',
-    description: 'Mean and median days in program, by facility.',
+    description: 'Mean days in program for clients discharged in the range, by facility.',
     sql: () => `
       SELECT
-        ISNULL(c.Facility, 'Unassigned') AS facility,
-        COUNT(*)                          AS clientCount,
-        AVG(CAST(DATEDIFF(DAY, c.AdmitDate, c.DischargeDate) AS FLOAT)) AS avgDays
+        ISNULL(NULLIF(c.clientSite, ''), 'Unassigned') AS facility,
+        COUNT(*)                                       AS clientCount,
+        AVG(CAST(DATEDIFF(DAY, c.clientAdmitDate, d.clientDischargeDate) AS FLOAT)) AS avgDays
       FROM dbo.Clients c
-      WHERE c.DischargeDate IS NOT NULL
-        AND c.DischargeDate >= @startDate AND c.DischargeDate < @endDate
-      GROUP BY c.Facility
+      JOIN (${DISCHARGED}) d ON d.clientID = c.clientID
+      WHERE c.clientAdmitDate IS NOT NULL
+        AND d.clientDischargeDate >= @startDate AND d.clientDischargeDate < @endDate
+      GROUP BY ISNULL(NULLIF(c.clientSite, ''), 'Unassigned')
       ORDER BY facility
     `,
-    bind: (q) => [
-      { name: 'startDate', type: sql.DateTime2, value: new Date(q.startDate) },
-      { name: 'endDate', type: sql.DateTime2, value: new Date(q.endDate) },
-    ],
+    bind: dateRange,
   },
 
   encounter_volume_by_type: {
@@ -157,17 +167,14 @@ const REPORTS = {
     description: 'Documented encounters grouped by note type.',
     sql: () => `
       SELECT
-        ISNULL(e.NoteType, 'Unspecified') AS noteType,
-        COUNT(*)                          AS encounters
-      FROM dbo.EncounterNote e
-      WHERE e.NoteDate >= @startDate AND e.NoteDate < @endDate
-      GROUP BY e.NoteType
+        ISNULL(NULLIF(e.CareNoteType, ''), 'Unspecified') AS noteType,
+        COUNT(*)                                         AS encounters
+      FROM dbo.EncounterNotes e
+      WHERE e.CareNoteDate >= @startDate AND e.CareNoteDate < @endDate
+      GROUP BY ISNULL(NULLIF(e.CareNoteType, ''), 'Unspecified')
       ORDER BY encounters DESC
     `,
-    bind: (q) => [
-      { name: 'startDate', type: sql.DateTime2, value: new Date(q.startDate) },
-      { name: 'endDate', type: sql.DateTime2, value: new Date(q.endDate) },
-    ],
+    bind: dateRange,
   },
 };
 
@@ -215,20 +222,21 @@ router.get('/summary', async (req, res) => {
 
     const result = await pool.request().query(`
       SELECT
-        SUM(CASE WHEN DischargeDate IS NULL THEN 1 ELSE 0 END) AS activeClients,
-        SUM(CASE WHEN AdmitDate >= DATEADD(DAY, -30, SYSUTCDATETIME()) THEN 1 ELSE 0 END) AS admissions30d,
-        SUM(CASE WHEN DischargeDate >= DATEADD(DAY, -30, SYSUTCDATETIME()) THEN 1 ELSE 0 END) AS discharges30d,
+        SUM(CASE WHEN d.clientID IS NULL THEN 1 ELSE 0 END) AS activeClients,
+        SUM(CASE WHEN c.clientAdmitDate >= DATEADD(DAY, -30, CAST(SYSUTCDATETIME() AS DATE)) THEN 1 ELSE 0 END) AS admissions30d,
+        SUM(CASE WHEN d.clientDischargeDate >= DATEADD(DAY, -30, CAST(SYSUTCDATETIME() AS DATE)) THEN 1 ELSE 0 END) AS discharges30d,
         COUNT(*) AS totalClients
-      FROM dbo.Clients
+      FROM dbo.Clients c
+      LEFT JOIN (${DISCHARGED}) d ON d.clientID = c.clientID
     `);
 
     const trend = await pool.request().query(`
       SELECT
-        FORMAT(AdmitDate, 'yyyy-MM') AS period,
-        COUNT(*)                     AS admissions
+        FORMAT(clientAdmitDate, 'yyyy-MM') AS period,
+        COUNT(*)                           AS admissions
       FROM dbo.Clients
-      WHERE AdmitDate >= DATEADD(MONTH, -12, SYSUTCDATETIME())
-      GROUP BY FORMAT(AdmitDate, 'yyyy-MM')
+      WHERE clientAdmitDate >= DATEADD(MONTH, -12, CAST(SYSUTCDATETIME() AS DATE))
+      GROUP BY FORMAT(clientAdmitDate, 'yyyy-MM')
       ORDER BY period
     `);
 
