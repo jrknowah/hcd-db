@@ -5,6 +5,9 @@ import app from '../backend/server.cjs';
 import sql from 'mssql';
 import { poolPromise } from '../backend/store/azureSql.js';
 
+// /api/authorization requires a token; middleware/auth.js accepts this one outside production
+const AUTH = { Authorization: 'Bearer dev-bypass-token' };
+
 describe('Authorization Forms API', () => {
   let testClientID = 'TEST-AUTH-' + Date.now();
 
@@ -55,6 +58,7 @@ describe('Authorization Forms API', () => {
     it('should accept valid form type', async () => {
       const response = await request(app)
         .post(`/api/authorization/${testClientID}/form/orientation`)
+        .set(AUTH)
         .send({
           checkboxes: { item1: true },
           signature: 'Test User'
@@ -67,6 +71,7 @@ describe('Authorization Forms API', () => {
     it('should reject invalid form type', async () => {
       await request(app)
         .post(`/api/authorization/${testClientID}/form/invalidFormType`)
+        .set(AUTH)
         .send({
           checkboxes: { item1: true },
           signature: 'Test'
@@ -77,6 +82,7 @@ describe('Authorization Forms API', () => {
     it('should provide list of valid form types on error', async () => {
       const response = await request(app)
         .post(`/api/authorization/${testClientID}/form/invalidType`)
+        .set(AUTH)
         .send({
           checkboxes: { item1: true },
           signature: 'Test'
@@ -101,6 +107,7 @@ describe('Authorization Forms API', () => {
 
       const response = await request(app)
         .post(`/api/authorization/${testClientID}/form/orientation`)
+        .set(AUTH)
         .send(formData)
         .expect(200);
       
@@ -121,15 +128,24 @@ describe('Authorization Forms API', () => {
 
       const response = await request(app)
         .post(`/api/authorization/${testClientID}/form/orientation`)
+        .set(AUTH)
         .send(updatedData)
         .expect(200);
       
       expect(response.body.formData.signature).toBe('John Doe Updated');
     });
 
+    it('should require authentication', async () => {
+      await request(app)
+        .post(`/api/authorization/${testClientID}/form/orientation`)
+        .send({ checkboxes: { item1: true }, signature: 'Test' })
+        .expect(401);
+    });
+
     it('should require clientID', async () => {
       await request(app)
         .post('/api/authorization//form/orientation')
+        .set(AUTH)
         .send({
           checkboxes: { item1: true },
           signature: 'Test'
@@ -140,6 +156,7 @@ describe('Authorization Forms API', () => {
     it('should require signature', async () => {
       const response = await request(app)
         .post(`/api/authorization/${testClientID}/form/orientation`)
+        .set(AUTH)
         .send({
           checkboxes: { item1: true }
           // No signature
@@ -152,6 +169,7 @@ describe('Authorization Forms API', () => {
     it('should validate signature length (min 2 chars)', async () => {
       const response = await request(app)
         .post(`/api/authorization/${testClientID}/form/orientation`)
+        .set(AUTH)
         .send({
           checkboxes: { item1: true },
           signature: 'A' // Too short
@@ -164,6 +182,7 @@ describe('Authorization Forms API', () => {
     it('should validate signature length (max 200 chars)', async () => {
       const response = await request(app)
         .post(`/api/authorization/${testClientID}/form/orientation`)
+        .set(AUTH)
         .send({
           checkboxes: { item1: true },
           signature: 'A'.repeat(201) // Too long
@@ -176,6 +195,7 @@ describe('Authorization Forms API', () => {
     it('should require checkboxes object', async () => {
       const response = await request(app)
         .post(`/api/authorization/${testClientID}/form/orientation`)
+        .set(AUTH)
         .send({
           signature: 'Test User'
           // No checkboxes
@@ -188,6 +208,7 @@ describe('Authorization Forms API', () => {
     it('should require at least one checkbox', async () => {
       const response = await request(app)
         .post(`/api/authorization/${testClientID}/form/orientation`)
+        .set(AUTH)
         .send({
           checkboxes: {}, // Empty object
           signature: 'Test User'
@@ -200,6 +221,7 @@ describe('Authorization Forms API', () => {
     it('should validate checkbox values are booleans', async () => {
       const response = await request(app)
         .post(`/api/authorization/${testClientID}/form/orientation`)
+        .set(AUTH)
         .send({
           checkboxes: {
             item1: 'yes' // Should be boolean
@@ -221,6 +243,7 @@ describe('Authorization Forms API', () => {
 
       const response = await request(app)
         .post(`/api/authorization/${testClientID}/form/orientation`)
+        .set(AUTH)
         .send(invalidData)
         .expect(422);
       
@@ -236,6 +259,7 @@ describe('Authorization Forms API', () => {
 
       const response = await request(app)
         .post(`/api/authorization/${testClientID}/form/orientation`)
+        .set(AUTH)
         .send(completeData)
         .expect(200);
       
@@ -253,6 +277,7 @@ describe('Authorization Forms API', () => {
 
       const response = await request(app)
         .post(`/api/authorization/${testClientID}/form/clientRights`)
+        .set(AUTH)
         .send(formData)
         .expect(200);
       
@@ -262,6 +287,7 @@ describe('Authorization Forms API', () => {
     it('should require acknowledged field', async () => {
       const response = await request(app)
         .post(`/api/authorization/${testClientID}/form/clientRights`)
+        .set(AUTH)
         .send({
           signature: 'Test'
         })
@@ -273,6 +299,7 @@ describe('Authorization Forms API', () => {
     it('should require acknowledged to be true', async () => {
       const response = await request(app)
         .post(`/api/authorization/${testClientID}/form/clientRights`)
+        .set(AUTH)
         .send({
           acknowledged: false,
           signature: 'Test'
@@ -285,6 +312,7 @@ describe('Authorization Forms API', () => {
     it('should validate signature is present', async () => {
       const response = await request(app)
         .post(`/api/authorization/${testClientID}/form/clientRights`)
+        .set(AUTH)
         .send({
           acknowledged: true
         })
@@ -308,6 +336,7 @@ describe('Authorization Forms API', () => {
 
       const response = await request(app)
         .post(`/api/authorization/${testClientID}/form/consentPhoto`)
+        .set(AUTH)
         .send(formData)
         .expect(200);
       
@@ -325,6 +354,7 @@ describe('Authorization Forms API', () => {
 
       const response = await request(app)
         .post(`/api/authorization/${testClientID}/form/consentPhoto`)
+        .set(AUTH)
         .send(invalidData)
         .expect(422);
       
@@ -334,6 +364,7 @@ describe('Authorization Forms API', () => {
     it('should require at least one release item', async () => {
       const response = await request(app)
         .post(`/api/authorization/${testClientID}/form/consentPhoto`)
+        .set(AUTH)
         .send({
           clientReleaseItems: [], // Empty
           clientReleasePurposes: ['purpose1'],
@@ -348,6 +379,7 @@ describe('Authorization Forms API', () => {
     it('should require release purposes array', async () => {
       const response = await request(app)
         .post(`/api/authorization/${testClientID}/form/consentPhoto`)
+        .set(AUTH)
         .send({
           clientReleaseItems: ['photos'],
           clientReleasePurposes: 'not-array',
@@ -362,6 +394,7 @@ describe('Authorization Forms API', () => {
     it('should require at least one purpose', async () => {
       const response = await request(app)
         .post(`/api/authorization/${testClientID}/form/consentPhoto`)
+        .set(AUTH)
         .send({
           clientReleaseItems: ['photos'],
           clientReleasePurposes: [],
@@ -384,6 +417,7 @@ describe('Authorization Forms API', () => {
 
       const response = await request(app)
         .post(`/api/authorization/${testClientID}/form/consentPhoto`)
+        .set(AUTH)
         .send(invalidData)
         .expect(422);
       
@@ -393,6 +427,7 @@ describe('Authorization Forms API', () => {
     it('should validate expiration date is after effective date', async () => {
       const response = await request(app)
         .post(`/api/authorization/${testClientID}/form/consentPhoto`)
+        .set(AUTH)
         .send({
           clientReleaseItems: ['photos'],
           clientReleasePurposes: ['marketing'],
@@ -408,6 +443,7 @@ describe('Authorization Forms API', () => {
     it('should validate array items have required structure', async () => {
       const response = await request(app)
         .post(`/api/authorization/${testClientID}/form/consentPhoto`)
+        .set(AUTH)
         .send({
           clientReleaseItems: [null, undefined, ''],
           clientReleasePurposes: ['purpose'],

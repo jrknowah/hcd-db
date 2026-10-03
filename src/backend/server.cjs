@@ -230,7 +230,8 @@ console.log('📝 Loading Section 2 Authorization & Signatures Routes...');
 // Try to load the Authorization & Signatures router
 try {
   const authSigRouter = require('./routes/authSig.js');
-  app.use('/api/authorization', authSigRouter);
+  // Signed-form PHI: every Section 2 call must be authenticated (unlock also needs IT Admin / Level 1)
+  app.use('/api/authorization', authMiddleware, authSigRouter);
   console.log('✅ Authorization & Signatures router loaded from ./routes/authSig.js');
   authSigRouterLoaded = true;
   console.log('✅ AuthSig router loaded from ./routes/authSig.js');
