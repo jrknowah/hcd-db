@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useDispatch } from 'react-redux';
 import { useClientPersistence } from '../../hooks/useClientPersistence';
 import ClientInfoBanner from '../../components/shared/ClientInfoBanner';
+import ExportPdfButton from '../../components/shared/ExportPdfButton';
 import {
   Card,
   CardContent,
@@ -132,6 +133,13 @@ const Medical = () => {
                 Medical Dashboard
               </Typography>
             </Box>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
+            <ExportPdfButton
+              clientID={clientID}
+              sections={[5]}
+              label="Export Section 5 PDF"
+              tooltip="Download all of Section 5 (Medical Information & Screenings) as a PDF"
+            />
             <Chip
               icon={<PersonIcon />}
               label={
@@ -143,6 +151,7 @@ const Medical = () => {
               variant={client ? "filled" : "outlined"}
               size="medium"
             />
+            </Box>
           </Box>
         </CardContent>
       </Card>
