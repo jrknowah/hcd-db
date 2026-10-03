@@ -1,4 +1,5 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
+import { getApiAuthHeaders } from "../../../utils/apiAuth";
 
 // ✅ API Base URL - Update this to match your backend
 const API_BASE_URL = `${import.meta.env.VITE_API_URL}`;
@@ -56,6 +57,7 @@ export const fetchAuthorizationForms = createAsyncThunk(
                 method: 'GET',
                 headers: {
                     'Content-Type': 'application/json',
+                    ...(await getApiAuthHeaders()),
                 },
             });
 
@@ -116,7 +118,9 @@ export const fetchFormData = createAsyncThunk(
         }
 
         try {
-            const response = await fetch(`${API_BASE_URL}/api/authorization/${clientID}/form/${formType}`);
+            const response = await fetch(`${API_BASE_URL}/api/authorization/${clientID}/form/${formType}`, {
+                headers: await getApiAuthHeaders(),
+            });
             
             if (!response.ok) {
                 if (response.status === 404) {
@@ -211,6 +215,7 @@ export const saveFormData = createAsyncThunk(
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
+                    ...(await getApiAuthHeaders()),
                 },
                 body: JSON.stringify(transformedData),
             });
@@ -263,6 +268,7 @@ export const saveBulkForms = createAsyncThunk(
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
+                    ...(await getApiAuthHeaders()),
                 },
                 body: JSON.stringify({ forms: formsData }),
             });
@@ -300,6 +306,7 @@ export const submitFormsForApproval = createAsyncThunk(
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
+                    ...(await getApiAuthHeaders()),
                 },
                 body: JSON.stringify({ submissionNotes }),
             });
@@ -335,18 +342,46 @@ export const autoSaveFormData = createAsyncThunk(
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
+                    ...(await getApiAuthHeaders()),
                 },
                 body: JSON.stringify(formData),
             });
 
             if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
             }
 
             const data = await response.json();
             return data;
         } catch (error) {
             return rejectWithValue(error.message || 'Auto-save failed');
+        }
+    }
+);
+
+// Unlock a signed form (IT Admin / Level 1 only — enforced by the backend).
+// The signed version is archived server-side and the client must sign again.
+export const unlockForm = createAsyncThunk(
+    'authSig/unlockForm',
+    async ({ clientID, formType, reason }, { rejectWithValue }) => {
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/authorization/${encodeURIComponent(clientID)}/form/${formType}/unlock`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(await getApiAuthHeaders()),
+                },
+                body: JSON.stringify({ reason }),
+            });
+
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) {
+                throw new Error(data.message || data.error || `HTTP error! status: ${response.status}`);
+            }
+            return data;
+        } catch (error) {
+            return rejectWithValue(error.message || 'Failed to unlock form');
         }
     }
 );
@@ -710,6 +745,27 @@ const authSigSlice = createSlice({
                 state.saving = false;
                 state.saveError = action.payload || 'Failed to save forms';
                 state.saveSuccess = false;
+            })
+
+            // ✅ Unlock signed form — server cleared the signature
+            .addCase(unlockForm.fulfilled, (state, action) => {
+                const { formType } = action.meta.arg;
+                const prev = state.forms[formType] || {};
+                if (prev.status === 'completed' && state.completedForms > 0) {
+                    state.completedForms -= 1;
+                    state.overallCompletion = Math.round((state.completedForms / state.totalForms) * 100);
+                }
+                state.forms[formType] = {
+                    ...prev,
+                    status:       action.payload.status,
+                    locked:       false,
+                    signature:    null,
+                    completedBy:  null,
+                    completedAt:  null,
+                    unlockedBy:   action.payload.unlockedBy,
+                    unlockedAt:   action.payload.unlockedAt,
+                    unlockReason: action.payload.unlockReason,
+                };
             });
     }
 });
