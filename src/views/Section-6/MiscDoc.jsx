@@ -41,6 +41,7 @@ import {
 } from '@mui/icons-material';
 import { useClientPersistence } from '../../hooks/useClientPersistence';
 import { azureBlobService } from '../../backend/services/azureBlobService';
+import { formatDateOnly } from '../../utils/dateOnly';
 
 /**
  * ✅ PRODUCTION-READY MiscDoc Component
@@ -313,12 +314,11 @@ const MiscDoc = () => {
   const formatDate = (dateString) => {
     if (!dateString) return 'Unknown';
     try {
-      return new Date(dateString).toLocaleDateString('en-US', {
+      // uploadDate is a SQL DATE column, so show the calendar day only.
+      return formatDateOnly(dateString, 'Unknown', 'en-US', {
         year: 'numeric',
         month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
+        day: 'numeric'
       });
     } catch {
       return 'Invalid Date';
