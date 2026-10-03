@@ -468,25 +468,26 @@ const CarePlan = ({ clientID, exportMode }) => {
               <TableCell>Client Actions</TableCell>
               <TableCell>Case Manager Actions</TableCell>
               <TableCell>Expected Outcomes</TableCell>
+              <TableCell>Added By</TableCell>
               {!exportMode && <TableCell>Actions</TableCell>}
             </TableRow>
           </TableHead>
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={exportMode ? 7 : 8} align="center">
+                <TableCell colSpan={exportMode ? 8 : 9} align="center">
                   <Alert severity="info">Loading care plans...</Alert>
                 </TableCell>
               </TableRow>
             ) : error ? (
               <TableRow>
-                <TableCell colSpan={exportMode ? 7 : 8} align="center">
+                <TableCell colSpan={exportMode ? 8 : 9} align="center">
                   <Alert severity="error">Error: {error}</Alert>
                 </TableCell>
               </TableRow>
             ) : carePlans.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={exportMode ? 7 : 8} align="center">
+                <TableCell colSpan={exportMode ? 8 : 9} align="center">
                   <Alert severity="info">No care plans available.</Alert>
                 </TableCell>
               </TableRow>
@@ -573,6 +574,9 @@ const CarePlan = ({ clientID, exportMode }) => {
                     >
                       {plan.careOutcome}
                     </Typography>
+                  </TableCell>
+                  <TableCell>
+                    <Typography variant="body2">{plan.createdBy || 'N/A'}</Typography>
                   </TableCell>
                   {!exportMode && (
                     <TableCell>
