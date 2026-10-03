@@ -1054,6 +1054,13 @@ async function renderSection3(doc, pool, clientID) {
   await fetchDirect('hospitalizations',    'MentalHealthHospitalizations',  'createdAt DESC');
   await fetchDirect('medications',         'MentalHealthMedications',       'createdAt DESC');
   await fetchDirect('mhProviders',         'MentalHealthProviders',         'createdAt DESC');
+  // Removed (inactive) Section 3 rows stay in the database for the record but
+  // are not part of the client's current chart.
+  for (const key of ['hospitalizations', 'medications', 'mhProviders']) {
+    if (Array.isArray(fetched[key])) {
+      fetched[key] = fetched[key].filter(row => row.active !== false && row.active !== 0);
+    }
+  }
   await fetchDirect('progressNotes',       'progress_notes',                'nurseNoteDate DESC');
 
 
