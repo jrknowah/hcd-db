@@ -30,6 +30,25 @@ function formatDate(val) {
   try { return new Date(val).toLocaleDateString('en-US'); } catch { return 'N/A'; }
 }
 
+// Calendar dates (SQL DATE columns: DOB, appointment dates) arrive as UTC
+// midnight. Formatting them in local time shows the previous day in US
+// timezones, so read the Y-M-D parts directly (mirrors src/utils/dateOnly.js).
+function formatDateOnly(val) {
+  if (!val) return 'N/A';
+  let ymd = null;
+  if (typeof val === 'string') {
+    const m = val.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (m) ymd = [m[1], m[2], m[3]];
+  }
+  if (!ymd) {
+    const d = val instanceof Date ? val : new Date(val);
+    if (Number.isNaN(d.getTime())) return 'N/A';
+    ymd = d.toISOString().slice(0, 10).split('-');
+  }
+  const [y, mo, da] = ymd.map(Number);
+  return `${mo}/${da}/${y}`;
+}
+
 // Face sheet multi-selects are stored as JSON arrays of react-select options
 // ({ value, label }) or plain strings. Render them as a readable list.
 function formatList(val, fallback = 'N/A') {
@@ -217,7 +236,7 @@ function drawCoverPage(doc, client, exportedBy, sectionNums = [1, 2, 3, 4, 5, 6]
 
   const infoItems = [
     ['Client ID', safeStr(client.clientID)],
-    ['Date of Birth', formatDate(client.dob)],
+    ['Date of Birth', formatDateOnly(client.dob)],
     ['Program', safeStr(client.program)],
     ['Site', safeStr(client.site || client.clientSite)],
     ['Primary Diagnosis', safeStr(client.primaryDiagnosis)],
@@ -288,7 +307,7 @@ async function renderSection1(doc, pool, clientID) {
       drawTwoColumn(doc, [
         ['First Name',       cl.clientFirstName],
         ['Last Name',        cl.clientLastName],
-        ['Date of Birth',    formatDate(cl.clientDOB || cl.dob)],
+        ['Date of Birth',    formatDateOnly(cl.clientDOB || cl.dob)],
         ['Gender',           cl.clientGender || cl.gender],
         ['SSN (last 4)',     cl.ssnLast4 ? `***-**-${cl.ssnLast4}` : 'N/A'],
         ['Primary Language', cl.primaryLanguage || cl.clientLanguage],
@@ -2154,7 +2173,7 @@ async function renderSection5(doc, pool, clientID) {
     if (r.recordset.length > 0) {
       r.recordset.forEach((appt, i) => {
         drawS4EntryHeader(doc, i + 1,
-          formatDate(appt.medApptDate),
+          formatDateOnly(appt.medApptDate),
           appt.medApptType || appt.appointmentType
         );
         drawS4MetaGrid(doc, [
@@ -2317,7 +2336,7 @@ async function renderMedFaceSheetDocument(doc, pool, client, exportedBy) {
   drawS4MetaGrid(doc, [
     ['Name',          `${safeStr(client.clientLastName, '')}, ${safeStr(client.clientFirstName, '')}`],
     ['Client ID',     clientID],
-    ['Date of Birth', formatDate(client.dob)],
+    ['Date of Birth', formatDateOnly(client.dob)],
     ['Status',        client.clientStatus],
     ['Program',       client.program],
     ['Site',          client.site || client.clientSite],
@@ -2387,7 +2406,7 @@ async function renderMedFaceSheetDocument(doc, pool, client, exportedBy) {
         headers:     ['Date', 'Location', 'Type', 'Provider', 'Transport'],
         widths:      [tw * 0.14, tw * 0.28, tw * 0.2, tw * 0.26, tw * 0.12],
         rows:        r.recordset.map((a) => [
-          formatDate(a.medApptDate),
+          formatDateOnly(a.medApptDate),
           a.medApptLoc,
           a.medApptType,
           a.medApptProv,
