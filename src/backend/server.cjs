@@ -3,6 +3,13 @@ const cors = require('cors');
 const path = require('path');
 const app = express();
 require('dotenv').config({ path: '../.env' });
+
+// Outside development/test (App Service leaves NODE_ENV unset), drop console.log/
+// info/debug: they're debug chatter, and many routes print client data with them.
+// warn/error still go to the logs. Set LOG_VERBOSE=true to see everything.
+if (!['development', 'test'].includes(process.env.NODE_ENV) && process.env.LOG_VERBOSE !== 'true') {
+  console.log = console.info = console.debug = () => {};
+}
 const { BlobServiceClient } = require('@azure/storage-blob'); 
 // const { requireAdmin } = require('./middleware/requireAdmin.cjs');
 
@@ -47,9 +54,10 @@ app.use(cors({
 }));
 app.use(express.json());
 
-// Every /api route requires a signed-in user (token, or a signed download link),
-// and every call is recorded in the audit trail. Must run before any router.
-app.use('/api', requireApiAuth, auditTrail);
+// Every call is recorded in the audit trail (including rejected ones), and every
+// /api route requires a signed-in member of an allowed group (or a signed download
+// link). Must run before any router.
+app.use('/api', auditTrail, requireApiAuth);
 
 try {
   const adminErrorsRouter = require('./routes/admin/errors.cjs');
@@ -75,80 +83,39 @@ try {
 // Azure Authentication Endpoints
 // ============================================================================
 
-// Azure login endpoint
+// Login check: the gate (requireApiAuth) has already verified the token and group
+// membership, so this returns what the server knows — never data the caller sent.
+const verifiedUser = (u) => ({
+  email: u.email,
+  name: u.name,
+  roles: u.appRoles || [],
+  isAdmin: Boolean(u.isAdmin),
+});
+
 app.post('/api/auth/azure-login', (req, res) => {
-  console.log('🔐 Azure login request received');
-  console.log('📤 User data:', req.body.user?.name || 'Unknown user');
-  console.log('📤 Token present:', req.body.token ? 'Yes' : 'No');
-  console.log('📤 User roles:', req.body.user?.roles || []);
-  
-  // Validate the request
-  if (!req.body.user || !req.body.token) {
-    return res.status(400).json({
-      success: false,
-      error: 'Missing user data or token'
-    });
-  }
-  
-  // For now, just return success with the user data
-  // In the future, you could add database operations here
   res.json({
     success: true,
     message: 'Azure authentication validated successfully',
-    user: {
-      ...req.body.user,
-      // You could add additional server-side data here
-      lastLogin: new Date().toISOString(),
-      serverValidated: true
-    }
+    user: { ...verifiedUser(req.user), lastLogin: new Date().toISOString(), serverValidated: true }
   });
 });
 
-// Azure logout endpoint
+// Logout is public (see PUBLIC_API_PATHS) so it still works after the session expires.
 app.post('/api/auth/logout', (req, res) => {
-  console.log('🚪 Azure logout request received');
-  
   res.json({
     success: true,
     message: 'Logout successful'
   });
 });
 
-// Token validation endpoint (optional - for future use)
 app.get('/api/auth/validate', (req, res) => {
-  const authHeader = req.headers.authorization;
-  
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({
-      valid: false,
-      error: 'No valid token provided'
-    });
-  }
-  
-  // For now, just return valid (in production, you'd validate the actual token)
   res.json({
     valid: true,
-    message: 'Token is valid'
+    message: 'Token is valid',
+    user: verifiedUser(req.user)
   });
-});
-app.get('/getClientAllergies/:clientID', async (req, res) => {
-  // Redirect to the correct endpoint
-  res.redirect(`/api/medical/allergies/${req.params.clientID}`);
 });
 
-// Also add the save endpoint if it doesn't exist
-app.post('/saveClientAllergies', async (req, res) => {
-  const { clientID, allergies } = req.body;
-  console.log('💾 Saving allergies for client:', clientID);
-  
-  // For now, just return success
-  res.json({ 
-    success: true,
-    message: 'Allergies saved successfully',
-    clientID,
-    allergies 
-  });
-})
 // Request logging middleware
 app.use((req, res, next) => {
   console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);

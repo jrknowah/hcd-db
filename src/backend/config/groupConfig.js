@@ -1,28 +1,8 @@
-export const GROUP_MAPPINGS = {
-  // ✅ Your actual IT group from Azure AD
-  // Verified against Entra > Groups > HOPE_it > Object Id (Aug 2026).
-  // The previous value (5937eaf5-...) was stale and matched no group in the
-  // token, which is why IT_ADMIN never resolved.
-  'HOPE_it': '47e60a70-aeab-4f3e-80bd-940cc951622f',
-  
-  // Keep the original IDs for future use (in case other groups are created later)
-  'HOPE_case': '59b40286-56c6-4b1e-8de2-854c7d91179b',
-  'HOPE_nursing': '51b04727-a548-4769-8227-4b055427a9ac',
-  'HOPE_level1': 'f47eca14-0206-4719-91c7-fba7b2be382c',
-  'HOPE_audit': 'fec5c917-431c-4663-85b2-efc9e9053e96',
-  'HOPE_readonly': 'e95d2a7a-0390-414e-92bd-26fb5b745acf',
-  'hope_eubanks': 'd5115dd6-74f0-4abe-951f-6dc3e96fb1ee',
-  'hope_pacific': '1985ac8b-285d-45c1-9d0e-1ded3d3f6fca',
-  'hope_heart': '',
-  'hope_hope': '',
-  'hope_downey': '',
-  'hope_heritage': '',
-  'hope_northridge': '',
-  'hope_casa': '',
-  'hope_97': '',
-  'hope_104': '',
-  'hope_238': '',
-};
+import groups from './groups.json';
+
+// Group object IDs live in groups.json so the backend enforces the same list.
+// HOPE_it was verified against Entra > Groups > HOPE_it > Object Id (Aug 2026).
+export const GROUP_MAPPINGS = groups.groupIds;
 
 // Define role-based permissions for HOPE system
 export const ROLE_PERMISSIONS = {
@@ -56,14 +36,9 @@ export const ROLE_PERMISSIONS = {
 };
 
 // ✅ Map your actual IT group to IT_ADMIN role  
-export const GROUP_TO_ROLE = {
-  [GROUP_MAPPINGS.HOPE_it]: 'IT_ADMIN',           // Your IT group -> IT_ADMIN (full access)
-  [GROUP_MAPPINGS.HOPE_level1]: 'LEVEL1',         
-  [GROUP_MAPPINGS.HOPE_case]: 'CASE_MANAGER',     
-  [GROUP_MAPPINGS.HOPE_nursing]: 'NURSE',
-  [GROUP_MAPPINGS.HOPE_audit]: 'AUDITOR',
-  [GROUP_MAPPINGS.HOPE_readonly]: 'READONLY',
-};
+export const GROUP_TO_ROLE = Object.fromEntries(
+  Object.entries(groups.roleGroups).map(([groupName, role]) => [GROUP_MAPPINGS[groupName], role])
+);
 
 // Define what sections each role can access
 export const SECTION_ACCESS = {

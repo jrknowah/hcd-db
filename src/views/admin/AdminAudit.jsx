@@ -66,7 +66,7 @@ function formatTimestamp(value) {
   return Number.isNaN(d.getTime()) ? String(value) : d.toLocaleString();
 }
 
-// Details is JSON written by the audit middleware: route, status, changed field NAMES.
+// Details is JSON written by the audit middleware: route, status, field NAMES.
 function parseDetails(value) {
   if (!value) return null;
   try {
@@ -546,16 +546,19 @@ export default function AdminAudit() {
                         <Typography>{details.status}</Typography>
                       </Grid>
                     )}
-                    {Array.isArray(details.changedFields) && (
-                      <Grid item xs={12}>
-                        <Typography variant="caption" color="text.secondary">Changed fields</Typography>
+                    {[
+                      ['changedFields', 'Changed fields'],
+                      ['submittedFields', 'Fields saved'],
+                    ].map(([key, label]) => Array.isArray(details[key]) && (
+                      <Grid item xs={12} key={key}>
+                        <Typography variant="caption" color="text.secondary">{label}</Typography>
                         <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 0.5 }}>
-                          {details.changedFields.map((f) => (
+                          {details[key].map((f) => (
                             <Chip key={f} label={f} size="small" variant="outlined" />
                           ))}
                         </Box>
                       </Grid>
-                    )}
+                    ))}
                   </>
                 );
               })()}

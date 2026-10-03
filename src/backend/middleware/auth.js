@@ -4,10 +4,20 @@ const jwksClient = require('jwks-rsa');
 const { verifySignedRequest } = require('../services/signedUrl.cjs');
 const TENANT_ID = '2fca3a49-cd1a-4717-bccc-5dbd1ea86b64';
 const APP_CLIENT_ID = '0b3e6463-bea7-4521-a36a-a32edb6af7a1';
+const groups = require('../config/groups.json');
 // HOPE_it — the group the frontend maps to IT_ADMIN (config/groupConfig.js).
 // Roles are assigned by group membership, so this is what makes IT staff admins.
-const IT_ADMIN_GROUP_ID = '47e60a70-aeab-4f3e-80bd-940cc951622f';
+const IT_ADMIN_GROUP_ID = groups.groupIds.HOPE_it;
 const ADMIN_GROUP_IDS = [IT_ADMIN_GROUP_ID, process.env.ADMIN_GROUP_ID].filter(Boolean);
+// Group ID -> app role, for the groups that may use the app at all (config/groups.json).
+const ROLE_BY_GROUP_ID = Object.fromEntries(
+  Object.entries(groups.roleGroups).map(([name, role]) => [groups.groupIds[name], role])
+);
+
+// Development shortcuts (dev-bypass-token, mock auth) only when explicitly in
+// development or test. App Service doesn't set NODE_ENV, so an unset value must
+// behave like production.
+const IS_DEV_OR_TEST = ['development', 'test'].includes(process.env.NODE_ENV);
 
 // ID tokens are signed with tenant-specific keys.
 // We use the tenant JWKS endpoint — ID tokens do not have a nonce
@@ -38,12 +48,14 @@ const DEV_USER = {
   name: 'Development User',
   userId: 'dev-user-id',
   roles: ['user'],
+  groups: [],
+  appRoles: ['LEVEL1'],
   isAdmin: false
 };
 
 // Verifies an ID token and resolves to the req.user shape.
 function verifyToken(token) {
-  if (token === 'dev-bypass-token' && process.env.NODE_ENV !== 'production') {
+  if (token === 'dev-bypass-token' && IS_DEV_OR_TEST) {
     return Promise.resolve({ ...DEV_USER });
   }
 
@@ -61,12 +73,16 @@ function verifyToken(token) {
     }, (err, decoded) => {
       if (err) return reject(err);
 
+      const tokenGroups = decoded.groups || [];
       resolve({
         userId:   decoded.sub || decoded.oid,
         email:    decoded.email || decoded.preferred_username || decoded.upn || decoded.unique_name,
         name:     decoded.name,
         roles:    decoded.roles  || [],
-        groups:   decoded.groups || [],
+        groups:   tokenGroups,
+        appRoles: [...new Set(tokenGroups.map(g => ROLE_BY_GROUP_ID[g]).filter(Boolean))],
+        // Entra omits the groups claim when a user is in too many groups ("overage").
+        groupsOverage: Boolean(decoded._claim_names?.groups),
         tenantId: decoded.tid,
         isAdmin:  (decoded.roles  || []).includes('Admin') ||
                   (decoded.roles  || []).includes('ITAdmin') ||
@@ -120,12 +136,30 @@ const authMiddleware = async (req, res, next) => {
   }
 };
 
-// Paths under /api reachable without signing in: health probes and the login/logout
-// handshake (which only echo data the caller sent).
-const PUBLIC_API_PATHS = ['/api/health', '/api/auth/'];
+// Paths under /api reachable without signing in: health probes, and logout (a
+// no-op that must still work after the session has expired).
+const PUBLIC_API_PATHS = ['/api/health', '/api/auth/logout'];
 
-// Gate for every /api route: a valid token, or a signed short-lived link (see
-// services/signedUrl.cjs) for GETs the browser opens directly.
+// Only members of a group in config/groups.json (or admins) may use the API.
+const requireAllowedGroup = (req, res, next) => {
+  const u = req.user || {};
+  if (u.viaSignedUrl || u.isAdmin || (u.appRoles || []).length) return next();
+
+  if (u.groupsOverage) {
+    return res.status(403).json({
+      error: 'Your account is in too many groups for sign-in to list them. Ask IT to assign access via app roles.',
+      code: 'GROUPS_OVERAGE'
+    });
+  }
+  return res.status(403).json({
+    error: 'Your account is not in a group that has access to this application',
+    code: 'NOT_IN_ALLOWED_GROUP'
+  });
+};
+
+// Gate for every /api route: a valid token from a member of an allowed group, or a
+// signed short-lived link (see services/signedUrl.cjs) for GETs the browser opens
+// directly — those are only issued to users who already passed this gate.
 const requireApiAuth = (req, res, next) => {
   if (req.method === 'OPTIONS') return next();
   if (PUBLIC_API_PATHS.some((p) => req.originalUrl.startsWith(p))) return next();
@@ -139,7 +173,7 @@ const requireApiAuth = (req, res, next) => {
     }
   }
 
-  return authMiddleware(req, res, next);
+  return authMiddleware(req, res, () => requireAllowedGroup(req, res, next));
 };
 
 // Role-based authorization middleware

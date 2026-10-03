@@ -31,7 +31,7 @@ const formatDateForDB = (dateValue) => {
     }
     return date;
   } catch (e) {
-    console.warn('⚠️ Invalid date value:', dateValue);
+    console.warn('⚠️ Invalid date value');
     return null;
   }
 };
@@ -49,7 +49,7 @@ const formatDateForFrontend = (dateValue) => {
     const day = String(date.getDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
   } catch (e) {
-    console.warn('⚠️ Error formatting date:', dateValue);
+    console.warn('⚠️ Error formatting date');
     return '';
   }
 };
@@ -68,7 +68,7 @@ const formatTimeForFrontend = (timeValue) => {
     }
     return timeValue;
   } catch (e) {
-    console.warn('⚠️ Error formatting time:', timeValue);
+    console.warn('⚠️ Error formatting time');
     return '';
   }
 };

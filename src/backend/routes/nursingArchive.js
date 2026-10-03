@@ -209,7 +209,7 @@ router.post('/nursing-archive/:clientID/upload', upload.array('files', 10), asyn
                     `);
                 
             } catch (fileError) {
-                console.error(`Error processing file ${file.originalname}:`, fileError);
+                console.error('Error processing uploaded file:', fileError.message);
                 // Clean up file on error
                 try {
                     await fs.unlink(file.path);

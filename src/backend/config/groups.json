@@ -1,0 +1,30 @@
+{
+  "_comment": "Entra ID security groups. Shared by the frontend (groupConfig.js) and the backend (middleware/auth.js): only members of a roleGroups group may use the app or its API.",
+  "groupIds": {
+    "HOPE_it": "47e60a70-aeab-4f3e-80bd-940cc951622f",
+    "HOPE_case": "59b40286-56c6-4b1e-8de2-854c7d91179b",
+    "HOPE_nursing": "51b04727-a548-4769-8227-4b055427a9ac",
+    "HOPE_level1": "f47eca14-0206-4719-91c7-fba7b2be382c",
+    "HOPE_audit": "fec5c917-431c-4663-85b2-efc9e9053e96",
+    "HOPE_readonly": "e95d2a7a-0390-414e-92bd-26fb5b745acf",
+    "hope_eubanks": "d5115dd6-74f0-4abe-951f-6dc3e96fb1ee",
+    "hope_pacific": "1985ac8b-285d-45c1-9d0e-1ded3d3f6fca",
+    "hope_heart": "",
+    "hope_hope": "",
+    "hope_downey": "",
+    "hope_heritage": "",
+    "hope_northridge": "",
+    "hope_casa": "",
+    "hope_97": "",
+    "hope_104": "",
+    "hope_238": ""
+  },
+  "roleGroups": {
+    "HOPE_it": "IT_ADMIN",
+    "HOPE_level1": "LEVEL1",
+    "HOPE_case": "CASE_MANAGER",
+    "HOPE_nursing": "NURSE",
+    "HOPE_audit": "AUDITOR",
+    "HOPE_readonly": "READONLY"
+  }
+}

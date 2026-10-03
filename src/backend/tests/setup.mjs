@@ -4,6 +4,21 @@
 
 // src/backend/tests/setup.mjs
 import { vi, beforeAll, afterAll, beforeEach } from 'vitest';
+import { createRequire } from 'module';
+
+// Every /api route requires a signed-in user. Send the test-only bypass token
+// (accepted only when NODE_ENV is development/test) unless a test sets its own
+// Authorization header — or sets it to '' to exercise the unauthenticated path.
+{
+  const require = createRequire(import.meta.url);
+  const { Test } = require('supertest');
+  const originalEnd = Test.prototype.end;
+  Test.prototype.end = function end(...args) {
+    if (this.get('Authorization') === undefined) this.set('Authorization', 'Bearer dev-bypass-token');
+    else if (this.get('Authorization') === '') this.unset('Authorization');
+    return originalEnd.apply(this, args);
+  };
+}
 
 // =============================================================================
 // Environment Configuration

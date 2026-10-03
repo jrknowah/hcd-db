@@ -190,7 +190,7 @@ async function main() {
       console.log(`   ✅ ${f.blobName}`);
       inserted++;
     } catch (err) {
-      console.error(`   ❌ ${f.blobName} — ${err.message}`);
+      console.error(`   ❌ Backfill failed for one file — ${err.message}`);
       failed++;
     }
   }

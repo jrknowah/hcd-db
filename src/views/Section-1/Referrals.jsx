@@ -20,6 +20,7 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import RetryIcon from '@mui/icons-material/Refresh';
 import WarningIcon from '@mui/icons-material/Warning';
+import { openApiFile } from '../../backend/config/apiAuth';
 import {
   fetchReferralData,
   fetchReferralFiles,
@@ -443,10 +444,14 @@ const Referrals = ({ exportMode }) => {
                       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <Typography variant="body2">
                           {f.fileID
-                            ? <a 
-                                href={`${import.meta.env.VITE_API_BASE_URL}/api/referralFiles/download/${f.fileID}`} 
-                                target="_blank" 
-                                rel="noopener noreferrer"
+                            ? <a
+                                href="#"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  openApiFile(
+                                    `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000'}/api/referralFiles/download/${f.fileID}`
+                                  ).catch((err) => console.error('Failed to open referral file:', err));
+                                }}
                               >
                                 {f.fileName}
                               </a>

@@ -34,6 +34,8 @@ const COLUMN_CANDIDATES = {
 
 // Tables without a success column mark failures with this action suffix.
 const FAILED_SUFFIX = '_FAILED';
+// Already a failure by name; no suffix needed.
+const ACCESS_DENIED = 'ACCESS_DENIED';
 
 const INT_TYPES = new Set(['int', 'bigint', 'smallint', 'tinyint']);
 
@@ -117,7 +119,7 @@ function readExprs(S) {
 function successExpr(S) {
   if (S.cols.success) return S.cols.success;
   if (S.cols.action) {
-    return `CAST(CASE WHEN ${S.cols.action} LIKE '%[_]FAILED' THEN 0 ELSE 1 END AS BIT)`;
+    return `CAST(CASE WHEN ${S.cols.action} LIKE '%[_]FAILED' OR ${S.cols.action} = '${ACCESS_DENIED}' THEN 0 ELSE 1 END AS BIT)`;
   }
   return 'CAST(1 AS BIT)';
 }
@@ -141,7 +143,8 @@ async function writeAuditEntry(entry) {
   const request = pool.request();
 
   let action = entry.action;
-  if (entry.success === false && !S.cols.success && action && !action.endsWith(FAILED_SUFFIX)) {
+  if (entry.success === false && !S.cols.success && action && !action.endsWith(FAILED_SUFFIX)
+      && action !== ACCESS_DENIED) {
     action += FAILED_SUFFIX;
   }
 

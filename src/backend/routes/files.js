@@ -429,7 +429,7 @@ router.get('/file/:fileName', async (req, res) => {
           });
         } catch (propErr) {
           if (propErr.statusCode === 404) {
-            console.warn(`   ⚠️  File not found in Azure: ${blobName}`);
+            console.warn('   ⚠️  File not found in Azure');
             if (!ENABLE_LOCAL_FALLBACK) {
               return res.status(404).json({ message: 'File not found' });
             }
@@ -631,7 +631,7 @@ router.delete('/file/:fileName', async (req, res) => {
           return res.json({ success: true, message: 'File deleted successfully', blobName, storage: 'azure' });
         } catch (delErr) {
           if (delErr.statusCode === 404) {
-            console.warn(`   ⚠️  File not found in Azure: ${blobName}`);
+            console.warn('   ⚠️  File not found in Azure');
             if (!ENABLE_LOCAL_FALLBACK) {
               return res.status(404).json({ message: 'File not found' });
             }

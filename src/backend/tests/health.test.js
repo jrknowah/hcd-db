@@ -40,35 +40,39 @@ describe('API Health Checks', () => {
 });
 
 describe('Authentication Endpoints', () => {
-  test('POST /api/auth/azure-login should validate user data', async () => {
-    const loginData = {
-      user: {
-        name: 'Test User',
-        email: 'test@example.com',
-        roles: ['User']
-      },
-      token: 'mock-token-12345'
-    };
-
+  test('POST /api/auth/azure-login returns the server-verified user, not request data', async () => {
     const response = await request(app)
       .post('/api/auth/azure-login')
-      .send(loginData)
+      .send({ user: { name: 'Spoofed Name', roles: ['IT_ADMIN'] }, token: 'anything' })
       .expect(200);
 
     expect(response.body.success).toBe(true);
-    expect(response.body.user).toBeDefined();
-    expect(response.body.user.name).toBe('Test User');
+    expect(response.body.user.name).toBe('Development User');
+    expect(response.body.user.roles).not.toContain('IT_ADMIN');
   });
 
-  test('POST /api/auth/azure-login should reject missing data', async () => {
-    const invalidData = {};
-
-    const response = await request(app)
+  test('POST /api/auth/azure-login rejects requests without a token', async () => {
+    await request(app)
       .post('/api/auth/azure-login')
-      .send(invalidData)
-      .expect(400);
+      .set('Authorization', '')
+      .send({})
+      .expect(401);
+  });
 
-    expect(response.body.success).toBe(false);
+  test('GET /api/clients rejects requests without a token', async () => {
+    const response = await request(app)
+      .get('/api/clients')
+      .set('Authorization', '')
+      .expect(401);
+
+    expect(response.body.code).toBe('NO_AUTH_HEADER');
+  });
+
+  test('POST /api/auth/logout works without a token', async () => {
+    await request(app)
+      .post('/api/auth/logout')
+      .set('Authorization', '')
+      .expect(200);
   });
 
   test('POST /api/auth/logout should succeed', async () => {

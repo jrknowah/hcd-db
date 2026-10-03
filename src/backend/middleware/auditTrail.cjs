@@ -1,10 +1,12 @@
 // middleware/auditTrail.cjs
 // Writes one audit row per API request once the response is sent: who (from the
 // token, see requireApiAuth), what (VIEW/CREATE/UPDATE/DELETE), which route, which
-// client/record, and whether it succeeded.
+// client/record, and whether it succeeded. Requests rejected by the auth gate are
+// recorded as ACCESS_DENIED.
 //
 // HIPAA: only identifiers and route patterns are recorded — never request bodies,
-// query strings, or field values. Routes may add the NAMES of changed fields via
+// query strings, or field values. Writes record the NAMES of submitted fields; routes
+// that diff against the stored record report the names that actually changed via
 // recordChangedFields(res, [...]).
 
 const { writeAuditEntry, actorFrom } = require('../services/auditLog.cjs');
@@ -65,35 +67,85 @@ function pickClientId(req, res) {
   );
 }
 
+// Field names only — never values. Top level plus one level into plain objects
+// (forms often nest sections). Keys that don't look like field names are skipped,
+// since some payloads key objects by data.
+const FIELD_NAME = /^[A-Za-z_][A-Za-z0-9_]{0,63}$/;
+const MAX_FIELDS = 200;
+const IGNORED_FIELDS = new Set(['clientID']);
+
+function submittedFieldNames(body) {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return [];
+  const names = [];
+  Object.entries(body).forEach(([key, value]) => {
+    if (!FIELD_NAME.test(key) || IGNORED_FIELDS.has(key)) return;
+    if (value && typeof value === 'object' && !Array.isArray(value) && !(value instanceof Date)) {
+      const nested = Object.keys(value).filter((k) => FIELD_NAME.test(k));
+      if (nested.length) {
+        nested.forEach((k) => names.push(`${key}.${k}`));
+        return;
+      }
+    }
+    names.push(key);
+  });
+  return names.slice(0, MAX_FIELDS);
+}
+
 function auditTrail(req, res, next) {
   if (process.env.NODE_ENV === 'test') return next();
 
   const action = ACTIONS[req.method];
-  if (!action || SKIP_PREFIXES.some((p) => req.originalUrl.startsWith(p))) return next();
+  if (!action || req.originalUrl.startsWith('/api/health')) return next();
+  const selfAudited = SKIP_PREFIXES.some((p) => req.originalUrl.startsWith(p));
 
   res.on('finish', () => {
+    const base = {
+      ...actorFrom(req),
+      ip: req.ip,
+      userAgent: (req.get('user-agent') || '').slice(0, 500),
+    };
+
+    // Rejected by the auth gate or an admin check before reaching a route.
+    if (!req.route && (res.statusCode === 401 || res.statusCode === 403)) {
+      // Only the first path segment — later segments can be file names.
+      const area = `/api/${(req.originalUrl.split('?')[0].split('/')[2] || '').slice(0, 64)}`;
+      writeAuditEntry({
+        ...base,
+        action: 'ACCESS_DENIED',
+        resourceType: area,
+        success: false,
+        details: { method: req.method, route: area, status: res.statusCode },
+      }).catch((err) => console.error('⚠️  Failed to write audit entry:', err.message));
+      return;
+    }
+
     // Unmatched routes (404s from no handler) aren't user activity on a resource.
-    if (!req.route) return;
+    if (!req.route || selfAudited) return;
 
     const routePattern = `${req.baseUrl || ''}${req.route.path}`;
     const clientID = pickClientId(req, res);
     const success = res.statusCode < 400;
+    const isWrite = action !== 'VIEW';
+
+    // Routes that compare against the stored record report exactly what changed;
+    // for the rest, record which fields were submitted.
+    const changedFields = res.locals.auditChangedFields;
+    const submittedFields = isWrite && !changedFields ? submittedFieldNames(req.body) : [];
 
     writeAuditEntry({
-      ...actorFrom(req),
+      ...base,
       action: res.locals.auditAction || action,
       resourceType: routePattern,
       resourceId: pickResourceId(req.params) || clientID,
       clientId: clientID,
-      ip: req.ip,
-      userAgent: (req.get('user-agent') || '').slice(0, 500),
       success,
       details: {
         method: req.method,
         route: routePattern,
         status: res.statusCode,
         ...(clientID && { clientID }),
-        ...(res.locals.auditChangedFields && { changedFields: res.locals.auditChangedFields }),
+        ...(changedFields && { changedFields }),
+        ...(submittedFields.length && { submittedFields }),
       },
     }).catch((err) => {
       console.error('⚠️  Failed to write audit entry:', err.message);
