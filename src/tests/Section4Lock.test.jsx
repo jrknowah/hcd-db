@@ -10,6 +10,7 @@ import encounterNoteReducer from '../backend/store/slices/encounterNoteSlice';
 import carePlansReducer from '../backend/store/slices/carePlanSlice';
 import EncounterNote from '../views/Section-4/EncounterNote';
 import CarePlan from '../views/Section-4/CarePlan';
+import { formatLocalDateTime } from '../utils/localDateTime';
 
 const IT_GROUP = '47e60a70-aeab-4f3e-80bd-940cc951622f';
 const LEVEL1_GROUP = 'f47eca14-0206-4719-91c7-fba7b2be382c';
@@ -101,8 +102,30 @@ describe('Section 4 encounter notes lock', () => {
     await screen.findAllByText('Met with client about housing.');
     const [lockedRow, draftRow] = screen.getAllByText('Met with client about housing.').map(el => el.closest('tr'));
     expect(within(lockedRow).getByText('lead@hope.org')).toBeInTheDocument();
-    expect(within(lockedRow).getByText(new Date('2026-10-01T17:00:00Z').toLocaleString())).toBeInTheDocument();
+    expect(within(lockedRow).getByText(formatLocalDateTime('2026-10-01T17:00:00Z'))).toBeInTheDocument();
     expect(within(draftRow).getByText('Not submitted')).toBeInTheDocument();
+  });
+
+  it('shows who last updated each note, falling back to the creator', async () => {
+    axios.get.mockResolvedValue({ data: [
+      { ...submittedNote, createdAt: '2026-09-30T15:00:00Z', updatedBy: 'it@hope.org', updatedAt: '2026-10-02T09:30:00Z' },
+      { ...draftNote, createdBy: 'new@hope.org', createdAt: '2026-10-03T12:00:00Z', updatedBy: null, updatedAt: null },
+    ] });
+    renderWithProviders(<EncounterNote clientID="C1" />, { store: makeStore() });
+    await screen.findAllByText('Met with client about housing.');
+    const [editedRow, newRow] = screen.getAllByText('Met with client about housing.').map(el => el.closest('tr'));
+    expect(screen.getByRole('columnheader', { name: 'Last Updated By' })).toBeInTheDocument();
+    expect(within(editedRow).getByText('it@hope.org')).toBeInTheDocument();
+    expect(within(editedRow).getByText(formatLocalDateTime('2026-10-02T09:30:00Z'))).toBeInTheDocument();
+    expect(within(newRow).getAllByText('new@hope.org')).toHaveLength(2); // last updated by + added by
+    expect(within(newRow).getAllByText(formatLocalDateTime('2026-10-03T12:00:00Z'))).toHaveLength(2);
+  });
+
+  it('shows the note date as a calendar day without shifting it', async () => {
+    axios.get.mockResolvedValue({ data: [{ ...submittedNote, careNoteDate: '2026-10-01T00:00:00.000Z' }] });
+    renderWithProviders(<EncounterNote clientID="C1" />, { store: makeStore() });
+    expect(await screen.findByText(new Date(2026, 9, 1).toLocaleDateString())).toBeInTheDocument();
+    expect(screen.queryByText('2026-10-01T00:00:00.000Z')).not.toBeInTheDocument();
   });
 
   it('sends the sign-in token when saving', async () => {

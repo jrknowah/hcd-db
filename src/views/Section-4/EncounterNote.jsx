@@ -42,6 +42,8 @@ import Select from 'react-select';
 import { addEncounterNote, editEncounterNote, fetchEncounterNotes, unlockEncounterNote, deleteEncounterNote } from '../../backend/store/slices/encounterNoteSlice';
 import { canUnlockLockedRecords } from '../../backend/config/groupConfig';
 import logUserAction from "../../backend/config/logAction";
+import { formatLocalDateTime } from "../../utils/localDateTime";
+import { formatDateOnly } from "../../utils/dateOnly";
 import { hhhSiteList2, cmNoteType } from "../../data/arrayList";
 
 // ✅ Static mock data outside component
@@ -111,7 +113,6 @@ const customSelectStyles = {
 // Submitted notes are locked; drafts ("Save Progress") stay editable
 const isNoteLocked = (note) => note.locked ?? note.submissionStatus !== 'draft';
 
-const formatDateTime = (value) => (value ? new Date(value).toLocaleString() : '');
 
 const EncounterNote = ({ clientID, exportMode }) => {
   const dispatch = useDispatch();
@@ -605,6 +606,7 @@ const EncounterNote = ({ clientID, exportMode }) => {
               <TableCell>Note</TableCell>
               <TableCell>Status</TableCell>
               <TableCell>Submitted By</TableCell>
+              <TableCell>Last Updated By</TableCell>
               <TableCell>Added By</TableCell>
               {!exportMode && <TableCell>Actions</TableCell>}
             </TableRow>
@@ -612,19 +614,19 @@ const EncounterNote = ({ clientID, exportMode }) => {
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={exportMode ? 7 : 8} align="center">
+                <TableCell colSpan={exportMode ? 8 : 9} align="center">
                   <Alert severity="info">Loading encounter notes...</Alert>
                 </TableCell>
               </TableRow>
             ) : error ? (
               <TableRow>
-                <TableCell colSpan={exportMode ? 7 : 8} align="center">
+                <TableCell colSpan={exportMode ? 8 : 9} align="center">
                   <Alert severity="error">Error: {error}</Alert>
                 </TableCell>
               </TableRow>
             ) : encounterNotes.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={exportMode ? 7 : 8} align="center">
+                <TableCell colSpan={exportMode ? 8 : 9} align="center">
                   <Alert severity="info">No encounter notes available.</Alert>
                 </TableCell>
               </TableRow>
@@ -634,7 +636,7 @@ const EncounterNote = ({ clientID, exportMode }) => {
                   <TableCell>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                       <DateIcon fontSize="small" color="action" />
-                      {note.careNoteDate}
+                      {formatDateOnly(note.careNoteDate)}
                     </Box>
                   </TableCell>
                   <TableCell>
@@ -677,7 +679,7 @@ const EncounterNote = ({ clientID, exportMode }) => {
                         <Typography variant="body2">{note.submittedBy || 'Unknown'}</Typography>
                         {note.submittedAt && (
                           <Typography variant="caption" color="text.secondary">
-                            {formatDateTime(note.submittedAt)}
+                            {formatLocalDateTime(note.submittedAt)}
                           </Typography>
                         )}
                       </>
@@ -686,7 +688,21 @@ const EncounterNote = ({ clientID, exportMode }) => {
                     )}
                   </TableCell>
                   <TableCell>
+                    {/* Never edited since creation: the creator is the last to update it */}
+                    <Typography variant="body2">{note.updatedBy || note.createdBy || 'N/A'}</Typography>
+                    {(note.updatedAt || note.createdAt) && (
+                      <Typography variant="caption" color="text.secondary">
+                        {formatLocalDateTime(note.updatedAt || note.createdAt)}
+                      </Typography>
+                    )}
+                  </TableCell>
+                  <TableCell>
                     <Typography variant="body2">{note.createdBy || 'N/A'}</Typography>
+                    {note.createdAt && (
+                      <Typography variant="caption" color="text.secondary">
+                        {formatLocalDateTime(note.createdAt)}
+                      </Typography>
+                    )}
                   </TableCell>
                   {!exportMode && (
                     <TableCell>
@@ -887,7 +903,7 @@ const EncounterNote = ({ clientID, exportMode }) => {
               ) : null}
             >
               <strong>Submitted and locked.</strong>
-              {editingNote?.submittedAt && ` Submitted ${formatDateTime(editingNote.submittedAt)}${editingNote.submittedBy ? ` by ${editingNote.submittedBy}` : ''}.`}
+              {editingNote?.submittedAt && ` Submitted ${formatLocalDateTime(editingNote.submittedAt)}${editingNote.submittedBy ? ` by ${editingNote.submittedBy}` : ''}.`}
               {' '}
               {canUnlock
                 ? 'Unlocking keeps a copy of the submitted version.'
@@ -895,7 +911,7 @@ const EncounterNote = ({ clientID, exportMode }) => {
             </Alert>
           ) : editingNote?.unlockedAt ? (
             <Alert severity="warning" icon={<LockOpenIcon />} sx={{ mx: 3 }}>
-              Unlocked by {editingNote.unlockedBy} on {formatDateTime(editingNote.unlockedAt)}
+              Unlocked by {editingNote.unlockedBy} on {formatLocalDateTime(editingNote.unlockedAt)}
               {editingNote.unlockReason && `: ${editingNote.unlockReason}`}. Submit it again when done.
             </Alert>
           ) : null}

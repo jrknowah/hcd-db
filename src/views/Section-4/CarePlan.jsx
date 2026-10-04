@@ -45,6 +45,7 @@ import { useMsal } from "@azure/msal-react";
 import { fetchCarePlans, addCarePlan, editCarePlan, deleteCarePlan, unlockCarePlan } from "../../backend/store/slices/carePlanSlice";
 import { canUnlockLockedRecords } from "../../backend/config/groupConfig";
 import logUserAction from "../../backend/config/logAction";
+import { formatLocalDateTime } from "../../utils/localDateTime";
 
 // ✅ Static mock data outside component
 const MOCK_CLIENT = {
@@ -110,7 +111,6 @@ const MOCK_CARE_PLANS = [
 // Submitted care plans are locked; drafts ("Save Progress") stay editable
 const isPlanLocked = (plan) => plan.locked ?? plan.submissionStatus !== 'draft';
 
-const formatDateTime = (value) => (value ? new Date(value).toLocaleString() : '');
 
 const errorText = (err) =>
   typeof err === 'string' ? err : err?.message || err?.error || 'Unknown error';
@@ -565,6 +565,7 @@ const CarePlan = ({ clientID, exportMode }) => {
               <TableCell>Expected Outcomes</TableCell>
               <TableCell>Submission</TableCell>
               <TableCell>Submitted By</TableCell>
+              <TableCell>Last Updated By</TableCell>
               <TableCell>Added By</TableCell>
               {!exportMode && <TableCell>Actions</TableCell>}
             </TableRow>
@@ -572,19 +573,19 @@ const CarePlan = ({ clientID, exportMode }) => {
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={exportMode ? 10 : 11} align="center">
+                <TableCell colSpan={exportMode ? 11 : 12} align="center">
                   <Alert severity="info">Loading care plans...</Alert>
                 </TableCell>
               </TableRow>
             ) : error ? (
               <TableRow>
-                <TableCell colSpan={exportMode ? 10 : 11} align="center">
+                <TableCell colSpan={exportMode ? 11 : 12} align="center">
                   <Alert severity="error">Error: {errorText(error)}</Alert>
                 </TableCell>
               </TableRow>
             ) : carePlans.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={exportMode ? 10 : 11} align="center">
+                <TableCell colSpan={exportMode ? 11 : 12} align="center">
                   <Alert severity="info">No care plans available.</Alert>
                 </TableCell>
               </TableRow>
@@ -685,7 +686,7 @@ const CarePlan = ({ clientID, exportMode }) => {
                         <Typography variant="body2">{plan.submittedBy || 'Unknown'}</Typography>
                         {plan.submittedAt && (
                           <Typography variant="caption" color="text.secondary">
-                            {formatDateTime(plan.submittedAt)}
+                            {formatLocalDateTime(plan.submittedAt)}
                           </Typography>
                         )}
                       </>
@@ -694,7 +695,21 @@ const CarePlan = ({ clientID, exportMode }) => {
                     )}
                   </TableCell>
                   <TableCell>
+                    {/* Never edited since creation: the creator is the last to update it */}
+                    <Typography variant="body2">{plan.updatedBy || plan.createdBy || 'N/A'}</Typography>
+                    {(plan.updatedAt || plan.createdAt) && (
+                      <Typography variant="caption" color="text.secondary">
+                        {formatLocalDateTime(plan.updatedAt || plan.createdAt)}
+                      </Typography>
+                    )}
+                  </TableCell>
+                  <TableCell>
                     <Typography variant="body2">{plan.createdBy || 'N/A'}</Typography>
+                    {plan.createdAt && (
+                      <Typography variant="caption" color="text.secondary">
+                        {formatLocalDateTime(plan.createdAt)}
+                      </Typography>
+                    )}
                   </TableCell>
                   {!exportMode && (
                     <TableCell>
@@ -792,7 +807,7 @@ const CarePlan = ({ clientID, exportMode }) => {
               ) : null}
             >
               <strong>Submitted and locked.</strong>
-              {editingPlan?.submittedAt && ` Submitted ${formatDateTime(editingPlan.submittedAt)}${editingPlan.submittedBy ? ` by ${editingPlan.submittedBy}` : ''}.`}
+              {editingPlan?.submittedAt && ` Submitted ${formatLocalDateTime(editingPlan.submittedAt)}${editingPlan.submittedBy ? ` by ${editingPlan.submittedBy}` : ''}.`}
               {' '}
               {canUnlock
                 ? 'Unlocking keeps a copy of the submitted version.'
@@ -800,7 +815,7 @@ const CarePlan = ({ clientID, exportMode }) => {
             </Alert>
           ) : editingPlan?.unlockedAt ? (
             <Alert severity="warning" icon={<LockOpenIcon />} sx={{ mx: 3 }}>
-              Unlocked by {editingPlan.unlockedBy} on {formatDateTime(editingPlan.unlockedAt)}
+              Unlocked by {editingPlan.unlockedBy} on {formatLocalDateTime(editingPlan.unlockedAt)}
               {editingPlan.unlockReason && `: ${editingPlan.unlockReason}`}. Submit it again when done.
             </Alert>
           ) : null}
