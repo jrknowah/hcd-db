@@ -183,7 +183,9 @@ class AzureBlobService {
         ];
       }
       
-      return []; // Return empty array on other errors
+      // Surface real failures; returning [] here made a failed request look like
+      // "No documents uploaded yet"
+      throw new Error(error.response?.data?.message || error.message || 'Failed to list files');
     }
   }
 
