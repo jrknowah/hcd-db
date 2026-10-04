@@ -204,8 +204,11 @@ class AzureBlobService {
       // Real API call
       console.log(`Deleting ${blobName} via backend...`);
       
-      const response = await axios.delete(`${this.apiUrl}/api/file`, {
-        data: { blobName }
+      // Backend route is DELETE /api/file/:fileName; the full blob path
+      // (which contains slashes) goes in the blobName query param.
+      const fileName = blobName.split('/').pop();
+      await axios.delete(`${this.apiUrl}/api/file/${encodeURIComponent(fileName)}`, {
+        params: { blobName }
       });
       
       console.log(`Successfully deleted ${blobName}`);
