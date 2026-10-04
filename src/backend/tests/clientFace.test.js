@@ -210,6 +210,19 @@ describe('ClientFace API Tests', () => {
       }
     });
 
+    test('should save when client has no email on file', async () => {
+      for (const email of ['', '   ', 'N/A', 'none', undefined]) {
+        await request(app)
+          .post('/api/saveClientFace')
+          .send({
+            clientID: testClientID,
+            clientContactNum: '(555) 123-4567',
+            clientEmail: email
+          })
+          .expect(200);
+      }
+    });
+
     test('should reject invalid email formats', async () => {
       const invalidEmails = [
         'notanemail',
