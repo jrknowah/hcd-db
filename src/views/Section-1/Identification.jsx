@@ -14,6 +14,7 @@ import {
   Close as CloseIcon
 } from '@mui/icons-material';
 import { azureBlobService } from '../../backend/services/azureBlobService';
+import { ARCHIVE_SECTIONS, sectionDocType, filterSectionFiles } from '../../utils/archiveSections';
 import { useClientPersistence } from '../../hooks/useClientPersistence';
 import logUserAction from '../../backend/config/logAction';
 import ClientFace from './ClientFace';
@@ -96,7 +97,7 @@ const Identification = () => {
       azureBlobService.listClientFiles(client.clientID)
         .then((filesData) => {
           console.log('📂 Azure files loaded:', filesData);
-          setFiles(Array.isArray(filesData) ? filesData : []);
+          setFiles(filterSectionFiles(filesData, ARCHIVE_SECTIONS.IDENTIFICATION, DOC_TYPES));
           setLoading(false);
         })
         .catch((err) => {
@@ -204,7 +205,7 @@ const Identification = () => {
         const uploadResult = await azureBlobService.uploadFile(
           fileToUpload, 
           client.clientID, 
-          docType
+          sectionDocType(ARCHIVE_SECTIONS.IDENTIFICATION, docType)
         );
         
         setUploadProgress((prev) => ({ ...prev, [docType]: 100 }));

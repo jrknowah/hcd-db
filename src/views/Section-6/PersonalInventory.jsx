@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Box,
   Button,
@@ -57,6 +57,8 @@ import {
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
 
+import { ARCHIVE_SECTIONS, sectionDocType, filterSectionFiles } from '../../utils/archiveSections';
+
 // Inventory categories — used as docType for the shared /api/upload route
 const INVENTORY_CATEGORIES = [
   'Electronics',
@@ -75,7 +77,11 @@ const PersonalInventory = () => {
   const { clientID } = useClientPersistence();
 
   // Redux state
-  const inventoryItems = useSelector(selectFiles);
+  const allFiles = useSelector(selectFiles);
+  const inventoryItems = useMemo(
+    () => filterSectionFiles(allFiles, ARCHIVE_SECTIONS.PERSONAL_INVENTORY, INVENTORY_CATEGORIES),
+    [allFiles]
+  );
   const loading = useSelector(selectFilesLoading);
   const uploading = useSelector(selectFilesUploading);
   const reduxError = useSelector(selectFilesError);
@@ -149,7 +155,7 @@ const PersonalInventory = () => {
     const result = await dispatch(uploadFile({
       file: selectedFile,
       clientID,
-      docType: category
+      docType: sectionDocType(ARCHIVE_SECTIONS.PERSONAL_INVENTORY, category)
     }));
 
     if (uploadFile.fulfilled.match(result)) {

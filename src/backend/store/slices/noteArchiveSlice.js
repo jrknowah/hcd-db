@@ -2,6 +2,7 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
 import { azureBlobService } from "../../services/azureBlobService";
+import { ARCHIVE_SECTIONS, sectionDocType, filterSectionFiles } from "../../../utils/archiveSections";
 
 const API = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
 
@@ -18,10 +19,11 @@ const createAxiosInstance = (timeout = FETCH_TIMEOUT) => {
 };
 
 // CM note files share the same blob storage pipeline as every other section's
-// uploads (/api/upload + /api/files/:clientID), stored under
-// {clientID}/CM_Notes_Archive/. The old /api/note-archive route wrote to a
+// uploads (/api/upload + /api/files/:clientID), in Section 4's own folder
+// (see utils/archiveSections). The old /api/note-archive route wrote to a
 // separate path + SQL table that this tab couldn't reliably read back.
-export const CM_NOTES_DOC_TYPE = 'CM_Notes_Archive';
+const CM_NOTES_CATEGORIES = ['CM Notes Archive'];
+const CM_NOTES_DOC_TYPE = sectionDocType(ARCHIVE_SECTIONS.CM_NOTES, CM_NOTES_CATEGORIES[0]);
 
 const toArchiveFile = (f) => ({
   fileName: f.fileName,
@@ -62,8 +64,7 @@ export const fetchNoteArchiveFiles = createAsyncThunk(
   async (clientID, { rejectWithValue }) => {
     try {
       const allFiles = await azureBlobService.listClientFiles(clientID);
-      const files = (allFiles || [])
-        .filter(f => f.docType === CM_NOTES_DOC_TYPE)
+      const files = filterSectionFiles(allFiles, ARCHIVE_SECTIONS.CM_NOTES, CM_NOTES_CATEGORIES)
         .map(toArchiveFile);
 
       // Files uploaded through the old note-archive route, if that route exists
