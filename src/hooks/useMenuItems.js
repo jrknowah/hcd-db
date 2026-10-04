@@ -13,7 +13,7 @@
 import { useMemo } from 'react';
 import { useMsal } from '@azure/msal-react';
 import Menuitems, { filterMenuItems } from 'src/layouts/full/vertical/sidebar/MenuItems';
-import { isAdminAccount } from 'src/backend/config/groupConfig';
+import { isAdminAccount, canViewAuditTrail } from 'src/backend/config/groupConfig';
 
 // Same check as the /admin route guard (<ProtectedRoute adminOnly>) in App.jsx.
 export function useIsAdmin() {
@@ -22,10 +22,12 @@ export function useIsAdmin() {
 }
 
 export default function useMenuItems() {
-  const isAdmin = useIsAdmin();
+  const { accounts } = useMsal();
+  const isAdmin = isAdminAccount(accounts[0]);
+  const canViewAudit = canViewAuditTrail(accounts[0]);
 
   return useMemo(
-    () => filterMenuItems(Menuitems, { isAdmin }),
-    [isAdmin]
+    () => filterMenuItems(Menuitems, { isAdmin, canViewAudit }),
+    [isAdmin, canViewAudit]
   );
 }

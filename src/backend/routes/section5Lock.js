@@ -9,10 +9,24 @@
 const express = require('express');
 const sql = require('mssql');
 const { getPool } = require('../store/azureSql');
-const { requireSignedFormUnlock } = require('../middleware/signedFormUnlock');
+const { requireUnlockPermission, canUnlockSignedForms } = require('../middleware/signedFormUnlock');
 const { RECORD_TYPES, actingUser } = require('../services/section5RecordLock');
 
 const router = express.Router();
+
+// Same groups as unlock, with a delete-specific refusal
+const requireDeletePermission = (req, res, next) => {
+  if (!req.user) {
+    return res.status(401).json({ error: 'Authentication required', code: 'AUTH_REQUIRED' });
+  }
+  if (!canUnlockSignedForms(req.user)) {
+    return res.status(403).json({
+      code: 'DELETE_NOT_PERMITTED',
+      message: 'Only IT Admin or Level 1 users can delete a submitted record.',
+    });
+  }
+  next();
+};
 
 const ACTIONS = {
   unlock: { verb: 'unlock', done: 'unlocked', audit: 'UNLOCK_SECTION5_RECORD' },
@@ -87,26 +101,25 @@ async function archiveAndApply(req, res, action, apply) {
 
       await apply(transaction, cfg, { id, currentUser, now, reason });
 
+      // Audit trail for Admin > Audit, in the same transaction so an unlock or
+      // delete never happens without its audit row. The reason is free text
+      // that may contain PHI, so it stays in Section5RecordVersions only.
+      await transaction.request()
+        .input('userID',    sql.NVarChar(100),     currentUser)
+        .input('userName',  sql.NVarChar(255),     req.user?.name || null)
+        .input('action',    sql.NVarChar(50),      action.audit)
+        .input('tableName', sql.NVarChar(100),     cfg.table.replace(/^dbo\./, ''))
+        .input('recordID',  sql.NVarChar(100),     String(id))
+        .input('clientID',  sql.NVarChar(50),      clientID)
+        .input('newValues', sql.NVarChar(sql.MAX), JSON.stringify({ recordType, recordID: String(id), clientID }))
+        .input('timestamp', sql.DateTime2,         now)
+        .query(`INSERT INTO dbo.AuditLog (userID, userName, action, tableName, recordID, clientID, newValues, timestamp)
+                VALUES (@userID, @userName, @action, @tableName, @recordID, @clientID, @newValues, @timestamp)`);
+
       await transaction.commit();
     } catch (err) {
       await transaction.rollback().catch(() => {});
       throw err;
-    }
-
-    // Admin audit trail. The reason is free text that may contain PHI, so it
-    // stays in the record / Section5RecordVersions only. Failure here is non-fatal.
-    try {
-      await pool.request()
-        .input('userID',    sql.NVarChar(100),     currentUser)
-        .input('action',    sql.NVarChar(50),      action.audit)
-        .input('tableName', sql.NVarChar(100),     cfg.table.replace(/^dbo\./, ''))
-        .input('recordID',  sql.NVarChar(100),     String(id))
-        .input('newValues', sql.NVarChar(sql.MAX), JSON.stringify({ recordType, recordID: String(id), clientID }))
-        .input('timestamp', sql.DateTime2,         now)
-        .query(`INSERT INTO dbo.AuditLog (userID, action, tableName, recordID, newValues, timestamp)
-                VALUES (@userID, @action, @tableName, @recordID, @newValues, @timestamp)`);
-    } catch (auditErr) {
-      console.error(`⚠️ Could not write ${action.verb} to AuditLog:`, auditErr.message);
     }
 
     res.json({
@@ -124,7 +137,7 @@ async function archiveAndApply(req, res, action, apply) {
   }
 }
 
-router.post('/records/:recordType/:id/unlock', requireSignedFormUnlock, (req, res) =>
+router.post('/records/:recordType/:id/unlock', requireUnlockPermission('a submitted record'), (req, res) =>
   archiveAndApply(req, res, ACTIONS.unlock, (transaction, cfg, { id, currentUser, now, reason }) =>
     transaction.request()
       .input('id',           cfg.idType,         id)
@@ -142,7 +155,7 @@ router.post('/records/:recordType/:id/unlock', requireSignedFormUnlock, (req, re
   )
 );
 
-router.delete('/records/:recordType/:id', requireSignedFormUnlock, (req, res) =>
+router.delete('/records/:recordType/:id', requireDeletePermission, (req, res) =>
   archiveAndApply(req, res, ACTIONS.delete, (transaction, cfg, { id }) =>
     transaction.request()
       .input('id', cfg.idType, id)

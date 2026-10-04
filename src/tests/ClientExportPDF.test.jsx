@@ -71,3 +71,31 @@ describe('ClientExportPDF', () => {
     expect(screen.getByRole('button', { name: /Select at least one section/i })).toBeDisabled();
   });
 });
+
+describe('ClientInfoBanner export button', () => {
+  it('shows no export button by default', async () => {
+    const { default: ClientInfoBanner } = await import('../components/shared/ClientInfoBanner');
+    renderWithProviders(<ClientInfoBanner />);
+    expect(screen.queryByRole('button', { name: /Export Section/i })).toBeNull();
+  });
+
+  it('exports just its own section', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      blob: () => Promise.resolve(new Blob(['%PDF'])),
+      headers: { get: () => '' },
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    URL.createObjectURL = vi.fn(() => 'blob:x');
+    URL.revokeObjectURL = vi.fn();
+
+    const { default: ClientInfoBanner } = await import('../components/shared/ClientInfoBanner');
+    renderWithProviders(<ClientInfoBanner exportSection={3} />, {
+      preloadedState: { clients: { selectedClient: { clientID: 'C9', clientFirstName: 'A', clientLastName: 'B' } } },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Export Section 3 PDF/i }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    expect(fetchMock.mock.calls[0][0]).toMatch(/\/client\/C9\/pdf\?sections=3$/);
+    vi.unstubAllGlobals();
+  });
+});

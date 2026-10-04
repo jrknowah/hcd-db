@@ -99,6 +99,15 @@ BEGIN
 END
 GO
 
+-- Unlocks and deletes write the user's display name and the client to
+-- dbo.AuditLog (shown on Admin > Audit). Same columns as Section4Lock.sql.
+IF COL_LENGTH('dbo.AuditLog', 'userName') IS NULL
+    ALTER TABLE dbo.AuditLog ADD userName NVARCHAR(255) NULL;
+
+IF COL_LENGTH('dbo.AuditLog', 'clientID') IS NULL
+    ALTER TABLE dbo.AuditLog ADD clientID NVARCHAR(50) NULL;
+GO
+
 -- Optional: treat everything already on file as submitted (locked).
 -- Uncomment to lock existing records when this feature goes live.
 -- UPDATE dbo.progress_notes                   SET isLocked = 1 WHERE isLocked = 0;

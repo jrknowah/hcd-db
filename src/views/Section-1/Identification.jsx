@@ -14,6 +14,7 @@ import {
   Close as CloseIcon
 } from '@mui/icons-material';
 import { azureBlobService } from '../../backend/services/azureBlobService';
+import { ARCHIVE_SECTIONS, SECTION_CATEGORIES, sectionDocType, filterSectionFiles } from '../../utils/archiveSections';
 import { useClientPersistence } from '../../hooks/useClientPersistence';
 import logUserAction from '../../backend/config/logAction';
 import ClientFace from './ClientFace';
@@ -21,10 +22,7 @@ import Referrals from './Referrals';
 import ClientExportPDF from '../../components/ClientExportPDF';
 import ClientInfoBanner from '../../components/shared/ClientInfoBanner';
 
-const DOC_TYPES = [
-  "Identification Card", "Driver's License", "Social Security Card", "Permanent Resident Alien Card",
-  "Medi-Cal Benefits", "Medicare", "TB Clearance", "Income", "Other"
-];
+const DOC_TYPES = SECTION_CATEGORIES[ARCHIVE_SECTIONS.IDENTIFICATION];
 
 const MOCK_FILES = [
   { 
@@ -96,7 +94,7 @@ const Identification = () => {
       azureBlobService.listClientFiles(client.clientID)
         .then((filesData) => {
           console.log('📂 Azure files loaded:', filesData);
-          setFiles(Array.isArray(filesData) ? filesData : []);
+          setFiles(filterSectionFiles(filesData, ARCHIVE_SECTIONS.IDENTIFICATION, DOC_TYPES));
           setLoading(false);
         })
         .catch((err) => {
@@ -204,7 +202,7 @@ const Identification = () => {
         const uploadResult = await azureBlobService.uploadFile(
           fileToUpload, 
           client.clientID, 
-          docType
+          sectionDocType(ARCHIVE_SECTIONS.IDENTIFICATION, docType)
         );
         
         setUploadProgress((prev) => ({ ...prev, [docType]: 100 }));
@@ -419,7 +417,7 @@ const Identification = () => {
         <Tab label="Export Complete Chart" />
       </Tabs>
 
-      <ClientInfoBanner sx={{ mb: 2 }} />
+      <ClientInfoBanner sx={{ mb: 2 }} exportSection={1} />
 
       {/* Tab 0: Client Face Sheet */}
       {tabIndex === 0 && <Box p={3}><ClientFace /></Box>}

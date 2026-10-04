@@ -39,6 +39,7 @@ import {
 } from '@mui/icons-material';
 import { useClientPersistence } from '../../hooks/useClientPersistence';
 import { azureBlobService } from '../../backend/services/azureBlobService';
+import { ARCHIVE_SECTIONS, SECTION_CATEGORIES, sectionDocType, filterSectionFiles } from '../../utils/archiveSections';
 
 /**
  * ✅ REFACTORED NursingArchive Component
@@ -57,24 +58,7 @@ import { azureBlobService } from '../../backend/services/azureBlobService';
  */
 
 // Nursing document types for the archive
-const NURSING_DOC_TYPES = [
-  'Nursing Assessment',
-  'Nursing Notes',
-  'Progress Notes',
-  'Vital Signs Record',
-  'Medication Administration Record (MAR)',
-  'Treatment Plan',
-  'Care Plan',
-  'Wound Care Documentation',
-  'IV Therapy Record',
-  'Discharge Summary',
-  'Lab Results',
-  'Imaging Reports',
-  'Consultation Notes',
-  'Incident Report',
-  'Transfer Summary',
-  'Other Nursing Documentation'
-];
+const NURSING_DOC_TYPES = SECTION_CATEGORIES[ARCHIVE_SECTIONS.NURSING];
 
 // Confidentiality levels
 const CONFIDENTIALITY_LEVELS = [
@@ -189,7 +173,7 @@ const NursingArchive = () => {
       );
 
       console.log('✅ Nursing documents fetched:', result?.length || 0);
-      setFiles(result || []);
+      setFiles(filterSectionFiles(result, ARCHIVE_SECTIONS.NURSING, NURSING_DOC_TYPES));
 
     } catch (error) {
       console.error('❌ Error fetching nursing documents:', error);
@@ -268,7 +252,7 @@ const NursingArchive = () => {
       const result = await azureBlobService.uploadFile(
         selectedFile,
         clientID,
-        selectedDocType  // docType parameter
+        sectionDocType(ARCHIVE_SECTIONS.NURSING, selectedDocType)
       );
 
       console.log('✅ Upload successful:', result);

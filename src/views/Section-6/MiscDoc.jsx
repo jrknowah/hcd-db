@@ -41,6 +41,7 @@ import {
 } from '@mui/icons-material';
 import { useClientPersistence } from '../../hooks/useClientPersistence';
 import { azureBlobService } from '../../backend/services/azureBlobService';
+import { ARCHIVE_SECTIONS, SECTION_CATEGORIES, sectionDocType, filterSectionFiles } from '../../utils/archiveSections';
 import { formatDateOnly } from '../../utils/dateOnly';
 
 /**
@@ -58,17 +59,7 @@ import { formatDateOnly } from '../../utils/dateOnly';
  */
 
 // Document categories for miscellaneous documents
-const DOCUMENT_CATEGORIES = [
-  'General Documents',
-  'Medical Records',
-  'Legal Documents',
-  'Financial Records',
-  'Identification',
-  'Benefits Documentation',
-  'Housing Documents',
-  'Employment Records',
-  'Other'
-];
+const DOCUMENT_CATEGORIES = SECTION_CATEGORIES[ARCHIVE_SECTIONS.MISC_DOCS];
 
 // Allowed file types
 const ALLOWED_FILE_TYPES = [
@@ -152,7 +143,7 @@ const MiscDoc = () => {
       );
 
       console.log('✅ Files fetched successfully:', result?.length || 0);
-      setFiles(result || []);
+      setFiles(filterSectionFiles(result, ARCHIVE_SECTIONS.MISC_DOCS, DOCUMENT_CATEGORIES));
 
     } catch (error) {
       console.error('❌ Error fetching files:', error);
@@ -229,7 +220,7 @@ const MiscDoc = () => {
       const result = await azureBlobService.uploadFile(
         selectedFile,
         clientID,
-        selectedCategory
+        sectionDocType(ARCHIVE_SECTIONS.MISC_DOCS, selectedCategory)
       );
 
       console.log('✅ Upload successful:', result);

@@ -304,6 +304,7 @@ describe('Section 5 record lock and unlock', () => {
       const { body } = await createNote(true);
       const res = await del(body.data.id, nurse);
       expect(res.status).toBe(403);
+      expect(res.body.code).toBe('DELETE_NOT_PERMITTED');
       expect(tables.progress_notes[body.data.id]).toBeDefined();
     });
 
@@ -332,6 +333,7 @@ describe('Section 5 record lock and unlock', () => {
       expect(versions[0].archivedBy).toBe(user.email);
       expect(JSON.parse(versions[0].snapshot).nurseNote).toBe('Client seen today.');
       expect(auditRows[0].action).toBe('DELETE_SECTION5_RECORD');
+      expect(auditRows[0].clientID).toBe('C1');
       expect(auditRows[0].newValues).not.toContain('wrong client');
     });
 

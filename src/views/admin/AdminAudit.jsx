@@ -36,6 +36,7 @@ import {
   Visibility as VisibilityIcon,
   Download as DownloadIcon,
 } from '@mui/icons-material';
+import { formatLocalDateTime } from '../../utils/localDateTime';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
 
@@ -60,10 +61,10 @@ const COLUMNS = [
   { id: 'clientId', field: 'ClientID', label: 'Client ID', sortable: true },
 ];
 
+// Viewer's local time with the zone named, e.g. "Oct 4, 2026, 3:12 PM PDT"
 function formatTimestamp(value) {
   if (!value) return '—';
-  const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? String(value) : d.toLocaleString();
+  return formatLocalDateTime(value, String(value));
 }
 
 export default function AdminAudit() {
@@ -432,7 +433,11 @@ export default function AdminAudit() {
                     </Tooltip>
                   </TableCell>
                   <TableCell>
-                    <Chip size="small" label={row.Action || '—'} />
+                    <Chip
+                      size="small"
+                      label={row.Action || '—'}
+                      color={String(row.Action || '').startsWith('DELETE') ? 'error' : 'default'}
+                    />
                   </TableCell>
                   <TableCell>{row.ResourceType || '—'}</TableCell>
                   <TableCell>{row.ResourceID || '—'}</TableCell>
