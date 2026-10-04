@@ -1,6 +1,7 @@
 // src/store/apps/notes/carePlanSlice.js
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
+import { getApiAuthHeaders } from "../../../utils/apiAuth";
 
 const API_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
 
@@ -156,6 +157,25 @@ export const editCarePlan = createAsyncThunk(
     } catch (error) {
       console.error("❌ Error editing care plan:", error);
       return thunkAPI.rejectWithValue(error.response?.data || "Edit failed");
+    }
+  }
+);
+
+// 🔓 Async thunk to unlock a submitted care plan (IT Admin / Level 1 only)
+export const unlockCarePlan = createAsyncThunk(
+  "carePlans/unlockCarePlan",
+  async ({ id, reason }, thunkAPI) => {
+    try {
+      const headers = await getApiAuthHeaders();
+      const response = await axios.post(
+        `${API_URL}/api/care-plans/${id}/unlock`,
+        { reason },
+        { headers }
+      );
+      return response.data;
+    } catch (error) {
+      console.error("❌ Error unlocking care plan:", error);
+      return thunkAPI.rejectWithValue(error.response?.data || "Unlock failed");
     }
   }
 );
@@ -319,6 +339,15 @@ const carePlanSlice = createSlice({
       .addCase(editCarePlan.rejected, (state, action) => {
         state.status = "failed";
         state.error = action.payload;
+      })
+      // Unlock care plan. A failed unlock is shown in the dialog, not as a
+      // slice-wide error that would replace the care plans table.
+      .addCase(unlockCarePlan.fulfilled, (state, action) => {
+        const index = state.data.findIndex(plan => plan._id === action.payload._id);
+        if (index !== -1) {
+          state.data[index] = action.payload;
+        }
+        state.lastUpdated = new Date().toISOString();
       })
       // Delete care plan
       .addCase(deleteCarePlan.fulfilled, (state, action) => {

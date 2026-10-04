@@ -110,6 +110,14 @@ export const isAdminAccount = (account) => {
          (claims.groups || []).includes(GROUP_MAPPINGS.HOPE_it);
 };
 
+// Who may unlock locked records (signed Section 2 forms, submitted Section 4
+// notes and care plans): HOPE_it or HOPE_level1. Display-only; the backend
+// (middleware/signedFormUnlock.js) enforces it.
+export const canUnlockLockedRecords = (account) => {
+  const groups = account?.idTokenClaims?.groups || [];
+  return isAdminAccount(account) || groups.includes(GROUP_MAPPINGS.HOPE_level1);
+};
+
 export const ROLE_DISPLAY_NAMES = {
   IT_ADMIN: 'IT Administrator',
   LEVEL1: 'Level 1 Staff',
