@@ -27,8 +27,26 @@ describe('archiveSections', () => {
     expect(s1.map(f => f.docType)).toEqual(['Identification Card', 'Other']);
   });
 
+  it('hides older files that belong to another section', () => {
+    const files = [folder('Nursing Notes'), folder('Electronics')];
+    expect(filterSectionFiles(files, ARCHIVE_SECTIONS.IDENTIFICATION)).toEqual([]);
+  });
+
+  it('shows older files that match no section in every archive instead of hiding them', () => {
+    const files = [folder('Old Scan Folder'), { fileName: 'no-folder.pdf' }];
+    for (const section of Object.values(ARCHIVE_SECTIONS)) {
+      expect(filterSectionFiles(files, section).map(f => f.docType))
+        .toEqual(['Old Scan Folder', 'Uncategorized']);
+    }
+  });
+
+  it('reads the folder from blobName when docType is missing', () => {
+    const files = [{ fileName: 'a.pdf', blobName: 'C1/S5__Nursing_Notes/a.pdf' }];
+    expect(filterSectionFiles(files, ARCHIVE_SECTIONS.NURSING)[0].docType).toBe('Nursing Notes');
+    expect(filterSectionFiles(files, ARCHIVE_SECTIONS.MISC_DOCS)).toEqual([]);
+  });
+
   it('handles missing input', () => {
-    expect(filterSectionFiles(null, ARCHIVE_SECTIONS.NURSING, ['Nursing Notes'])).toEqual([]);
-    expect(filterSectionFiles([{ fileName: 'x' }], ARCHIVE_SECTIONS.NURSING, ['Nursing Notes'])).toEqual([]);
+    expect(filterSectionFiles(null, ARCHIVE_SECTIONS.NURSING)).toEqual([]);
   });
 });

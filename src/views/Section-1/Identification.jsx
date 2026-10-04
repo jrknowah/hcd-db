@@ -14,7 +14,7 @@ import {
   Close as CloseIcon
 } from '@mui/icons-material';
 import { azureBlobService } from '../../backend/services/azureBlobService';
-import { ARCHIVE_SECTIONS, sectionDocType, filterSectionFiles } from '../../utils/archiveSections';
+import { ARCHIVE_SECTIONS, SECTION_CATEGORIES, sectionDocType, filterSectionFiles } from '../../utils/archiveSections';
 import { useClientPersistence } from '../../hooks/useClientPersistence';
 import logUserAction from '../../backend/config/logAction';
 import ClientFace from './ClientFace';
@@ -22,10 +22,7 @@ import Referrals from './Referrals';
 import ClientExportPDF from '../../components/ClientExportPDF';
 import ClientInfoBanner from '../../components/shared/ClientInfoBanner';
 
-const DOC_TYPES = [
-  "Identification Card", "Driver's License", "Social Security Card", "Permanent Resident Alien Card",
-  "Medi-Cal Benefits", "Medicare", "TB Clearance", "Income", "Other"
-];
+const DOC_TYPES = SECTION_CATEGORIES[ARCHIVE_SECTIONS.IDENTIFICATION];
 
 const MOCK_FILES = [
   { 

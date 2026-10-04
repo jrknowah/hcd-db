@@ -28,29 +28,9 @@ import {
 } from '../../backend/store/slices/filesSlice';
 
 // Complete document types for Mental Archive
-import { ARCHIVE_SECTIONS, sectionDocType, filterSectionFiles } from '../../utils/archiveSections';
+import { ARCHIVE_SECTIONS, SECTION_CATEGORIES, sectionDocType, filterSectionFiles } from '../../utils/archiveSections';
 
-const MENTAL_ARCHIVE_DOC_TYPES = [
-  'Mental Health Archive',
-  'Assessment Report', 
-  'Treatment Plan',
-  'Progress Notes',
-  'Discharge Summary',
-  'Psychiatric Evaluation',
-  'Therapy Notes',
-  'Medication Records',
-  'Crisis Intervention',
-  'Family Session Notes',
-  'Group Therapy Notes',
-  'Court Documents',
-  'Insurance Forms',
-  'Medical Records',
-  'Lab Results',
-  'Imaging Studies',
-  'Historical Document',
-  'Paper Conversion',
-  'Other'
-];
+const MENTAL_ARCHIVE_DOC_TYPES = SECTION_CATEGORIES[ARCHIVE_SECTIONS.MENTAL_HEALTH];
 
 const MentalArchive = ({ clientID: propClientID, exportMode = false }) => {
   const dispatch = useDispatch();

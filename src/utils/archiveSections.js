@@ -17,6 +17,93 @@ export const ARCHIVE_SECTIONS = {
   PERSONAL_INVENTORY: 'S6INV'
 };
 
+// Upload categories offered by each section's archive
+export const SECTION_CATEGORIES = {
+  [ARCHIVE_SECTIONS.IDENTIFICATION]: [
+    "Identification Card", "Driver's License", "Social Security Card", "Permanent Resident Alien Card",
+    "Medi-Cal Benefits", "Medicare", "TB Clearance", "Income", "Other"
+  ],
+  [ARCHIVE_SECTIONS.AUTH_SIG]: [
+    'Consent for Treatment',
+    'Photo Release',
+    'Release of PHI',
+    'Authorization for Disclosure',
+    'Housing Agreement',
+    'Residence Policy',
+    'Termination Agreement',
+    'HIPAA Notice',
+    'Client Rights',
+    'Financial Agreement',
+    'Medication Consent',
+    'Transportation Consent',
+    'Emergency Treatment',
+    'General Consent',
+    'Other Authorization Forms'
+  ],
+  [ARCHIVE_SECTIONS.NURSING]: [
+    'Nursing Assessment',
+    'Nursing Notes',
+    'Progress Notes',
+    'Vital Signs Record',
+    'Medication Administration Record (MAR)',
+    'Treatment Plan',
+    'Care Plan',
+    'Wound Care Documentation',
+    'IV Therapy Record',
+    'Discharge Summary',
+    'Lab Results',
+    'Imaging Reports',
+    'Consultation Notes',
+    'Incident Report',
+    'Transfer Summary',
+    'Other Nursing Documentation'
+  ],
+  [ARCHIVE_SECTIONS.MISC_DOCS]: [
+    'General Documents',
+    'Medical Records',
+    'Legal Documents',
+    'Financial Records',
+    'Identification',
+    'Benefits Documentation',
+    'Housing Documents',
+    'Employment Records',
+    'Other'
+  ],
+  [ARCHIVE_SECTIONS.PERSONAL_INVENTORY]: [
+    'Electronics',
+    'Jewelry',
+    'Furniture',
+    'Appliances',
+    'Clothing',
+    'Documents',
+    'Medical Equipment',
+    'Personal Items',
+    'Other'
+  ],
+  [ARCHIVE_SECTIONS.MENTAL_HEALTH]: [
+    'Mental Health Archive',
+    'Assessment Report',
+    'Treatment Plan',
+    'Progress Notes',
+    'Discharge Summary',
+    'Psychiatric Evaluation',
+    'Therapy Notes',
+    'Medication Records',
+    'Crisis Intervention',
+    'Family Session Notes',
+    'Group Therapy Notes',
+    'Court Documents',
+    'Insurance Forms',
+    'Medical Records',
+    'Lab Results',
+    'Imaging Studies',
+    'Historical Document',
+    'Paper Conversion',
+    'Other'
+  ],
+  [ARCHIVE_SECTIONS.CM_NOTES]: ['CM Notes Archive']
+};
+
 const SEPARATOR = '__';
 
 // Mirrors sanitizeSegment() in src/backend/routes/files.js
@@ -29,26 +116,45 @@ export const sanitizeSegment = (s) =>
 // docType to send to azureBlobService.uploadFile / filesSlice.uploadFile
 export const sectionDocType = (section, category) => `${section}${SEPARATOR}${category}`;
 
-// Category label for a file's folder, or null if the file isn't this section's.
-// Files uploaded before section prefixes existed are matched by category name;
-// a legacy category shared by two sections shows in both.
-const categoryFor = (docType, section, categories) => {
-  if (!docType) return null;
+const matchCategory = (folder, categories) =>
+  categories.find(c => c === folder || sanitizeSegment(c) === folder) || null;
+
+const matchesAnySection = (folder) =>
+  Object.values(SECTION_CATEGORIES).some(cats => matchCategory(folder, cats));
+
+// The folder a file was stored in: {clientID}/{folder}/{file}
+const folderOf = (file) => {
+  if (file?.docType) return file.docType;
+  const parts = String(file?.blobName || '').split('/');
+  return parts.length >= 3 ? parts[1] : null;
+};
+
+// Category label for a file, or null if the file belongs to another section.
+// - Section-prefixed files go only to their own section.
+// - Older, unprefixed files go to the section whose category they match (a
+//   category name two sections share shows in both).
+// - Older files that match no section's categories (or have no folder at all)
+//   are shown in every archive rather than hidden.
+const categoryFor = (file, section, categories) => {
+  const folder = folderOf(file);
   const prefix = `${section}${SEPARATOR}`;
-  if (docType.startsWith(prefix)) {
-    const rest = docType.slice(prefix.length);
-    return categories.find(c => c === rest || sanitizeSegment(c) === rest) || rest.replace(/_/g, ' ');
+  if (folder && folder.startsWith(prefix)) {
+    const rest = folder.slice(prefix.length);
+    return matchCategory(rest, categories) || rest.replace(/_/g, ' ');
   }
-  if (Object.values(ARCHIVE_SECTIONS).some(s => docType.startsWith(`${s}${SEPARATOR}`))) {
+  if (folder && Object.values(ARCHIVE_SECTIONS).some(s => folder.startsWith(`${s}${SEPARATOR}`))) {
     return null;
   }
-  return categories.find(c => c === docType || sanitizeSegment(c) === docType) || null;
+  const own = folder && matchCategory(folder, categories);
+  if (own) return own;
+  if (folder && matchesAnySection(folder)) return null;
+  return folder ? folder.replace(/_/g, ' ') : 'Uncategorized';
 };
 
 // Keep only this section's files, with docType relabelled to the readable category.
-export const filterSectionFiles = (files, section, categories) =>
+export const filterSectionFiles = (files, section, categories = SECTION_CATEGORIES[section] || []) =>
   (Array.isArray(files) ? files : []).reduce((acc, file) => {
-    const category = categoryFor(file?.docType, section, categories);
+    const category = file && categoryFor(file, section, categories);
     if (category) acc.push({ ...file, docType: category });
     return acc;
   }, []);

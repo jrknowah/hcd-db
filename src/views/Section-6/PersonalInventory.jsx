@@ -57,20 +57,10 @@ import {
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
 
-import { ARCHIVE_SECTIONS, sectionDocType, filterSectionFiles } from '../../utils/archiveSections';
+import { ARCHIVE_SECTIONS, SECTION_CATEGORIES, sectionDocType, filterSectionFiles } from '../../utils/archiveSections';
 
 // Inventory categories — used as docType for the shared /api/upload route
-const INVENTORY_CATEGORIES = [
-  'Electronics',
-  'Jewelry',
-  'Furniture',
-  'Appliances',
-  'Clothing',
-  'Documents',
-  'Medical Equipment',
-  'Personal Items',
-  'Other'
-];
+const INVENTORY_CATEGORIES = SECTION_CATEGORIES[ARCHIVE_SECTIONS.PERSONAL_INVENTORY];
 
 const PersonalInventory = () => {
   const dispatch = useDispatch();
