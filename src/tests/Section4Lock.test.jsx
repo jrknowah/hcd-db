@@ -189,6 +189,62 @@ describe('Section 4 encounter notes lock', () => {
   }, 20000);
 });
 
+describe('Section 4 encounter notes delete', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    axios.get.mockResolvedValue({ data: [submittedNote, draftNote] });
+    axios.delete.mockResolvedValue({ data: { message: 'Encounter note deleted successfully' } });
+  });
+
+  it('does not offer delete to regular staff', async () => {
+    groups = [CASE_GROUP];
+    renderWithProviders(<EncounterNote clientID="C1" />, { store: makeStore() });
+    await screen.findAllByText('Met with client about housing.');
+    expect(screen.queryByRole('button', { name: /delete note/i })).not.toBeInTheDocument();
+  });
+
+  it.each([['IT Admin', IT_GROUP], ['Level 1', LEVEL1_GROUP]])('lets %s delete a submitted note with a reason', async (_label, group) => {
+    groups = [group];
+    const user = userEvent.setup();
+    renderWithProviders(<EncounterNote clientID="C1" />, { store: makeStore() });
+
+    await screen.findAllByText('Met with client about housing.');
+    const [lockedRow] = screen.getAllByText('Met with client about housing.').map(el => el.closest('tr'));
+    await user.click(within(lockedRow).getByRole('button', { name: /delete note/i }));
+
+    const dialog = await screen.findByRole('dialog', { name: /delete submitted note/i });
+    const confirm = within(dialog).getByRole('button', { name: /delete note/i });
+    expect(confirm).toBeDisabled(); // reason required
+    await user.click(within(dialog).getByLabelText(/reason for deleting/i));
+    await user.paste('Entered on the wrong client');
+    await user.click(confirm);
+
+    await waitFor(() => expect(axios.delete).toHaveBeenCalledWith(
+      expect.stringMatching(/\/api\/encounter-notes\/n1$/),
+      { data: { reason: 'Entered on the wrong client' }, headers: { Authorization: 'Bearer test-token' } },
+    ));
+    await waitFor(() => expect(screen.getAllByText('Met with client about housing.')).toHaveLength(1));
+  }, 20000);
+
+  it('deletes a draft without asking for a reason', async () => {
+    groups = [LEVEL1_GROUP];
+    const user = userEvent.setup();
+    renderWithProviders(<EncounterNote clientID="C1" />, { store: makeStore() });
+
+    await screen.findAllByText('Met with client about housing.');
+    const [, draftRow] = screen.getAllByText('Met with client about housing.').map(el => el.closest('tr'));
+    await user.click(within(draftRow).getByRole('button', { name: /delete note/i }));
+    const dialog = await screen.findByRole('dialog', { name: /delete draft note/i });
+    expect(within(dialog).queryByLabelText(/reason for deleting/i)).not.toBeInTheDocument();
+    await user.click(within(dialog).getByRole('button', { name: /delete note/i }));
+
+    await waitFor(() => expect(axios.delete).toHaveBeenCalledWith(
+      expect.stringMatching(/\/api\/encounter-notes\/n2$/),
+      { data: { reason: undefined }, headers: { Authorization: 'Bearer test-token' } },
+    ));
+  }, 20000);
+});
+
 describe('Section 4 care plans lock', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -213,7 +269,28 @@ describe('Section 4 care plans lock', () => {
     expect(within(row).queryByRole('button', { name: /edit draft/i })).not.toBeInTheDocument();
     expect(within(row).queryByRole('button', { name: /delete draft/i })).not.toBeInTheDocument();
     expect(within(row).queryByRole('button', { name: /unlock care plan/i })).not.toBeInTheDocument();
+    expect(within(row).queryByRole('button', { name: /delete care plan/i })).not.toBeInTheDocument();
   });
+
+  it('lets IT Admin delete a submitted plan with a reason', async () => {
+    groups = [IT_GROUP];
+    const user = userEvent.setup();
+    axios.delete.mockResolvedValue({ data: {} });
+    renderWithProviders(<CarePlan clientID="C1" />, { store: makeStore() });
+
+    await screen.findByText('Stable housing');
+    await user.click(within(rowFor('Stable housing')).getByRole('button', { name: /delete care plan/i }));
+    const dialog = await screen.findByRole('dialog', { name: /delete submitted care plan/i });
+    await user.click(within(dialog).getByLabelText(/reason for deleting/i));
+    await user.paste('Goal was duplicated');
+    await user.click(within(dialog).getByRole('button', { name: /^delete$/i }));
+
+    await waitFor(() => expect(axios.delete).toHaveBeenCalledWith(
+      expect.stringMatching(/\/api\/care-plans\/p1$/),
+      expect.objectContaining({ data: expect.objectContaining({ reason: 'Goal was duplicated' }) }),
+    ));
+    await waitFor(() => expect(screen.queryByText('Stable housing')).not.toBeInTheDocument());
+  }, 20000);
 
   it('shows Unlock to Level 1 and unlocks with a reason', async () => {
     groups = [LEVEL1_GROUP];

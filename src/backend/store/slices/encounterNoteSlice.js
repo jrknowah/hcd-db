@@ -183,7 +183,7 @@ export const unlockEncounterNote = createAsyncThunk(
 // 🗑️ Async thunk to delete encounter note
 export const deleteEncounterNote = createAsyncThunk(
   "encounterNote/deleteEncounterNote",
-  async ({ noteId, clientID }, thunkAPI) => {
+  async ({ noteId, clientID, reason }, thunkAPI) => {
     // ✅ PROTECTION: Return mock success for mock clients
     if (shouldUseMockData(clientID)) {
       console.log("🔧 Mock mode: Simulating encounter note delete for", noteId);
@@ -191,7 +191,11 @@ export const deleteEncounterNote = createAsyncThunk(
     }
 
     try {
-      await axios.delete(`${API_URL}/api/encounter-notes/${noteId}`, { headers: await getApiAuthHeaders() });
+      // A submitted note can only be deleted by IT Admin / Level 1, with a reason
+      await axios.delete(`${API_URL}/api/encounter-notes/${noteId}`, {
+        data: { reason },
+        headers: await getApiAuthHeaders(),
+      });
       return noteId;
     } catch (error) {
       console.error("❌ Error deleting encounter note:", error);

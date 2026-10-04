@@ -1,5 +1,5 @@
 // Section 4: encounter notes and care plans save as drafts, lock once
-// submitted, and only IT Admin / Level 1 can unlock them.
+// submitted, and only IT Admin / Level 1 can unlock or delete them.
 import { describe, it, expect, beforeEach } from 'vitest';
 import { createRequire } from 'module';
 import path from 'path';
@@ -76,12 +76,9 @@ function makeRequest() {
         return { recordset: [], rowsAffected: [1] };
       }
       if (/DELETE FROM EncounterNotes/.test(q)) {
-        const row = notes[params.noteId];
-        if (row && row.SubmissionStatus === 'draft') {
-          delete notes[params.noteId];
-          return { recordset: [], rowsAffected: [1] };
-        }
-        return { recordset: [], rowsAffected: [0] };
+        const existed = !!notes[params.noteId];
+        delete notes[params.noteId];
+        return { recordset: [], rowsAffected: [existed ? 1 : 0] };
       }
       if (/FROM EncounterNotes/.test(q) && params.noteId) {
         return { recordset: notes[params.noteId] ? [{ ...notes[params.noteId], Id: params.noteId }] : [] };
@@ -127,12 +124,9 @@ function makeRequest() {
         return { recordset: [], rowsAffected: [1] };
       }
       if (/DELETE FROM CarePlans/.test(q)) {
-        const row = plans[params.carePlanID];
-        if (row && row.submissionStatus === 'draft') {
-          delete plans[params.carePlanID];
-          return { recordset: [], rowsAffected: [1] };
-        }
-        return { recordset: [], rowsAffected: [0] };
+        const existed = !!plans[params.carePlanID];
+        delete plans[params.carePlanID];
+        return { recordset: [], rowsAffected: [existed ? 1 : 0] };
       }
       if (/FROM CarePlans/.test(q) && params.carePlanID) {
         return { recordset: plans[params.carePlanID] ? [plans[params.carePlanID]] : [] };
@@ -309,11 +303,63 @@ describe('Section 4 draft / submit / unlock', () => {
       expect(notes[NOTE_ID].CareNote).toBe('Met with client about housing.');
     });
 
-    it('rejects deleting a submitted note', async () => {
-      notes[NOTE_ID] = noteRow();
-      const res = await request(app).delete(`/api/encounter-notes/${NOTE_ID}`).set(asUser(caseManager));
-      expect(res.status).toBe(409);
-      expect(notes[NOTE_ID]).toBeDefined();
+    describe('delete', () => {
+      const del = (user, body) => {
+        const r = request(app).delete(`/api/encounter-notes/${NOTE_ID}`);
+        return (user ? r.set(asUser(user)) : r).send(body);
+      };
+
+      it('returns 401 without a user', async () => {
+        notes[NOTE_ID] = noteRow();
+        expect((await del(null, { reason: 'Duplicate entry' })).status).toBe(401);
+        expect(notes[NOTE_ID]).toBeDefined();
+      });
+
+      it('does not let a case manager delete a submitted note', async () => {
+        notes[NOTE_ID] = noteRow();
+        const res = await del(caseManager, { reason: 'Duplicate entry' });
+        expect(res.status).toBe(403);
+        expect(res.body.code).toBe('DELETE_NOT_PERMITTED');
+        expect(notes[NOTE_ID]).toBeDefined();
+        expect(versions).toHaveLength(0);
+      });
+
+      it.each([['IT Admin', itAdmin], ['Level 1', level1]])('lets %s delete a submitted note', async (_label, user) => {
+        notes[NOTE_ID] = noteRow();
+        const res = await del(user, { reason: 'Duplicate entry' });
+        expect(res.status).toBe(200);
+        expect(notes[NOTE_ID]).toBeUndefined();
+      });
+
+      it('archives the note before deleting and audits without the reason', async () => {
+        notes[NOTE_ID] = noteRow();
+        await del(level1, { reason: 'Entered on the wrong client' });
+        expect(versions).toHaveLength(1);
+        expect(versions[0].archivedReason).toBe('delete');
+        expect(versions[0].reason).toBe('Entered on the wrong client');
+        expect(versions[0].archivedBy).toBe('lead@hope.org');
+        expect(JSON.parse(versions[0].snapshot).careNote).toBe('Met with client about housing.');
+        expect(auditRows).toHaveLength(1);
+        expect(auditRows[0].action).toBe('DELETE_SECTION4_RECORD');
+        expect(auditRows[0].newValues).not.toMatch(/wrong client/);
+      });
+
+      it('requires a reason to delete a submitted note', async () => {
+        notes[NOTE_ID] = noteRow();
+        expect((await del(itAdmin, { reason: '' })).status).toBe(422);
+        expect(notes[NOTE_ID]).toBeDefined();
+      });
+
+      it('still lets staff delete a draft without a reason', async () => {
+        notes[NOTE_ID] = noteRow({ SubmissionStatus: 'draft' });
+        expect((await del(caseManager, {})).status).toBe(200);
+        expect(notes[NOTE_ID]).toBeUndefined();
+        expect(versions[0].archivedReason).toBe('delete');
+      });
+
+      it('returns 404 for a missing note', async () => {
+        expect((await del(itAdmin, { reason: 'Duplicate entry' })).status).toBe(404);
+      });
     });
 
     it('treats rows without a status as submitted', async () => {
@@ -361,6 +407,8 @@ describe('Section 4 draft / submit / unlock', () => {
         expect(versions[0].recordType).toBe('EncounterNote');
         expect(JSON.parse(versions[0].snapshot).careNote).toBe('Met with client about housing.');
         expect(versions[0].archivedBy).toBe('lead@hope.org');
+        expect(versions[0].archivedReason).toBe('unlock');
+        expect(versions[0].reason).toBe('Wrong note date entered');
         expect(auditRows).toHaveLength(1);
         expect(auditRows[0].action).toBe('UNLOCK_SUBMITTED_RECORD');
         expect(auditRows[0].newValues).not.toMatch(/Wrong note date/);
@@ -427,8 +475,19 @@ describe('Section 4 draft / submit / unlock', () => {
       expect(patch.status).toBe(409);
       expect(plans[PLAN_ID].status).toBe('Active');
 
-      expect((await request(app).delete(`/api/care-plans/${PLAN_ID}`).set(asUser(caseManager))).status).toBe(409);
+      const del = await request(app).delete(`/api/care-plans/${PLAN_ID}`).set(asUser(caseManager)).send({ reason: 'Not needed' });
+      expect(del.status).toBe(403);
+      expect(del.body.code).toBe('DELETE_NOT_PERMITTED');
       expect(plans[PLAN_ID].careGoal).toBe('Stable housing');
+    });
+
+    it.each([['IT Admin', itAdmin], ['Level 1', level1]])('lets %s delete a submitted plan with a reason', async (_label, user) => {
+      plans[PLAN_ID] = planRow();
+      expect((await request(app).delete(`/api/care-plans/${PLAN_ID}`).set(asUser(user)).send({})).status).toBe(422);
+      const res = await request(app).delete(`/api/care-plans/${PLAN_ID}`).set(asUser(user)).send({ reason: 'Goal was duplicated' });
+      expect(res.status).toBe(200);
+      expect(plans[PLAN_ID]).toBeUndefined();
+      expect(versions[0]).toMatchObject({ recordType: 'CarePlan', archivedReason: 'delete', reason: 'Goal was duplicated' });
     });
 
     it('still deletes a draft plan', async () => {

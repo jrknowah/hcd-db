@@ -3,7 +3,8 @@
 -- Submitted records are locked. Only IT Admin / Level 1 can unlock them.
 -- Idempotent: safe to run more than once. Run before deploying the backend
 -- that includes POST /api/encounter-notes/:noteId/unlock and
--- POST /api/care-plans/:carePlanID/unlock.
+-- POST /api/care-plans/:carePlanID/unlock. IT Admin / Level 1 can also delete
+-- any note or care plan; a copy is archived first.
 --
 -- Rows that already exist were saved before drafts existed, so they are
 -- marked 'submitted' (locked). Their submitter is taken from the last person
@@ -81,8 +82,8 @@ WHERE submissionStatus = 'submitted' AND submittedBy IS NULL;
 GO
 
 -- ---------- Archived submitted versions ----------
--- Append-only copy of each submitted record, written before an unlock
--- re-opens it for editing.
+-- Append-only copy of a record, written before an unlock re-opens it for
+-- editing or an IT Admin / Level 1 user deletes it.
 IF OBJECT_ID('dbo.Section4RecordVersions', 'U') IS NULL
 BEGIN
     CREATE TABLE dbo.Section4RecordVersions (
@@ -96,13 +97,19 @@ BEGIN
         submittedBy   NVARCHAR(255)  NULL,
         submittedAt   DATETIME2      NULL,
 
-        archivedReason NVARCHAR(50)  NOT NULL,   -- 'unlock'
+        archivedReason NVARCHAR(50)  NOT NULL,   -- 'unlock' | 'delete'
         archivedBy    NVARCHAR(255)  NOT NULL,
         archivedAt    DATETIME2      NOT NULL DEFAULT SYSUTCDATETIME(),
-        unlockReason  NVARCHAR(500)  NULL
+        reason        NVARCHAR(500)  NULL        -- why it was unlocked / deleted
     );
 
     CREATE INDEX IX_Section4RecordVersions_Record
         ON dbo.Section4RecordVersions (recordType, recordID, archivedAt);
 END
+GO
+
+-- Earlier drafts of this script named the reason column unlockReason
+IF COL_LENGTH('dbo.Section4RecordVersions', 'reason') IS NULL
+   AND COL_LENGTH('dbo.Section4RecordVersions', 'unlockReason') IS NOT NULL
+    EXEC sp_rename 'dbo.Section4RecordVersions.unlockReason', 'reason', 'COLUMN';
 GO
