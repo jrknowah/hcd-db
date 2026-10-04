@@ -1270,7 +1270,7 @@ const AuthSig = () => {
         </Tabs>
       </Paper>
 
-      <ClientInfoBanner sx={{ mb: 3 }} />
+      <ClientInfoBanner sx={{ mb: 3 }} exportSection={2} />
 
       <TabPanel value={activeTab} index={0}>
         <CategoryFilter 

@@ -419,7 +419,7 @@ const Identification = () => {
         <Tab label="Export Complete Chart" />
       </Tabs>
 
-      <ClientInfoBanner sx={{ mb: 2 }} />
+      <ClientInfoBanner sx={{ mb: 2 }} exportSection={1} />
 
       {/* Tab 0: Client Face Sheet */}
       {tabIndex === 0 && <Box p={3}><ClientFace /></Box>}
