@@ -50,23 +50,23 @@ const archiveVersion = (transaction, {
        @archivedReason, @archivedBy, @archivedAt, @reason)
   `);
 
-// Admin audit trail. The reason is free text that may contain PHI, so it stays
-// on the record and in Section4RecordVersions only. Failure here is non-fatal.
-const auditAction = async (pool, { action, userID, tableName, recordID, clientID, timestamp }) => {
-  try {
-    await pool.request()
-      .input('userID',    sql.NVarChar(100),     userID)
-      .input('action',    sql.NVarChar(50),      action)
-      .input('tableName', sql.NVarChar(100),     tableName)
-      .input('recordID',  sql.NVarChar(100),     String(recordID))
-      .input('newValues', sql.NVarChar(sql.MAX), JSON.stringify({ clientID, recordID: String(recordID) }))
-      .input('timestamp', sql.DateTime2,         timestamp)
-      .query(`INSERT INTO dbo.AuditLog (userID, action, tableName, recordID, newValues, timestamp)
-              VALUES (@userID, @action, @tableName, @recordID, @newValues, @timestamp)`);
-  } catch (auditErr) {
-    console.warn('Audit log failed (non-fatal):', auditErr.message);
-  }
-};
+// Audit trail row for the Admin > Audit page: who (email + display name),
+// what, which record and which client. Written inside the caller's
+// transaction, so an unlock or delete never happens without its audit row.
+// The reason is free text that may contain PHI, so it stays in
+// Section4RecordVersions and is never written here.
+const auditAction = (transaction, { action, req, tableName, recordID, clientID, details = {}, timestamp }) =>
+  transaction.request()
+    .input('userID',    sql.NVarChar(100),     getCurrentUser(req))
+    .input('userName',  sql.NVarChar(255),     req.user?.name || null)
+    .input('action',    sql.NVarChar(50),      action)
+    .input('tableName', sql.NVarChar(100),     tableName)
+    .input('recordID',  sql.NVarChar(100),     String(recordID))
+    .input('clientID',  sql.NVarChar(50),      clientID || null)
+    .input('newValues', sql.NVarChar(sql.MAX), JSON.stringify({ clientID, recordID: String(recordID), ...details }))
+    .input('timestamp', sql.DateTime2,         timestamp)
+    .query(`INSERT INTO dbo.AuditLog (userID, userName, action, tableName, recordID, clientID, newValues, timestamp)
+            VALUES (@userID, @userName, @action, @tableName, @recordID, @clientID, @newValues, @timestamp)`);
 
 const deleteNotPermittedResponse = (res, what) => res.status(403).json({
   code: 'DELETE_NOT_PERMITTED',

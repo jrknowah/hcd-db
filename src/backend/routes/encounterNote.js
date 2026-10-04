@@ -441,20 +441,20 @@ router.post(
             WHERE Id = @noteId
           `);
 
+        await auditAction(transaction, {
+          action: 'UNLOCK_ENCOUNTER_NOTE',
+          req,
+          tableName: 'EncounterNotes',
+          recordID: note._id,
+          clientID: note.ClientID,
+          timestamp: now,
+        });
+
         await transaction.commit();
       } catch (err) {
         await transaction.rollback().catch(() => {});
         throw err;
       }
-
-      await auditAction(pool, {
-        action: 'UNLOCK_SUBMITTED_RECORD',
-        userID: currentUser,
-        tableName: 'EncounterNotes',
-        recordID: note._id,
-        clientID: note.ClientID,
-        timestamp: now,
-      });
 
       res.json(mapNote({
         ...note,
@@ -535,20 +535,21 @@ router.delete('/encounter-notes/:noteId', authMiddleware, async (req, res) => {
         .input('noteId', sql.UniqueIdentifier, noteId)
         .query('DELETE FROM EncounterNotes WHERE Id = @noteId');
 
+      await auditAction(transaction, {
+        action: 'DELETE_ENCOUNTER_NOTE',
+        req,
+        tableName: 'EncounterNotes',
+        recordID: note._id,
+        clientID: note.ClientID,
+        details: { submissionStatus: submitted ? 'submitted' : 'draft' },
+        timestamp: now,
+      });
+
       await transaction.commit();
     } catch (err) {
       await transaction.rollback().catch(() => {});
       throw err;
     }
-
-    await auditAction(pool, {
-      action: 'DELETE_SECTION4_RECORD',
-      userID: currentUser,
-      tableName: 'EncounterNotes',
-      recordID: note._id,
-      clientID: note.ClientID,
-      timestamp: now,
-    });
 
     console.log(`✅ Encounter note deleted: ${noteId}`);
     res.json({ message: 'Encounter note deleted successfully' });

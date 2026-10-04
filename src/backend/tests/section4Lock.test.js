@@ -18,6 +18,8 @@ let notes;
 let plans;
 let versions;
 let auditRows;
+let failAudit;
+let transactions;
 let queries;
 let nextNoteId;
 
@@ -36,6 +38,7 @@ function makeRequest() {
         return { recordset: [], rowsAffected: [1] };
       }
       if (/INSERT INTO dbo\.AuditLog/.test(q)) {
+        if (failAudit) throw new Error('AuditLog insert failed');
         auditRows.push({ ...params });
         return { recordset: [], rowsAffected: [1] };
       }
@@ -144,9 +147,10 @@ function makeRequest() {
 const fakePool = { request: makeRequest };
 
 class FakeTransaction {
-  async begin() {}
-  async commit() {}
-  async rollback() {}
+  constructor() { this.state = 'new'; transactions.push(this); }
+  async begin() { this.state = 'begun'; }
+  async commit() { this.state = 'committed'; }
+  async rollback() { this.state = 'rolledback'; }
   request() { return makeRequest(); }
 }
 
@@ -177,7 +181,7 @@ function buildApp() {
 
 const asUser = (user) => ({ 'x-test-user': JSON.stringify(user) });
 const itAdmin = { email: 'it@hope.org', isAdmin: true, groups: [IT_GROUP] };
-const level1 = { email: 'lead@hope.org', isAdmin: false, groups: [LEVEL1_GROUP] };
+const level1 = { email: 'lead@hope.org', name: 'Lee Lead', isAdmin: false, groups: [LEVEL1_GROUP] };
 const caseManager = { email: 'cm@hope.org', isAdmin: false, groups: [CASE_GROUP] };
 
 const noteRow = (overrides = {}) => ({
@@ -225,6 +229,8 @@ describe('Section 4 draft / submit / unlock', () => {
     plans = {};
     versions = [];
     auditRows = [];
+    failAudit = false;
+    transactions = [];
     queries = [];
     nextNoteId = 1;
     app = buildApp();
@@ -340,8 +346,24 @@ describe('Section 4 draft / submit / unlock', () => {
         expect(versions[0].archivedBy).toBe('lead@hope.org');
         expect(JSON.parse(versions[0].snapshot).careNote).toBe('Met with client about housing.');
         expect(auditRows).toHaveLength(1);
-        expect(auditRows[0].action).toBe('DELETE_SECTION4_RECORD');
+        expect(auditRows[0]).toMatchObject({
+          action: 'DELETE_ENCOUNTER_NOTE',
+          userID: 'lead@hope.org',
+          userName: 'Lee Lead',
+          tableName: 'EncounterNotes',
+          recordID: NOTE_ID,
+          clientID: 'C1',
+        });
+        expect(JSON.parse(auditRows[0].newValues).submissionStatus).toBe('submitted');
         expect(auditRows[0].newValues).not.toMatch(/wrong client/);
+      });
+
+      it('rolls the delete back if the audit row cannot be written', async () => {
+        notes[NOTE_ID] = noteRow();
+        failAudit = true;
+        const res = await del(level1, { reason: 'Entered on the wrong client' });
+        expect(res.status).toBe(500);
+        expect(transactions[0].state).toBe('rolledback');
       });
 
       it('requires a reason to delete a submitted note', async () => {
@@ -410,7 +432,7 @@ describe('Section 4 draft / submit / unlock', () => {
         expect(versions[0].archivedReason).toBe('unlock');
         expect(versions[0].reason).toBe('Wrong note date entered');
         expect(auditRows).toHaveLength(1);
-        expect(auditRows[0].action).toBe('UNLOCK_SUBMITTED_RECORD');
+        expect(auditRows[0]).toMatchObject({ action: 'UNLOCK_ENCOUNTER_NOTE', userID: 'lead@hope.org', clientID: 'C1' });
         expect(auditRows[0].newValues).not.toMatch(/Wrong note date/);
       });
 
@@ -488,6 +510,7 @@ describe('Section 4 draft / submit / unlock', () => {
       expect(res.status).toBe(200);
       expect(plans[PLAN_ID]).toBeUndefined();
       expect(versions[0]).toMatchObject({ recordType: 'CarePlan', archivedReason: 'delete', reason: 'Goal was duplicated' });
+      expect(auditRows[0]).toMatchObject({ action: 'DELETE_CARE_PLAN', userID: user.email, tableName: 'CarePlans', clientID: 'C1' });
     });
 
     it('still deletes a draft plan', async () => {

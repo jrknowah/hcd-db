@@ -390,20 +390,20 @@ router.post(
             WHERE carePlanID = @carePlanID
           `);
 
+        await auditAction(transaction, {
+          action: 'UNLOCK_CARE_PLAN',
+          req,
+          tableName: 'CarePlans',
+          recordID: plan._id,
+          clientID: plan.clientID,
+          timestamp: now,
+        });
+
         await transaction.commit();
       } catch (err) {
         await transaction.rollback().catch(() => {});
         throw err;
       }
-
-      await auditAction(pool, {
-        action: 'UNLOCK_SUBMITTED_RECORD',
-        userID: currentUser,
-        tableName: 'CarePlans',
-        recordID: plan._id,
-        clientID: plan.clientID,
-        timestamp: now,
-      });
 
       res.json(mapPlan({
         ...plan,
@@ -484,20 +484,21 @@ router.delete('/care-plans/:carePlanID', authMiddleware, async (req, res) => {
         .input('carePlanID', sql.VarChar, carePlanID)
         .query('DELETE FROM CarePlans WHERE carePlanID = @carePlanID');
 
+      await auditAction(transaction, {
+        action: 'DELETE_CARE_PLAN',
+        req,
+        tableName: 'CarePlans',
+        recordID: plan._id,
+        clientID: plan.clientID,
+        details: { submissionStatus: submitted ? 'submitted' : 'draft' },
+        timestamp: now,
+      });
+
       await transaction.commit();
     } catch (err) {
       await transaction.rollback().catch(() => {});
       throw err;
     }
-
-    await auditAction(pool, {
-      action: 'DELETE_SECTION4_RECORD',
-      userID: currentUser,
-      tableName: 'CarePlans',
-      recordID: plan._id,
-      clientID: plan.clientID,
-      timestamp: now,
-    });
 
     console.log(`✅ Care plan deleted: ${carePlanID}`);
     res.json({ message: 'Care plan deleted successfully' });

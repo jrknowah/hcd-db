@@ -4,7 +4,8 @@
 -- Idempotent: safe to run more than once. Run before deploying the backend
 -- that includes POST /api/encounter-notes/:noteId/unlock and
 -- POST /api/care-plans/:carePlanID/unlock. IT Admin / Level 1 can also delete
--- any note or care plan; a copy is archived first.
+-- any note or care plan; a copy is archived first. Unlocks and deletes are
+-- recorded in dbo.AuditLog (shown on Admin > Audit).
 --
 -- Rows that already exist were saved before drafts existed, so they are
 -- marked 'submitted' (locked). Their submitter is taken from the last person
@@ -112,4 +113,14 @@ GO
 IF COL_LENGTH('dbo.Section4RecordVersions', 'reason') IS NULL
    AND COL_LENGTH('dbo.Section4RecordVersions', 'unlockReason') IS NOT NULL
     EXEC sp_rename 'dbo.Section4RecordVersions.unlockReason', 'reason', 'COLUMN';
+GO
+
+-- ---------- Audit log: who and which client ----------
+-- Unlocks and deletes write the user's display name and the client to
+-- dbo.AuditLog. The Admin > Audit page shows these columns when present.
+IF COL_LENGTH('dbo.AuditLog', 'userName') IS NULL
+    ALTER TABLE dbo.AuditLog ADD userName NVARCHAR(255) NULL;
+
+IF COL_LENGTH('dbo.AuditLog', 'clientID') IS NULL
+    ALTER TABLE dbo.AuditLog ADD clientID NVARCHAR(50) NULL;
 GO
