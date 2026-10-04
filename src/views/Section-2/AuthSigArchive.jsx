@@ -40,7 +40,7 @@ import {
 } from '@mui/icons-material';
 import { useClientPersistence } from '../../hooks/useClientPersistence';
 import { azureBlobService } from '../../backend/services/azureBlobService';
-import { ARCHIVE_SECTIONS, sectionDocType, filterSectionFiles } from '../../utils/archiveSections';
+import { ARCHIVE_SECTIONS, SECTION_CATEGORIES, sectionDocType, filterSectionFiles } from '../../utils/archiveSections';
 
 /**
  * ✅ CORRECTED AuthSigArchive Component
@@ -56,23 +56,7 @@ import { ARCHIVE_SECTIONS, sectionDocType, filterSectionFiles } from '../../util
  */
 
 // Authorization form types that can be archived
-const AUTH_FORM_TYPES = [
-  'Consent for Treatment',
-  'Photo Release',
-  'Release of PHI',
-  'Authorization for Disclosure',
-  'Housing Agreement',
-  'Residence Policy',
-  'Termination Agreement',
-  'HIPAA Notice',
-  'Client Rights',
-  'Financial Agreement',
-  'Medication Consent',
-  'Transportation Consent',
-  'Emergency Treatment',
-  'General Consent',
-  'Other Authorization Forms'
-];
+const AUTH_FORM_TYPES = SECTION_CATEGORIES[ARCHIVE_SECTIONS.AUTH_SIG];
 
 // Allowed file types
 const ALLOWED_FILE_TYPES = [

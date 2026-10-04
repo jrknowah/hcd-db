@@ -39,7 +39,7 @@ import {
 } from '@mui/icons-material';
 import { useClientPersistence } from '../../hooks/useClientPersistence';
 import { azureBlobService } from '../../backend/services/azureBlobService';
-import { ARCHIVE_SECTIONS, sectionDocType, filterSectionFiles } from '../../utils/archiveSections';
+import { ARCHIVE_SECTIONS, SECTION_CATEGORIES, sectionDocType, filterSectionFiles } from '../../utils/archiveSections';
 
 /**
  * ✅ REFACTORED NursingArchive Component
@@ -58,24 +58,7 @@ import { ARCHIVE_SECTIONS, sectionDocType, filterSectionFiles } from '../../util
  */
 
 // Nursing document types for the archive
-const NURSING_DOC_TYPES = [
-  'Nursing Assessment',
-  'Nursing Notes',
-  'Progress Notes',
-  'Vital Signs Record',
-  'Medication Administration Record (MAR)',
-  'Treatment Plan',
-  'Care Plan',
-  'Wound Care Documentation',
-  'IV Therapy Record',
-  'Discharge Summary',
-  'Lab Results',
-  'Imaging Reports',
-  'Consultation Notes',
-  'Incident Report',
-  'Transfer Summary',
-  'Other Nursing Documentation'
-];
+const NURSING_DOC_TYPES = SECTION_CATEGORIES[ARCHIVE_SECTIONS.NURSING];
 
 // Confidentiality levels
 const CONFIDENTIALITY_LEVELS = [
