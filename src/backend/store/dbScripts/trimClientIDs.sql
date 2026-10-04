@@ -15,6 +15,12 @@
      3. Every change is logged to dbo.ClientIDTrimLog. The UNDO section at the
         bottom restores the original IDs from that log.
 
+   MANUAL CORRECTIONS (section 1b) rename an ID to a different value, e.g.
+   ' Client ID 231257' -> '231257'. Their uploaded files live in a different
+   blob folder, so after this script ALSO run:
+     node scripts/moveClientBlobs.js Client_ID_231257 231257            (preview)
+     node scripts/moveClientBlobs.js Client_ID_231257 231257 --apply
+
    Take a database backup / point-in-time restore point before step 2.
 ============================================================================ */
 SET NOCOUNT ON;
@@ -28,13 +34,34 @@ DECLARE @ws NVARCHAR(10) = NCHAR(32) + NCHAR(9) + NCHAR(10) + NCHAR(13) + NCHAR(
 /* 1. Affected client IDs. DATALENGTH is used because SQL Server's = and <>
       ignore trailing spaces, which would hide IDs like '231257 '.            */
 IF OBJECT_ID('tempdb..#fix') IS NOT NULL DROP TABLE #fix;
-SELECT clientID                    AS oldID,
-       TRIM(@ws FROM clientID)     AS newID
-INTO   #fix
-FROM   dbo.Clients
-WHERE  DATALENGTH(clientID) <> DATALENGTH(TRIM(@ws FROM clientID));
+CREATE TABLE #fix (
+  oldID     NVARCHAR(100) NOT NULL,
+  newID     NVARCHAR(100) NOT NULL,
+  oldFolder NVARCHAR(200) NULL,   -- blob folder files were uploaded under
+  newFolder NVARCHAR(200) NULL    -- blob folder the new ID uses
+);
 
-SELECT '[' + oldID + ']' AS oldID, '[' + newID + ']' AS newID FROM #fix;
+/* 1b. Manual corrections: IDs that need more than trimming.
+       oldFolder/newFolder = the ID with spaces -> '_' and punctuation -> '_'
+       (how the upload code names folders). Stored blob paths in the database
+       are rewritten from oldFolder/ to newFolder/.                          */
+INSERT INTO #fix (oldID, newID, oldFolder, newFolder) VALUES
+  (N' Client ID 231257', N'231257', N'Client_ID_231257', N'231257');
+
+-- Drop manual rows whose old ID doesn't exist (already fixed / typo here)
+DELETE f FROM #fix f
+WHERE NOT EXISTS (SELECT 1 FROM dbo.Clients c
+                  WHERE c.clientID = f.oldID AND DATALENGTH(c.clientID) = DATALENGTH(f.oldID));
+
+/* 1c. Everything else: just strip leading/trailing whitespace.             */
+INSERT INTO #fix (oldID, newID)
+SELECT clientID, TRIM(@ws FROM clientID)
+FROM   dbo.Clients c
+WHERE  DATALENGTH(clientID) <> DATALENGTH(TRIM(@ws FROM clientID))
+  AND  NOT EXISTS (SELECT 1 FROM #fix f
+                   WHERE f.oldID = c.clientID AND DATALENGTH(f.oldID) = DATALENGTH(c.clientID));
+
+SELECT '[' + oldID + ']' AS oldID, '[' + newID + ']' AS newID, oldFolder, newFolder FROM #fix;
 
 IF NOT EXISTS (SELECT 1 FROM #fix)
 BEGIN
@@ -91,6 +118,36 @@ CLOSE cur; DEALLOCATE cur;
 
 SELECT sch AS [schema], tbl AS [table], col AS [column], rowsAffected
 FROM   #cols WHERE rowsAffected > 0 ORDER BY tbl;
+
+/* Stored blob paths/URLs pointing at a renamed folder (manual corrections).  */
+IF OBJECT_ID('tempdb..#pathcols') IS NOT NULL DROP TABLE #pathcols;
+SELECT c.TABLE_SCHEMA AS sch, c.TABLE_NAME AS tbl, c.COLUMN_NAME AS col,
+       CAST(0 AS INT) AS rowsAffected
+INTO   #pathcols
+FROM   INFORMATION_SCHEMA.COLUMNS c
+JOIN   INFORMATION_SCHEMA.TABLES  t
+  ON   t.TABLE_SCHEMA = c.TABLE_SCHEMA AND t.TABLE_NAME = c.TABLE_NAME
+WHERE  t.TABLE_TYPE = 'BASE TABLE'
+  AND  c.COLUMN_NAME IN ('blobName', 'blobPath', 'filePath', 'blobUrl', 'fileUrl')
+  AND  c.DATA_TYPE IN ('varchar', 'nvarchar');
+
+DECLARE pcur CURSOR LOCAL FAST_FORWARD FOR SELECT sch, tbl, col FROM #pathcols;
+OPEN pcur;
+FETCH NEXT FROM pcur INTO @sch, @tbl, @col;
+WHILE @@FETCH_STATUS = 0
+BEGIN
+  SET @sql = N'SELECT @n = COUNT(*) FROM ' + QUOTENAME(@sch) + N'.' + QUOTENAME(@tbl) + N' x
+               JOIN #fix f ON f.oldFolder IS NOT NULL
+                AND (x.' + QUOTENAME(@col) + N' LIKE REPLACE(f.oldFolder, N''_'', N''[_]'') + N''/%''
+                  OR x.' + QUOTENAME(@col) + N' LIKE N''%/'' + REPLACE(f.oldFolder, N''_'', N''[_]'') + N''/%'');';
+  EXEC sp_executesql @sql, N'@n INT OUTPUT', @n = @n OUTPUT;
+  UPDATE #pathcols SET rowsAffected = @n WHERE sch = @sch AND tbl = @tbl AND col = @col;
+  FETCH NEXT FROM pcur INTO @sch, @tbl, @col;
+END
+CLOSE pcur; DEALLOCATE pcur;
+
+SELECT sch AS [schema], tbl AS [table], col AS blobPathColumn, rowsAffected
+FROM   #pathcols WHERE rowsAffected > 0 ORDER BY tbl;
 
 /* Foreign keys on these columns must be paused while parent and child rows
    are renamed, then re-validated.                                           */
@@ -165,6 +222,34 @@ BEGIN TRY
   END
   CLOSE upcur; DEALLOCATE upcur;
 
+  -- Rewrite stored blob paths for renamed folders (logged with columnName = path column)
+  DECLARE pup CURSOR LOCAL FAST_FORWARD FOR SELECT sch, tbl, col FROM #pathcols WHERE rowsAffected > 0;
+  OPEN pup;
+  FETCH NEXT FROM pup INTO @sch, @tbl, @col;
+  WHILE @@FETCH_STATUS = 0
+  BEGIN
+    SET @sql = N'INSERT INTO dbo.ClientIDTrimLog (oldID, newID, tableSchema, tableName, columnName, rowsUpdated)
+                 SELECT f.oldFolder + N''/'', f.newFolder + N''/'', @sch, @tbl, @col, COUNT(*)
+                 FROM ' + QUOTENAME(@sch) + N'.' + QUOTENAME(@tbl) + N' x
+                 JOIN #fix f ON f.oldFolder IS NOT NULL
+                  AND (x.' + QUOTENAME(@col) + N' LIKE REPLACE(f.oldFolder, N''_'', N''[_]'') + N''/%''
+                    OR x.' + QUOTENAME(@col) + N' LIKE N''%/'' + REPLACE(f.oldFolder, N''_'', N''[_]'') + N''/%'')
+                 GROUP BY f.oldFolder, f.newFolder;
+
+                 UPDATE x SET ' + QUOTENAME(@col) + N' =
+                   CASE WHEN x.' + QUOTENAME(@col) + N' LIKE REPLACE(f.oldFolder, N''_'', N''[_]'') + N''/%''
+                        THEN f.newFolder + SUBSTRING(x.' + QUOTENAME(@col) + N', LEN(f.oldFolder) + 1, 4000)
+                        ELSE REPLACE(x.' + QUOTENAME(@col) + N', N''/'' + f.oldFolder + N''/'', N''/'' + f.newFolder + N''/'')
+                   END
+                 FROM ' + QUOTENAME(@sch) + N'.' + QUOTENAME(@tbl) + N' x
+                 JOIN #fix f ON f.oldFolder IS NOT NULL
+                  AND (x.' + QUOTENAME(@col) + N' LIKE REPLACE(f.oldFolder, N''_'', N''[_]'') + N''/%''
+                    OR x.' + QUOTENAME(@col) + N' LIKE N''%/'' + REPLACE(f.oldFolder, N''_'', N''[_]'') + N''/%'');';
+    EXEC sp_executesql @sql, N'@sch SYSNAME, @tbl SYSNAME, @col SYSNAME', @sch = @sch, @tbl = @tbl, @col = @col;
+    FETCH NEXT FROM pup INTO @sch, @tbl, @col;
+  END
+  CLOSE pup; DEALLOCATE pup;
+
   -- Re-enable and re-validate the paused foreign keys (fails -> rolls back)
   DECLARE fkcur2 CURSOR LOCAL FAST_FORWARD FOR SELECT sch, tbl, fkName FROM #fks;
   OPEN fkcur2;
@@ -193,7 +278,8 @@ END CATCH;
    DECLARE @s SYSNAME, @t SYSNAME, @c SYSNAME, @o NVARCHAR(100), @nw NVARCHAR(100), @q NVARCHAR(MAX);
    -- Pause the same foreign keys first (see step 3 query), then:
    DECLARE u CURSOR LOCAL FAST_FORWARD FOR
-     SELECT tableSchema, tableName, columnName, oldID, newID FROM dbo.ClientIDTrimLog;
+     SELECT tableSchema, tableName, columnName, oldID, newID FROM dbo.ClientIDTrimLog
+     WHERE oldID NOT LIKE N'%/';
    OPEN u; FETCH NEXT FROM u INTO @s, @t, @c, @o, @nw;
    WHILE @@FETCH_STATUS = 0
    BEGIN
@@ -204,4 +290,7 @@ END CATCH;
    END
    CLOSE u; DEALLOCATE u;
    -- Re-enable the foreign keys WITH CHECK.
+   -- Rows logged with a blob path column (oldID ending in '/') are folder
+   -- renames: reverse them with REPLACE(col, newID, oldID) on that column, and
+   -- move the blobs back with scripts/moveClientBlobs.js <new> <old> --apply.
 ============================================================================ */
