@@ -32,6 +32,7 @@ import {
   uploadNoteFile,
   fetchNoteArchiveFiles
 } from "../../backend/store/slices/noteArchiveSlice";
+import { azureBlobService } from "../../backend/services/azureBlobService";
 
 const API = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
 
@@ -52,7 +53,8 @@ const CmNoteArchive = ({ clientID: clientIDProp }) => {
     successMessage,
     uploadProgress,
     uploadedFiles,
-    filesLoading
+    filesLoading,
+    filesError
   } = useSelector((state) => state.noteArchive);
 
   const [selectedFile, setSelectedFile] = useState(null);
@@ -109,6 +111,17 @@ const CmNoteArchive = ({ clientID: clientIDProp }) => {
     e.preventDefault();
     if (!selectedFile) return;
     dispatch(uploadNoteFile({ file: selectedFile, clientID }));
+  };
+
+  // Blob-backed files need a short-lived signed URL; legacy note-archive
+  // records carry their own download route.
+  const handleView = async (file) => {
+    if (file.blobName) {
+      const url = await azureBlobService.generateDownloadUrl(file.blobName, 1, { inline: true });
+      window.open(url, '_blank', 'noopener,noreferrer');
+    } else if (file.fileUrl) {
+      window.open(`${API}${file.fileUrl}`, '_blank', 'noopener,noreferrer');
+    }
   };
 
   const formatFileSize = (bytes) => {
@@ -298,7 +311,13 @@ const CmNoteArchive = ({ clientID: clientIDProp }) => {
 
         {filesLoading && <LinearProgress sx={{ mb: 2 }} />}
 
-        {!filesLoading && uploadedFiles.length === 0 && (
+        {!filesLoading && filesError && (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            Could not load files: {filesError}
+          </Alert>
+        )}
+
+        {!filesLoading && !filesError && uploadedFiles.length === 0 && (
           <Alert severity="info">
             No files uploaded yet{clientID ? ' for this client' : ''}.
           </Alert>
@@ -308,7 +327,7 @@ const CmNoteArchive = ({ clientID: clientIDProp }) => {
           <Paper variant="outlined">
             <List dense disablePadding>
               {uploadedFiles.map((file, idx) => (
-                <React.Fragment key={file.noteArchiveID || idx}>
+                <React.Fragment key={file.blobName || file.noteArchiveID || idx}>
                   {idx > 0 && <Divider component="li" />}
                   <ListItem>
                     <ListItemIcon>
@@ -343,10 +362,7 @@ const CmNoteArchive = ({ clientID: clientIDProp }) => {
                         <IconButton
                           edge="end"
                           size="small"
-                          component="a"
-                          href={`${API}${file.fileUrl}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
+                          onClick={() => handleView(file)}
                         >
                           <ViewIcon />
                         </IconButton>
