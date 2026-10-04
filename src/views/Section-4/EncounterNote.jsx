@@ -7,6 +7,7 @@ import {
   TableCell,
   TableHead,
   TableRow,
+  TableContainer,
   Button,
   Dialog,
   DialogTitle,
@@ -113,6 +114,18 @@ const customSelectStyles = {
 // Submitted notes are locked; drafts ("Save Progress") stay editable
 const isNoteLocked = (note) => note.locked ?? note.submissionStatus !== 'draft';
 
+
+// Too many columns to fit the page: the table scrolls left/right inside its
+// card, and the Actions column stays pinned on the right. Export (PDF) mode
+// keeps the full-width layout.
+const SCROLL_TABLE_MIN_WIDTH = 1400;
+const stickyActionsSx = {
+  position: 'sticky',
+  right: 0,
+  zIndex: 1,
+  bgcolor: 'background.paper',
+  boxShadow: (theme) => `-2px 0 4px -2px ${theme.palette.divider}`,
+};
 
 const EncounterNote = ({ clientID, exportMode }) => {
   const dispatch = useDispatch();
@@ -597,7 +610,16 @@ const EncounterNote = ({ clientID, exportMode }) => {
         )}
 
         {/* Notes Table */}
-        <Table>
+        <TableContainer
+          sx={exportMode ? undefined : { overflowX: 'auto', maxWidth: '100%' }}
+          data-testid="section4-table-scroll"
+        >
+        <Table
+          sx={exportMode ? undefined : {
+            minWidth: SCROLL_TABLE_MIN_WIDTH,
+            '& .MuiTableHead-root .MuiTableCell-root': { whiteSpace: 'nowrap' },
+          }}
+        >
           <TableHead>
             <TableRow>
               <TableCell>Date</TableCell>
@@ -608,7 +630,7 @@ const EncounterNote = ({ clientID, exportMode }) => {
               <TableCell>Submitted By</TableCell>
               <TableCell>Last Updated By</TableCell>
               <TableCell>Added By</TableCell>
-              {!exportMode && <TableCell>Actions</TableCell>}
+              {!exportMode && <TableCell sx={stickyActionsSx}>Actions</TableCell>}
             </TableRow>
           </TableHead>
           <TableBody>
@@ -705,7 +727,7 @@ const EncounterNote = ({ clientID, exportMode }) => {
                     )}
                   </TableCell>
                   {!exportMode && (
-                    <TableCell>
+                    <TableCell sx={stickyActionsSx}>
                       {isNoteLocked(note) ? (
                         <Box sx={{ display: 'flex', gap: 1 }}>
                           <Tooltip title="View note">
@@ -757,6 +779,7 @@ const EncounterNote = ({ clientID, exportMode }) => {
             )}
           </TableBody>
         </Table>
+        </TableContainer>
 
         {/* Add Note Modal */}
          <Dialog 
