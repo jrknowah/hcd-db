@@ -994,6 +994,15 @@ try {
   console.log('⚠️  Could not load section5Lock.js:', err.message);
 }
 
+// SECTION 5 MAIN TAB SUMMARY (per-tab data present / last updated / by whom)
+try {
+  const section5SummaryRouter = require('./routes/section5Summary.js');
+  app.use('/api/section5', authMiddleware, section5SummaryRouter);
+  console.log('✅ Section 5 summary router loaded');
+} catch (err) {
+  console.log('⚠️  Could not load section5Summary.js:', err.message);
+}
+
 console.log('✅ Section 5 Medical Routes Loading Complete');
 //End Section 5: Medical ===================================================================
 

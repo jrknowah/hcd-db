@@ -72,6 +72,30 @@ import {
 // Real notes are keyed by `id`, mock notes by `_id`
 const noteKey = (note) => note.id ?? note._id;
 
+// Who last changed the note and when: the editor if it was edited, otherwise its author
+const lastUpdate = (note) => {
+  const edited = note.updatedAt && (!note.createdAt || new Date(note.updatedAt) > new Date(note.createdAt));
+  const by = (edited && note.updatedBy) || note.createdBy || note.updatedBy || null;
+  const at = edited ? note.updatedAt : (note.createdAt || note.updatedAt || null);
+  const d = at ? new Date(at) : null;
+  return {
+    by,
+    at: d && !Number.isNaN(d.getTime()) ? d.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : null,
+  };
+};
+
+const LastUpdated = ({ note }) => {
+  const { by, at } = lastUpdate(note);
+  return (
+    <>
+      <Typography variant="body2">{by || '—'}</Typography>
+      {at && <Typography variant="caption" color="text.secondary">{at}</Typography>}
+    </>
+  );
+};
+
+LastUpdated.propTypes = { note: PropTypes.object.isRequired };
+
 const SUBMIT_CONFIRM = "Submit this note? Once submitted it is locked and only an IT Admin or Level 1 user can unlock it.";
 
 const ProgressNote = ({ clientID }) => {
@@ -325,6 +349,8 @@ const ProgressNote = ({ clientID }) => {
   };
 
   // Filter notes based on search and filters
+  const editingNote = editNoteId != null ? notes.find(note => noteKey(note) === editNoteId) : null;
+
   const filteredNotes = notes.filter(note => {
     const matchesSearch = note.nurseNote.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          note.nurseNoteSite.toLowerCase().includes(searchTerm.toLowerCase());
@@ -498,20 +524,21 @@ const ProgressNote = ({ clientID }) => {
                   <TableCell>Note</TableCell>
                   <TableCell>Follow-up</TableCell>
                   <TableCell>Status</TableCell>
+                  <TableCell>Last Updated By</TableCell>
                   <TableCell>Actions</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan="8" align="center" sx={{ py: 4 }}>
+                    <TableCell colSpan="9" align="center" sx={{ py: 4 }}>
                       <CircularProgress size={24} />
                       <Typography variant="body2" sx={{ mt: 1 }}>Loading notes...</Typography>
                     </TableCell>
                   </TableRow>
                 ) : filteredNotes.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan="8" align="center" sx={{ py: 4 }}>
+                    <TableCell colSpan="9" align="center" sx={{ py: 4 }}>
                       <Typography variant="body2" color="text.secondary">
                         {searchTerm || filterSite || filterCategory || filterPriority 
                           ? "No notes match your search criteria." 
@@ -555,6 +582,9 @@ const ProgressNote = ({ clientID }) => {
                       </TableCell>
                       <TableCell>
                         <RecordStatusChip record={note} />
+                      </TableCell>
+                      <TableCell>
+                        <LastUpdated note={note} />
                       </TableCell>
                       <TableCell>
                         {isRecordLocked(note) ? (
@@ -733,6 +763,12 @@ const ProgressNote = ({ clientID }) => {
             <DialogTitle>{viewOnly ? 'Progress Note (Submitted)' : 'Edit Progress Note'}</DialogTitle>
             <DialogContent>
               {viewOnly && <LockedRecordAlert label="note" />}
+              {editingNote && lastUpdate(editingNote).by && (
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                  Last updated by {lastUpdate(editingNote).by}
+                  {lastUpdate(editingNote).at ? ` on ${lastUpdate(editingNote).at}` : ''}
+                </Typography>
+              )}
               <Box
                 component="fieldset"
                 disabled={viewOnly}
