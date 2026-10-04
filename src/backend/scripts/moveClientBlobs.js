@@ -87,7 +87,7 @@ async function main() {
           blobCacheControl: blob.properties.cacheControl,
           blobContentDisposition: blob.properties.contentDisposition,
         },
-        metadata: blob.metadata,
+        metadata: blob.metadata || {},
       });
 
       const copied = await dst.getProperties();
