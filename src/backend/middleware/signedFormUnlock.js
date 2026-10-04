@@ -20,7 +20,7 @@ const requireSignedFormUnlock = (req, res, next) => {
   }
   if (!canUnlockSignedForms(req.user)) {
     return res.status(403).json({
-      error: 'Only IT Admin or Level 1 users can unlock a signed form or submitted record',
+      error: 'Only IT Admin or Level 1 users can unlock a signed form, or unlock or delete a submitted record',
       code: 'UNLOCK_NOT_PERMITTED',
     });
   }

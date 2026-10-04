@@ -275,6 +275,7 @@ describe('Section 5 record lock and unlock', () => {
 
       expect(versions).toHaveLength(1);
       expect(versions[0].recordType).toBe('progress-note');
+      expect(versions[0].archivedReason).toBe('unlock');
       expect(JSON.parse(versions[0].snapshot).nurseNote).toBe('Client seen today.');
       expect(auditRows[0].action).toBe('UNLOCK_SECTION5_RECORD');
       // The free-text reason may contain PHI and stays out of AuditLog
@@ -284,6 +285,62 @@ describe('Section 5 record lock and unlock', () => {
       const edit = await request(app).put(`/api/progress-notes/${id}`)
         .send({ nurseNote: 'Corrected', updatedBy: 'nurse@hope.org' });
       expect(edit.status).toBe(200);
+    });
+  });
+
+  describe('admin delete of a submitted record', () => {
+    const del = (id, user, body = { reason: 'Entered on the wrong client' }, type = 'progress-note') => {
+      const r = request(app).delete(`/api/section5/records/${type}/${id}`);
+      if (user) r.set(asUser(user));
+      return r.send(body);
+    };
+
+    it('requires authentication', async () => {
+      const { body } = await createNote(true);
+      expect((await del(body.data.id, null)).status).toBe(401);
+    });
+
+    it('refuses users outside IT Admin / Level 1', async () => {
+      const { body } = await createNote(true);
+      const res = await del(body.data.id, nurse);
+      expect(res.status).toBe(403);
+      expect(tables.progress_notes[body.data.id]).toBeDefined();
+    });
+
+    it('requires a reason', async () => {
+      const { body } = await createNote(true);
+      expect((await del(body.data.id, itAdmin, {})).status).toBe(422);
+    });
+
+    it('only handles submitted records; drafts use the normal delete', async () => {
+      const { body } = await createNote(false);
+      const res = await del(body.data.id, itAdmin);
+      expect(res.status).toBe(409);
+      expect(res.body.code).toBe('RECORD_NOT_LOCKED');
+    });
+
+    it.each([['Level 1', level1], ['IT Admin', itAdmin]])('lets %s delete it, keeping a copy', async (_label, user) => {
+      const { body } = await createNote(true);
+      const id = body.data.id;
+
+      const res = await del(id, user);
+      expect(res.status).toBe(200);
+      expect(tables.progress_notes[id]).toBeUndefined();
+
+      expect(versions).toHaveLength(1);
+      expect(versions[0].archivedReason).toBe('delete');
+      expect(versions[0].archivedBy).toBe(user.email);
+      expect(JSON.parse(versions[0].snapshot).nurseNote).toBe('Client seen today.');
+      expect(auditRows[0].action).toBe('DELETE_SECTION5_RECORD');
+      expect(auditRows[0].newValues).not.toContain('wrong client');
+    });
+
+    it('deletes observation records too', async () => {
+      const created = await request(app).post('/api/vital-signs/C1')
+        .send({ recordDate: '2026-10-01', pulse: 70, recordedBy: 'Nurse', submit: true });
+      const res = await del(created.body.vitalSignID, level1, undefined, 'vital-signs');
+      expect(res.status).toBe(200);
+      expect(tables.vital_signs[created.body.vitalSignID]).toBeUndefined();
     });
   });
 });

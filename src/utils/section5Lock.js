@@ -1,6 +1,6 @@
 // Section 5 notes and observation records lock once submitted. Staff can save
 // progress as often as they like; "Submit" locks the record. Only IT Admin or
-// Level 1 users can unlock it (backend routes/section5Lock.js enforces this).
+// Level 1 users can unlock or delete it (backend routes/section5Lock.js enforces this).
 import { getApiAuthHeaders } from './apiAuth';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
@@ -28,11 +28,23 @@ export async function httpError(response) {
 export const errorMessage = (err) =>
   (typeof err === 'string' ? err : err?.message || err?.error) || 'Unknown error';
 
+const recordUrl = (recordType, id) =>
+  `${API_BASE_URL}/api/section5/records/${encodeURIComponent(recordType)}/${encodeURIComponent(id)}`;
+
 export async function unlockSection5Record(recordType, id, reason) {
+  return adminRecordRequest('POST', `${recordUrl(recordType, id)}/unlock`, reason);
+}
+
+// Delete a submitted record (a copy of it is kept server side)
+export async function deleteSection5Record(recordType, id, reason) {
+  return adminRecordRequest('DELETE', recordUrl(recordType, id), reason);
+}
+
+async function adminRecordRequest(method, url, reason) {
   const response = await fetch(
-    `${API_BASE_URL}/api/section5/records/${encodeURIComponent(recordType)}/${encodeURIComponent(id)}/unlock`,
+    url,
     {
-      method: 'POST',
+      method,
       headers: { 'Content-Type': 'application/json', ...(await getApiAuthHeaders()) },
       body: JSON.stringify({ reason }),
     }

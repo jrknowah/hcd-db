@@ -983,7 +983,7 @@ try {
   console.log('⚠️  Could not load medObservation.js:', err.message);
 }
 
-// SECTION 5 RECORD UNLOCK (submitted notes / observation records; IT Admin / Level 1 only)
+// SECTION 5 RECORD UNLOCK / DELETE (submitted notes / observation records; IT Admin / Level 1 only)
 try {
   const section5LockRouter = require('./routes/section5Lock.js');
   app.use('/api/section5', authMiddleware, section5LockRouter);

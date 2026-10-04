@@ -62,6 +62,7 @@ import { canUnlockSection5Records, isRecordLocked, errorMessage } from "../../ut
 import {
   RecordStatusChip,
   UnlockRecordButton,
+  DeleteLockedRecordButton,
   UnlockRecordDialog,
   LockedRecordAlert,
   SaveProgressSubmitActions,
@@ -568,9 +569,14 @@ const ProgressNote = ({ clientID }) => {
                               </IconButton>
                             </Tooltip>
                             {canUnlock && (
+                              <>
                               <UnlockRecordButton
                                 onClick={() => setUnlockTarget({ recordType: 'progress-note', id: noteKey(note), label: 'progress note' })}
                               />
+                              <DeleteLockedRecordButton
+                                onClick={() => setUnlockTarget({ recordType: 'progress-note', id: noteKey(note), label: 'progress note', action: 'delete' })}
+                              />
+                              </>
                             )}
                           </Box>
                         ) : (
@@ -859,7 +865,10 @@ const ProgressNote = ({ clientID }) => {
           <UnlockRecordDialog
             target={unlockTarget}
             onClose={() => setUnlockTarget(null)}
-            onUnlocked={() => dispatch(fetchProgressNotes(clientID))}
+            onUnlocked={() => {
+              dispatch(fetchProgressNotes(clientID));
+              dispatch(fetchNotesSummary(clientID));
+            }}
           />
         </CardContent>
       </Card>

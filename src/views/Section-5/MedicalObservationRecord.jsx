@@ -69,6 +69,7 @@ import { canUnlockSection5Records, isRecordLocked, errorMessage } from "../../ut
 import {
   RecordStatusChip,
   UnlockRecordButton,
+  DeleteLockedRecordButton,
   UnlockRecordDialog,
   LockedRecordAlert,
   SaveProgressSubmitActions,
@@ -770,9 +771,14 @@ const MedicalObservationRecord = ({ clientID }) => {
                                       <ViewIcon />
                                     </IconButton>
                                     {canUnlock && (
+                                      <>
                                       <UnlockRecordButton
                                         onClick={() => setUnlockTarget({ recordType: 'medication-admin', id: record.marID, label: 'medication record' })}
                                       />
+                                      <DeleteLockedRecordButton
+                                        onClick={() => setUnlockTarget({ recordType: 'medication-admin', id: record.marID, label: 'medication record', action: 'delete' })}
+                                      />
+                                      </>
                                     )}
                                   </>
                                 ) : (
@@ -891,9 +897,14 @@ const MedicalObservationRecord = ({ clientID }) => {
                                       <ViewIcon />
                                     </IconButton>
                                     {canUnlock && (
+                                      <>
                                       <UnlockRecordButton
                                         onClick={() => setUnlockTarget({ recordType: 'vital-signs', id: vital.vitalSignID, label: 'vital signs record' })}
                                       />
+                                      <DeleteLockedRecordButton
+                                        onClick={() => setUnlockTarget({ recordType: 'vital-signs', id: vital.vitalSignID, label: 'vital signs record', action: 'delete' })}
+                                      />
+                                      </>
                                     )}
                                   </>
                                 ) : (
@@ -1003,9 +1014,14 @@ const MedicalObservationRecord = ({ clientID }) => {
                                       <ViewIcon />
                                     </IconButton>
                                     {canUnlock && (
+                                      <>
                                       <UnlockRecordButton
                                         onClick={() => setUnlockTarget({ recordType: 'daily-observation', id: obs.observationID, label: 'daily observation' })}
                                       />
+                                      <DeleteLockedRecordButton
+                                        onClick={() => setUnlockTarget({ recordType: 'daily-observation', id: obs.observationID, label: 'daily observation', action: 'delete' })}
+                                      />
+                                      </>
                                     )}
                                   </>
                                 ) : (

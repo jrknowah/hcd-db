@@ -72,7 +72,8 @@ CLOSE table_cursor;
 DEALLOCATE table_cursor;
 GO
 
--- Append-only copy of each submitted version, written before an unlock re-opens it
+-- Append-only copy of each submitted version, written before an unlock
+-- re-opens it or an admin deletes it
 IF OBJECT_ID('dbo.Section5RecordVersions', 'U') IS NULL
 BEGIN
     CREATE TABLE dbo.Section5RecordVersions (
@@ -87,10 +88,10 @@ BEGIN
         submittedAt    DATETIME2      NULL,
 
         -- Why this version was archived
-        archivedReason NVARCHAR(50)   NOT NULL,   -- 'unlock'
+        archivedReason NVARCHAR(50)   NOT NULL,   -- 'unlock' or 'delete'
         archivedBy     NVARCHAR(255)  NOT NULL,
         archivedAt     DATETIME2      NOT NULL DEFAULT SYSUTCDATETIME(),
-        unlockReason   NVARCHAR(500)  NULL
+        unlockReason   NVARCHAR(500)  NULL       -- reason given for the unlock or delete
     );
 
     CREATE INDEX IX_Section5RecordVersions_Record

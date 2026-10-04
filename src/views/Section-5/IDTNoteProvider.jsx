@@ -64,6 +64,7 @@ import { canUnlockSection5Records, isRecordLocked, errorMessage } from "../../ut
 import {
   RecordStatusChip,
   UnlockRecordButton,
+  DeleteLockedRecordButton,
   UnlockRecordDialog,
   LockedRecordAlert,
   SaveProgressSubmitActions,
@@ -864,9 +865,14 @@ const IDTNoteProvider = ({ clientID }) => {
                             </IconButton>
                           </Tooltip>
                           {canUnlock && (
+                            <>
                             <UnlockRecordButton
                               onClick={() => setUnlockTarget({ recordType: 'idt-provider', id: note.id, label: 'IDT provider note' })}
                             />
+                            <DeleteLockedRecordButton
+                              onClick={() => setUnlockTarget({ recordType: 'idt-provider', id: note.id, label: 'IDT provider note', action: 'delete' })}
+                            />
+                            </>
                           )}
                         </>
                       ) : (

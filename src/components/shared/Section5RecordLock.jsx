@@ -16,12 +16,13 @@ import {
   Typography,
 } from '@mui/material';
 import {
+  DeleteForever as DeleteForeverIcon,
   Lock as LockIcon,
   LockOpen as LockOpenIcon,
   Save as SaveIcon,
   Send as SendIcon,
 } from '@mui/icons-material';
-import { unlockSection5Record } from '../../utils/section5Lock';
+import { deleteSection5Record, unlockSection5Record } from '../../utils/section5Lock';
 
 const formatDateTime = (value) => {
   if (!value) return '';
@@ -56,10 +57,21 @@ export const UnlockRecordButton = ({ onClick }) => (
 
 UnlockRecordButton.propTypes = { onClick: PropTypes.func.isRequired };
 
+/** Delete icon button for a locked row, shown to IT Admin / Level 1 users only. */
+export const DeleteLockedRecordButton = ({ onClick }) => (
+  <Tooltip title="Delete submitted record (IT Admin / Level 1)">
+    <IconButton size="small" color="error" onClick={onClick} aria-label="Delete submitted record">
+      <DeleteForeverIcon fontSize="small" />
+    </IconButton>
+  </Tooltip>
+);
+
+DeleteLockedRecordButton.propTypes = { onClick: PropTypes.func.isRequired };
+
 /** Banner shown on a locked record's row or dialog. */
 export const LockedRecordAlert = ({ label = 'record' }) => (
   <Alert severity="info" icon={<LockIcon />} sx={{ mb: 2 }}>
-    This {label} has been submitted and is locked. Only an IT Admin or Level 1 user can unlock it.
+    This {label} has been submitted and is locked. Only an IT Admin or Level 1 user can unlock or delete it.
   </Alert>
 );
 
@@ -106,15 +118,38 @@ SaveProgressSubmitActions.propTypes = {
 export const SubmitLockNotice = () => (
   <Typography variant="caption" color="text.secondary" sx={{ display: 'block', px: 3, pb: 1 }}>
     Save Progress keeps the record editable. Submit locks it; after that only an IT Admin or
-    Level 1 user can unlock it.
+    Level 1 user can unlock or delete it.
   </Typography>
 );
 
+const DIALOG_ACTIONS = {
+  unlock: {
+    title: 'Unlock submitted',
+    body: 'A copy of the submitted version will be kept. The record becomes editable again and must be submitted again to re-lock it.',
+    button: 'Unlock',
+    busy: 'Unlocking...',
+    color: 'warning',
+    Icon: LockOpenIcon,
+    call: unlockSection5Record,
+  },
+  delete: {
+    title: 'Delete submitted',
+    body: 'The record will be removed from this client\'s chart. A copy of the submitted version is kept for audit.',
+    button: 'Delete',
+    busy: 'Deleting...',
+    color: 'error',
+    Icon: DeleteForeverIcon,
+    call: deleteSection5Record,
+  },
+};
+
 /**
- * Reason dialog that calls the unlock endpoint. `target` is
- * { recordType, id, label } or null when closed.
+ * Reason dialog that unlocks or deletes a submitted record. `target` is
+ * { recordType, id, label, action: 'unlock' | 'delete' } or null when closed;
+ * action defaults to 'unlock'. onDone runs after either succeeds.
  */
 export const UnlockRecordDialog = ({ target, onClose, onUnlocked }) => {
+  const action = DIALOG_ACTIONS[target?.action] || DIALOG_ACTIONS.unlock;
   const [reason, setReason] = useState('');
   const [unlocking, setUnlocking] = useState(false);
   const [error, setError] = useState(null);
@@ -130,12 +165,12 @@ export const UnlockRecordDialog = ({ target, onClose, onUnlocked }) => {
     setUnlocking(true);
     setError(null);
     try {
-      await unlockSection5Record(target.recordType, target.id, reason.trim());
+      await action.call(target.recordType, target.id, reason.trim());
       setReason('');
       onUnlocked?.(target);
       onClose();
     } catch (err) {
-      setError(err.message || 'Failed to unlock record');
+      setError(err.message || `Failed to ${action.button.toLowerCase()} record`);
     } finally {
       setUnlocking(false);
     }
@@ -143,11 +178,10 @@ export const UnlockRecordDialog = ({ target, onClose, onUnlocked }) => {
 
   return (
     <Dialog open={!!target} onClose={handleClose} maxWidth="sm" fullWidth>
-      <DialogTitle>Unlock submitted {target?.label || 'record'}</DialogTitle>
+      <DialogTitle>{action.title} {target?.label || 'record'}</DialogTitle>
       <DialogContent>
         <Typography variant="body2" sx={{ mb: 2 }}>
-          A copy of the submitted version will be kept. The record becomes editable again and must
-          be submitted again to re-lock it.
+          {action.body}
         </Typography>
         {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
         <TextField
@@ -155,11 +189,11 @@ export const UnlockRecordDialog = ({ target, onClose, onUnlocked }) => {
           fullWidth
           multiline
           minRows={3}
-          label="Reason for unlocking"
+          label={`Reason to ${action.button.toLowerCase()}`}
           value={reason}
           onChange={(e) => setReason(e.target.value)}
           inputProps={{ maxLength: 500 }}
-          helperText="Required. Recorded with the unlock (at least 5 characters)."
+          helperText="Required. Recorded for audit (at least 5 characters)."
         />
       </DialogContent>
       <DialogActions>
@@ -168,12 +202,12 @@ export const UnlockRecordDialog = ({ target, onClose, onUnlocked }) => {
         </Button>
         <Button
           variant="contained"
-          color="warning"
+          color={action.color}
           onClick={handleConfirm}
           disabled={unlocking || reason.trim().length < 5}
-          startIcon={unlocking ? <CircularProgress size={16} /> : <LockOpenIcon />}
+          startIcon={unlocking ? <CircularProgress size={16} /> : <action.Icon />}
         >
-          {unlocking ? 'Unlocking...' : 'Unlock'}
+          {unlocking ? action.busy : action.button}
         </Button>
       </DialogActions>
     </Dialog>
@@ -185,6 +219,7 @@ UnlockRecordDialog.propTypes = {
     recordType: PropTypes.string.isRequired,
     id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
     label: PropTypes.string,
+    action: PropTypes.oneOf(['unlock', 'delete']),
   }),
   onClose: PropTypes.func.isRequired,
   onUnlocked: PropTypes.func,
