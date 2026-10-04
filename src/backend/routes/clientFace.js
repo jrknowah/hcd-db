@@ -16,6 +16,14 @@ const validateEmail = (email) => {
   return emailRegex.test(email);
 };
 
+// Placeholder entries used when a client has no email on file
+const NO_EMAIL_VALUES = ['n/a', 'na', 'none', 'no email', 'no', '-', 'unknown'];
+const normalizeEmail = (email) => {
+  if (typeof email !== 'string') return email;
+  const trimmed = email.trim();
+  return NO_EMAIL_VALUES.includes(trimmed.toLowerCase()) ? '' : trimmed;
+};
+
 // Get client face data
 router.get('/getClientFace/:clientID', async (req, res) => {
   const timestamp = new Date().toISOString();
@@ -74,7 +82,8 @@ router.post('/saveClientFace', async (req, res) => {
     }
   }
 
-  // ✅ VALIDATION: Email
+  // ✅ VALIDATION: Email (optional — clients without email may leave it blank)
+  req.body.clientEmail = normalizeEmail(req.body.clientEmail);
   if (req.body.clientEmail && !validateEmail(req.body.clientEmail)) {
     console.error(`❌ Invalid email format: ${req.body.clientEmail}`);
     return res.status(400).json({ 
