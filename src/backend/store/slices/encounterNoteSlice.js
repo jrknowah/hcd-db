@@ -129,7 +129,7 @@ export const addEncounterNote = createAsyncThunk(
     }
 
     try {
-      const response = await axios.post(`${API_URL}/api/encounter-notes/${clientID}`, noteData);
+      const response = await axios.post(`${API_URL}/api/encounter-notes/${clientID}`, noteData, { headers: await getApiAuthHeaders() });
       return response.data;
     } catch (error) {
       console.error("❌ Error adding encounter note:", error);
@@ -152,7 +152,7 @@ export const editEncounterNote = createAsyncThunk(
     }
 
     try {
-      const response = await axios.put(`${API_URL}/api/encounter-notes/${noteId}`, updatedData);
+      const response = await axios.put(`${API_URL}/api/encounter-notes/${noteId}`, updatedData, { headers: await getApiAuthHeaders() });
       return response.data;
     } catch (error) {
       console.error("❌ Error editing encounter note:", error);
@@ -191,7 +191,7 @@ export const deleteEncounterNote = createAsyncThunk(
     }
 
     try {
-      await axios.delete(`${API_URL}/api/encounter-notes/${noteId}`);
+      await axios.delete(`${API_URL}/api/encounter-notes/${noteId}`, { headers: await getApiAuthHeaders() });
       return noteId;
     } catch (error) {
       console.error("❌ Error deleting encounter note:", error);

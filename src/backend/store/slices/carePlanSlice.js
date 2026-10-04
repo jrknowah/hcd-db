@@ -123,7 +123,7 @@ export const addCarePlan = createAsyncThunk(
         ...carePlanData,
         createdBy: user?.email || "unknown",
         createdAt: new Date().toISOString(),
-      });
+      }, { headers: await getApiAuthHeaders() });
       return response.data;
     } catch (error) {
       console.error("❌ Error adding care plan:", error);
@@ -152,7 +152,7 @@ export const editCarePlan = createAsyncThunk(
         ...updatedData,
         updatedBy: user?.email || "unknown",
         updatedAt: new Date().toISOString(),
-      });
+      }, { headers: await getApiAuthHeaders() });
       return response.data;
     } catch (error) {
       console.error("❌ Error editing care plan:", error);
@@ -192,7 +192,8 @@ export const deleteCarePlan = createAsyncThunk(
 
     try {
       await axios.delete(`${API_URL}/api/care-plans/${id}`, {
-        data: { deletedBy: user?.email || "unknown" }
+        data: { deletedBy: user?.email || "unknown" },
+        headers: await getApiAuthHeaders(),
       });
       return id;
     } catch (error) {
@@ -215,7 +216,7 @@ export const updateCarePlanStatus = createAsyncThunk(
         status,
         updatedBy: user?.email || "unknown",
         updatedAt: new Date().toISOString(),
-      });
+      }, { headers: await getApiAuthHeaders() });
       return response.data;
     } catch (error) {
       console.error("❌ Error updating care plan status:", error);

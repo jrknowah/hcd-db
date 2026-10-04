@@ -237,9 +237,34 @@ describe('Section 4 draft / submit / unlock', () => {
   });
 
   describe('encounter notes', () => {
-    it('saves progress as an unlocked draft, even without note content', async () => {
+    it('requires a signed-in user to save', async () => {
       const res = await request(app)
         .post('/api/encounter-notes/C1')
+        .send({ careNoteDate: '2026-10-02', careNoteType: 'Individual', careNote: 'x', submit: true });
+      expect(res.status).toBe(401);
+      expect(Object.keys(notes)).toHaveLength(0);
+    });
+
+    it('records the signed-in user as the submitter, not the request body', async () => {
+      const res = await request(app)
+        .post('/api/encounter-notes/C1').set(asUser(caseManager))
+        .send({ careNoteDate: '2026-10-02', careNoteType: 'Individual', careNote: 'Done', createdBy: 'someone-else@hope.org', submit: true });
+      expect(res.body.submittedBy).toBe('cm@hope.org');
+      expect(res.body.createdBy).toBe('cm@hope.org');
+      expect(res.body.submittedAt).toBeTruthy();
+    });
+
+    it('records who submitted a draft', async () => {
+      notes[NOTE_ID] = noteRow({ SubmissionStatus: 'draft', SubmittedBy: null, SubmittedAt: null, CreatedBy: 'first@hope.org' });
+      const res = await request(app).put(`/api/encounter-notes/${NOTE_ID}`).set(asUser(level1))
+        .send(noteBody({ submit: true, updatedBy: 'spoofed@hope.org' }));
+      expect(res.body.submittedBy).toBe('lead@hope.org');
+      expect(notes[NOTE_ID].SubmittedBy).toBe('lead@hope.org');
+    });
+
+    it('saves progress as an unlocked draft, even without note content', async () => {
+      const res = await request(app)
+        .post('/api/encounter-notes/C1').set(asUser(caseManager))
         .send({ careNoteDate: '2026-10-02', careNoteType: 'Individual', careNote: '', createdBy: 'cm@hope.org' });
       expect(res.status).toBe(201);
       expect(res.body.submissionStatus).toBe('draft');
@@ -249,14 +274,14 @@ describe('Section 4 draft / submit / unlock', () => {
 
     it('requires note content to submit', async () => {
       const res = await request(app)
-        .post('/api/encounter-notes/C1')
+        .post('/api/encounter-notes/C1').set(asUser(caseManager))
         .send({ careNoteDate: '2026-10-02', careNoteType: 'Individual', careNote: ' ', submit: true });
       expect(res.status).toBe(400);
     });
 
     it('locks a note when it is submitted', async () => {
       const res = await request(app)
-        .post('/api/encounter-notes/C1')
+        .post('/api/encounter-notes/C1').set(asUser(caseManager))
         .send({ careNoteDate: '2026-10-02', careNoteType: 'Individual', careNote: 'Done', createdBy: 'cm@hope.org', submit: true });
       expect(res.status).toBe(201);
       expect(res.body.submissionStatus).toBe('submitted');
@@ -266,11 +291,11 @@ describe('Section 4 draft / submit / unlock', () => {
 
     it('lets a draft be edited and then submitted', async () => {
       notes[NOTE_ID] = noteRow({ SubmissionStatus: 'draft', SubmittedBy: null, SubmittedAt: null });
-      const saved = await request(app).put(`/api/encounter-notes/${NOTE_ID}`).send(noteBody());
+      const saved = await request(app).put(`/api/encounter-notes/${NOTE_ID}`).set(asUser(caseManager)).send(noteBody());
       expect(saved.status).toBe(200);
       expect(saved.body.locked).toBe(false);
 
-      const submitted = await request(app).put(`/api/encounter-notes/${NOTE_ID}`).send(noteBody({ submit: true }));
+      const submitted = await request(app).put(`/api/encounter-notes/${NOTE_ID}`).set(asUser(caseManager)).send(noteBody({ submit: true }));
       expect(submitted.status).toBe(200);
       expect(submitted.body.locked).toBe(true);
       expect(notes[NOTE_ID].SubmissionStatus).toBe('submitted');
@@ -278,7 +303,7 @@ describe('Section 4 draft / submit / unlock', () => {
 
     it('rejects editing a submitted note with 409 RECORD_LOCKED', async () => {
       notes[NOTE_ID] = noteRow();
-      const res = await request(app).put(`/api/encounter-notes/${NOTE_ID}`).send(noteBody());
+      const res = await request(app).put(`/api/encounter-notes/${NOTE_ID}`).set(asUser(caseManager)).send(noteBody());
       expect(res.status).toBe(409);
       expect(res.body.code).toBe('RECORD_LOCKED');
       expect(notes[NOTE_ID].CareNote).toBe('Met with client about housing.');
@@ -286,7 +311,7 @@ describe('Section 4 draft / submit / unlock', () => {
 
     it('rejects deleting a submitted note', async () => {
       notes[NOTE_ID] = noteRow();
-      const res = await request(app).delete(`/api/encounter-notes/${NOTE_ID}`);
+      const res = await request(app).delete(`/api/encounter-notes/${NOTE_ID}`).set(asUser(caseManager));
       expect(res.status).toBe(409);
       expect(notes[NOTE_ID]).toBeDefined();
     });
@@ -295,7 +320,7 @@ describe('Section 4 draft / submit / unlock', () => {
       notes[NOTE_ID] = noteRow({ SubmissionStatus: null });
       const list = await request(app).get('/api/encounter-notes/C1');
       expect(list.body[0].locked).toBe(true);
-      expect((await request(app).put(`/api/encounter-notes/${NOTE_ID}`).send(noteBody())).status).toBe(409);
+      expect((await request(app).put(`/api/encounter-notes/${NOTE_ID}`).set(asUser(caseManager)).send(noteBody())).status).toBe(409);
     });
 
     describe('unlock', () => {
@@ -326,7 +351,7 @@ describe('Section 4 draft / submit / unlock', () => {
         expect(notes[NOTE_ID].UnlockReason).toBe('Wrong note date entered');
 
         // Editable again
-        expect((await request(app).put(`/api/encounter-notes/${NOTE_ID}`).send(noteBody())).status).toBe(200);
+        expect((await request(app).put(`/api/encounter-notes/${NOTE_ID}`).set(asUser(caseManager)).send(noteBody())).status).toBe(200);
       });
 
       it('archives the submitted version and audits without the reason', async () => {
@@ -359,16 +384,23 @@ describe('Section 4 draft / submit / unlock', () => {
   describe('care plans', () => {
     it('saves progress as a draft with only a goal', async () => {
       const res = await request(app)
-        .post('/api/care-plans/C1')
+        .post('/api/care-plans/C1').set(asUser(caseManager))
         .send({ careGoal: 'Stable housing', careSteps: '', createdBy: 'cm@hope.org' });
       expect(res.status).toBe(201);
       expect(res.body.submissionStatus).toBe('draft');
       expect(res.body.locked).toBe(false);
     });
 
+    it('records the signed-in user as the submitter', async () => {
+      const res = await request(app)
+        .post('/api/care-plans/C1').set(asUser(level1))
+        .send({ careGoal: 'Stable housing', careSteps: 'Apply', createdBy: 'spoofed@hope.org', submit: true });
+      expect(res.body.submittedBy).toBe('lead@hope.org');
+    });
+
     it('requires steps to submit', async () => {
       const res = await request(app)
-        .post('/api/care-plans/C1')
+        .post('/api/care-plans/C1').set(asUser(caseManager))
         .send({ careGoal: 'Stable housing', careSteps: '', submit: true });
       expect(res.status).toBe(400);
       expect(res.body.errors.careSteps).toBeDefined();
@@ -377,7 +409,7 @@ describe('Section 4 draft / submit / unlock', () => {
     it('locks a plan when it is submitted', async () => {
       plans[PLAN_ID] = planRow({ submissionStatus: 'draft' });
       const res = await request(app)
-        .put(`/api/care-plans/${PLAN_ID}`)
+        .put(`/api/care-plans/${PLAN_ID}`).set(asUser(caseManager))
         .send({ careGoal: 'Stable housing', careSteps: 'Apply', status: 'Active', priority: 'High', submit: true });
       expect(res.status).toBe(200);
       expect(res.body.locked).toBe(true);
@@ -386,22 +418,22 @@ describe('Section 4 draft / submit / unlock', () => {
     it('rejects editing, status changes and deleting a submitted plan', async () => {
       plans[PLAN_ID] = planRow();
       const put = await request(app)
-        .put(`/api/care-plans/${PLAN_ID}`)
+        .put(`/api/care-plans/${PLAN_ID}`).set(asUser(caseManager))
         .send({ careGoal: 'Changed', careSteps: 'Changed' });
       expect(put.status).toBe(409);
       expect(put.body.code).toBe('RECORD_LOCKED');
 
-      const patch = await request(app).patch(`/api/care-plans/${PLAN_ID}/status`).send({ status: 'Completed' });
+      const patch = await request(app).patch(`/api/care-plans/${PLAN_ID}/status`).set(asUser(caseManager)).send({ status: 'Completed' });
       expect(patch.status).toBe(409);
       expect(plans[PLAN_ID].status).toBe('Active');
 
-      expect((await request(app).delete(`/api/care-plans/${PLAN_ID}`)).status).toBe(409);
+      expect((await request(app).delete(`/api/care-plans/${PLAN_ID}`).set(asUser(caseManager))).status).toBe(409);
       expect(plans[PLAN_ID].careGoal).toBe('Stable housing');
     });
 
     it('still deletes a draft plan', async () => {
       plans[PLAN_ID] = planRow({ submissionStatus: 'draft' });
-      expect((await request(app).delete(`/api/care-plans/${PLAN_ID}`)).status).toBe(200);
+      expect((await request(app).delete(`/api/care-plans/${PLAN_ID}`).set(asUser(caseManager))).status).toBe(200);
       expect(plans[PLAN_ID]).toBeUndefined();
     });
 

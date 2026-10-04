@@ -549,6 +549,7 @@ const CarePlan = ({ clientID, exportMode }) => {
               <TableCell>Case Manager Actions</TableCell>
               <TableCell>Expected Outcomes</TableCell>
               <TableCell>Submission</TableCell>
+              <TableCell>Submitted By</TableCell>
               <TableCell>Added By</TableCell>
               {!exportMode && <TableCell>Actions</TableCell>}
             </TableRow>
@@ -556,19 +557,19 @@ const CarePlan = ({ clientID, exportMode }) => {
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={exportMode ? 9 : 10} align="center">
+                <TableCell colSpan={exportMode ? 10 : 11} align="center">
                   <Alert severity="info">Loading care plans...</Alert>
                 </TableCell>
               </TableRow>
             ) : error ? (
               <TableRow>
-                <TableCell colSpan={exportMode ? 9 : 10} align="center">
+                <TableCell colSpan={exportMode ? 10 : 11} align="center">
                   <Alert severity="error">Error: {errorText(error)}</Alert>
                 </TableCell>
               </TableRow>
             ) : carePlans.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={exportMode ? 9 : 10} align="center">
+                <TableCell colSpan={exportMode ? 10 : 11} align="center">
                   <Alert severity="info">No care plans available.</Alert>
                 </TableCell>
               </TableRow>
@@ -658,11 +659,23 @@ const CarePlan = ({ clientID, exportMode }) => {
                   </TableCell>
                   <TableCell>
                     {isPlanLocked(plan) ? (
-                      <Tooltip title={plan.submittedAt ? `Submitted ${formatDateTime(plan.submittedAt)}${plan.submittedBy ? ` by ${plan.submittedBy}` : ''}` : 'Submitted'}>
-                        <Chip icon={<LockIcon />} label="Submitted" size="small" />
-                      </Tooltip>
+                      <Chip icon={<LockIcon />} label="Submitted" size="small" />
                     ) : (
                       <Chip label="Draft" color="warning" variant="outlined" size="small" />
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {isPlanLocked(plan) ? (
+                      <>
+                        <Typography variant="body2">{plan.submittedBy || 'Unknown'}</Typography>
+                        {plan.submittedAt && (
+                          <Typography variant="caption" color="text.secondary">
+                            {formatDateTime(plan.submittedAt)}
+                          </Typography>
+                        )}
+                      </>
+                    ) : (
+                      <Typography variant="body2" color="text.secondary">Not submitted</Typography>
                     )}
                   </TableCell>
                   <TableCell>

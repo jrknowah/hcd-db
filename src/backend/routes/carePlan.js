@@ -113,7 +113,7 @@ router.get('/care-plans/:clientID', async (req, res) => {
 
 // POST /api/care-plans/:clientID - Create new care plan
 // { submit: true } submits (locks) the plan; otherwise it is saved as a draft.
-router.post('/care-plans/:clientID', async (req, res) => {
+router.post('/care-plans/:clientID', authMiddleware, async (req, res) => {
   try {
     const pool = await getPool();
     const { clientID } = req.params;
@@ -130,7 +130,8 @@ router.post('/care-plans/:clientID', async (req, res) => {
     }
     
     const carePlanID = generateCarePlanID(clientID);
-    const createdBy = planData.createdBy || 'unknown';
+    // Recorded from the signed-in user, never from the request body
+    const createdBy = getCurrentUser(req);
     
     console.log(`📝 Creating ${submit ? 'submitted' : 'draft'} care plan: ${carePlanID} for client: ${clientID}`);
     
@@ -179,7 +180,7 @@ router.post('/care-plans/:clientID', async (req, res) => {
 
 // PUT /api/care-plans/:carePlanID - Update a draft care plan
 // { submit: true } submits (locks) it. Submitted plans return 409 RECORD_LOCKED.
-router.put('/care-plans/:carePlanID', async (req, res) => {
+router.put('/care-plans/:carePlanID', authMiddleware, async (req, res) => {
   try {
     const pool = await getPool();
     const { carePlanID } = req.params;
@@ -209,7 +210,8 @@ router.put('/care-plans/:carePlanID', async (req, res) => {
       return lockedResponse(res, 'care plan');
     }
     
-    const updatedBy = updateData.updatedBy || 'unknown';
+    // Recorded from the signed-in user, never from the request body
+    const updatedBy = getCurrentUser(req);
     // The status guard in the WHERE clause stops a save that races a submit
     const result = await pool.request()
       .input('carePlanID', sql.VarChar, carePlanID)
@@ -264,11 +266,11 @@ router.put('/care-plans/:carePlanID', async (req, res) => {
 });
 
 // PATCH /api/care-plans/:carePlanID/status - Update status only (drafts only)
-router.patch('/care-plans/:carePlanID/status', async (req, res) => {
+router.patch('/care-plans/:carePlanID/status', authMiddleware, async (req, res) => {
   try {
     const pool = await getPool();
     const { carePlanID } = req.params;
-    const { status, updatedBy } = req.body;
+    const { status } = req.body;
     
     if (!status) {
       return res.status(400).json({ error: 'Status is required' });
@@ -283,7 +285,7 @@ router.patch('/care-plans/:carePlanID/status', async (req, res) => {
     const result = await pool.request()
       .input('carePlanID', sql.VarChar, carePlanID)
       .input('status', sql.VarChar, status)
-      .input('updatedBy', sql.VarChar, updatedBy || 'unknown')
+      .input('updatedBy', sql.VarChar, getCurrentUser(req))
       .query(`
         UPDATE CarePlans 
         SET 
@@ -420,7 +422,7 @@ router.post(
 );
 
 // DELETE /api/care-plans/:carePlanID - Delete a draft care plan
-router.delete('/care-plans/:carePlanID', async (req, res) => {
+router.delete('/care-plans/:carePlanID', authMiddleware, async (req, res) => {
   try {
     const pool = await getPool();
     const { carePlanID } = req.params;

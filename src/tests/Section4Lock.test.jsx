@@ -95,6 +95,35 @@ describe('Section 4 encounter notes lock', () => {
     expect(within(dialog).getByLabelText(/note content/i)).toHaveAttribute('readonly');
   }, 20000);
 
+  it('shows who submitted each note', async () => {
+    axios.get.mockResolvedValue({ data: [{ ...submittedNote, submittedBy: 'lead@hope.org' }, draftNote] });
+    renderWithProviders(<EncounterNote clientID="C1" />, { store: makeStore() });
+    await screen.findAllByText('Met with client about housing.');
+    const [lockedRow, draftRow] = screen.getAllByText('Met with client about housing.').map(el => el.closest('tr'));
+    expect(within(lockedRow).getByText('lead@hope.org')).toBeInTheDocument();
+    expect(within(lockedRow).getByText(new Date('2026-10-01T17:00:00Z').toLocaleString())).toBeInTheDocument();
+    expect(within(draftRow).getByText('Not submitted')).toBeInTheDocument();
+  });
+
+  it('sends the sign-in token when saving', async () => {
+    const user = userEvent.setup();
+    axios.get.mockResolvedValue({ data: [] });
+    axios.post.mockImplementation(async (_url, body) => ({ data: { ...body, _id: 'new', locked: false, submissionStatus: 'draft' } }));
+    renderWithProviders(<EncounterNote clientID="C1" />, { store: makeStore() });
+
+    await user.click(await screen.findByRole('button', { name: /add note/i }));
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByText('Select note type...'));
+    await user.click(await screen.findByText('Individual'));
+    await user.click(within(dialog).getByRole('button', { name: /save progress/i }));
+
+    await waitFor(() => expect(axios.post).toHaveBeenCalledWith(
+      expect.stringMatching(/\/api\/encounter-notes\/C1$/),
+      expect.any(Object),
+      { headers: { Authorization: 'Bearer test-token' } },
+    ));
+  }, 20000);
+
   it('saves progress as a draft with submit: false', async () => {
     const user = userEvent.setup();
     axios.get.mockResolvedValue({ data: [] });
@@ -165,6 +194,14 @@ describe('Section 4 care plans lock', () => {
     vi.clearAllMocks();
     groups = [CASE_GROUP];
     axios.get.mockResolvedValue({ data: [submittedPlan] });
+  });
+
+  it('shows who submitted each plan', async () => {
+    axios.get.mockResolvedValue({ data: [{ ...submittedPlan, submittedBy: 'lead@hope.org' }, { ...submittedPlan, _id: 'p2', careGoal: 'Draft goal', submissionStatus: 'draft', locked: false, submittedBy: null, submittedAt: null }] });
+    renderWithProviders(<CarePlan clientID="C1" />, { store: makeStore() });
+    await screen.findByText('Stable housing');
+    expect(within(rowFor('Stable housing')).getByText('lead@hope.org')).toBeInTheDocument();
+    expect(within(rowFor('Draft goal')).getByText('Not submitted')).toBeInTheDocument();
   });
 
   it('hides edit and delete on a submitted plan for regular staff', async () => {

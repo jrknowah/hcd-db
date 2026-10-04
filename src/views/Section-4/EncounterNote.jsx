@@ -541,6 +541,7 @@ const EncounterNote = ({ clientID, exportMode }) => {
               <TableCell>Site</TableCell>
               <TableCell>Note</TableCell>
               <TableCell>Status</TableCell>
+              <TableCell>Submitted By</TableCell>
               <TableCell>Added By</TableCell>
               {!exportMode && <TableCell>Actions</TableCell>}
             </TableRow>
@@ -548,19 +549,19 @@ const EncounterNote = ({ clientID, exportMode }) => {
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={exportMode ? 6 : 7} align="center">
+                <TableCell colSpan={exportMode ? 7 : 8} align="center">
                   <Alert severity="info">Loading encounter notes...</Alert>
                 </TableCell>
               </TableRow>
             ) : error ? (
               <TableRow>
-                <TableCell colSpan={exportMode ? 6 : 7} align="center">
+                <TableCell colSpan={exportMode ? 7 : 8} align="center">
                   <Alert severity="error">Error: {error}</Alert>
                 </TableCell>
               </TableRow>
             ) : encounterNotes.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={exportMode ? 6 : 7} align="center">
+                <TableCell colSpan={exportMode ? 7 : 8} align="center">
                   <Alert severity="info">No encounter notes available.</Alert>
                 </TableCell>
               </TableRow>
@@ -602,11 +603,23 @@ const EncounterNote = ({ clientID, exportMode }) => {
                   </TableCell>
                   <TableCell>
                     {isNoteLocked(note) ? (
-                      <Tooltip title={note.submittedAt ? `Submitted ${formatDateTime(note.submittedAt)}${note.submittedBy ? ` by ${note.submittedBy}` : ''}` : 'Submitted'}>
-                        <Chip icon={<LockIcon />} label="Submitted" size="small" />
-                      </Tooltip>
+                      <Chip icon={<LockIcon />} label="Submitted" size="small" />
                     ) : (
                       <Chip label="Draft" color="warning" variant="outlined" size="small" />
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {isNoteLocked(note) ? (
+                      <>
+                        <Typography variant="body2">{note.submittedBy || 'Unknown'}</Typography>
+                        {note.submittedAt && (
+                          <Typography variant="caption" color="text.secondary">
+                            {formatDateTime(note.submittedAt)}
+                          </Typography>
+                        )}
+                      </>
+                    ) : (
+                      <Typography variant="body2" color="text.secondary">Not submitted</Typography>
                     )}
                   </TableCell>
                   <TableCell>

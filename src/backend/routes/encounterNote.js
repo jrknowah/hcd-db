@@ -226,7 +226,7 @@ router.get('/encounter-notes/:clientID', async (req, res) => {
 
 // POST /api/encounter-notes/:clientID - Create new encounter note
 // { submit: true } submits (locks) the note; otherwise it is saved as a draft.
-router.post('/encounter-notes/:clientID', async (req, res) => {
+router.post('/encounter-notes/:clientID', authMiddleware, async (req, res) => {
   try {
     const pool = await getPool();
     const { clientID } = req.params;
@@ -240,7 +240,8 @@ router.post('/encounter-notes/:clientID', async (req, res) => {
 
     console.log(`📝 Creating ${submit ? 'submitted' : 'draft'} encounter note for client: ${clientID}`);
     
-    const createdBy = noteData.createdBy || 'unknown';
+    // Recorded from the signed-in user, never from the request body
+    const createdBy = getCurrentUser(req);
     const result = await pool.request()
       .input('clientID', sql.NVarChar, clientID)
       .input('careNoteDate', sql.Date, noteData.careNoteDate)
@@ -294,7 +295,7 @@ router.post('/encounter-notes/:clientID', async (req, res) => {
 
 // PUT /api/encounter-notes/:noteId - Update a draft encounter note
 // { submit: true } submits (locks) it. Submitted notes return 409 RECORD_LOCKED.
-router.put('/encounter-notes/:noteId', async (req, res) => {
+router.put('/encounter-notes/:noteId', authMiddleware, async (req, res) => {
   try {
     const pool = await getPool();
     const { noteId } = req.params;
@@ -320,7 +321,8 @@ router.put('/encounter-notes/:noteId', async (req, res) => {
       return lockedResponse(res, 'note');
     }
     
-    const updatedBy = updateData.updatedBy || 'unknown';
+    // Recorded from the signed-in user, never from the request body
+    const updatedBy = getCurrentUser(req);
     // The status guard in the WHERE clause stops a save that races a submit
     const result = await pool.request()
       .input('noteId', sql.UniqueIdentifier, noteId)
@@ -471,7 +473,7 @@ router.post(
 );
 
 // DELETE /api/encounter-notes/:noteId - Delete a draft encounter note
-router.delete('/encounter-notes/:noteId', async (req, res) => {
+router.delete('/encounter-notes/:noteId', authMiddleware, async (req, res) => {
   try {
     const pool = await getPool();
     const { noteId } = req.params;

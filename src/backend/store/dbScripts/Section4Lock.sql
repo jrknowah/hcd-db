@@ -6,7 +6,8 @@
 -- POST /api/care-plans/:carePlanID/unlock.
 --
 -- Rows that already exist were saved before drafts existed, so they are
--- marked 'submitted' (locked).
+-- marked 'submitted' (locked). Their submitter is taken from the last person
+-- to save them (updatedBy, else createdBy).
 -- ========================================
 
 -- ---------- EncounterNotes ----------
@@ -37,6 +38,13 @@ IF OBJECT_ID('dbo.CK_EncounterNotes_SubmissionStatus', 'C') IS NULL
         CHECK (SubmissionStatus IN ('draft', 'submitted'));
 GO
 
+-- Existing notes: record the last person to save them as the submitter
+UPDATE dbo.EncounterNotes
+SET SubmittedBy = COALESCE(UpdatedBy, CreatedBy),
+    SubmittedAt = COALESCE(UpdatedAt, CreatedAt)
+WHERE SubmissionStatus = 'submitted' AND SubmittedBy IS NULL;
+GO
+
 -- ---------- CarePlans ----------
 IF COL_LENGTH('dbo.CarePlans', 'submissionStatus') IS NULL
     ALTER TABLE dbo.CarePlans
@@ -63,6 +71,13 @@ IF OBJECT_ID('dbo.CK_CarePlans_SubmissionStatus', 'C') IS NULL
     ALTER TABLE dbo.CarePlans
         ADD CONSTRAINT CK_CarePlans_SubmissionStatus
         CHECK (submissionStatus IN ('draft', 'submitted'));
+GO
+
+-- Existing care plans: record the last person to save them as the submitter
+UPDATE dbo.CarePlans
+SET submittedBy = COALESCE(updatedBy, createdBy),
+    submittedAt = COALESCE(updatedAt, createdAt)
+WHERE submissionStatus = 'submitted' AND submittedBy IS NULL;
 GO
 
 -- ---------- Archived submitted versions ----------
