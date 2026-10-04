@@ -1,25 +1,15 @@
 // src/store/apps/notes/noteArchiveSlice.js
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
+import { azureBlobService } from "../../services/azureBlobService";
+import { ARCHIVE_SECTIONS, sectionDocType, filterSectionFiles } from "../../../utils/archiveSections";
 
 const API = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
 
-// Timeouts
-const API_TIMEOUT = 60000;   // 60 seconds for file uploads
-const FETCH_TIMEOUT = 30000; // 30 seconds for fetch/save
-
-// Mock response for development
-const MOCK_UPLOAD_RESPONSE = {
-  success: true,
-  message: "File uploaded successfully",
-  fileUrl: "https://example.com/uploads/mock-file.pdf",
-  fileName: "mock-uploaded-file.pdf",
-  fileSize: 1024000,
-  uploadedAt: new Date().toISOString()
-};
+const FETCH_TIMEOUT = 30000; // 30 seconds
 
 // Configured axios instance
-const createAxiosInstance = (timeout = API_TIMEOUT) => {
+const createAxiosInstance = (timeout = FETCH_TIMEOUT) => {
   return axios.create({
     timeout,
     headers: {
@@ -28,112 +18,70 @@ const createAxiosInstance = (timeout = API_TIMEOUT) => {
   });
 };
 
-// Helper to determine if error is retryable
-const isRetryableError = (error) => {
-  if (!error) return false;
-  const status = error.response?.status;
-  const message = error.message?.toLowerCase() || '';
-  return (
-    status === 503 ||
-    status === 500 ||
-    status === 502 ||
-    status === 504 ||
-    message.includes('timeout') ||
-    message.includes('network error') ||
-    message.includes('econnaborted')
-  );
-};
+// CM note files share the same blob storage pipeline as every other section's
+// uploads (/api/upload + /api/files/:clientID), in Section 4's own folder
+// (see utils/archiveSections). The old /api/note-archive route wrote to a
+// separate path + SQL table that this tab couldn't reliably read back.
+const CM_NOTES_CATEGORIES = ['CM Notes Archive'];
+const CM_NOTES_DOC_TYPE = sectionDocType(ARCHIVE_SECTIONS.CM_NOTES, CM_NOTES_CATEGORIES[0]);
+
+const toArchiveFile = (f) => ({
+  fileName: f.fileName,
+  blobName: f.blobName,
+  fileSize: f.fileSize,
+  docType: f.docType,
+  uploadedAt: f.uploadDate || f.uploadedAt || null
+});
 
 // 📤 Upload note file
 export const uploadNoteFile = createAsyncThunk(
   "noteArchive/uploadNoteFile",
-  async (fileOrPayload, { rejectWithValue, dispatch }) => {
+  async (fileOrPayload, { rejectWithValue }) => {
     // Support both signatures: dispatch(uploadNoteFile(file)) OR dispatch(uploadNoteFile({ file, clientID }))
     const file = fileOrPayload?.file || fileOrPayload;
     const clientID = fileOrPayload?.clientID || null;
 
+    if (!clientID) {
+      return rejectWithValue('No client selected - select a client before uploading');
+    }
+
     try {
-      const isDevelopment = import.meta.env.MODE === 'development';
-      const shouldUseMockData = isDevelopment && !import.meta.env.VITE_USE_REAL_DATA;
-
-      if (shouldUseMockData) {
-        console.log("🔧 Mock mode: Simulating file upload for", file.name);
-        for (let i = 0; i <= 100; i += 20) {
-          await new Promise(resolve => setTimeout(resolve, 300));
-          dispatch(setUploadProgress(i));
-        }
-        return {
-          ...MOCK_UPLOAD_RESPONSE,
-          fileName: file.name,
-          fileSize: file.size
-        };
-      }
-
-      const formData = new FormData();
-      formData.append("noteFile", file);
-      if (clientID) formData.append("clientID", clientID);
-
-      const response = await axios.post(`${API}/api/note-archive/upload`, formData, {
-        headers: {
-          "Content-Type": "multipart/form-data"
-        },
-        timeout: API_TIMEOUT,
-        onUploadProgress: (progressEvent) => {
-          const percent = Math.round((progressEvent.loaded * 100) / progressEvent.total);
-          dispatch(setUploadProgress(percent));
-        }
-      });
-
-      return response.data;
+      const result = await azureBlobService.uploadFile(file, clientID, CM_NOTES_DOC_TYPE);
+      return {
+        message: 'File uploaded successfully',
+        ...toArchiveFile({ ...result, fileName: result.fileName || file.name, fileSize: result.fileSize ?? file.size })
+      };
     } catch (error) {
       console.error('❌ Upload note file error:', error);
-
-      let errorMessage = 'Failed to upload file';
-
-      if (error.code === 'ECONNABORTED') {
-        errorMessage = `Upload timed out after ${API_TIMEOUT / 1000} seconds. File may be too large or connection is slow.`;
-      } else if (error.response?.status === 503) {
-        errorMessage = '503 Service Unavailable - Azure Blob Storage may not be configured or backend is starting up. Wait 30 seconds and retry.';
-      } else if (error.response?.status === 500) {
-        errorMessage = '500 Server Error - Backend encountered an issue while processing the upload. Check server logs.';
-      } else if (error.response?.status === 413) {
-        errorMessage = 'File too large - maximum file size is 25MB';
-      } else if (error.response?.status === 401) {
-        errorMessage = '401 Unauthorized - your session may have expired. Refresh and sign in again.';
-      } else if (error.response?.status === 400) {
-        errorMessage = error.response?.data?.error || 'Invalid upload request - check file format';
-      } else if (!error.response) {
-        errorMessage = 'Network error - unable to reach the server. Check your internet connection.';
-      } else {
-        errorMessage = error.response?.data?.message ||
-                       error.response?.data?.error ||
-                       `Upload failed with status ${error.response?.status}`;
-      }
-
-      if (isRetryableError(error)) {
-        errorMessage += ' [Retryable]';
-      }
-
-      return rejectWithValue(errorMessage);
+      return rejectWithValue(error.message || 'Failed to upload file');
     }
   }
 );
 
-// Optional: fetch list of uploaded note files for a client
+// Fetch the client's CM note files (plus any legacy /api/note-archive records)
 export const fetchNoteArchiveFiles = createAsyncThunk(
   "noteArchive/fetchNoteArchiveFiles",
   async (clientID, { rejectWithValue }) => {
     try {
-      const isDevelopment = import.meta.env.MODE === 'development';
-      if (isDevelopment && !import.meta.env.VITE_USE_REAL_DATA) {
-        return [];
+      const allFiles = await azureBlobService.listClientFiles(clientID);
+      const files = filterSectionFiles(allFiles, ARCHIVE_SECTIONS.CM_NOTES, CM_NOTES_CATEGORIES)
+        .map(toArchiveFile);
+
+      // Files uploaded through the old note-archive route, if that route exists
+      let legacy = [];
+      try {
+        const { data } = await createAxiosInstance(FETCH_TIMEOUT)
+          .get(`${API}/api/note-archive/list/${encodeURIComponent(clientID)}`);
+        if (Array.isArray(data)) legacy = data;
+      } catch (legacyErr) {
+        console.warn('⚠️ Legacy note-archive list unavailable:', legacyErr.message);
       }
-      const axiosInstance = createAxiosInstance(FETCH_TIMEOUT);
-      //const { data } = await axiosInstance.get(`${API}/api/note-archive/${clientID}`);
-      const { data } = await axiosInstance.get(`${API}/api/note-archive/list/${clientID}`);
-      return data;
+
+      return [...files, ...legacy].sort(
+        (a, b) => new Date(b.uploadedAt || 0) - new Date(a.uploadedAt || 0)
+      );
     } catch (error) {
-      return rejectWithValue(error.response?.data?.error || 'Failed to fetch note archive files');
+      return rejectWithValue(error.message || 'Failed to fetch note archive files');
     }
   }
 );
@@ -206,17 +154,14 @@ const noteArchiveSlice = createSlice({
         state.loading = false;
         state.uploading = false;
         state.successMessage = action.payload.message || "✅ File uploaded successfully";
-        state.fileUrl = action.payload.fileUrl;
         state.uploadProgress = 100;
         state.error = null;
 
-        // Append to file list for immediate UI feedback
-        state.uploadedFiles.push({
-          fileName: action.payload.fileName,
-          fileUrl: action.payload.fileUrl,
-          fileSize: action.payload.fileSize,
-          noteArchiveID: action.payload.noteArchiveID,
-          uploadedAt: action.payload.uploadedAt || new Date().toISOString()
+        // Prepend to file list for immediate UI feedback (list is newest-first)
+        const { message, ...file } = action.payload;
+        state.uploadedFiles.unshift({
+          ...file,
+          uploadedAt: file.uploadedAt || new Date().toISOString()
         });
       })
       .addCase(uploadNoteFile.rejected, (state, action) => {

@@ -1,5 +1,5 @@
 // Section3/MentalArchive.jsx - Updated to use fetchMentalArchiveFiles
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Box, Typography, Button, Grid, Card, CardContent, CardActions,
   Alert, LinearProgress, IconButton, Chip, Dialog, DialogTitle,
@@ -28,6 +28,8 @@ import {
 } from '../../backend/store/slices/filesSlice';
 
 // Complete document types for Mental Archive
+import { ARCHIVE_SECTIONS, sectionDocType, filterSectionFiles } from '../../utils/archiveSections';
+
 const MENTAL_ARCHIVE_DOC_TYPES = [
   'Mental Health Archive',
   'Assessment Report', 
@@ -79,8 +81,11 @@ const MentalArchive = ({ clientID: propClientID, exportMode = false }) => {
   // Determine effective client ID
   const effectiveClientID = propClientID || currentClient?.clientID;
 
-  // No need to filter - backend already returns only mental health files
-  const mentalArchiveFiles = files;
+  // The list endpoint returns every file the client has; keep only Section 3's
+  const mentalArchiveFiles = useMemo(
+    () => filterSectionFiles(files, ARCHIVE_SECTIONS.MENTAL_HEALTH, MENTAL_ARCHIVE_DOC_TYPES),
+    [files]
+  );
 
   // Calculate summary statistics
   const summary = {
@@ -160,7 +165,7 @@ const MentalArchive = ({ clientID: propClientID, exportMode = false }) => {
     await dispatch(uploadFile({
       file: fileToUpload,
       clientID: effectiveClientID,
-      docType: docType
+      docType: sectionDocType(ARCHIVE_SECTIONS.MENTAL_HEALTH, docType)
     }));
     
     // Reload mental archive files after upload

@@ -41,6 +41,7 @@ import {
 } from '@mui/icons-material';
 import { useClientPersistence } from '../../hooks/useClientPersistence';
 import { azureBlobService } from '../../backend/services/azureBlobService';
+import { ARCHIVE_SECTIONS, sectionDocType, filterSectionFiles } from '../../utils/archiveSections';
 import { formatDateOnly } from '../../utils/dateOnly';
 
 /**
@@ -152,7 +153,7 @@ const MiscDoc = () => {
       );
 
       console.log('✅ Files fetched successfully:', result?.length || 0);
-      setFiles(result || []);
+      setFiles(filterSectionFiles(result, ARCHIVE_SECTIONS.MISC_DOCS, DOCUMENT_CATEGORIES));
 
     } catch (error) {
       console.error('❌ Error fetching files:', error);
@@ -229,7 +230,7 @@ const MiscDoc = () => {
       const result = await azureBlobService.uploadFile(
         selectedFile,
         clientID,
-        selectedCategory
+        sectionDocType(ARCHIVE_SECTIONS.MISC_DOCS, selectedCategory)
       );
 
       console.log('✅ Upload successful:', result);
