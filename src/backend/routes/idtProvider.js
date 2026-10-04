@@ -2,6 +2,11 @@ const express = require('express');
 const router = express.Router();
 const sql = require('mssql');
 const { logUserAction } = require('../config/logAction');
+const { bindSubmitInputs, lockedResponse, rejectIfLocked } = require('../services/section5RecordLock');
+
+// POST/PUT accept `submit: true` to submit (lock) the note; without it the
+// note is saved as progress. Locked notes can't be updated or deleted until an
+// IT Admin / Level 1 user unlocks them (routes/section5Lock.js).
 
 // ✅ Database connection configuration
 const dbConfig = {
@@ -217,7 +222,7 @@ router.post('/idt-provider/:clientID', async (req, res) => {
         const pool = await sql.connect(dbConfig);
         
         // Insert new record
-        const result = await pool.request()
+        const insertRequest = pool.request()
             .input('clientID', sql.VarChar(50), clientID)
             .input('idtHospital', sql.NVarChar(200), data.idtHospital)
             .input('idtAdmitDate', sql.Date, data.idtAdmitDate)
@@ -242,8 +247,10 @@ router.post('/idt-provider/:clientID', async (req, res) => {
             .input('idtGoals', sql.NVarChar(sql.MAX), data.idtGoals)
             .input('idtInterventions', sql.NVarChar(sql.MAX), data.idtInterventions)
             .input('idtOutcomes', sql.NVarChar(sql.MAX), data.idtOutcomes)
-            .input('createdBy', sql.NVarChar(100), rawData.userName || 'System')
-            .query(`
+            .input('createdBy', sql.NVarChar(100), rawData.userName || 'System');
+        bindSubmitInputs(insertRequest, req, rawData.userName);
+
+        const result = await insertRequest.query(`
                 INSERT INTO dbo.idt_provider_notes (
                     clientID, idtHospital, idtAdmitDate, idtProviderName, idtProviderRole,
                     idtDiag, idtProblems, idtPriority, idtFunctionalStatus,
@@ -252,7 +259,8 @@ router.post('/idt-provider/:clientID', async (req, res) => {
                     idtDischargeReadiness, idtComplexityScore, idtRiskLevel,
                     idtLengthOfStay, idtTargetLOS,
                     idtGoals, idtInterventions, idtOutcomes,
-                    createdBy, createdAt, updatedBy, updatedAt
+                    createdBy, createdAt, updatedBy, updatedAt,
+                    isLocked, submittedBy, submittedAt
                 )
                 OUTPUT INSERTED.*
                 VALUES (
@@ -263,7 +271,8 @@ router.post('/idt-provider/:clientID', async (req, res) => {
                     @idtDischargeReadiness, @idtComplexityScore, @idtRiskLevel,
                     @idtLengthOfStay, @idtTargetLOS,
                     @idtGoals, @idtInterventions, @idtOutcomes,
-                    @createdBy, GETDATE(), @createdBy, GETDATE()
+                    @createdBy, GETDATE(), @createdBy, GETDATE(),
+                    @isLocked, @submittedBy, @submittedAt
                 )
             `);
             
@@ -282,7 +291,7 @@ router.post('/idt-provider/:clientID', async (req, res) => {
 });
 
 // ✅ PUT /api/idt-provider/note/:id - Update existing IDT provider note
-router.put('/idt-provider/note/:id', async (req, res) => {
+router.put('/idt-provider/note/:id', rejectIfLocked('idt-provider', 'id', () => sql.connect(dbConfig)), async (req, res) => {
     try {
         const { id } = req.params;
         const rawData = req.body;
@@ -302,7 +311,7 @@ router.put('/idt-provider/note/:id', async (req, res) => {
         const data = sanitizeIDTData(rawData);
         
         const pool = await sql.connect(dbConfig);
-        const result = await pool.request()
+        const updateRequest = pool.request()
             .input('id', sql.Int, id)
             .input('idtHospital', sql.NVarChar(200), data.idtHospital)
             .input('idtAdmitDate', sql.Date, data.idtAdmitDate)
@@ -327,8 +336,10 @@ router.put('/idt-provider/note/:id', async (req, res) => {
             .input('idtGoals', sql.NVarChar(sql.MAX), data.idtGoals)
             .input('idtInterventions', sql.NVarChar(sql.MAX), data.idtInterventions)
             .input('idtOutcomes', sql.NVarChar(sql.MAX), data.idtOutcomes)
-            .input('updatedBy', sql.NVarChar(100), rawData.userName || 'System')
-            .query(`
+            .input('updatedBy', sql.NVarChar(100), rawData.userName || 'System');
+        bindSubmitInputs(updateRequest, req, rawData.userName);
+
+        const result = await updateRequest.query(`
                 UPDATE dbo.idt_provider_notes SET
                     idtHospital = @idtHospital,
                     idtAdmitDate = @idtAdmitDate,
@@ -354,12 +365,22 @@ router.put('/idt-provider/note/:id', async (req, res) => {
                     idtInterventions = @idtInterventions,
                     idtOutcomes = @idtOutcomes,
                     updatedBy = @updatedBy,
-                    updatedAt = GETDATE()
+                    updatedAt = GETDATE(),
+                    isLocked = @isLocked,
+                    submittedBy = @submittedBy,
+                    submittedAt = @submittedAt
                 OUTPUT INSERTED.*
-                WHERE id = @id
+                WHERE id = @id AND ISNULL(isLocked, 0) = 0
             `);
             
         if (result.recordset.length === 0) {
+            // Submitted between the lock check and this update
+            const stillThere = await pool.request()
+                .input('id', sql.Int, id)
+                .query('SELECT 1 AS found FROM dbo.idt_provider_notes WHERE id = @id');
+            if (stillThere.recordset.length > 0) return lockedResponse(res, 'idt-provider');
+
+
             console.log(`⚠️ IDT provider note not found: ${id}`);
             return res.status(404).json({ 
                 message: 'IDT provider note not found'
@@ -381,7 +402,7 @@ router.put('/idt-provider/note/:id', async (req, res) => {
 });
 
 // ✅ DELETE /api/idt-provider/note/:id - Delete specific IDT provider note
-router.delete('/idt-provider/note/:id', async (req, res) => {
+router.delete('/idt-provider/note/:id', rejectIfLocked('idt-provider', 'id', () => sql.connect(dbConfig)), async (req, res) => {
     try {
         const { id } = req.params;
         
@@ -403,9 +424,12 @@ router.delete('/idt-provider/note/:id', async (req, res) => {
         const clientID = existingRecord.recordset[0].clientID;
         
         // Delete the record
-        await pool.request()
+        const deleted = await pool.request()
             .input('id', sql.Int, id)
-            .query('DELETE FROM dbo.idt_provider_notes WHERE id = @id');
+            .query('DELETE FROM dbo.idt_provider_notes WHERE id = @id AND ISNULL(isLocked, 0) = 0');
+
+        // Submitted between the lock check and this delete
+        if (deleted.rowsAffected[0] === 0) return lockedResponse(res, 'idt-provider');
         
         await logUserAction(req, 'DELETE', 'idt_provider_notes', clientID);
         

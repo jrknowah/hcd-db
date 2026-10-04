@@ -1,5 +1,6 @@
 // middleware/signedFormUnlock.js
-// Who may unlock a signed Section 2 form: IT_ADMIN or LEVEL1.
+// Who may unlock a signed Section 2 form or a submitted Section 5 record:
+// IT_ADMIN or LEVEL1.
 //
 // Roles are assigned through Entra group membership. These IDs must stay in
 // sync with GROUP_MAPPINGS in config/groupConfig.js (HOPE_it, HOPE_level1).
@@ -19,7 +20,7 @@ const requireSignedFormUnlock = (req, res, next) => {
   }
   if (!canUnlockSignedForms(req.user)) {
     return res.status(403).json({
-      error: 'Only IT Admin or Level 1 users can unlock a signed form',
+      error: 'Only IT Admin or Level 1 users can unlock a signed form or submitted record',
       code: 'UNLOCK_NOT_PERMITTED',
     });
   }
