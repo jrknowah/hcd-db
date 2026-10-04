@@ -14,6 +14,13 @@ try {
   throw new Error('azureSql module not found');
 }
 
+const authMiddleware = require('../middleware/auth.js');
+const { requireUnlockPermission } = require('../middleware/signedFormUnlock');
+const {
+  DRAFT, SUBMITTED, isSubmitted, wantsSubmit, lockedResponse, getCurrentUser,
+  parseUnlockReason, archiveSubmittedVersion, auditUnlock,
+} = require('../utils/section4Lock');
+
 // =====================================================================
 // ⚠️  DB MIGRATION REQUIRED if you haven't run this yet:
 //   ALTER TABLE EncounterNotes
@@ -30,6 +37,62 @@ const VALID_NOTE_TYPES = [
   'Individual', 'Crisis', 'Group', 'Summary', 'Intake',
   'MHA', 'Care Plan', 'Discharge', 'Case Conference'
 ];
+
+const NOTE_COLUMNS = `
+  Id as _id,
+  ClientID,
+  CareNoteDate,
+  CareNoteType,
+  CareNoteSite,
+  CareNote,
+  CreatedBy,
+  CreatedAt,
+  UpdatedBy,
+  UpdatedAt,
+  SubmissionStatus,
+  SubmittedBy,
+  SubmittedAt,
+  UnlockedBy,
+  UnlockedAt,
+  UnlockReason`;
+
+// Map column names to match frontend expectations
+const mapNote = (note) => ({
+  _id: note._id,
+  clientID: note.ClientID,
+  careNoteDate: note.CareNoteDate,
+  careNoteType: note.CareNoteType,
+  careNoteSite: note.CareNoteSite,
+  careNote: note.CareNote,
+  createdBy: note.CreatedBy,
+  createdAt: note.CreatedAt,
+  updatedBy: note.UpdatedBy,
+  updatedAt: note.UpdatedAt,
+  submissionStatus: note.SubmissionStatus || SUBMITTED,
+  submittedBy: note.SubmittedBy || null,
+  submittedAt: note.SubmittedAt || null,
+  unlockedBy: note.UnlockedBy || null,
+  unlockedAt: note.UnlockedAt || null,
+  unlockReason: note.UnlockReason || null,
+  locked: isSubmitted(note.SubmissionStatus),
+});
+
+// A submitted note needs its content; a draft only needs what the table requires
+const validateNote = (data, submit) => {
+  if (!data.careNoteDate || isNaN(new Date(data.careNoteDate).getTime())) {
+    return 'Note date is required';
+  }
+  if (!data.careNoteType) {
+    return 'Note type is required';
+  }
+  if (data.careNoteType && !VALID_NOTE_TYPES.includes(data.careNoteType)) {
+    return `Invalid note type '${data.careNoteType}'. Allowed: ${VALID_NOTE_TYPES.join(', ')}`;
+  }
+  if (submit && (typeof data.careNote !== 'string' || !data.careNote.trim())) {
+    return 'Note content is required to submit';
+  }
+  return null;
+};
 
 // Generate unique encounter note ID
 const generateEncounterNoteID = (clientID) => {
@@ -81,37 +144,13 @@ router.get('/encounter-notes/bytype/:clientID/:noteType', async (req, res) => {
       .input('clientID', sql.NVarChar, clientID)
       .input('noteType', sql.NVarChar, noteType)
       .query(`
-        SELECT 
-          Id as _id, 
-          ClientID, 
-          CareNoteDate, 
-          CareNoteType, 
-          CareNoteSite, 
-          CareNote, 
-          CreatedBy, 
-          CreatedAt, 
-          UpdatedBy, 
-          UpdatedAt
+        SELECT ${NOTE_COLUMNS}
         FROM EncounterNotes 
         WHERE ClientID = @clientID AND CareNoteType = @noteType
         ORDER BY CareNoteDate DESC, CreatedAt DESC
       `);
     
-    // Map column names to match frontend expectations
-    const mappedNotes = result.recordset.map(note => ({
-      _id: note._id,
-      clientID: note.ClientID,
-      careNoteDate: note.CareNoteDate,
-      careNoteType: note.CareNoteType,
-      careNoteSite: note.CareNoteSite,
-      careNote: note.CareNote,
-      createdBy: note.CreatedBy,
-      createdAt: note.CreatedAt,
-      updatedBy: note.UpdatedBy,
-      updatedAt: note.UpdatedAt
-    }));
-    
-    res.json(mappedNotes);
+    res.json(result.recordset.map(mapNote));
   } catch (err) {
     console.error('❌ Error fetching encounter notes by type:', err);
     res.status(500).json({ 
@@ -166,35 +205,13 @@ router.get('/encounter-notes/:clientID', async (req, res) => {
     const result = await pool.request()
       .input('clientID', sql.NVarChar, clientID)
       .query(`
-        SELECT 
-          Id as _id, 
-          ClientID, 
-          CareNoteDate, 
-          CareNoteType, 
-          CareNoteSite, 
-          CareNote, 
-          CreatedBy, 
-          CreatedAt, 
-          UpdatedBy, 
-          UpdatedAt
+        SELECT ${NOTE_COLUMNS}
         FROM EncounterNotes 
         WHERE ClientID = @clientID 
         ORDER BY CareNoteDate DESC, CreatedAt DESC
       `);
     
-    // Map column names to match frontend expectations
-    const mappedNotes = result.recordset.map(note => ({
-      _id: note._id,
-      clientID: note.ClientID,
-      careNoteDate: note.CareNoteDate,
-      careNoteType: note.CareNoteType,
-      careNoteSite: note.CareNoteSite,
-      careNote: note.CareNote,
-      createdBy: note.CreatedBy,
-      createdAt: note.CreatedAt,
-      updatedBy: note.UpdatedBy,
-      updatedAt: note.UpdatedAt
-    }));
+    const mappedNotes = result.recordset.map(mapNote);
     
     console.log(`✅ Found ${mappedNotes.length} encounter notes for client ${clientID}`);
     res.json(mappedNotes);
@@ -208,41 +225,37 @@ router.get('/encounter-notes/:clientID', async (req, res) => {
 });
 
 // POST /api/encounter-notes/:clientID - Create new encounter note
-router.post('/encounter-notes/:clientID', async (req, res) => {
+// { submit: true } submits (locks) the note; otherwise it is saved as a draft.
+router.post('/encounter-notes/:clientID', authMiddleware, async (req, res) => {
   try {
     const pool = await getPool();
     const { clientID } = req.params;
     const noteData = req.body;
-    
-    // Validation
-    // const validationErrors = validateEncounterNoteData(noteData);
-    // if (validationErrors) {
-    //   return res.status(400).json({
-    //     error: 'Validation failed',
-    //     errors: validationErrors
-    //   });
-    // }
-    
-    // Validate note type against allowed values
-    if (noteData.careNoteType && !VALID_NOTE_TYPES.includes(noteData.careNoteType)) {
-      return res.status(400).json({
-        error: 'Validation failed',
-        message: `Invalid note type '${noteData.careNoteType}'. Allowed: ${VALID_NOTE_TYPES.join(', ')}`
-      });
+    const submit = wantsSubmit(noteData);
+
+    const validationError = validateNote(noteData, submit);
+    if (validationError) {
+      return res.status(400).json({ error: 'Validation failed', message: validationError });
     }
 
-    console.log(`📝 Creating encounter note for client: ${clientID}`);
+    console.log(`📝 Creating ${submit ? 'submitted' : 'draft'} encounter note for client: ${clientID}`);
     
+    // Recorded from the signed-in user, never from the request body
+    const createdBy = getCurrentUser(req);
     const result = await pool.request()
       .input('clientID', sql.NVarChar, clientID)
       .input('careNoteDate', sql.Date, noteData.careNoteDate)
       .input('careNoteType', sql.NVarChar, noteData.careNoteType)
       .input('careNoteSite', sql.NVarChar, noteData.careNoteSite || null)
-      .input('careNote', sql.NVarChar, noteData.careNote)
-      .input('createdBy', sql.NVarChar, noteData.createdBy || 'unknown')
+      .input('careNote', sql.NVarChar, noteData.careNote || '')
+      .input('createdBy', sql.NVarChar, createdBy)
+      .input('submissionStatus', sql.NVarChar(20), submit ? SUBMITTED : DRAFT)
+      .input('submittedBy', sql.NVarChar, submit ? createdBy : null)
+      .input('submittedAt', sql.DateTime2, submit ? new Date() : null)
       .query(`
         INSERT INTO EncounterNotes (
-          ClientID, CareNoteDate, CareNoteType, CareNoteSite, CareNote, CreatedBy
+          ClientID, CareNoteDate, CareNoteType, CareNoteSite, CareNote, CreatedBy,
+          SubmissionStatus, SubmittedBy, SubmittedAt
         )
         OUTPUT 
           INSERTED.Id as _id,
@@ -254,26 +267,20 @@ router.post('/encounter-notes/:clientID', async (req, res) => {
           INSERTED.CreatedBy,
           INSERTED.CreatedAt,
           INSERTED.UpdatedBy,
-          INSERTED.UpdatedAt
+          INSERTED.UpdatedAt,
+          INSERTED.SubmissionStatus,
+          INSERTED.SubmittedBy,
+          INSERTED.SubmittedAt,
+          INSERTED.UnlockedBy,
+          INSERTED.UnlockedAt,
+          INSERTED.UnlockReason
         VALUES (
-          @clientID, @careNoteDate, @careNoteType, @careNoteSite, @careNote, @createdBy
+          @clientID, @careNoteDate, @careNoteType, @careNoteSite, @careNote, @createdBy,
+          @submissionStatus, @submittedBy, @submittedAt
         )
       `);
     
-    // Map column names to match frontend expectations
-    const createdNote = result.recordset[0];
-    const mappedNote = {
-      _id: createdNote._id,
-      clientID: createdNote.ClientID,
-      careNoteDate: createdNote.CareNoteDate,
-      careNoteType: createdNote.CareNoteType,
-      careNoteSite: createdNote.CareNoteSite,
-      careNote: createdNote.CareNote,
-      createdBy: createdNote.CreatedBy,
-      createdAt: createdNote.CreatedAt,
-      updatedBy: createdNote.UpdatedBy,
-      updatedAt: createdNote.UpdatedAt
-    };
+    const mappedNote = mapNote(result.recordset[0]);
     
     console.log(`✅ Encounter note created: ${mappedNote._id}`);
     res.status(201).json(mappedNote);
@@ -286,48 +293,47 @@ router.post('/encounter-notes/:clientID', async (req, res) => {
   }
 });
 
-// PUT /api/encounter-notes/:noteId - Update encounter note
-router.put('/encounter-notes/:noteId', async (req, res) => {
+// PUT /api/encounter-notes/:noteId - Update a draft encounter note
+// { submit: true } submits (locks) it. Submitted notes return 409 RECORD_LOCKED.
+router.put('/encounter-notes/:noteId', authMiddleware, async (req, res) => {
   try {
     const pool = await getPool();
     const { noteId } = req.params;
     const updateData = req.body;
-    
-    // Validation
-    // const validationErrors = validateEncounterNoteData(updateData, true);
-    // if (validationErrors) {
-    //   return res.status(400).json({
-    //     error: 'Validation failed',
-    //     errors: validationErrors
-    //   });
-    // }
-    
-    // Validate note type against allowed values
-    if (updateData.careNoteType && !VALID_NOTE_TYPES.includes(updateData.careNoteType)) {
-      return res.status(400).json({
-        error: 'Validation failed',
-        message: `Invalid note type '${updateData.careNoteType}'. Allowed: ${VALID_NOTE_TYPES.join(', ')}`
-      });
+    const submit = wantsSubmit(updateData);
+
+    const validationError = validateNote(updateData, submit);
+    if (validationError) {
+      return res.status(400).json({ error: 'Validation failed', message: validationError });
     }
 
     console.log(`📝 Updating encounter note: ${noteId}`);
     
-    // Check if note exists
+    // Check if note exists and is still a draft
     const checkResult = await pool.request()
       .input('noteId', sql.UniqueIdentifier, noteId)
-      .query('SELECT Id FROM EncounterNotes WHERE Id = @noteId');
+      .query('SELECT Id, SubmissionStatus FROM EncounterNotes WHERE Id = @noteId');
     
     if (checkResult.recordset.length === 0) {
       return res.status(404).json({ error: 'Encounter note not found' });
     }
+    if (isSubmitted(checkResult.recordset[0].SubmissionStatus)) {
+      return lockedResponse(res, 'note');
+    }
     
+    // Recorded from the signed-in user, never from the request body
+    const updatedBy = getCurrentUser(req);
+    // The status guard in the WHERE clause stops a save that races a submit
     const result = await pool.request()
       .input('noteId', sql.UniqueIdentifier, noteId)
       .input('careNoteDate', sql.Date, updateData.careNoteDate)
       .input('careNoteType', sql.NVarChar, updateData.careNoteType)
       .input('careNoteSite', sql.NVarChar, updateData.careNoteSite || null)
-      .input('careNote', sql.NVarChar, updateData.careNote)
-      .input('updatedBy', sql.NVarChar, updateData.updatedBy || 'unknown')
+      .input('careNote', sql.NVarChar, updateData.careNote || '')
+      .input('updatedBy', sql.NVarChar, updatedBy)
+      .input('submissionStatus', sql.NVarChar(20), submit ? SUBMITTED : DRAFT)
+      .input('submittedBy', sql.NVarChar, submit ? updatedBy : null)
+      .input('submittedAt', sql.DateTime2, submit ? new Date() : null)
       .query(`
         UPDATE EncounterNotes 
         SET 
@@ -335,42 +341,24 @@ router.put('/encounter-notes/:noteId', async (req, res) => {
           CareNoteType = @careNoteType, 
           CareNoteSite = @careNoteSite, 
           CareNote = @careNote, 
+          SubmissionStatus = @submissionStatus,
+          SubmittedBy = @submittedBy,
+          SubmittedAt = @submittedAt,
           UpdatedBy = @updatedBy, 
           UpdatedAt = GETUTCDATE()
-        WHERE Id = @noteId;
+        WHERE Id = @noteId AND SubmissionStatus = '${DRAFT}';
         
-        SELECT 
-          Id as _id,
-          ClientID,
-          CareNoteDate,
-          CareNoteType,
-          CareNoteSite,
-          CareNote,
-          CreatedBy,
-          CreatedAt,
-          UpdatedBy,
-          UpdatedAt
+        SELECT ${NOTE_COLUMNS}
         FROM EncounterNotes 
         WHERE Id = @noteId;
       `);
     
-    // Map column names to match frontend expectations
-    const updatedNote = result.recordset[0];
-    const mappedNote = {
-      _id: updatedNote._id,
-      clientID: updatedNote.ClientID,
-      careNoteDate: updatedNote.CareNoteDate,
-      careNoteType: updatedNote.CareNoteType,
-      careNoteSite: updatedNote.CareNoteSite,
-      careNote: updatedNote.CareNote,
-      createdBy: updatedNote.CreatedBy,
-      createdAt: updatedNote.CreatedAt,
-      updatedBy: updatedNote.UpdatedBy,
-      updatedAt: updatedNote.UpdatedAt
-    };
-    
+    if (result.rowsAffected && result.rowsAffected[0] === 0) {
+      return lockedResponse(res, 'note');
+    }
+
     console.log(`✅ Encounter note updated: ${noteId}`);
-    res.json(mappedNote);
+    res.json(mapNote(result.recordset[0]));
   } catch (err) {
     console.error('❌ Error updating encounter note:', err);
     res.status(500).json({ 
@@ -380,8 +368,112 @@ router.put('/encounter-notes/:noteId', async (req, res) => {
   }
 });
 
-// DELETE /api/encounter-notes/:noteId - Delete encounter note
-router.delete('/encounter-notes/:noteId', async (req, res) => {
+// POST /api/encounter-notes/:noteId/unlock - IT Admin / Level 1 only.
+// Archives the submitted note and returns it to draft so it can be edited.
+router.post(
+  '/encounter-notes/:noteId/unlock',
+  authMiddleware,
+  requireUnlockPermission('a submitted note'),
+  async (req, res) => {
+    const { noteId } = req.params;
+    const reason = parseUnlockReason(req.body);
+    if (!reason) {
+      return res.status(422).json({ message: 'A reason between 5 and 500 characters is required to unlock a submitted note' });
+    }
+
+    const currentUser = getCurrentUser(req);
+    const now = new Date();
+
+    try {
+      const pool = await getPool();
+      const transaction = new sql.Transaction(pool);
+      await transaction.begin();
+
+      let note;
+      try {
+        // UPDLOCK so a concurrent save or unlock can't slip in between read and write
+        const existing = await transaction.request()
+          .input('noteId', sql.UniqueIdentifier, noteId)
+          .query(`
+            SELECT ${NOTE_COLUMNS}
+            FROM EncounterNotes WITH (UPDLOCK, HOLDLOCK)
+            WHERE Id = @noteId
+          `);
+
+        note = existing.recordset[0];
+        if (!note) {
+          await transaction.rollback();
+          return res.status(404).json({ message: 'Encounter note not found' });
+        }
+        if (!isSubmitted(note.SubmissionStatus)) {
+          await transaction.rollback();
+          return res.status(409).json({ code: 'RECORD_NOT_LOCKED', message: 'Note is not submitted or locked' });
+        }
+
+        await archiveSubmittedVersion(transaction, {
+          recordType: 'EncounterNote',
+          recordID: note._id,
+          clientID: note.ClientID,
+          snapshot: mapNote(note),
+          submittedBy: note.SubmittedBy,
+          submittedAt: note.SubmittedAt,
+          archivedBy: currentUser,
+          archivedAt: now,
+          unlockReason: reason,
+        });
+
+        await transaction.request()
+          .input('noteId', sql.UniqueIdentifier, noteId)
+          .input('unlockedBy', sql.NVarChar, currentUser)
+          .input('unlockedAt', sql.DateTime2, now)
+          .input('unlockReason', sql.NVarChar(500), reason)
+          .query(`
+            UPDATE EncounterNotes
+            SET SubmissionStatus = '${DRAFT}',
+                SubmittedBy  = NULL,
+                SubmittedAt  = NULL,
+                UnlockedBy   = @unlockedBy,
+                UnlockedAt   = @unlockedAt,
+                UnlockReason = @unlockReason,
+                UpdatedBy    = @unlockedBy,
+                UpdatedAt    = @unlockedAt
+            WHERE Id = @noteId
+          `);
+
+        await transaction.commit();
+      } catch (err) {
+        await transaction.rollback().catch(() => {});
+        throw err;
+      }
+
+      await auditUnlock(pool, {
+        userID: currentUser,
+        tableName: 'EncounterNotes',
+        recordID: note._id,
+        clientID: note.ClientID,
+        timestamp: now,
+      });
+
+      res.json(mapNote({
+        ...note,
+        SubmissionStatus: DRAFT,
+        SubmittedBy: null,
+        SubmittedAt: null,
+        UnlockedBy: currentUser,
+        UnlockedAt: now,
+        UnlockReason: reason,
+        UpdatedBy: currentUser,
+        UpdatedAt: now,
+      }));
+    } catch (err) {
+      console.error('❌ Error unlocking encounter note:', err.message);
+      res.status(500).json({ message: 'Error unlocking encounter note' });
+    }
+  }
+);
+
+// DELETE /api/encounter-notes/:noteId - Delete a draft encounter note
+router.delete('/encounter-notes/:noteId', authMiddleware, async (req, res) => {
   try {
     const pool = await getPool();
     const { noteId } = req.params;
@@ -391,15 +483,22 @@ router.delete('/encounter-notes/:noteId', async (req, res) => {
     // Check if note exists
     const checkResult = await pool.request()
       .input('noteId', sql.UniqueIdentifier, noteId)
-      .query('SELECT Id FROM EncounterNotes WHERE Id = @noteId');
+      .query('SELECT Id, SubmissionStatus FROM EncounterNotes WHERE Id = @noteId');
     
     if (checkResult.recordset.length === 0) {
       return res.status(404).json({ error: 'Encounter note not found' });
     }
+    if (isSubmitted(checkResult.recordset[0].SubmissionStatus)) {
+      return lockedResponse(res, 'note');
+    }
     
-    await pool.request()
+    const result = await pool.request()
       .input('noteId', sql.UniqueIdentifier, noteId)
-      .query('DELETE FROM EncounterNotes WHERE Id = @noteId');
+      .query(`DELETE FROM EncounterNotes WHERE Id = @noteId AND SubmissionStatus = '${DRAFT}'`);
+
+    if (result.rowsAffected && result.rowsAffected[0] === 0) {
+      return lockedResponse(res, 'note');
+    }
     
     console.log(`✅ Encounter note deleted: ${noteId}`);
     res.json({ message: 'Encounter note deleted successfully' });
@@ -412,7 +511,5 @@ router.delete('/encounter-notes/:noteId', async (req, res) => {
   }
 });
 
-
-
-
 module.exports = router;
+module.exports.validateNote = validateNote;

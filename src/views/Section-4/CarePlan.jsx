@@ -20,7 +20,9 @@ import {
   IconButton,
   Chip,
   Paper,
-  Divider
+  Divider,
+  Tooltip,
+  CircularProgress
 } from "@mui/material";
 import {
   Add as AddIcon,
@@ -30,11 +32,18 @@ import {
   CheckCircle as CheckCircleIcon,
   Schedule as ScheduleIcon,
   Person as PersonIcon,
-  Support as SupportIcon
+  Support as SupportIcon,
+  Save as SaveIcon,
+  Send as SendIcon,
+  Lock as LockIcon,
+  LockOpen as LockOpenIcon,
+  Visibility as VisibilityIcon
 } from "@mui/icons-material";
 import PropTypes from "prop-types";
 import { useDispatch, useSelector } from "react-redux";
-import { fetchCarePlans, addCarePlan, editCarePlan, deleteCarePlan } from "../../backend/store/slices/carePlanSlice";
+import { useMsal } from "@azure/msal-react";
+import { fetchCarePlans, addCarePlan, editCarePlan, deleteCarePlan, unlockCarePlan } from "../../backend/store/slices/carePlanSlice";
+import { canUnlockLockedRecords } from "../../backend/config/groupConfig";
 import logUserAction from "../../backend/config/logAction";
 
 // ✅ Static mock data outside component
@@ -93,12 +102,24 @@ const MOCK_CARE_PLANS = [
     targetDate: '2024-08-01',
     createdBy: 'test@example.com',
     createdAt: '2024-03-08T13:20:00Z',
-    updatedAt: '2024-03-08T13:20:00Z'
+    updatedAt: '2024-03-08T13:20:00Z',
+    submissionStatus: 'draft'
   }
 ];
 
+// Submitted care plans are locked; drafts ("Save Progress") stay editable
+const isPlanLocked = (plan) => plan.locked ?? plan.submissionStatus !== 'draft';
+
+const formatDateTime = (value) => (value ? new Date(value).toLocaleString() : '');
+
+const errorText = (err) =>
+  typeof err === 'string' ? err : err?.message || err?.error || 'Unknown error';
+
 const CarePlan = ({ clientID, exportMode }) => {
   const dispatch = useDispatch();
+  const { accounts } = useMsal();
+  // Display-only; the backend enforces who may unlock
+  const canUnlock = canUnlockLockedRecords(accounts?.[0]);
   
   // ✅ Safe selectors
   const reduxUser = useSelector((state) => state?.auth?.user);
@@ -125,6 +146,13 @@ const CarePlan = ({ clientID, exportMode }) => {
   const [saveError, setSaveError] = useState(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
+  const [saving, setSaving] = useState(false);
+  // The plan open in the dialog; a locked plan opens read-only
+  const [editingPlan, setEditingPlan] = useState(null);
+  const [unlockOpen, setUnlockOpen] = useState(false);
+  const [unlockReason, setUnlockReason] = useState('');
+  const [unlocking, setUnlocking] = useState(false);
+  const [unlockError, setUnlockError] = useState(null);
 
   const initialFormState = {
     careGoal: "",
@@ -163,6 +191,10 @@ const CarePlan = ({ clientID, exportMode }) => {
     setEditMode(false);
     setEditingId(null);
     setDeletingId(null);
+    setEditingPlan(null);
+    setUnlockOpen(false);
+    setUnlockReason('');
+    setUnlockError(null);
     setSaveSuccess(false);
     setSaveError(null);
     setFormData(initialFormState);
@@ -175,7 +207,10 @@ const CarePlan = ({ clientID, exportMode }) => {
     setSaveSuccess(false);
     setEditMode(false);
     setEditingId(null);
+    setEditingPlan(null);
   };
+
+  const editingLocked = editingPlan ? isPlanLocked(editingPlan) : false;
 
   const toggleModal = () => {
     setModalOpen(!modalOpen);
@@ -192,21 +227,27 @@ const CarePlan = ({ clientID, exportMode }) => {
     }));
   };
 
-  const handleSave = async () => {
+  const handleSave = async (submit = false) => {
     if (!effectiveClientID) {
       setSaveError("Please select a client before saving.");
       return;
     }
 
-    if (!formData.careGoal.trim() || !formData.careSteps.trim()) {
-      setSaveError("Please fill in at least the Goal and Steps fields.");
+    // A draft needs a goal; submitting also needs the steps
+    if (!formData.careGoal.trim()) {
+      setSaveError("Please enter the goal.");
+      return;
+    }
+    if (submit && !formData.careSteps.trim()) {
+      setSaveError("Please fill in the Steps before submitting.");
       return;
     }
 
+    setSaving(true);
     try {
       if (shouldUseMockData) {
         setTimeout(() => {
-          setSaveSuccess(true);
+          setSaveSuccess(submit ? 'Care plan submitted and locked.' : 'Progress saved. The care plan is still a draft.');
           setTimeout(() => {
             setSaveSuccess(false);
             toggleModal();
@@ -220,14 +261,16 @@ const CarePlan = ({ clientID, exportMode }) => {
           id: editingId,
           updatedData: {
             ...formData,
+            clientID: effectiveClientID,
             updatedBy: currentUser?.email || "unknown",
-            updatedAt: new Date().toISOString()
+            updatedAt: new Date().toISOString(),
+            submit
           },
           user: currentUser
         })).unwrap();
 
         if (currentUser) {
-          await logUserAction(currentUser, "EDIT_CARE_PLAN", {
+          await logUserAction(currentUser, submit ? "SUBMIT_CARE_PLAN" : "EDIT_CARE_PLAN", {
             carePlanId: editingId,
             clientID: effectiveClientID,
             goal: formData.careGoal
@@ -239,20 +282,21 @@ const CarePlan = ({ clientID, exportMode }) => {
           carePlanData: {
             ...formData,
             createdBy: currentUser?.email || "unknown",
-            createdAt: new Date().toISOString()
+            createdAt: new Date().toISOString(),
+            submit
           },
           user: currentUser
         })).unwrap();
 
         if (currentUser) {
-          await logUserAction(currentUser, "ADD_CARE_PLAN", {
+          await logUserAction(currentUser, submit ? "SUBMIT_CARE_PLAN" : "ADD_CARE_PLAN", {
             clientID: effectiveClientID,
             goal: formData.careGoal
           });
         }
       }
 
-      setSaveSuccess(true);
+      setSaveSuccess(submit ? 'Care plan submitted and locked.' : 'Progress saved. The care plan is still a draft.');
       setTimeout(() => {
         setSaveSuccess(false);
         toggleModal();
@@ -260,7 +304,9 @@ const CarePlan = ({ clientID, exportMode }) => {
 
     } catch (err) {
       console.error("❌ Error saving care plan:", err);
-      setSaveError(`Failed to save care plan: ${err.message || err}`);
+      setSaveError(`Failed to save care plan: ${errorText(err)}`);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -278,8 +324,42 @@ const CarePlan = ({ clientID, exportMode }) => {
         : ""
     });
     setEditingId(plan._id);
+    setEditingPlan(plan);
     setEditMode(true);
     setModalOpen(true);
+  };
+
+  const openUnlockDialog = (plan) => {
+    setEditingPlan(plan);
+    setUnlockReason('');
+    setUnlockError(null);
+    setUnlockOpen(true);
+  };
+
+  const closeUnlockDialog = () => {
+    setUnlockOpen(false);
+    setUnlockError(null);
+    if (!modalOpen) setEditingPlan(null);
+  };
+
+  const handleConfirmUnlock = async () => {
+    if (!editingPlan) return;
+    setUnlocking(true);
+    setUnlockError(null);
+    try {
+      const unlocked = await dispatch(unlockCarePlan({
+        id: editingPlan._id,
+        reason: unlockReason.trim(),
+      })).unwrap();
+      setUnlockOpen(false);
+      setUnlockReason('');
+      // Re-open the plan as an editable draft
+      handleEdit(unlocked);
+    } catch (err) {
+      setUnlockError(`Failed to unlock care plan: ${errorText(err)}`);
+    } finally {
+      setUnlocking(false);
+    }
   };
 
   const handleDeleteClick = (id) => {
@@ -315,7 +395,7 @@ const CarePlan = ({ clientID, exportMode }) => {
       setDeletingId(null);
     } catch (err) {
       console.error("❌ Error deleting care plan:", err);
-      setSaveError(`Failed to delete care plan: ${err.message || err}`);
+      setSaveError(`Failed to delete care plan: ${errorText(err)}`);
       setDeleteConfirmOpen(false);
       setDeletingId(null);
     }
@@ -448,7 +528,7 @@ const CarePlan = ({ clientID, exportMode }) => {
         {/* Success/Error Messages */}
         {saveSuccess && (
           <Alert severity="success" sx={{ mb: 2 }}>
-            ✅ Care plan saved successfully!
+            ✅ {saveSuccess}
           </Alert>
         )}
         {saveError && (
@@ -468,6 +548,8 @@ const CarePlan = ({ clientID, exportMode }) => {
               <TableCell>Client Actions</TableCell>
               <TableCell>Case Manager Actions</TableCell>
               <TableCell>Expected Outcomes</TableCell>
+              <TableCell>Submission</TableCell>
+              <TableCell>Submitted By</TableCell>
               <TableCell>Added By</TableCell>
               {!exportMode && <TableCell>Actions</TableCell>}
             </TableRow>
@@ -475,19 +557,19 @@ const CarePlan = ({ clientID, exportMode }) => {
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={exportMode ? 8 : 9} align="center">
+                <TableCell colSpan={exportMode ? 10 : 11} align="center">
                   <Alert severity="info">Loading care plans...</Alert>
                 </TableCell>
               </TableRow>
             ) : error ? (
               <TableRow>
-                <TableCell colSpan={exportMode ? 8 : 9} align="center">
-                  <Alert severity="error">Error: {error}</Alert>
+                <TableCell colSpan={exportMode ? 10 : 11} align="center">
+                  <Alert severity="error">Error: {errorText(error)}</Alert>
                 </TableCell>
               </TableRow>
             ) : carePlans.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={exportMode ? 8 : 9} align="center">
+                <TableCell colSpan={exportMode ? 10 : 11} align="center">
                   <Alert severity="info">No care plans available.</Alert>
                 </TableCell>
               </TableRow>
@@ -576,28 +658,84 @@ const CarePlan = ({ clientID, exportMode }) => {
                     </Typography>
                   </TableCell>
                   <TableCell>
+                    {isPlanLocked(plan) ? (
+                      <Chip icon={<LockIcon />} label="Submitted" size="small" />
+                    ) : (
+                      <Chip label="Draft" color="warning" variant="outlined" size="small" />
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {isPlanLocked(plan) ? (
+                      <>
+                        <Typography variant="body2">{plan.submittedBy || 'Unknown'}</Typography>
+                        {plan.submittedAt && (
+                          <Typography variant="caption" color="text.secondary">
+                            {formatDateTime(plan.submittedAt)}
+                          </Typography>
+                        )}
+                      </>
+                    ) : (
+                      <Typography variant="body2" color="text.secondary">Not submitted</Typography>
+                    )}
+                  </TableCell>
+                  <TableCell>
                     <Typography variant="body2">{plan.createdBy || 'N/A'}</Typography>
                   </TableCell>
                   {!exportMode && (
                     <TableCell>
-                      <Box sx={{ display: 'flex', gap: 1 }}>
-                        <IconButton
-                          color="primary"
-                          size="small"
-                          onClick={() => handleEdit(plan)}
-                          disabled={loading}
-                        >
-                          <EditIcon />
-                        </IconButton>
-                        <IconButton
-                          color="error"
-                          size="small"
-                          onClick={() => handleDeleteClick(plan._id)}
-                          disabled={loading}
-                        >
-                          <DeleteIcon />
-                        </IconButton>
-                      </Box>
+                      {isPlanLocked(plan) ? (
+                        <Box sx={{ display: 'flex', gap: 1 }}>
+                          <Tooltip title="View care plan">
+                            <IconButton
+                              color="primary"
+                              size="small"
+                              aria-label="View care plan"
+                              onClick={() => handleEdit(plan)}
+                              disabled={loading}
+                            >
+                              <VisibilityIcon />
+                            </IconButton>
+                          </Tooltip>
+                          {canUnlock && (
+                            <Tooltip title="Unlock care plan">
+                              <IconButton
+                                color="warning"
+                                size="small"
+                                aria-label="Unlock care plan"
+                                onClick={() => openUnlockDialog(plan)}
+                                disabled={loading}
+                              >
+                                <LockOpenIcon />
+                              </IconButton>
+                            </Tooltip>
+                          )}
+                        </Box>
+                      ) : (
+                        <Box sx={{ display: 'flex', gap: 1 }}>
+                          <Tooltip title="Edit draft">
+                            <IconButton
+                              color="primary"
+                              size="small"
+                              aria-label="Edit draft"
+                              onClick={() => handleEdit(plan)}
+                              disabled={loading}
+                            >
+                              <EditIcon />
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title="Delete draft">
+                            <IconButton
+                              color="error"
+                              size="small"
+                              aria-label="Delete draft"
+                              onClick={() => handleDeleteClick(plan._id)}
+                              disabled={loading}
+                            >
+                              <DeleteIcon />
+                            </IconButton>
+                          </Tooltip>
+                        </Box>
+                      )}
                     </TableCell>
                   )}
                 </TableRow>
@@ -610,11 +748,36 @@ const CarePlan = ({ clientID, exportMode }) => {
         <Dialog open={modalOpen} onClose={toggleModal} maxWidth="xl" fullWidth>
           <DialogTitle>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-              {editMode ? <EditIcon /> : <AddIcon />}
-              {editMode ? "Edit Care Plan Goal" : "Add Care Plan Goal"}
+              {editingLocked ? <LockIcon /> : editMode ? <EditIcon /> : <AddIcon />}
+              {editingLocked ? "Care Plan Goal (Submitted)" : editMode ? "Edit Draft Care Plan Goal" : "Add Care Plan Goal"}
             </Box>
           </DialogTitle>
+          {editingLocked ? (
+            <Alert
+              severity="info"
+              icon={<LockIcon />}
+              sx={{ mx: 3 }}
+              action={canUnlock ? (
+                <Button color="inherit" size="small" startIcon={<LockOpenIcon />} onClick={() => openUnlockDialog(editingPlan)}>
+                  Unlock
+                </Button>
+              ) : null}
+            >
+              <strong>Submitted and locked.</strong>
+              {editingPlan?.submittedAt && ` Submitted ${formatDateTime(editingPlan.submittedAt)}${editingPlan.submittedBy ? ` by ${editingPlan.submittedBy}` : ''}.`}
+              {' '}
+              {canUnlock
+                ? 'Unlocking keeps a copy of the submitted version.'
+                : 'Changes require an IT Admin or Level 1 user to unlock it.'}
+            </Alert>
+          ) : editingPlan?.unlockedAt ? (
+            <Alert severity="warning" icon={<LockOpenIcon />} sx={{ mx: 3 }}>
+              Unlocked by {editingPlan.unlockedBy} on {formatDateTime(editingPlan.unlockedAt)}
+              {editingPlan.unlockReason && `: ${editingPlan.unlockReason}`}. Submit it again when done.
+            </Alert>
+          ) : null}
           <DialogContent>
+            <fieldset disabled={editingLocked} style={{ border: 0, margin: 0, padding: 0, minWidth: 0 }}>
             <Grid container spacing={3} sx={{ mt: 1 }}>
               <Grid item xs={12}>
                 <TextField
@@ -729,13 +892,68 @@ const CarePlan = ({ clientID, exportMode }) => {
                 />
               </Grid>
             </Grid>
+            </fieldset>
+          </DialogContent>
+          {saveError && (
+            <Alert severity="error" sx={{ mx: 3 }}>{saveError}</Alert>
+          )}
+          <DialogActions sx={{ flexWrap: 'wrap', gap: 1 }}>
+            {editingLocked ? (
+              <Button onClick={toggleModal} color="secondary">
+                Close
+              </Button>
+            ) : (
+              <>
+                <Typography variant="caption" color="text.secondary" sx={{ flexGrow: 1, pl: 2 }}>
+                  Submitted care plans are locked. Only IT Admin or Level 1 users can unlock them.
+                </Typography>
+                <Button onClick={toggleModal} color="secondary" disabled={saving}>
+                  Cancel
+                </Button>
+                <Button onClick={() => handleSave(false)} variant="outlined" startIcon={<SaveIcon />} disabled={saving}>
+                  Save Progress
+                </Button>
+                <Button onClick={() => handleSave(true)} variant="contained" color="primary" startIcon={<SendIcon />} disabled={saving}>
+                  Submit Goal
+                </Button>
+              </>
+            )}
+          </DialogActions>
+        </Dialog>
+
+        {/* Unlock Care Plan Dialog */}
+        <Dialog open={unlockOpen} onClose={unlocking ? undefined : closeUnlockDialog} maxWidth="sm" fullWidth>
+          <DialogTitle>Unlock submitted care plan</DialogTitle>
+          <DialogContent>
+            <Typography variant="body2" sx={{ mb: 2 }}>
+              A copy of the submitted care plan will be kept. It goes back to draft so it can be
+              edited, and must be submitted again.
+            </Typography>
+            <TextField
+              autoFocus
+              fullWidth
+              multiline
+              minRows={3}
+              label="Reason for unlocking"
+              value={unlockReason}
+              onChange={(e) => setUnlockReason(e.target.value)}
+              inputProps={{ maxLength: 500 }}
+              helperText="Required. Recorded with the unlock (at least 5 characters)."
+            />
+            {unlockError && <Alert severity="error" sx={{ mt: 2 }}>{unlockError}</Alert>}
           </DialogContent>
           <DialogActions>
-            <Button onClick={handleSave} variant="contained" color="primary">
-              {editMode ? "Update Goal" : "Save Goal"}
-            </Button>
-            <Button onClick={toggleModal} color="secondary">
+            <Button onClick={closeUnlockDialog} disabled={unlocking} color="inherit">
               Cancel
+            </Button>
+            <Button
+              variant="contained"
+              color="warning"
+              onClick={handleConfirmUnlock}
+              disabled={unlocking || unlockReason.trim().length < 5}
+              startIcon={unlocking ? <CircularProgress size={16} /> : <LockOpenIcon />}
+            >
+              {unlocking ? 'Unlocking...' : 'Unlock care plan'}
             </Button>
           </DialogActions>
         </Dialog>
