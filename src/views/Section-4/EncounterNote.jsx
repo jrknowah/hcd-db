@@ -32,15 +32,18 @@ import {
   Send as SendIcon,
   Lock as LockIcon,
   LockOpen as LockOpenIcon,
-  Visibility as VisibilityIcon
+  Visibility as VisibilityIcon,
+  Delete as DeleteIcon
 } from "@mui/icons-material";
 import PropTypes from "prop-types";
 import { useDispatch, useSelector } from "react-redux";
 import { useMsal } from '@azure/msal-react';
 import Select from 'react-select';
-import { addEncounterNote, editEncounterNote, fetchEncounterNotes, unlockEncounterNote } from '../../backend/store/slices/encounterNoteSlice';
+import { addEncounterNote, editEncounterNote, fetchEncounterNotes, unlockEncounterNote, deleteEncounterNote } from '../../backend/store/slices/encounterNoteSlice';
 import { canUnlockLockedRecords } from '../../backend/config/groupConfig';
 import logUserAction from "../../backend/config/logAction";
+import { formatLocalDateTime } from "../../utils/localDateTime";
+import { formatDateOnly } from "../../utils/dateOnly";
 import { hhhSiteList2, cmNoteType } from "../../data/arrayList";
 
 // ✅ Static mock data outside component
@@ -110,13 +113,13 @@ const customSelectStyles = {
 // Submitted notes are locked; drafts ("Save Progress") stay editable
 const isNoteLocked = (note) => note.locked ?? note.submissionStatus !== 'draft';
 
-const formatDateTime = (value) => (value ? new Date(value).toLocaleString() : '');
 
 const EncounterNote = ({ clientID, exportMode }) => {
   const dispatch = useDispatch();
   const { accounts } = useMsal();
-  // Display-only; the backend enforces who may unlock
+  // Display-only; the backend enforces who may unlock or delete
   const canUnlock = canUnlockLockedRecords(accounts?.[0]);
+  const canDelete = canUnlock;
   
   // ✅ Safe selectors
   const reduxUser = useSelector((state) => state?.auth?.user);
@@ -159,6 +162,11 @@ const EncounterNote = ({ clientID, exportMode }) => {
   const [unlockReason, setUnlockReason] = useState('');
   const [unlocking, setUnlocking] = useState(false);
   const [unlockError, setUnlockError] = useState(null);
+  // The note being deleted (IT Admin / Level 1); a submitted note needs a reason
+  const [deletingNote, setDeletingNote] = useState(null);
+  const [deleteReason, setDeleteReason] = useState('');
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState(null);
 
   const initialFormState = {
     careNoteDate: new Date().toISOString().split('T')[0],
@@ -194,6 +202,9 @@ const EncounterNote = ({ clientID, exportMode }) => {
     setUnlockOpen(false);
     setUnlockReason('');
     setUnlockError(null);
+    setDeletingNote(null);
+    setDeleteReason('');
+    setDeleteError(null);
     setSaveSuccess(false);
     setSaveError(null);
     setFormData(initialFormState);
@@ -293,6 +304,59 @@ const EncounterNote = ({ clientID, exportMode }) => {
     setModalOpen(false);
     resetForm();
   };
+
+  const openDeleteDialog = (note) => {
+    setDeletingNote(note);
+    setDeleteReason('');
+    setDeleteError(null);
+  };
+
+  const closeDeleteDialog = () => {
+    setDeletingNote(null);
+    setDeleteError(null);
+  };
+
+  const deletingLocked = deletingNote ? isNoteLocked(deletingNote) : false;
+
+  const handleConfirmDelete = async () => {
+    if (!deletingNote) return;
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      await dispatch(deleteEncounterNote({
+        noteId: deletingNote._id,
+        clientID: effectiveClientID,
+        reason: deletingLocked ? deleteReason.trim() : undefined,
+      })).unwrap();
+      if (currentUser) {
+        await logUserAction(currentUser, "DELETE_ENCOUNTER_NOTE", {
+          noteId: deletingNote._id,
+          clientID: effectiveClientID,
+        });
+      }
+      if (editNoteId === deletingNote._id) closeEditModal();
+      closeDeleteDialog();
+    } catch (err) {
+      const msg = typeof err === 'string' ? err : err?.message || err?.error || 'Unknown error';
+      setDeleteError(`Failed to delete note: ${msg}`);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const deleteButton = (note) => canDelete && (
+    <Tooltip title="Delete note">
+      <IconButton
+        color="error"
+        size="small"
+        aria-label="Delete note"
+        onClick={() => openDeleteDialog(note)}
+        disabled={loading}
+      >
+        <DeleteIcon />
+      </IconButton>
+    </Tooltip>
+  );
 
   const handleUpdateCareNote = async (submit = false) => {
     if (!editNoteId) {
@@ -542,6 +606,7 @@ const EncounterNote = ({ clientID, exportMode }) => {
               <TableCell>Note</TableCell>
               <TableCell>Status</TableCell>
               <TableCell>Submitted By</TableCell>
+              <TableCell>Last Updated By</TableCell>
               <TableCell>Added By</TableCell>
               {!exportMode && <TableCell>Actions</TableCell>}
             </TableRow>
@@ -549,19 +614,19 @@ const EncounterNote = ({ clientID, exportMode }) => {
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={exportMode ? 7 : 8} align="center">
+                <TableCell colSpan={exportMode ? 8 : 9} align="center">
                   <Alert severity="info">Loading encounter notes...</Alert>
                 </TableCell>
               </TableRow>
             ) : error ? (
               <TableRow>
-                <TableCell colSpan={exportMode ? 7 : 8} align="center">
+                <TableCell colSpan={exportMode ? 8 : 9} align="center">
                   <Alert severity="error">Error: {error}</Alert>
                 </TableCell>
               </TableRow>
             ) : encounterNotes.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={exportMode ? 7 : 8} align="center">
+                <TableCell colSpan={exportMode ? 8 : 9} align="center">
                   <Alert severity="info">No encounter notes available.</Alert>
                 </TableCell>
               </TableRow>
@@ -571,7 +636,7 @@ const EncounterNote = ({ clientID, exportMode }) => {
                   <TableCell>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                       <DateIcon fontSize="small" color="action" />
-                      {note.careNoteDate}
+                      {formatDateOnly(note.careNoteDate)}
                     </Box>
                   </TableCell>
                   <TableCell>
@@ -614,7 +679,7 @@ const EncounterNote = ({ clientID, exportMode }) => {
                         <Typography variant="body2">{note.submittedBy || 'Unknown'}</Typography>
                         {note.submittedAt && (
                           <Typography variant="caption" color="text.secondary">
-                            {formatDateTime(note.submittedAt)}
+                            {formatLocalDateTime(note.submittedAt)}
                           </Typography>
                         )}
                       </>
@@ -623,7 +688,21 @@ const EncounterNote = ({ clientID, exportMode }) => {
                     )}
                   </TableCell>
                   <TableCell>
+                    {/* Never edited since creation: the creator is the last to update it */}
+                    <Typography variant="body2">{note.updatedBy || note.createdBy || 'N/A'}</Typography>
+                    {(note.updatedAt || note.createdAt) && (
+                      <Typography variant="caption" color="text.secondary">
+                        {formatLocalDateTime(note.updatedAt || note.createdAt)}
+                      </Typography>
+                    )}
+                  </TableCell>
+                  <TableCell>
                     <Typography variant="body2">{note.createdBy || 'N/A'}</Typography>
+                    {note.createdAt && (
+                      <Typography variant="caption" color="text.secondary">
+                        {formatLocalDateTime(note.createdAt)}
+                      </Typography>
+                    )}
                   </TableCell>
                   {!exportMode && (
                     <TableCell>
@@ -653,19 +732,23 @@ const EncounterNote = ({ clientID, exportMode }) => {
                               </IconButton>
                             </Tooltip>
                           )}
+                          {deleteButton(note)}
                         </Box>
                       ) : (
-                        <Tooltip title="Edit draft">
-                          <IconButton
-                            color="primary"
-                            size="small"
-                            aria-label="Edit draft"
-                            onClick={() => openEditModal(note)}
-                            disabled={loading}
-                          >
-                            <EditIcon />
-                          </IconButton>
-                        </Tooltip>
+                        <Box sx={{ display: 'flex', gap: 1 }}>
+                          <Tooltip title="Edit draft">
+                            <IconButton
+                              color="primary"
+                              size="small"
+                              aria-label="Edit draft"
+                              onClick={() => openEditModal(note)}
+                              disabled={loading}
+                            >
+                              <EditIcon />
+                            </IconButton>
+                          </Tooltip>
+                          {deleteButton(note)}
+                        </Box>
                       )}
                     </TableCell>
                   )}
@@ -820,7 +903,7 @@ const EncounterNote = ({ clientID, exportMode }) => {
               ) : null}
             >
               <strong>Submitted and locked.</strong>
-              {editingNote?.submittedAt && ` Submitted ${formatDateTime(editingNote.submittedAt)}${editingNote.submittedBy ? ` by ${editingNote.submittedBy}` : ''}.`}
+              {editingNote?.submittedAt && ` Submitted ${formatLocalDateTime(editingNote.submittedAt)}${editingNote.submittedBy ? ` by ${editingNote.submittedBy}` : ''}.`}
               {' '}
               {canUnlock
                 ? 'Unlocking keeps a copy of the submitted version.'
@@ -828,7 +911,7 @@ const EncounterNote = ({ clientID, exportMode }) => {
             </Alert>
           ) : editingNote?.unlockedAt ? (
             <Alert severity="warning" icon={<LockOpenIcon />} sx={{ mx: 3 }}>
-              Unlocked by {editingNote.unlockedBy} on {formatDateTime(editingNote.unlockedAt)}
+              Unlocked by {editingNote.unlockedBy} on {formatLocalDateTime(editingNote.unlockedAt)}
               {editingNote.unlockReason && `: ${editingNote.unlockReason}`}. Submit it again when done.
             </Alert>
           ) : null}
@@ -928,6 +1011,46 @@ const EncounterNote = ({ clientID, exportMode }) => {
                 </Button>
               </>
             )}
+          </DialogActions>
+        </Dialog>
+
+        {/* Delete Note Dialog (IT Admin / Level 1) */}
+        <Dialog open={!!deletingNote} onClose={deleting ? undefined : closeDeleteDialog} maxWidth="sm" fullWidth>
+          <DialogTitle>{deletingLocked ? 'Delete submitted note' : 'Delete draft note'}</DialogTitle>
+          <DialogContent>
+            <Typography variant="body2" sx={{ mb: deletingLocked ? 2 : 0 }}>
+              {deletingLocked
+                ? <>This note was submitted{deletingNote?.submittedBy ? ` by ${deletingNote.submittedBy}` : ''}. It will be removed from the client's record; a copy is kept for audit.</>
+                : 'This draft will be removed from the client\'s record; a copy is kept for audit.'}
+            </Typography>
+            {deletingLocked && (
+              <TextField
+                autoFocus
+                fullWidth
+                multiline
+                minRows={3}
+                label="Reason for deleting"
+                value={deleteReason}
+                onChange={(e) => setDeleteReason(e.target.value)}
+                inputProps={{ maxLength: 500 }}
+                helperText="Required. Recorded with the deletion (at least 5 characters)."
+              />
+            )}
+            {deleteError && <Alert severity="error" sx={{ mt: 2 }}>{deleteError}</Alert>}
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={closeDeleteDialog} disabled={deleting} color="inherit">
+              Cancel
+            </Button>
+            <Button
+              variant="contained"
+              color="error"
+              onClick={handleConfirmDelete}
+              disabled={deleting || (deletingLocked && deleteReason.trim().length < 5)}
+              startIcon={deleting ? <CircularProgress size={16} /> : <DeleteIcon />}
+            >
+              {deleting ? 'Deleting...' : 'Delete note'}
+            </Button>
           </DialogActions>
         </Dialog>
 

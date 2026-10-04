@@ -3,7 +3,8 @@ import { useIsAuthenticated, useMsal } from '@azure/msal-react';
 import { Navigate } from 'react-router-dom';
 import { isAdminAccount } from '../../backend/config/groupConfig';
 
-const ProtectedRoute = ({ children, requiredRoles = [], adminOnly = false }) => {
+// canAccess: optional (account) => boolean for access rules beyond adminOnly
+const ProtectedRoute = ({ children, requiredRoles = [], adminOnly = false, canAccess }) => {
   const isAuthenticated = useIsAuthenticated();
   const { accounts } = useMsal();
 
@@ -12,6 +13,10 @@ const ProtectedRoute = ({ children, requiredRoles = [], adminOnly = false }) => 
   }
 
   if (adminOnly && !isAdminAccount(accounts[0])) {
+    return <Navigate to="/unauthorized" replace />;
+  }
+
+  if (canAccess && !canAccess(accounts[0])) {
     return <Navigate to="/unauthorized" replace />;
   }
 

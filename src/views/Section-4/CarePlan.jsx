@@ -45,6 +45,7 @@ import { useMsal } from "@azure/msal-react";
 import { fetchCarePlans, addCarePlan, editCarePlan, deleteCarePlan, unlockCarePlan } from "../../backend/store/slices/carePlanSlice";
 import { canUnlockLockedRecords } from "../../backend/config/groupConfig";
 import logUserAction from "../../backend/config/logAction";
+import { formatLocalDateTime } from "../../utils/localDateTime";
 
 // ✅ Static mock data outside component
 const MOCK_CLIENT = {
@@ -110,7 +111,6 @@ const MOCK_CARE_PLANS = [
 // Submitted care plans are locked; drafts ("Save Progress") stay editable
 const isPlanLocked = (plan) => plan.locked ?? plan.submissionStatus !== 'draft';
 
-const formatDateTime = (value) => (value ? new Date(value).toLocaleString() : '');
 
 const errorText = (err) =>
   typeof err === 'string' ? err : err?.message || err?.error || 'Unknown error';
@@ -145,7 +145,11 @@ const CarePlan = ({ clientID, exportMode }) => {
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [saveError, setSaveError] = useState(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
-  const [deletingId, setDeletingId] = useState(null);
+  // The plan being deleted; a submitted plan needs a reason (IT Admin / Level 1 only)
+  const [deletingPlan, setDeletingPlan] = useState(null);
+  const [deleteReason, setDeleteReason] = useState('');
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState(null);
   const [saving, setSaving] = useState(false);
   // The plan open in the dialog; a locked plan opens read-only
   const [editingPlan, setEditingPlan] = useState(null);
@@ -190,7 +194,9 @@ const CarePlan = ({ clientID, exportMode }) => {
     setDeleteConfirmOpen(false);
     setEditMode(false);
     setEditingId(null);
-    setDeletingId(null);
+    setDeletingPlan(null);
+    setDeleteReason('');
+    setDeleteError(null);
     setEditingPlan(null);
     setUnlockOpen(false);
     setUnlockReason('');
@@ -362,42 +368,51 @@ const CarePlan = ({ clientID, exportMode }) => {
     }
   };
 
-  const handleDeleteClick = (id) => {
-    setDeletingId(id);
+  const handleDeleteClick = (plan) => {
+    setDeletingPlan(plan);
+    setDeleteReason('');
+    setDeleteError(null);
     setDeleteConfirmOpen(true);
   };
 
-  const handleDeleteConfirm = async () => {
-    if (!deletingId) return;
+  const closeDeleteDialog = () => {
+    setDeleteConfirmOpen(false);
+    setDeletingPlan(null);
+    setDeleteError(null);
+  };
 
+  const deletingLocked = deletingPlan ? isPlanLocked(deletingPlan) : false;
+
+  const handleDeleteConfirm = async () => {
+    if (!deletingPlan) return;
+
+    setDeleting(true);
+    setDeleteError(null);
     try {
       if (shouldUseMockData) {
-        setTimeout(() => {
-          setDeleteConfirmOpen(false);
-          setDeletingId(null);
-        }, 1000);
+        setTimeout(closeDeleteDialog, 1000);
         return;
       }
 
       await dispatch(deleteCarePlan({ 
-        id: deletingId, 
-        user: currentUser 
+        id: deletingPlan._id, 
+        user: currentUser,
+        reason: deletingLocked ? deleteReason.trim() : undefined,
       })).unwrap();
 
       if (currentUser) {
         await logUserAction(currentUser, "DELETE_CARE_PLAN", {
-          carePlanId: deletingId,
+          carePlanId: deletingPlan._id,
           clientID: effectiveClientID
         });
       }
 
-      setDeleteConfirmOpen(false);
-      setDeletingId(null);
+      closeDeleteDialog();
     } catch (err) {
       console.error("❌ Error deleting care plan:", err);
-      setSaveError(`Failed to delete care plan: ${errorText(err)}`);
-      setDeleteConfirmOpen(false);
-      setDeletingId(null);
+      setDeleteError(`Failed to delete care plan: ${errorText(err)}`);
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -550,6 +565,7 @@ const CarePlan = ({ clientID, exportMode }) => {
               <TableCell>Expected Outcomes</TableCell>
               <TableCell>Submission</TableCell>
               <TableCell>Submitted By</TableCell>
+              <TableCell>Last Updated By</TableCell>
               <TableCell>Added By</TableCell>
               {!exportMode && <TableCell>Actions</TableCell>}
             </TableRow>
@@ -557,19 +573,19 @@ const CarePlan = ({ clientID, exportMode }) => {
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={exportMode ? 10 : 11} align="center">
+                <TableCell colSpan={exportMode ? 11 : 12} align="center">
                   <Alert severity="info">Loading care plans...</Alert>
                 </TableCell>
               </TableRow>
             ) : error ? (
               <TableRow>
-                <TableCell colSpan={exportMode ? 10 : 11} align="center">
+                <TableCell colSpan={exportMode ? 11 : 12} align="center">
                   <Alert severity="error">Error: {errorText(error)}</Alert>
                 </TableCell>
               </TableRow>
             ) : carePlans.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={exportMode ? 10 : 11} align="center">
+                <TableCell colSpan={exportMode ? 11 : 12} align="center">
                   <Alert severity="info">No care plans available.</Alert>
                 </TableCell>
               </TableRow>
@@ -670,7 +686,7 @@ const CarePlan = ({ clientID, exportMode }) => {
                         <Typography variant="body2">{plan.submittedBy || 'Unknown'}</Typography>
                         {plan.submittedAt && (
                           <Typography variant="caption" color="text.secondary">
-                            {formatDateTime(plan.submittedAt)}
+                            {formatLocalDateTime(plan.submittedAt)}
                           </Typography>
                         )}
                       </>
@@ -679,7 +695,21 @@ const CarePlan = ({ clientID, exportMode }) => {
                     )}
                   </TableCell>
                   <TableCell>
+                    {/* Never edited since creation: the creator is the last to update it */}
+                    <Typography variant="body2">{plan.updatedBy || plan.createdBy || 'N/A'}</Typography>
+                    {(plan.updatedAt || plan.createdAt) && (
+                      <Typography variant="caption" color="text.secondary">
+                        {formatLocalDateTime(plan.updatedAt || plan.createdAt)}
+                      </Typography>
+                    )}
+                  </TableCell>
+                  <TableCell>
                     <Typography variant="body2">{plan.createdBy || 'N/A'}</Typography>
+                    {plan.createdAt && (
+                      <Typography variant="caption" color="text.secondary">
+                        {formatLocalDateTime(plan.createdAt)}
+                      </Typography>
+                    )}
                   </TableCell>
                   {!exportMode && (
                     <TableCell>
@@ -709,6 +739,19 @@ const CarePlan = ({ clientID, exportMode }) => {
                               </IconButton>
                             </Tooltip>
                           )}
+                          {canUnlock && (
+                            <Tooltip title="Delete care plan">
+                              <IconButton
+                                color="error"
+                                size="small"
+                                aria-label="Delete care plan"
+                                onClick={() => handleDeleteClick(plan)}
+                                disabled={loading}
+                              >
+                                <DeleteIcon />
+                              </IconButton>
+                            </Tooltip>
+                          )}
                         </Box>
                       ) : (
                         <Box sx={{ display: 'flex', gap: 1 }}>
@@ -728,7 +771,7 @@ const CarePlan = ({ clientID, exportMode }) => {
                               color="error"
                               size="small"
                               aria-label="Delete draft"
-                              onClick={() => handleDeleteClick(plan._id)}
+                              onClick={() => handleDeleteClick(plan)}
                               disabled={loading}
                             >
                               <DeleteIcon />
@@ -764,7 +807,7 @@ const CarePlan = ({ clientID, exportMode }) => {
               ) : null}
             >
               <strong>Submitted and locked.</strong>
-              {editingPlan?.submittedAt && ` Submitted ${formatDateTime(editingPlan.submittedAt)}${editingPlan.submittedBy ? ` by ${editingPlan.submittedBy}` : ''}.`}
+              {editingPlan?.submittedAt && ` Submitted ${formatLocalDateTime(editingPlan.submittedAt)}${editingPlan.submittedBy ? ` by ${editingPlan.submittedBy}` : ''}.`}
               {' '}
               {canUnlock
                 ? 'Unlocking keeps a copy of the submitted version.'
@@ -772,7 +815,7 @@ const CarePlan = ({ clientID, exportMode }) => {
             </Alert>
           ) : editingPlan?.unlockedAt ? (
             <Alert severity="warning" icon={<LockOpenIcon />} sx={{ mx: 3 }}>
-              Unlocked by {editingPlan.unlockedBy} on {formatDateTime(editingPlan.unlockedAt)}
+              Unlocked by {editingPlan.unlockedBy} on {formatLocalDateTime(editingPlan.unlockedAt)}
               {editingPlan.unlockReason && `: ${editingPlan.unlockReason}`}. Submit it again when done.
             </Alert>
           ) : null}
@@ -959,19 +1002,41 @@ const CarePlan = ({ clientID, exportMode }) => {
         </Dialog>
 
         {/* Delete Confirmation Dialog */}
-        <Dialog open={deleteConfirmOpen} onClose={() => setDeleteConfirmOpen(false)}>
-          <DialogTitle>Confirm Delete</DialogTitle>
+        <Dialog open={deleteConfirmOpen} onClose={deleting ? undefined : closeDeleteDialog} maxWidth="sm" fullWidth>
+          <DialogTitle>{deletingLocked ? 'Delete submitted care plan' : 'Confirm Delete'}</DialogTitle>
           <DialogContent>
-            <Typography>
-              Are you sure you want to delete this care plan? This action cannot be undone.
+            <Typography sx={{ mb: deletingLocked ? 2 : 0 }}>
+              {deletingLocked
+                ? <>This care plan was submitted{deletingPlan?.submittedBy ? ` by ${deletingPlan.submittedBy}` : ''}. It will be removed from the client's record; a copy is kept for audit.</>
+                : 'Are you sure you want to delete this care plan? This action cannot be undone.'}
             </Typography>
+            {deletingLocked && (
+              <TextField
+                autoFocus
+                fullWidth
+                multiline
+                minRows={3}
+                label="Reason for deleting"
+                value={deleteReason}
+                onChange={(e) => setDeleteReason(e.target.value)}
+                inputProps={{ maxLength: 500 }}
+                helperText="Required. Recorded with the deletion (at least 5 characters)."
+              />
+            )}
+            {deleteError && <Alert severity="error" sx={{ mt: 2 }}>{deleteError}</Alert>}
           </DialogContent>
           <DialogActions>
-            <Button onClick={handleDeleteConfirm} color="error" variant="contained">
-              Delete
-            </Button>
-            <Button onClick={() => setDeleteConfirmOpen(false)} color="secondary">
+            <Button onClick={closeDeleteDialog} color="secondary" disabled={deleting}>
               Cancel
+            </Button>
+            <Button
+              onClick={handleDeleteConfirm}
+              color="error"
+              variant="contained"
+              disabled={deleting || (deletingLocked && deleteReason.trim().length < 5)}
+              startIcon={deleting ? <CircularProgress size={16} /> : <DeleteIcon />}
+            >
+              {deleting ? 'Deleting...' : 'Delete'}
             </Button>
           </DialogActions>
         </Dialog>

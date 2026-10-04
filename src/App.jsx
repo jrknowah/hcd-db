@@ -4,7 +4,7 @@ import { ThemeSettings } from './theme/Theme';
 import RTL from './layouts/full/shared/customizer/RTL';
 import { CssBaseline, ThemeProvider, Box, Typography, CircularProgress } from '@mui/material';
 import { CustomizerContext } from 'src/context/CustomizerContext';
-import { MsalProvider } from '@azure/msal-react';
+import { MsalProvider, useMsal } from '@azure/msal-react';
 import { msalInstance, initializeMsal } from './backend/config/authConfig';
 import AuthGuard from './components/Auth/AuthGuard';
 import ClientRouteGate from './components/ClientRouteGate';
@@ -14,6 +14,7 @@ import  store  from './backend/store/store';
 import AdminErrors from './views/Dashboard/AdminErrors';
 // import { ProtectedAdminRoute } from './views/Dashboard/ProtectedAdminRoute';
 import ProtectedRoute from './components/Auth/ProtectedRoute';
+import { isAdminAccount, canViewAuditTrail } from './backend/config/groupConfig';
 import AdminLayout from './views/admin/AdminLayout';
 
 // At the very top of App.jsx, before any other code:
@@ -353,18 +354,21 @@ const AppRoutes = () => {
                 No client-scoped section state applies here.
                 ======================================== */}
             <Route path="/admin" element={
-              <ProtectedRoute adminOnly>
+              // IT Admin sees the whole console; Level 1 sees only the audit trail
+              <ProtectedRoute canAccess={canViewAuditTrail}>
                 <ComponentErrorBoundary name="AdminLayout">
                   <AdminLayout />
                 </ComponentErrorBoundary>
               </ProtectedRoute>
             }>
-              <Route index element={<Navigate to="/admin/errors" replace />} />
+              <Route index element={<AdminHomeRedirect />} />
 
               <Route path="errors" element={
-                <ComponentErrorBoundary name="Admin Errors">
-                  <AdminErrors />
-                </ComponentErrorBoundary>
+                <ProtectedRoute adminOnly>
+                  <ComponentErrorBoundary name="Admin Errors">
+                    <AdminErrors />
+                  </ComponentErrorBoundary>
+                </ProtectedRoute>
               } />
 
               <Route path="audit" element={
@@ -376,14 +380,16 @@ const AppRoutes = () => {
               } />
 
               <Route path="analytics" element={
-                <ComponentErrorBoundary name="Admin Analytics">
-                  <Suspense fallback={<LoadingFallback name="Reports & Analytics" />}>
-                    <AdminAnalytics />
-                  </Suspense>
-                </ComponentErrorBoundary>
+                <ProtectedRoute adminOnly>
+                  <ComponentErrorBoundary name="Admin Analytics">
+                    <Suspense fallback={<LoadingFallback name="Reports & Analytics" />}>
+                      <AdminAnalytics />
+                    </Suspense>
+                  </ComponentErrorBoundary>
+                </ProtectedRoute>
               } />
 
-              <Route path="*" element={<Navigate to="/admin/errors" replace />} />
+              <Route path="*" element={<AdminHomeRedirect />} />
             </Route>
 
             <Route path="/unauthorized" element={
@@ -411,6 +417,14 @@ const AppRoutes = () => {
 };
 
 // ✅ Main App Component with MSAL Initialization
+// /admin landing page: IT Admin starts on System Errors, Level 1 (audit
+// trail only) on the Audit Trail.
+function AdminHomeRedirect() {
+  const { accounts } = useMsal();
+  const to = isAdminAccount(accounts[0]) ? '/admin/errors' : '/admin/audit';
+  return <Navigate to={to} replace />;
+}
+
 function App() {
   const [msalInitialized, setMsalInitialized] = useState(false);
   const [initError, setInitError] = useState(null);

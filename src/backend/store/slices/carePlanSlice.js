@@ -183,7 +183,7 @@ export const unlockCarePlan = createAsyncThunk(
 // 🗑️ Async thunk to delete care plan
 export const deleteCarePlan = createAsyncThunk(
   "carePlans/deleteCarePlan",
-  async ({ id, user }, thunkAPI) => {
+  async ({ id, user, reason }, thunkAPI) => {
     // ✅ PROTECTION: Return mock success for mock clients
     if (shouldUseMockData('mock-123')) {
       console.log("🔧 Mock mode: Simulating care plan delete for", id);
@@ -192,7 +192,8 @@ export const deleteCarePlan = createAsyncThunk(
 
     try {
       await axios.delete(`${API_URL}/api/care-plans/${id}`, {
-        data: { deletedBy: user?.email || "unknown" },
+        // A submitted plan can only be deleted by IT Admin / Level 1, with a reason
+        data: { deletedBy: user?.email || "unknown", reason },
         headers: await getApiAuthHeaders(),
       });
       return id;

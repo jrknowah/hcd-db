@@ -118,6 +118,11 @@ export const canUnlockLockedRecords = (account) => {
   return isAdminAccount(account) || groups.includes(GROUP_MAPPINGS.HOPE_level1);
 };
 
+// Admin > Audit Trail: IT Admin or Level 1. The rest of the admin console
+// stays IT Admin only. Must stay in sync with requireAuditAccess
+// (middleware/signedFormUnlock.js) on /api/admin/audit.
+export const canViewAuditTrail = (account) => canUnlockLockedRecords(account);
+
 export const ROLE_DISPLAY_NAMES = {
   IT_ADMIN: 'IT Administrator',
   LEVEL1: 'Level 1 Staff',

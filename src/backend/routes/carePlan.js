@@ -15,10 +15,10 @@ try {
 }
 
 const authMiddleware = require('../middleware/auth.js');
-const { requireUnlockPermission } = require('../middleware/signedFormUnlock');
+const { requireUnlockPermission, canUnlockSignedForms } = require('../middleware/signedFormUnlock');
 const {
   DRAFT, SUBMITTED, isSubmitted, wantsSubmit, lockedResponse, getCurrentUser,
-  parseUnlockReason, archiveSubmittedVersion, auditUnlock,
+  parseUnlockReason, archiveVersion, auditAction, deleteNotPermittedResponse,
 } = require('../utils/section4Lock');
 
 const PLAN_COLUMNS = `
@@ -359,7 +359,8 @@ router.post(
           return res.status(409).json({ code: 'RECORD_NOT_LOCKED', message: 'Care plan is not submitted or locked' });
         }
 
-        await archiveSubmittedVersion(transaction, {
+        await archiveVersion(transaction, {
+          action: 'unlock',
           recordType: 'CarePlan',
           recordID: plan._id,
           clientID: plan.clientID,
@@ -368,7 +369,7 @@ router.post(
           submittedAt: plan.submittedAt,
           archivedBy: currentUser,
           archivedAt: now,
-          unlockReason: reason,
+          reason,
         });
 
         await transaction.request()
@@ -389,19 +390,20 @@ router.post(
             WHERE carePlanID = @carePlanID
           `);
 
+        await auditAction(transaction, {
+          action: 'UNLOCK_CARE_PLAN',
+          req,
+          tableName: 'CarePlans',
+          recordID: plan._id,
+          clientID: plan.clientID,
+          timestamp: now,
+        });
+
         await transaction.commit();
       } catch (err) {
         await transaction.rollback().catch(() => {});
         throw err;
       }
-
-      await auditUnlock(pool, {
-        userID: currentUser,
-        tableName: 'CarePlans',
-        recordID: plan._id,
-        clientID: plan.clientID,
-        timestamp: now,
-      });
 
       res.json(mapPlan({
         ...plan,
@@ -421,41 +423,90 @@ router.post(
   }
 );
 
-// DELETE /api/care-plans/:carePlanID - Delete a draft care plan
+// DELETE /api/care-plans/:carePlanID - Delete a care plan
+// Drafts: any signed-in user. Submitted (locked): IT Admin / Level 1 only,
+// with { reason }. A copy is archived to Section4RecordVersions first.
 router.delete('/care-plans/:carePlanID', authMiddleware, async (req, res) => {
+  const { carePlanID } = req.params;
+  const canDeleteSubmitted = canUnlockSignedForms(req.user);
+  const reason = parseUnlockReason(req.body);
+  const currentUser = getCurrentUser(req);
+  const now = new Date();
+
   try {
     const pool = await getPool();
-    const { carePlanID } = req.params;
-    
-    console.log(`🗑️ Deleting care plan: ${carePlanID}`);
-    
-    // Check if care plan exists
-    const checkResult = await pool.request()
-      .input('carePlanID', sql.VarChar, carePlanID)
-      .query('SELECT carePlanID, submissionStatus FROM CarePlans WHERE carePlanID = @carePlanID');
-    
-    if (checkResult.recordset.length === 0) {
-      return res.status(404).json({ error: 'Care plan not found' });
-    }
-    if (isSubmitted(checkResult.recordset[0].submissionStatus)) {
-      return lockedResponse(res, 'care plan');
-    }
-    
-    const result = await pool.request()
-      .input('carePlanID', sql.VarChar, carePlanID)
-      .query(`DELETE FROM CarePlans WHERE carePlanID = @carePlanID AND submissionStatus = '${DRAFT}'`);
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
 
-    if (result.rowsAffected && result.rowsAffected[0] === 0) {
-      return lockedResponse(res, 'care plan');
+    let plan;
+    try {
+      // UPDLOCK so a concurrent submit or unlock can't slip in between read and delete
+      const existing = await transaction.request()
+        .input('carePlanID', sql.VarChar, carePlanID)
+        .query(`
+          SELECT ${PLAN_COLUMNS}
+          FROM CarePlans WITH (UPDLOCK, HOLDLOCK)
+          WHERE carePlanID = @carePlanID
+        `);
+
+      plan = existing.recordset[0];
+      if (!plan) {
+        await transaction.rollback();
+        return res.status(404).json({ error: 'Care plan not found' });
+      }
+
+      const submitted = isSubmitted(plan.submissionStatus);
+      if (submitted && !canDeleteSubmitted) {
+        await transaction.rollback();
+        return deleteNotPermittedResponse(res, 'care plan');
+      }
+      if (submitted && !reason) {
+        await transaction.rollback();
+        return res.status(422).json({ message: 'A reason between 5 and 500 characters is required to delete a submitted care plan' });
+      }
+
+      console.log(`🗑️ Deleting ${submitted ? 'submitted' : 'draft'} care plan: ${carePlanID}`);
+
+      await archiveVersion(transaction, {
+        action: 'delete',
+        recordType: 'CarePlan',
+        recordID: plan._id,
+        clientID: plan.clientID,
+        snapshot: mapPlan(plan),
+        submittedBy: plan.submittedBy,
+        submittedAt: plan.submittedAt,
+        archivedBy: currentUser,
+        archivedAt: now,
+        reason,
+      });
+
+      await transaction.request()
+        .input('carePlanID', sql.VarChar, carePlanID)
+        .query('DELETE FROM CarePlans WHERE carePlanID = @carePlanID');
+
+      await auditAction(transaction, {
+        action: 'DELETE_CARE_PLAN',
+        req,
+        tableName: 'CarePlans',
+        recordID: plan._id,
+        clientID: plan.clientID,
+        details: { submissionStatus: submitted ? 'submitted' : 'draft' },
+        timestamp: now,
+      });
+
+      await transaction.commit();
+    } catch (err) {
+      await transaction.rollback().catch(() => {});
+      throw err;
     }
-    
+
     console.log(`✅ Care plan deleted: ${carePlanID}`);
     res.json({ message: 'Care plan deleted successfully' });
   } catch (err) {
     console.error('❌ Error deleting care plan:', err);
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Failed to delete care plan',
-      message: err.message 
+      message: err.message
     });
   }
 });

@@ -15,10 +15,10 @@ try {
 }
 
 const authMiddleware = require('../middleware/auth.js');
-const { requireUnlockPermission } = require('../middleware/signedFormUnlock');
+const { requireUnlockPermission, canUnlockSignedForms } = require('../middleware/signedFormUnlock');
 const {
   DRAFT, SUBMITTED, isSubmitted, wantsSubmit, lockedResponse, getCurrentUser,
-  parseUnlockReason, archiveSubmittedVersion, auditUnlock,
+  parseUnlockReason, archiveVersion, auditAction, deleteNotPermittedResponse,
 } = require('../utils/section4Lock');
 
 // =====================================================================
@@ -410,7 +410,8 @@ router.post(
           return res.status(409).json({ code: 'RECORD_NOT_LOCKED', message: 'Note is not submitted or locked' });
         }
 
-        await archiveSubmittedVersion(transaction, {
+        await archiveVersion(transaction, {
+          action: 'unlock',
           recordType: 'EncounterNote',
           recordID: note._id,
           clientID: note.ClientID,
@@ -419,7 +420,7 @@ router.post(
           submittedAt: note.SubmittedAt,
           archivedBy: currentUser,
           archivedAt: now,
-          unlockReason: reason,
+          reason,
         });
 
         await transaction.request()
@@ -440,19 +441,20 @@ router.post(
             WHERE Id = @noteId
           `);
 
+        await auditAction(transaction, {
+          action: 'UNLOCK_ENCOUNTER_NOTE',
+          req,
+          tableName: 'EncounterNotes',
+          recordID: note._id,
+          clientID: note.ClientID,
+          timestamp: now,
+        });
+
         await transaction.commit();
       } catch (err) {
         await transaction.rollback().catch(() => {});
         throw err;
       }
-
-      await auditUnlock(pool, {
-        userID: currentUser,
-        tableName: 'EncounterNotes',
-        recordID: note._id,
-        clientID: note.ClientID,
-        timestamp: now,
-      });
 
       res.json(mapNote({
         ...note,
@@ -472,41 +474,90 @@ router.post(
   }
 );
 
-// DELETE /api/encounter-notes/:noteId - Delete a draft encounter note
+// DELETE /api/encounter-notes/:noteId - Delete a note
+// Drafts: any signed-in user. Submitted (locked): IT Admin / Level 1 only,
+// with { reason }. A copy is archived to Section4RecordVersions first.
 router.delete('/encounter-notes/:noteId', authMiddleware, async (req, res) => {
+  const { noteId } = req.params;
+  const canDeleteSubmitted = canUnlockSignedForms(req.user);
+  const reason = parseUnlockReason(req.body);
+  const currentUser = getCurrentUser(req);
+  const now = new Date();
+
   try {
     const pool = await getPool();
-    const { noteId } = req.params;
-    
-    console.log(`🗑️ Deleting encounter note: ${noteId}`);
-    
-    // Check if note exists
-    const checkResult = await pool.request()
-      .input('noteId', sql.UniqueIdentifier, noteId)
-      .query('SELECT Id, SubmissionStatus FROM EncounterNotes WHERE Id = @noteId');
-    
-    if (checkResult.recordset.length === 0) {
-      return res.status(404).json({ error: 'Encounter note not found' });
-    }
-    if (isSubmitted(checkResult.recordset[0].SubmissionStatus)) {
-      return lockedResponse(res, 'note');
-    }
-    
-    const result = await pool.request()
-      .input('noteId', sql.UniqueIdentifier, noteId)
-      .query(`DELETE FROM EncounterNotes WHERE Id = @noteId AND SubmissionStatus = '${DRAFT}'`);
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
 
-    if (result.rowsAffected && result.rowsAffected[0] === 0) {
-      return lockedResponse(res, 'note');
+    let note;
+    try {
+      // UPDLOCK so a concurrent submit or unlock can't slip in between read and delete
+      const existing = await transaction.request()
+        .input('noteId', sql.UniqueIdentifier, noteId)
+        .query(`
+          SELECT ${NOTE_COLUMNS}
+          FROM EncounterNotes WITH (UPDLOCK, HOLDLOCK)
+          WHERE Id = @noteId
+        `);
+
+      note = existing.recordset[0];
+      if (!note) {
+        await transaction.rollback();
+        return res.status(404).json({ error: 'Encounter note not found' });
+      }
+
+      const submitted = isSubmitted(note.SubmissionStatus);
+      if (submitted && !canDeleteSubmitted) {
+        await transaction.rollback();
+        return deleteNotPermittedResponse(res, 'note');
+      }
+      if (submitted && !reason) {
+        await transaction.rollback();
+        return res.status(422).json({ message: 'A reason between 5 and 500 characters is required to delete a submitted note' });
+      }
+
+      console.log(`🗑️ Deleting ${submitted ? 'submitted' : 'draft'} note: ${noteId}`);
+
+      await archiveVersion(transaction, {
+        action: 'delete',
+        recordType: 'EncounterNote',
+        recordID: note._id,
+        clientID: note.ClientID,
+        snapshot: mapNote(note),
+        submittedBy: note.SubmittedBy,
+        submittedAt: note.SubmittedAt,
+        archivedBy: currentUser,
+        archivedAt: now,
+        reason,
+      });
+
+      await transaction.request()
+        .input('noteId', sql.UniqueIdentifier, noteId)
+        .query('DELETE FROM EncounterNotes WHERE Id = @noteId');
+
+      await auditAction(transaction, {
+        action: 'DELETE_ENCOUNTER_NOTE',
+        req,
+        tableName: 'EncounterNotes',
+        recordID: note._id,
+        clientID: note.ClientID,
+        details: { submissionStatus: submitted ? 'submitted' : 'draft' },
+        timestamp: now,
+      });
+
+      await transaction.commit();
+    } catch (err) {
+      await transaction.rollback().catch(() => {});
+      throw err;
     }
-    
+
     console.log(`✅ Encounter note deleted: ${noteId}`);
     res.json({ message: 'Encounter note deleted successfully' });
   } catch (err) {
-    console.error('❌ Error deleting encounter note:', err);
-    res.status(500).json({ 
-      error: 'Failed to delete encounter note',
-      message: err.message 
+    console.error('❌ Error deleting note:', err);
+    res.status(500).json({
+      error: 'Failed to delete note',
+      message: err.message
     });
   }
 });
