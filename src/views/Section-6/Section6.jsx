@@ -191,7 +191,7 @@ const Section6 = () => {
 
             {/* Tab Content */}
             <Box sx={{ p: 3 }}>
-                <ClientInfoBanner />
+                <ClientInfoBanner exportSection={6} />
                 {filteredSections.map((section, index) => (
                     <TabPanel key={index} value={activeTab} index={index}>
                         {section.section6Title === "Case Manager IDT Note" && (

@@ -406,7 +406,7 @@ const AssessCarePlans = () => {
 
             {/* Tab Content */}
             <Box sx={{ p: 3 }}>
-                <ClientInfoBanner />
+                <ClientInfoBanner exportSection={3} />
                 <TabPanel value={activeTab} index={0}>
                     <AssessmentFaceSheetDashboard />
                 </TabPanel>
