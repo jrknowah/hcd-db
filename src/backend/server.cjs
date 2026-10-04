@@ -1003,6 +1003,15 @@ try {
   console.log('⚠️  Could not load section5Summary.js:', err.message);
 }
 
+// SECTION 5 NURSING ARCHIVE UPLOADERS (who uploaded each file; DB + AuditLog)
+try {
+  const nursingArchiveUploadsRouter = require('./routes/nursingArchiveUploads.js');
+  app.use('/api/section5', authMiddleware, nursingArchiveUploadsRouter);
+  console.log('✅ Nursing Archive uploads router loaded');
+} catch (err) {
+  console.log('⚠️  Could not load nursingArchiveUploads.js:', err.message);
+}
+
 console.log('✅ Section 5 Medical Routes Loading Complete');
 //End Section 5: Medical ===================================================================
 

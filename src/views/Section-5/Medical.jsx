@@ -41,6 +41,7 @@ import { getApiAuthHeaders } from "../../utils/apiAuth";
 import { httpError } from "../../utils/section5Lock";
 import { azureBlobService } from "../../backend/services/azureBlobService";
 import { ARCHIVE_SECTIONS, SECTION_CATEGORIES, filterSectionFiles } from "../../utils/archiveSections";
+import { withUploaders } from "../../utils/nursingArchiveUploads";
 import MedFaceSheet from "./MedFaceSheet";
 import MedScreening from "./MedScreening";
 import NursingAdmission from "./NursingAdmission";
@@ -132,25 +133,23 @@ const Medical = () => {
       return body.sections || [];
     };
 
-    // Archive uploads live in blob storage, not the database: list them the same
-    // way the Nursing Archive tab does so the counts match. Uploads don't record
-    // who uploaded them, so there is no "by" for this row.
+    // Archive files live in blob storage: list them the same way the Nursing
+    // Archive tab does so the counts match; the uploader comes from the DB.
     const loadArchive = async () => {
-      const files = filterSectionFiles(
+      const files = await withUploaders(clientID, filterSectionFiles(
         await azureBlobService.listClientFiles(clientID, 'nursing_archive'),
         ARCHIVE_SECTIONS.NURSING,
         SECTION_CATEGORIES[ARCHIVE_SECTIONS.NURSING]
-      );
+      ));
       const latest = files
-        .map(f => f.uploadDate)
-        .filter(Boolean)
-        .sort((a, b) => new Date(b) - new Date(a))[0];
+        .filter(f => f.uploadDate)
+        .sort((a, b) => new Date(b.uploadDate) - new Date(a.uploadDate))[0];
       return {
         key: 'nursingArchive',
         hasData: files.length > 0,
         total: files.length,
-        lastUpdatedAt: latest || null,
-        lastUpdatedBy: null,
+        lastUpdatedAt: latest?.uploadDate || null,
+        lastUpdatedBy: latest?.uploader || null,
         error: false,
       };
     };
