@@ -1,6 +1,6 @@
 // middleware/signedFormUnlock.js
 // Who may unlock a locked record (signed Section 2 forms, submitted Section 4
-// notes and care plans): IT_ADMIN or LEVEL1.
+// notes and care plans) and view the Admin > Audit Trail: IT_ADMIN or LEVEL1.
 //
 // Roles are assigned through Entra group membership. These IDs must stay in
 // sync with GROUP_MAPPINGS in config/groupConfig.js (HOPE_it, HOPE_level1).
@@ -29,9 +29,25 @@ const requireUnlockPermission = (what) => (req, res, next) => {
 
 const requireSignedFormUnlock = requireUnlockPermission('a signed form');
 
+// Admin > Audit Trail (/api/admin/audit). The rest of the admin console
+// (errors, analytics) stays IT Admin only via requireAdmin.
+const requireAuditAccess = (req, res, next) => {
+  if (!req.user) {
+    return res.status(401).json({ error: 'Authentication required', code: 'AUTH_REQUIRED' });
+  }
+  if (!canUnlockSignedForms(req.user)) {
+    return res.status(403).json({
+      error: 'Only IT Admin or Level 1 users can view the audit trail',
+      code: 'AUDIT_ACCESS_REQUIRED',
+    });
+  }
+  next();
+};
+
 module.exports = {
   canUnlockSignedForms,
   requireSignedFormUnlock,
   requireUnlockPermission,
+  requireAuditAccess,
   UNLOCK_GROUP_IDS,
 };
