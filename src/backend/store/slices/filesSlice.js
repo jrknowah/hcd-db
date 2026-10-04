@@ -90,7 +90,7 @@ export const fetchClientFiles = createAsyncThunk(
       }
 
       // Real API call
-      const response = await axios.get(`${API_URL}/api/files/${clientID}`);
+      const response = await axios.get(`${API_URL}/api/files/${encodeURIComponent(clientID)}`);
       return Array.isArray(response.data) ? response.data : [];
     } catch (error) {
       return rejectWithValue(error.response?.data?.message || error.message || 'Failed to fetch files');
