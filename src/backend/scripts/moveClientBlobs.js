@@ -15,8 +15,11 @@
  * folder. Blobs whose destination already exists are skipped, never overwritten.
  * Re-running is safe. To undo, swap the two folder names.
  *
- * Requires AZURE_STORAGE_CONNECTION_STRING (and optionally AZURE_BLOB_CONTAINER)
- * in the same .env the backend uses.
+ * Auth (same as the backend, from the same .env):
+ *   - AZURE_STORAGE_CONNECTION_STRING, or
+ *   - AZURE_STORAGE_ACCOUNT + an Azure sign-in (run `az login` first; your account
+ *     needs the "Storage Blob Data Contributor" role on the storage account)
+ * Optional: AZURE_BLOB_CONTAINER (default 'client-docs').
  */
 
 require('dotenv').config({ path: require('path').join(__dirname, '../../.env') });
@@ -24,6 +27,7 @@ require('dotenv').config({ path: require('path').join(__dirname, '../../.env') }
 const { BlobServiceClient } = require('@azure/storage-blob');
 
 const CONNECTION_STRING = process.env.AZURE_STORAGE_CONNECTION_STRING;
+const STORAGE_ACCOUNT   = process.env.AZURE_STORAGE_ACCOUNT;
 const CONTAINER_NAME    = process.env.AZURE_BLOB_CONTAINER || 'client-docs';
 
 const args  = process.argv.slice(2).filter((a) => !a.startsWith('--'));
@@ -35,8 +39,19 @@ async function main() {
     console.error('Usage: node scripts/moveClientBlobs.js <oldFolder> <newFolder> [--apply]');
     process.exit(1);
   }
-  if (!CONNECTION_STRING) {
-    console.error('❌ AZURE_STORAGE_CONNECTION_STRING is not set in .env');
+  let serviceClient;
+  if (CONNECTION_STRING) {
+    serviceClient = BlobServiceClient.fromConnectionString(CONNECTION_STRING);
+    console.log('Auth      : connection string');
+  } else if (STORAGE_ACCOUNT) {
+    const { DefaultAzureCredential } = require('@azure/identity');
+    serviceClient = new BlobServiceClient(
+      `https://${STORAGE_ACCOUNT}.blob.core.windows.net`,
+      new DefaultAzureCredential()
+    );
+    console.log(`Auth      : Azure sign-in (account ${STORAGE_ACCOUNT})`);
+  } else {
+    console.error('❌ Neither AZURE_STORAGE_CONNECTION_STRING nor AZURE_STORAGE_ACCOUNT is set in .env');
     process.exit(1);
   }
 
@@ -44,9 +59,7 @@ async function main() {
   console.log(`Move      : ${oldFolder}/  ->  ${newFolder}/`);
   console.log(`Mode      : ${APPLY ? 'APPLY' : 'PREVIEW (add --apply to move)'}\n`);
 
-  const container = BlobServiceClient
-    .fromConnectionString(CONNECTION_STRING)
-    .getContainerClient(CONTAINER_NAME);
+  const container = serviceClient.getContainerClient(CONTAINER_NAME);
 
   const prefix = `${oldFolder}/`;
   let moved = 0, skipped = 0, failed = 0, found = 0;
@@ -74,7 +87,7 @@ async function main() {
           blobCacheControl: blob.properties.cacheControl,
           blobContentDisposition: blob.properties.contentDisposition,
         },
-        metadata: blob.metadata,
+        metadata: blob.metadata || {},
       });
 
       const copied = await dst.getProperties();
