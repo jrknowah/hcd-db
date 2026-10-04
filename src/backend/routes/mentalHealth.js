@@ -2,6 +2,8 @@
 const express = require('express');
 const router = express.Router();
 const sql = require('mssql');
+const authMiddleware = require('../middleware/auth.js');
+const { requireAdmin } = authMiddleware;
 
 // Try to load azureSql module (following your existing pattern)
 let getPool;
@@ -95,7 +97,7 @@ router.get('/mental-health/:clientID', async (req, res) => {
         .input('clientID', sql.VarChar, clientID)
         .query(`
           SELECT * FROM MentalHealthHospitalizations 
-          WHERE clientID = @clientID
+          WHERE clientID = @clientID AND active = 1
           ORDER BY hospitalizationDate DESC
         `),
       
@@ -529,33 +531,148 @@ router.post('/mental-health/:clientID/providers', async (req, res) => {
   }
 });
 
-// DELETE /api/mental-health/:clientID/providers/:providerID
-router.delete('/mental-health/:clientID/providers/:providerID', async (req, res) => {
-  try {
-    const pool = await getPool();
-    const { clientID, providerID } = req.params;
-    
-    console.log(`🗑️ Removing provider: ${providerID}`);
-    
-    const result = await pool.request()
-      .input('clientID', sql.VarChar, clientID)
-      .input('providerID', sql.VarChar, providerID)
-      .query('UPDATE MentalHealthProviders SET active = 0 WHERE providerID = @providerID AND clientID = @clientID');
+// ---------------------------------------------------------------------------
+// REMOVING PROVIDERS / HOSPITALIZATIONS / MEDICATIONS
+//
+// HIPAA: clinical history is never erased by a normal remove. The row is
+// marked inactive (active = 0) with who/when/why, so it drops off the page but
+// stays in the record. Admins can permanently delete a row that was entered
+// in error (e.g. a duplicate); that requires a reason and a verified admin
+// token. Every remove writes a dbo.AuditLog row in the same transaction, so a
+// change is never made without its audit entry. The audit row holds IDs and
+// the reason only, never PHI values.
+//
+// Requires store/dbScripts/mentalHealthSoftDelete.sql to have been run.
+// ---------------------------------------------------------------------------
+const REMOVABLE_TABLES = {
+  providers:        { table: 'MentalHealthProviders',        idColumn: 'providerID',        label: 'Provider' },
+  hospitalizations: { table: 'MentalHealthHospitalizations', idColumn: 'hospitalizationID', label: 'Hospitalization' },
+  medications:      { table: 'MentalHealthMedications',      idColumn: 'medicationID',      label: 'Medication' },
+};
 
-    if (result.rowsAffected[0] === 0) {
-      return res.status(404).json({ error: 'Provider not found' });
-    }
-    
-    console.log(`✅ Provider ${providerID} deactivated`);
-    res.json({ success: true });
-    
-  } catch (error) {
-    console.error('⚠️ Error removing provider:', error);
-    res.status(500).json({ 
-      error: 'Failed to remove provider',
-      message: error.message 
-    });
+const MAX_REASON_LENGTH = 500;
+
+const readReason = (req, res) => {
+  const reason = typeof req.body?.reason === 'string' ? req.body.reason.trim() : '';
+  if (reason.length > MAX_REASON_LENGTH) {
+    res.status(400).json({ error: `Reason must be ${MAX_REASON_LENGTH} characters or fewer` });
+    return null;
   }
+  return reason;
+};
+
+const writeRemovalAudit = (transaction, { userID, action, table, recordID, clientID, reason }) =>
+  new sql.Request(transaction)
+    .input('userID',    sql.NVarChar,  userID)
+    .input('action',    sql.NVarChar,  action)
+    .input('tableName', sql.NVarChar,  table)
+    .input('recordID',  sql.NVarChar,  String(recordID))
+    .input('newValues', sql.NVarChar,  JSON.stringify({ clientID, reason: reason || null }))
+    .input('timestamp', sql.DateTime2, new Date())
+    .query(`INSERT INTO dbo.AuditLog (userID, action, tableName, recordID, newValues, timestamp)
+            VALUES (@userID, @action, @tableName, @recordID, @newValues, @timestamp)`);
+
+// Runs `change` and its audit insert in one transaction. Returns false (after
+// rolling back) when no row matched.
+const runAuditedChange = async (change, audit) => {
+  const pool = await getPool();
+  const transaction = new sql.Transaction(pool);
+  await transaction.begin();
+  try {
+    const result = await change(new sql.Request(transaction));
+    if (result.rowsAffected[0] === 0) {
+      await transaction.rollback();
+      return false;
+    }
+    await writeRemovalAudit(transaction, audit);
+    await transaction.commit();
+    return true;
+  } catch (error) {
+    try { await transaction.rollback(); } catch (_) { /* already rolled back */ }
+    throw error;
+  }
+};
+
+Object.entries(REMOVABLE_TABLES).forEach(([kind, { table, idColumn, label }]) => {
+  const noun = label.toLowerCase();
+
+  // DELETE /api/mental-health/:clientID/<kind>/:id - Remove (mark inactive)
+  router.delete(`/mental-health/:clientID/${kind}/:id`, async (req, res) => {
+    const reason = readReason(req, res);
+    if (reason === null) return;
+    const { clientID, id } = req.params;
+    const deletedBy = (typeof req.body?.deletedBy === 'string' && req.body.deletedBy) || 'unknown';
+
+    try {
+      console.log(`🗑️ Removing ${noun}: ${id}`);
+
+      const found = await runAuditedChange(
+        (request) => request
+          .input('clientID', sql.VarChar, clientID)
+          .input('id', sql.VarChar, id)
+          .input('deletedBy', sql.NVarChar, deletedBy)
+          .input('deleteReason', sql.NVarChar, reason || null)
+          .query(`
+            UPDATE ${table}
+            SET active = 0, deletedBy = @deletedBy, deletedAt = GETDATE(), deleteReason = @deleteReason
+            WHERE ${idColumn} = @id AND clientID = @clientID AND active = 1
+          `),
+        { userID: deletedBy, action: 'REMOVE', table, recordID: id, clientID, reason }
+      );
+
+      if (!found) {
+        return res.status(404).json({ error: `${label} not found` });
+      }
+
+      console.log(`✅ ${label} ${id} marked inactive`);
+      res.json({ success: true, permanent: false });
+
+    } catch (error) {
+      console.error(`⚠️ Error removing ${noun}:`, error);
+      res.status(500).json({
+        error: `Failed to remove ${noun}`,
+        message: error.message
+      });
+    }
+  });
+
+  // DELETE /api/mental-health/:clientID/<kind>/:id/permanent - Admin only: erase
+  // a row entered in error (e.g. a duplicate). Reason required.
+  router.delete(`/mental-health/:clientID/${kind}/:id/permanent`, authMiddleware, requireAdmin, async (req, res) => {
+    const reason = readReason(req, res);
+    if (reason === null) return;
+    if (!reason) {
+      return res.status(400).json({ error: 'A reason is required to permanently delete a record' });
+    }
+    const { clientID, id } = req.params;
+    const deletedBy = req.user.email || req.user.userId || 'unknown';
+
+    try {
+      console.log(`🗑️ Permanently deleting ${noun}: ${id}`);
+
+      const found = await runAuditedChange(
+        (request) => request
+          .input('clientID', sql.VarChar, clientID)
+          .input('id', sql.VarChar, id)
+          .query(`DELETE FROM ${table} WHERE ${idColumn} = @id AND clientID = @clientID`),
+        { userID: deletedBy, action: 'PERMANENT_DELETE', table, recordID: id, clientID, reason }
+      );
+
+      if (!found) {
+        return res.status(404).json({ error: `${label} not found` });
+      }
+
+      console.log(`✅ ${label} ${id} permanently deleted by ${deletedBy}`);
+      res.json({ success: true, permanent: true });
+
+    } catch (error) {
+      console.error(`⚠️ Error permanently deleting ${noun}:`, error);
+      res.status(500).json({
+        error: `Failed to delete ${noun}`,
+        message: error.message
+      });
+    }
+  });
 });
 
 // POST /api/mental-health/:clientID/hospitalizations - Add hospitalization
@@ -800,7 +917,7 @@ router.get('/mental-health/:clientID/summary', async (req, res) => {
           MAX(mh.updatedAt) as lastActivity
         FROM MentalHealthAssessments mh
         LEFT JOIN MentalHealthProviders p ON p.clientID = mh.clientID AND p.active = 1
-        LEFT JOIN MentalHealthHospitalizations h ON h.clientID = mh.clientID
+        LEFT JOIN MentalHealthHospitalizations h ON h.clientID = mh.clientID AND h.active = 1
         LEFT JOIN MentalHealthMedications m ON m.clientID = mh.clientID AND m.active = 1
         LEFT JOIN ArrestRecords ar ON ar.clientID = mh.clientID
         WHERE mh.clientID = @clientID

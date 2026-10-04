@@ -4,7 +4,7 @@
 // HIPAA notes:
 //   - This router NEVER returns PHI values. Only resource references (IDs) and action metadata.
 //   - Reading the audit log is itself an auditable event; every list/detail/export call
-//     writes its own UserActionLog row (see recordAuditAccess below).
+//     writes its own audit row (see recordAuditAccess below).
 //   - Export is capped and logged with the applied filter set.
 
 const express = require('express');
@@ -14,34 +14,116 @@ const { getPool } = require('../../store/azureSql.js');
 const router = express.Router();
 
 // ---------------------------------------------------------------------------
-// SCHEMA MAP — the only place to change if UserActionLog column names differ.
+// SCHEMA RESOLUTION
+// The app writes audit rows to dbo.AuditLog (userID, action, tableName, recordID,
+// newValues, timestamp — see routes/clientExport.js). Rather than hardcode a
+// column list that drifts from the real table, resolve the table and columns
+// from INFORMATION_SCHEMA once and degrade gracefully when a column is absent.
 // ---------------------------------------------------------------------------
-const T = {
-  table: 'dbo.UserActionLog',
-  id: 'LogID',
-  userId: 'UserID',
-  userName: 'UserName',
-  action: 'ActionType',
-  resourceType: 'ResourceType',
-  resourceId: 'ResourceID',
-  clientId: 'ClientID',
-  timestamp: 'Timestamp',
-  ip: 'IPAddress',
-  userAgent: 'UserAgent',
-  success: 'Success',
+const TABLE_CANDIDATES = ['AuditLog', 'UserActionLog'];
+
+// Logical field -> candidate physical column names (matched case-insensitively).
+const COLUMN_CANDIDATES = {
+  id: ['auditID', 'AuditLogID', 'LogID', 'ID'],
+  userId: ['userID'],
+  userName: ['userName', 'performedBy'],
+  action: ['action', 'ActionType'],
+  resourceType: ['ResourceType', 'tableName'],
+  resourceId: ['ResourceID', 'recordID'],
+  clientId: ['clientID'],
+  timestamp: ['timestamp', 'createdAt', 'createdDate'],
+  ip: ['IPAddress'],
+  userAgent: ['userAgent'],
+  success: ['success'],
 };
 
-// Whitelisted sort columns — never interpolate raw user input into ORDER BY.
+// Whitelisted sort keys -> logical fields. Never interpolate raw user input into ORDER BY.
 const SORTABLE = {
-  timestamp: T.timestamp,
-  userId: T.userId,
-  action: T.action,
-  resourceType: T.resourceType,
-  clientId: T.clientId,
+  timestamp: 'timestamp',
+  userId: 'userId',
+  action: 'action',
+  resourceType: 'resourceType',
+  clientId: 'clientId',
 };
+
+const INT_TYPES = new Set(['int', 'bigint', 'smallint', 'tinyint']);
 
 const MAX_PAGE_SIZE = 200;
 const MAX_EXPORT_ROWS = 50000;
+
+const quote = (name) => `[${String(name).replace(/]/g, ']]')}]`;
+
+let schemaPromise = null;
+
+async function loadSchema() {
+  const pool = await getPool();
+  const result = await pool.request().query(`
+    SELECT TABLE_NAME, COLUMN_NAME, DATA_TYPE
+    FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_SCHEMA = 'dbo'
+      AND TABLE_NAME IN (${TABLE_CANDIDATES.map((t) => `'${t}'`).join(', ')})
+  `);
+
+  const byTable = {};
+  result.recordset.forEach((r) => {
+    (byTable[r.TABLE_NAME.toLowerCase()] ||= []).push(r);
+  });
+
+  const tableName = TABLE_CANDIDATES.find((t) => byTable[t.toLowerCase()]);
+  if (!tableName) {
+    throw new Error(`No audit table found (looked for dbo.${TABLE_CANDIDATES.join(', dbo.')})`);
+  }
+
+  const columns = byTable[tableName.toLowerCase()];
+  const cols = {};
+  const types = {};
+  Object.entries(COLUMN_CANDIDATES).forEach(([key, names]) => {
+    const match = names
+      .map((n) => columns.find((c) => c.COLUMN_NAME.toLowerCase() === n.toLowerCase()))
+      .find(Boolean);
+    cols[key] = match ? quote(match.COLUMN_NAME) : null;
+    types[key] = match ? match.DATA_TYPE.toLowerCase() : null;
+  });
+
+  if (!cols.timestamp) throw new Error(`dbo.${tableName} has no timestamp column`);
+
+  return { table: `dbo.${quote(tableName)}`, cols, types };
+}
+
+/** Cached schema lookup; a failed lookup is retried on the next request. */
+function getSchema() {
+  if (!schemaPromise) {
+    schemaPromise = loadSchema().catch((err) => {
+      schemaPromise = null;
+      throw err;
+    });
+  }
+  return schemaPromise;
+}
+
+/** SELECT expression for a logical field, NULL (or a default) when the column is absent. */
+function sel(S, key, fallback = 'NULL') {
+  return S.cols[key] || fallback;
+}
+
+/** Column list shared by list/export/detail, aliased to the names the UI expects. */
+function selectList(S, { includeUserAgent = false } = {}) {
+  const fields = [
+    `${sel(S, 'id')} AS LogID`,
+    `${sel(S, 'timestamp')} AS Timestamp`,
+    `${sel(S, 'userId')} AS UserID`,
+    `${sel(S, 'userName')} AS UserName`,
+    `${sel(S, 'action')} AS Action`,
+    `${sel(S, 'resourceType')} AS ResourceType`,
+    `${sel(S, 'resourceId')} AS ResourceID`,
+    `${sel(S, 'clientId')} AS ClientID`,
+    `${sel(S, 'ip')} AS IPAddress`,
+  ];
+  if (includeUserAgent) fields.push(`${sel(S, 'userAgent')} AS UserAgent`);
+  // Tables without a success flag only record completed actions.
+  fields.push(`${sel(S, 'success', 'CAST(1 AS BIT)')} AS Success`);
+  return fields.join(',\n        ');
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -60,25 +142,37 @@ function actorFrom(req) {
  */
 async function recordAuditAccess(req, action, resourceId) {
   try {
+    const S = await getSchema();
     const pool = await getPool();
     const actor = actorFrom(req);
-    await pool
-      .request()
-      .input('userId', sql.NVarChar(255), actor.userId)
-      .input('userName', sql.NVarChar(255), actor.userName)
-      .input('action', sql.NVarChar(100), action)
-      .input('resourceType', sql.NVarChar(100), 'AuditLog')
-      .input('resourceId', sql.NVarChar(255), resourceId || null)
-      .input('ip', sql.NVarChar(64), req.ip || null)
-      .input('userAgent', sql.NVarChar(500), (req.get('user-agent') || '').slice(0, 500))
-      .query(`
-        INSERT INTO ${T.table}
-          (${T.userId}, ${T.userName}, ${T.action}, ${T.resourceType}, ${T.resourceId},
-           ${T.timestamp}, ${T.ip}, ${T.userAgent}, ${T.success})
-        VALUES
-          (@userId, @userName, @action, @resourceType, @resourceId,
-           SYSUTCDATETIME(), @ip, @userAgent, 1)
-      `);
+    const request = pool.request();
+
+    const values = [
+      ['userId', sql.NVarChar(255), actor.userId],
+      ['userName', sql.NVarChar(255), actor.userName],
+      ['action', sql.NVarChar(100), action],
+      ['resourceType', sql.NVarChar(100), 'AuditLog'],
+      ['resourceId', sql.NVarChar(255), resourceId || null],
+      ['ip', sql.NVarChar(64), req.ip || null],
+      ['userAgent', sql.NVarChar(500), (req.get('user-agent') || '').slice(0, 500)],
+    ].filter(([key]) => S.cols[key]);
+
+    const columns = values.map(([key]) => S.cols[key]);
+    const params = values.map(([key, type, value]) => {
+      request.input(key, type, value);
+      return `@${key}`;
+    });
+    columns.push(S.cols.timestamp);
+    params.push('SYSUTCDATETIME()');
+    if (S.cols.success) {
+      columns.push(S.cols.success);
+      params.push('1');
+    }
+
+    await request.query(`
+      INSERT INTO ${S.table} (${columns.join(', ')})
+      VALUES (${params.join(', ')})
+    `);
   } catch (err) {
     console.error('⚠️  Failed to record audit-log access:', err.message);
   }
@@ -86,38 +180,40 @@ async function recordAuditAccess(req, action, resourceId) {
 
 /**
  * Builds the shared WHERE clause + bound parameters from query filters.
+ * Filters on columns the table doesn't have are ignored.
  * Returns { where, bind } where bind(request) attaches every input.
  */
-function buildFilters(q) {
+function buildFilters(S, q) {
   const clauses = [];
   const params = [];
+  const c = S.cols;
 
-  const add = (clause, name, type, value) => {
-    clauses.push(clause);
+  const add = (key, op, name, type, value) => {
+    if (!c[key]) return;
+    clauses.push(`${c[key]} ${op} @${name}`);
     params.push({ name, type, value });
   };
 
-  if (q.userID) add(`${T.userId} = @userID`, 'userID', sql.NVarChar(255), q.userID);
-  if (q.action) add(`${T.action} = @action`, 'action', sql.NVarChar(100), q.action);
-  if (q.resourceType)
-    add(`${T.resourceType} = @resourceType`, 'resourceType', sql.NVarChar(100), q.resourceType);
-  if (q.resourceID)
-    add(`${T.resourceId} = @resourceID`, 'resourceID', sql.NVarChar(255), q.resourceID);
-  if (q.clientID) add(`${T.clientId} = @clientID`, 'clientID', sql.NVarChar(255), q.clientID);
-  if (q.startDate)
-    add(`${T.timestamp} >= @startDate`, 'startDate', sql.DateTime2, new Date(q.startDate));
-  if (q.endDate) add(`${T.timestamp} < @endDate`, 'endDate', sql.DateTime2, new Date(q.endDate));
-  if (q.success === 'true' || q.success === 'false')
-    add(`${T.success} = @success`, 'success', sql.Bit, q.success === 'true' ? 1 : 0);
+  if (q.userID) add('userId', '=', 'userID', sql.NVarChar(255), q.userID);
+  if (q.action) add('action', '=', 'action', sql.NVarChar(100), q.action);
+  if (q.resourceType) add('resourceType', '=', 'resourceType', sql.NVarChar(100), q.resourceType);
+  if (q.resourceID) add('resourceId', '=', 'resourceID', sql.NVarChar(255), q.resourceID);
+  if (q.clientID) add('clientId', '=', 'clientID', sql.NVarChar(255), q.clientID);
+  if (q.startDate) add('timestamp', '>=', 'startDate', sql.DateTime2, new Date(q.startDate));
+  if (q.endDate) add('timestamp', '<', 'endDate', sql.DateTime2, new Date(q.endDate));
+  if (q.success === 'true' || q.success === 'false') {
+    if (c.success) {
+      add('success', '=', 'success', sql.Bit, q.success === 'true' ? 1 : 0);
+    } else if (q.success === 'false') {
+      // No success column means every recorded action succeeded.
+      clauses.push('1 = 0');
+    }
+  }
 
   // Free-text search across non-PHI metadata columns only.
-  if (q.search) {
-    clauses.push(`(
-      ${T.userName} LIKE @search OR
-      ${T.userId} LIKE @search OR
-      ${T.action} LIKE @search OR
-      ${T.resourceType} LIKE @search
-    )`);
+  const searchCols = ['userName', 'userId', 'action', 'resourceType'].map((k) => c[k]).filter(Boolean);
+  if (q.search && searchCols.length) {
+    clauses.push(`(${searchCols.map((col) => `${col} LIKE @search`).join(' OR ')})`);
     params.push({ name: 'search', type: sql.NVarChar(255), value: `%${q.search}%` });
   }
 
@@ -146,25 +242,33 @@ function csvEscape(v) {
  */
 router.get('/filters', async (req, res) => {
   try {
+    const S = await getSchema();
     const pool = await getPool();
-    const result = await pool.request().query(`
-      SELECT DISTINCT ${T.action} AS value, 'action' AS kind
-        FROM ${T.table} WHERE ${T.action} IS NOT NULL
-      UNION ALL
-      SELECT DISTINCT ${T.resourceType} AS value, 'resourceType' AS kind
-        FROM ${T.table} WHERE ${T.resourceType} IS NOT NULL
-      UNION ALL
-      SELECT DISTINCT CAST(${T.userId} AS NVARCHAR(255)) AS value, 'userID' AS kind
-        FROM ${T.table} WHERE ${T.userId} IS NOT NULL
-    `);
+
+    const sources = [
+      ['action', 'action'],
+      ['resourceType', 'resourceType'],
+      ['userId', 'userID'],
+    ].filter(([key]) => S.cols[key]);
 
     const out = { actions: [], resourceTypes: [], userIDs: [] };
-    const bucket = { action: 'actions', resourceType: 'resourceTypes', userID: 'userIDs' };
-    result.recordset.forEach((r) => {
-      const key = bucket[r.kind];
-      if (key && r.value) out[key].push(r.value);
-    });
-    Object.values(out).forEach((arr) => arr.sort());
+
+    if (sources.length) {
+      const result = await pool.request().query(
+        sources
+          .map(([key, kind]) => `
+            SELECT DISTINCT CAST(${S.cols[key]} AS NVARCHAR(255)) AS value, '${kind}' AS kind
+              FROM ${S.table} WHERE ${S.cols[key]} IS NOT NULL`)
+          .join('\n      UNION ALL')
+      );
+
+      const bucket = { action: 'actions', resourceType: 'resourceTypes', userID: 'userIDs' };
+      result.recordset.forEach((r) => {
+        const key = bucket[r.kind];
+        if (key && r.value) out[key].push(r.value);
+      });
+      Object.values(out).forEach((arr) => arr.sort());
+    }
 
     res.json(out);
   } catch (err) {
@@ -179,37 +283,42 @@ router.get('/filters', async (req, res) => {
  */
 router.get('/stats', async (req, res) => {
   try {
+    const S = await getSchema();
     const pool = await getPool();
+    const ts = S.cols.timestamp;
+
     const result = await pool.request().query(`
       SELECT
         COUNT(*) AS total,
-        SUM(CASE WHEN ${T.timestamp} >= DATEADD(HOUR, -24, SYSUTCDATETIME()) THEN 1 ELSE 0 END) AS last24h,
-        SUM(CASE WHEN ${T.timestamp} >= DATEADD(DAY, -7, SYSUTCDATETIME()) THEN 1 ELSE 0 END) AS last7d,
-        SUM(CASE WHEN ${T.success} = 0 THEN 1 ELSE 0 END) AS failures,
-        COUNT(DISTINCT ${T.userId}) AS distinctUsers,
-        MIN(${T.timestamp}) AS oldestEntry
-      FROM ${T.table}
+        SUM(CASE WHEN ${ts} >= DATEADD(HOUR, -24, SYSUTCDATETIME()) THEN 1 ELSE 0 END) AS last24h,
+        SUM(CASE WHEN ${ts} >= DATEADD(DAY, -7, SYSUTCDATETIME()) THEN 1 ELSE 0 END) AS last7d,
+        ${S.cols.success ? `SUM(CASE WHEN ${S.cols.success} = 0 THEN 1 ELSE 0 END)` : '0'} AS failures,
+        ${S.cols.userId ? `COUNT(DISTINCT ${S.cols.userId})` : '0'} AS distinctUsers,
+        MIN(${ts}) AS oldestEntry
+      FROM ${S.table}
     `);
 
-    const topActions = await pool.request().query(`
-      SELECT TOP 10 ${T.action} AS action, COUNT(*) AS count
-      FROM ${T.table}
-      WHERE ${T.timestamp} >= DATEADD(DAY, -30, SYSUTCDATETIME())
-      GROUP BY ${T.action}
-      ORDER BY COUNT(*) DESC
-    `);
+    const topActions = S.cols.action
+      ? (await pool.request().query(`
+          SELECT TOP 10 ${S.cols.action} AS action, COUNT(*) AS count
+          FROM ${S.table}
+          WHERE ${ts} >= DATEADD(DAY, -30, SYSUTCDATETIME())
+          GROUP BY ${S.cols.action}
+          ORDER BY COUNT(*) DESC
+        `)).recordset
+      : [];
 
     const daily = await pool.request().query(`
-      SELECT CAST(${T.timestamp} AS DATE) AS day, COUNT(*) AS count
-      FROM ${T.table}
-      WHERE ${T.timestamp} >= DATEADD(DAY, -30, SYSUTCDATETIME())
-      GROUP BY CAST(${T.timestamp} AS DATE)
+      SELECT CAST(${ts} AS DATE) AS day, COUNT(*) AS count
+      FROM ${S.table}
+      WHERE ${ts} >= DATEADD(DAY, -30, SYSUTCDATETIME())
+      GROUP BY CAST(${ts} AS DATE)
       ORDER BY day
     `);
 
     res.json({
       summary: result.recordset[0] || {},
-      topActions: topActions.recordset,
+      topActions,
       daily: daily.recordset,
     });
   } catch (err) {
@@ -224,27 +333,19 @@ router.get('/stats', async (req, res) => {
  */
 router.get('/export', async (req, res) => {
   try {
+    const S = await getSchema();
     const pool = await getPool();
-    const { where, bind } = buildFilters(req.query);
+    const { where, bind } = buildFilters(S, req.query);
 
     const request = bind(pool.request());
     request.input('cap', sql.Int, MAX_EXPORT_ROWS);
 
     const result = await request.query(`
       SELECT TOP (@cap)
-        ${T.id}           AS LogID,
-        ${T.timestamp}    AS Timestamp,
-        ${T.userId}       AS UserID,
-        ${T.userName}     AS UserName,
-        ${T.action}       AS Action,
-        ${T.resourceType} AS ResourceType,
-        ${T.resourceId}   AS ResourceID,
-        ${T.clientId}     AS ClientID,
-        ${T.ip}           AS IPAddress,
-        ${T.success}      AS Success
-      FROM ${T.table}
+        ${selectList(S)}
+      FROM ${S.table}
       ${where}
-      ORDER BY ${T.timestamp} DESC
+      ORDER BY ${S.cols.timestamp} DESC
     `);
 
     const rows = result.recordset;
@@ -261,7 +362,7 @@ router.get('/export', async (req, res) => {
     const stamp = new Date().toISOString().slice(0, 10);
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="audit-log-${stamp}.csv"`);
-    res.send('\uFEFF' + csv); // BOM so Excel reads UTF-8 correctly
+    res.send('﻿' + csv); // BOM so Excel reads UTF-8 correctly
 
     recordAuditAccess(req, 'AUDIT_LOG_EXPORT', `rows=${rows.length}`);
   } catch (err) {
@@ -280,14 +381,16 @@ router.get('/', async (req, res) => {
     const pageSize = Math.min(MAX_PAGE_SIZE, Math.max(1, parseInt(req.query.pageSize, 10) || 50));
     const offset = (page - 1) * pageSize;
 
-    const sortCol = SORTABLE[req.query.sortBy] || T.timestamp;
+    const S = await getSchema();
+    const sortCol = S.cols[SORTABLE[req.query.sortBy]] || S.cols.timestamp;
     const sortDir = String(req.query.sortDir).toLowerCase() === 'asc' ? 'ASC' : 'DESC';
+    const tieBreak = S.cols.id && S.cols.id !== sortCol ? `, ${S.cols.id} ${sortDir}` : '';
 
     const pool = await getPool();
-    const { where, bind } = buildFilters(req.query);
+    const { where, bind } = buildFilters(S, req.query);
 
     const countResult = await bind(pool.request()).query(`
-      SELECT COUNT(*) AS total FROM ${T.table} ${where}
+      SELECT COUNT(*) AS total FROM ${S.table} ${where}
     `);
     const total = countResult.recordset[0]?.total ?? 0;
 
@@ -297,19 +400,10 @@ router.get('/', async (req, res) => {
 
     const result = await request.query(`
       SELECT
-        ${T.id}           AS LogID,
-        ${T.timestamp}    AS Timestamp,
-        ${T.userId}       AS UserID,
-        ${T.userName}     AS UserName,
-        ${T.action}       AS Action,
-        ${T.resourceType} AS ResourceType,
-        ${T.resourceId}   AS ResourceID,
-        ${T.clientId}     AS ClientID,
-        ${T.ip}           AS IPAddress,
-        ${T.success}      AS Success
-      FROM ${T.table}
+        ${selectList(S)}
+      FROM ${S.table}
       ${where}
-      ORDER BY ${sortCol} ${sortDir}, ${T.id} ${sortDir}
+      ORDER BY ${sortCol} ${sortDir}${tieBreak}
       OFFSET @offset ROWS FETCH NEXT @pageSize ROWS ONLY
     `);
 
@@ -331,25 +425,31 @@ router.get('/', async (req, res) => {
  */
 router.get('/:logID', async (req, res) => {
   try {
+    const S = await getSchema();
+    if (!S.cols.id) {
+      return res.status(404).json({ error: 'Audit entry not found' });
+    }
+
+    // Bind with the column's real type so a bad ID is a 404, not a SQL conversion error.
+    let idType = sql.NVarChar(255);
+    let idValue = req.params.logID;
+    if (INT_TYPES.has(S.types.id)) {
+      if (!/^\d+$/.test(idValue)) {
+        return res.status(404).json({ error: 'Audit entry not found' });
+      }
+      idType = sql.BigInt;
+      idValue = Number(idValue);
+    }
+
     const pool = await getPool();
     const result = await pool
       .request()
-      .input('logID', sql.NVarChar(255), req.params.logID)
+      .input('logID', idType, idValue)
       .query(`
         SELECT
-          ${T.id}           AS LogID,
-          ${T.timestamp}    AS Timestamp,
-          ${T.userId}       AS UserID,
-          ${T.userName}     AS UserName,
-          ${T.action}       AS Action,
-          ${T.resourceType} AS ResourceType,
-          ${T.resourceId}   AS ResourceID,
-          ${T.clientId}     AS ClientID,
-          ${T.ip}           AS IPAddress,
-          ${T.userAgent}    AS UserAgent,
-          ${T.success}      AS Success
-        FROM ${T.table}
-        WHERE ${T.id} = @logID
+          ${selectList(S, { includeUserAgent: true })}
+        FROM ${S.table}
+        WHERE ${S.cols.id} = @logID
       `);
 
     if (!result.recordset.length) {

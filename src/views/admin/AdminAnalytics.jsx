@@ -29,14 +29,64 @@ import {
   CircularProgress,
   Alert,
   ListSubheader,
+  Menu,
+  ListItemIcon,
+  ListItemText,
   useTheme,
 } from '@mui/material';
 import {
   Refresh as RefreshIcon,
   Download as DownloadIcon,
+  ArrowDropDown as ArrowDropDownIcon,
+  TableChart as ExcelIcon,
+  PictureAsPdf as PdfIcon,
+  Description as CsvIcon,
+  LibraryBooks as PacketIcon,
 } from '@mui/icons-material';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+
+const EXPORT_FORMATS = {
+  xlsx: { label: 'Excel (.xlsx)', icon: <ExcelIcon fontSize="small" /> },
+  pdf: { label: 'PDF', icon: <PdfIcon fontSize="small" /> },
+  csv: { label: 'CSV', icon: <CsvIcon fontSize="small" /> },
+};
+
+// "avgDaysFromAdmit" -> "Avg Days From Admit"
+function humanize(key) {
+  return String(key)
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/_/g, ' ')
+    .replace(/^./, (c) => c.toUpperCase());
+}
+
+function formatNumber(v) {
+  return Number.isInteger(v) ? v.toLocaleString() : v.toLocaleString(undefined, { maximumFractionDigits: 1 });
+}
+
+// Error bodies on blob requests arrive as a Blob; pull the JSON message out.
+async function errorMessage(err) {
+  const data = err.response?.data;
+  if (data instanceof Blob) {
+    try {
+      return JSON.parse(await data.text()).error || err.message;
+    } catch {
+      return err.message;
+    }
+  }
+  return data?.error || err.message;
+}
+
+function downloadBlob(data, filename) {
+  const url = window.URL.createObjectURL(new Blob([data]));
+  const link = document.createElement('a');
+  link.href = url;
+  link.setAttribute('download', filename);
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
+}
 
 function isoDaysAgo(days) {
   const d = new Date();
@@ -249,6 +299,10 @@ export default function AdminAnalytics() {
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState(null);
+  const [summaryError, setSummaryError] = useState(null);
+
+  // Which export menu is open: { anchor, scope: 'report' | 'all' }
+  const [exportMenu, setExportMenu] = useState(null);
 
   const getAuthHeader = useCallback(async () => {
     if (!accounts[0]) throw new Error('Not authenticated');
@@ -272,23 +326,25 @@ export default function AdminAnalytics() {
   }, [getAuthHeader]);
 
   const fetchSummary = useCallback(async () => {
+    setSummaryError(null);
     try {
       const headers = await getAuthHeader();
       const res = await axios.get(`${API_BASE}/api/admin/analytics/summary`, { headers });
       setSummary(res.data);
     } catch (err) {
       console.error('Failed to load analytics summary:', err);
+      setSummaryError(err.response?.data?.error || err.message);
     }
   }, [getAuthHeader]);
 
-  const runReport = useCallback(async () => {
-    if (!reportKey) return;
+  const runReport = useCallback(async (key = reportKey) => {
+    if (!key) return;
     setLoading(true);
     setError(null);
     try {
       const headers = await getAuthHeader();
       const res = await axios.get(
-        `${API_BASE}/api/admin/analytics/reports/${reportKey}`,
+        `${API_BASE}/api/admin/analytics/reports/${key}`,
         { headers, params: { startDate, endDate } }
       );
       setReport(res.data);
@@ -301,27 +357,28 @@ export default function AdminAnalytics() {
     }
   }, [reportKey, startDate, endDate, getAuthHeader]);
 
-  const handleExport = async () => {
-    if (!reportKey) return;
+  // scope 'report' exports the selected report; 'all' exports every report
+  // in one workbook / PDF (one sheet or section per report).
+  const handleExport = async (scope, format) => {
+    setExportMenu(null);
+    if (scope === 'report' && !reportKey) return;
     setExporting(true);
+    setError(null);
     try {
       const headers = await getAuthHeader();
-      const res = await axios.get(
-        `${API_BASE}/api/admin/analytics/reports/${reportKey}/export`,
-        { headers, params: { startDate, endDate }, responseType: 'blob' }
-      );
-
-      const url = window.URL.createObjectURL(new Blob([res.data]));
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', `${reportKey}-${endDate}.csv`);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
+      const url = scope === 'all'
+        ? `${API_BASE}/api/admin/analytics/export-all`
+        : `${API_BASE}/api/admin/analytics/reports/${reportKey}/export`;
+      const res = await axios.get(url, {
+        headers,
+        params: { startDate, endDate, format },
+        responseType: 'blob',
+      });
+      const base = scope === 'all' ? 'analytics-reports' : reportKey;
+      downloadBlob(res.data, `${base}-${startDate}-to-${endDate}.${format}`);
     } catch (err) {
       console.error('Export failed:', err);
-      setError(err.response?.data?.error || err.message);
+      setError(await errorMessage(err));
     } finally {
       setExporting(false);
     }
@@ -331,6 +388,9 @@ export default function AdminAnalytics() {
     fetchCatalog();
     fetchSummary();
   }, [fetchCatalog, fetchSummary]);
+
+  const selectedReport = catalog.find((r) => r.key === reportKey);
+  const usesRange = selectedReport?.usesRange !== false;
 
   const groupedCatalog = useMemo(() => {
     const groups = {};
@@ -354,9 +414,14 @@ export default function AdminAnalytics() {
     return { labelKey, valueKey };
   }, [report]);
 
-  const columns = report?.rows?.length
-    ? Object.keys(report.rows[0]).filter((k) => k !== '__suppressed')
-    : [];
+  const columns = report?.columns?.length
+    ? report.columns
+    : report?.rows?.length
+      ? Object.keys(report.rows[0]).filter((k) => k !== '__suppressed')
+      : [];
+
+  // Headline figures: null means suppressed (cohort under minCellSize).
+  const kpi = (v) => (v === null ? `<${minCellSize}` : (v ?? 0).toLocaleString());
 
   return (
     <Box sx={{ p: 3 }}>
@@ -379,6 +444,12 @@ export default function AdminAnalytics() {
         </Alert>
       )}
 
+      {summaryError && (
+        <Alert severity="warning" sx={{ mb: 2 }} onClose={() => setSummaryError(null)}>
+          Headline figures could not be loaded: {summaryError}
+        </Alert>
+      )}
+
       {summary && (
         <>
           <Grid container spacing={2} sx={{ mb: 2 }}>
@@ -386,7 +457,7 @@ export default function AdminAnalytics() {
               <Card>
                 <CardContent>
                   <Typography variant="body2" color="text.secondary">Active clients</Typography>
-                  <Typography variant="h4">{summary.summary?.activeClients ?? 0}</Typography>
+                  <Typography variant="h4">{kpi(summary.summary?.activeClients)}</Typography>
                 </CardContent>
               </Card>
             </Grid>
@@ -394,7 +465,7 @@ export default function AdminAnalytics() {
               <Card>
                 <CardContent>
                   <Typography variant="body2" color="text.secondary">Admissions (30d)</Typography>
-                  <Typography variant="h4">{summary.summary?.admissions30d ?? 0}</Typography>
+                  <Typography variant="h4">{kpi(summary.summary?.admissions30d)}</Typography>
                 </CardContent>
               </Card>
             </Grid>
@@ -402,7 +473,7 @@ export default function AdminAnalytics() {
               <Card>
                 <CardContent>
                   <Typography variant="body2" color="text.secondary">Discharges (30d)</Typography>
-                  <Typography variant="h4">{summary.summary?.discharges30d ?? 0}</Typography>
+                  <Typography variant="h4">{kpi(summary.summary?.discharges30d)}</Typography>
                 </CardContent>
               </Card>
             </Grid>
@@ -410,7 +481,7 @@ export default function AdminAnalytics() {
               <Card>
                 <CardContent>
                   <Typography variant="body2" color="text.secondary">Clients served</Typography>
-                  <Typography variant="h4">{summary.summary?.totalClients ?? 0}</Typography>
+                  <Typography variant="h4">{kpi(summary.summary?.totalClients)}</Typography>
                 </CardContent>
               </Card>
             </Grid>
@@ -438,7 +509,12 @@ export default function AdminAnalytics() {
             <TextField
               select fullWidth size="small" label="Report"
               value={reportKey}
-              onChange={(e) => { setReportKey(e.target.value); setReport(null); }}
+              onChange={(e) => {
+                const key = e.target.value;
+                setReportKey(key);
+                setReport(null);
+                if (key) runReport(key);
+              }}
             >
               <MenuItem value="">Select a report…</MenuItem>
               {Object.entries(groupedCatalog).flatMap(([category, items]) => [
@@ -453,6 +529,7 @@ export default function AdminAnalytics() {
             <TextField
               fullWidth size="small" type="date" label="Start date"
               InputLabelProps={{ shrink: true }}
+              disabled={!usesRange}
               value={startDate} onChange={(e) => setStartDate(e.target.value)}
             />
           </Grid>
@@ -460,6 +537,7 @@ export default function AdminAnalytics() {
             <TextField
               fullWidth size="small" type="date" label="End date"
               InputLabelProps={{ shrink: true }}
+              disabled={!usesRange}
               value={endDate} onChange={(e) => setEndDate(e.target.value)}
             />
           </Grid>
@@ -467,7 +545,7 @@ export default function AdminAnalytics() {
             <Stack direction="row" spacing={1}>
               <Button
                 variant="contained"
-                onClick={runReport}
+                onClick={() => runReport()}
                 disabled={!reportKey || loading}
               >
                 Run report
@@ -475,15 +553,51 @@ export default function AdminAnalytics() {
               <Button
                 variant="outlined"
                 startIcon={exporting ? <CircularProgress size={16} /> : <DownloadIcon />}
-                onClick={handleExport}
-                disabled={!report || exporting}
+                endIcon={<ArrowDropDownIcon />}
+                onClick={(e) => setExportMenu({ anchor: e.currentTarget, scope: 'report' })}
+                disabled={!reportKey || exporting}
               >
-                Export CSV
+                Export
               </Button>
+              <Tooltip title="Every report for this date range in one file — e.g. for a funder packet">
+                <span>
+                  <Button
+                    variant="text"
+                    startIcon={<PacketIcon />}
+                    endIcon={<ArrowDropDownIcon />}
+                    onClick={(e) => setExportMenu({ anchor: e.currentTarget, scope: 'all' })}
+                    disabled={exporting}
+                  >
+                    All reports
+                  </Button>
+                </span>
+              </Tooltip>
             </Stack>
           </Grid>
         </Grid>
+
+        {selectedReport && (
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 1.5 }}>
+            {selectedReport.description}
+          </Typography>
+        )}
       </Paper>
+
+      <Menu
+        anchorEl={exportMenu?.anchor}
+        open={Boolean(exportMenu)}
+        onClose={() => setExportMenu(null)}
+      >
+        {Object.entries(EXPORT_FORMATS)
+          // CSV holds one table, so it isn't offered for "all reports".
+          .filter(([fmt]) => exportMenu?.scope !== 'all' || fmt !== 'csv')
+          .map(([fmt, { label, icon }]) => (
+            <MenuItem key={fmt} onClick={() => handleExport(exportMenu.scope, fmt)}>
+              <ListItemIcon>{icon}</ListItemIcon>
+              <ListItemText>{label}</ListItemText>
+            </MenuItem>
+          ))}
+      </Menu>
 
       {loading && (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
@@ -495,7 +609,9 @@ export default function AdminAnalytics() {
         <Paper sx={{ p: 2 }}>
           <Typography variant="h6">{report.label}</Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            {report.range?.startDate} to {report.range?.endDate}
+            {report.usesRange === false
+              ? `As of ${report.range?.endDate}`
+              : `${report.range?.startDate} to ${report.range?.endDate}`}
           </Typography>
 
           {report.suppressedCells > 0 && (
@@ -523,7 +639,7 @@ export default function AdminAnalytics() {
               <TableHead>
                 <TableRow>
                   {columns.map((c) => (
-                    <TableCell key={c}>{c}</TableCell>
+                    <TableCell key={c}>{humanize(c)}</TableCell>
                   ))}
                 </TableRow>
               </TableHead>
@@ -546,7 +662,7 @@ export default function AdminAnalytics() {
                             &lt;{report.minCellSize}
                           </Typography>
                         ) : (
-                          typeof row[c] === 'number' ? row[c].toLocaleString() : String(row[c])
+                          typeof row[c] === 'number' ? formatNumber(row[c]) : String(row[c])
                         )}
                       </TableCell>
                     ))}

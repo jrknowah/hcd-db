@@ -1,10 +1,26 @@
 // backend/routes/authSig.js - Complete with all fixes
 const express = require('express');
 const sql = require('mssql');
-const { poolPromise } = require('../store/azureSql');
+const { getPool } = require('../store/azureSql');
 const { logUserAction } = require('../config/logAction');
+const { requireSignedFormUnlock, canUnlockSignedForms } = require('../middleware/signedFormUnlock');
 
 const router = express.Router();
+
+// A form is locked once signed. Only an IT Admin / Level 1 unlock (which
+// archives the signed version and clears the signature) re-opens it.
+const LOCKED_STATUSES = ['completed', 'submitted', 'approved'];
+
+const isLockedStatus = (status) => LOCKED_STATUSES.includes(status);
+
+const lockedResponse = (res, currentStatus) => res.status(409).json({
+  code: 'FORM_LOCKED',
+  message: 'This form has been signed and is locked. An IT Admin or Level 1 user must unlock it before it can be changed.',
+  currentStatus,
+});
+
+// Authenticated user for audit columns (set by middleware/auth.js)
+const getCurrentUser = (req) => req.user?.email || req.user?.name || 'system';
 
 // Valid form types - UPDATED to match frontend FORM_CONFIGS
 const VALID_FORM_TYPES = [
@@ -238,36 +254,53 @@ const FORM_METADATA = {
   calaimVerbalOptIn:{ formNumber: 16, priority: 'high'   },
 };
 
+// Per-form signature field names, as sent by each form's getFormData()
+const SIGNATURE_FIELDS = {
+  orientation:      'signature',
+  clientRights:     'signature',
+  consentTreatment: 'signature',
+  preScreen:        'signature',
+  privacyPractice:  'signature',
+  lahmis:           'signature',
+  phiRelease:       'signature',
+  residencePolicy:  'resPolicySignature',
+  authDisclosure:   'atrClientSign',
+  termination:      'tppSign',
+  advDirective:     'clientSignature',
+  grievances:       'clientGrievanceSign',
+  healthDisclosure: 'atrClientSign',
+  consentPhoto:     'consentPhotoSign1',
+  housingAgreement: 'housingAgreeeSign',
+  calaimVerbalOptIn:'signature',
+};
+
 /**
- * Determine if a form is complete based on its stored formData JSON.
- * Each form type has its own required signature field name.
+ * A form is complete (and therefore locked) only once it carries a signature.
+ * The client-sent completionPercentage is display-only: trusting it would
+ * lock forms that were never signed.
  */
-function isFormComplete(formType, formData, completionPercentage) {
-  // Trust an explicit 100% completion flag from the saved payload
-  if (Number(completionPercentage) === 100) return true;
-
-  // Per-form signature field names
-  const signatureFields = {
-    orientation:      'signature',
-    clientRights:     'signature',
-    consentTreatment: 'signature',
-    preScreen:        'signature',
-    privacyPractice:  'signature',
-    lahmis:           'signature',
-    phiRelease:       'signature',
-    residencePolicy:  'signature',
-    authDisclosure:   'atrClientSign',
-    termination:      'signature',
-    advDirective:     'clientSignature',
-    grievances:       'signature',
-    healthDisclosure: 'atrClientSign',
-    consentPhoto:     'consentPhotoSign1',
-    housingAgreement: 'housingAgreeeSign',
-    calaimVerbalOptIn:'signature',
-  };
-
-  const sigField = signatureFields[formType] || 'signature';
+function isFormComplete(formType, formData) {
+  const sigField = SIGNATURE_FIELDS[formType] || 'signature';
   return !!(formData[sigField] && String(formData[sigField]).trim().length >= 2);
+}
+
+/**
+ * Remove the client signature from a stored formData blob so the form must be
+ * signed again after an unlock. Some forms (PrivacyPractice) also nest their
+ * fields under a `formData` key.
+ */
+function clearSignatureFields(formType, data) {
+  const fields = new Set([SIGNATURE_FIELDS[formType] || 'signature', 'signature', 'clientSignature']);
+  const strip = (obj) => {
+    const out = { ...obj };
+    fields.forEach(f => { delete out[f]; });
+    return out;
+  };
+  const cleared = strip(data);
+  if (cleared.formData && typeof cleared.formData === 'object' && !Array.isArray(cleared.formData)) {
+    cleared.formData = strip(cleared.formData);
+  }
+  return cleared;
 }
 
 // ============================================================================
@@ -284,7 +317,7 @@ router.get('/:clientID/forms', async (req, res) => {
   const { clientID } = req.params;
 
   try {
-    const pool = await poolPromise;
+    const pool = await getPool();
 
     // Fetch all saved forms for this client — read every dedicated column
     const formsResult = await pool.request()
@@ -365,7 +398,7 @@ router.get('/:clientID/forms', async (req, res) => {
 
     const overallCompletion = Math.round((completedCount / VALID_FORM_TYPES.length) * 100);
 
-    logUserAction(req, 'GET', 'AuthorizationForms');
+    logUserAction(getCurrentUser(req), 'GET', 'AuthorizationForms');
 
     res.json({
       clientID,
@@ -394,7 +427,7 @@ router.post('/:clientID/form/:formType', async (req, res) => {
   const { clientID, formType } = req.params;
   
   try {
-    const pool = await poolPromise;
+    const pool = await getPool();
     
     // Validate form type
     if (!VALID_FORM_TYPES.includes(formType)) {
@@ -404,19 +437,16 @@ router.post('/:clientID/form/:formType', async (req, res) => {
       });
     }
     
-    // FIX #8: Check if form exists and prevent updates to submitted/approved forms
+    // Signed (completed), submitted and approved forms are locked
     const statusCheck = await pool.request()
       .input('clientID', sql.VarChar(50), clientID)
       .input('formType', sql.VarChar(50), formType)
       .query('SELECT status FROM AuthorizationForms WHERE clientID = @clientID AND formType = @formType');
-    
+
     if (statusCheck.recordset.length > 0) {
       const currentStatus = statusCheck.recordset[0].status;
-      if (currentStatus === 'submitted' || currentStatus === 'approved') {
-        return res.status(409).json({ 
-          message: `Cannot modify form with status: ${currentStatus}`,
-          currentStatus 
-        });
+      if (isLockedStatus(currentStatus)) {
+        return lockedResponse(res, currentStatus);
       }
     }
     
@@ -454,9 +484,9 @@ router.post('/:clientID/form/:formType', async (req, res) => {
     
     // ─── Resolve save metadata ───────────────────────────────────────────────
     const incomingPct  = Number(req.body.completionPercentage ?? 0);
-    const isComplete   = isFormComplete(formType, req.body, incomingPct);
+    const isComplete   = isFormComplete(formType, req.body);
     const newStatus    = isComplete ? 'completed' : 'in_progress';
-    const currentUser  = req.userEmail || req.user?.email || req.user?.name || 'system';
+    const currentUser  = getCurrentUser(req);
     const now          = new Date();
 
     // priority: honour whatever the frontend sent, default to schema value
@@ -475,6 +505,7 @@ router.post('/:clientID/form/:formType', async (req, res) => {
     const { checkboxes, priority: _p, completionPercentage: _pct, status: _s,
             completedBy: _cb, completedAt: _ca, createdBy: _crb, updatedBy: _ub,
             submissionID: _sid, signature: _sig, checkboxData: _cd,
+            unlockedBy: _ulb, unlockedAt: _ula, unlockReason: _ulr, locked: _lk,
             ...formDataPayload } = req.body;
 
     const formDataJson = JSON.stringify({
@@ -524,7 +555,7 @@ router.post('/:clientID/form/:formType', async (req, res) => {
              @createdBy, @updatedBy, GETDATE(), GETDATE())
         `);
 
-      logUserAction(req, 'CREATE', 'AuthorizationForm');
+      logUserAction(getCurrentUser(req), 'CREATE', 'AuthorizationForm');
 
     } else {
       // ── UPDATE ─────────────────────────────────────────────────────────────
@@ -562,7 +593,7 @@ router.post('/:clientID/form/:formType', async (req, res) => {
           WHERE clientID = @clientID AND formType = @formType
         `);
 
-      logUserAction(req, 'UPDATE', 'AuthorizationForm');
+      logUserAction(getCurrentUser(req), 'UPDATE', 'AuthorizationForm');
     }
 
     res.json({
@@ -595,7 +626,7 @@ router.get('/:clientID/form/:formType', async (req, res) => {
   const { clientID, formType } = req.params;
   
   try {
-    const pool = await poolPromise;
+    const pool = await getPool();
     const result = await pool.request()
       .input('clientID', sql.VarChar(50), clientID)
       .input('formType', sql.VarChar(50), formType)
@@ -609,9 +640,14 @@ router.get('/:clientID/form/:formType', async (req, res) => {
     let formData   = {};
     try { formData = JSON.parse(form.formData || '{}'); } catch (_) {}
 
+    let checkboxData = formData.checkboxes || null;
+    if (form.checkboxData) {
+      try { checkboxData = JSON.parse(form.checkboxData); } catch (_) {}
+    }
+
     // Dedicated columns are authoritative — they were written explicitly on save.
     // formData JSON is supplementary (contains the actual field values for the form UI).
-    logUserAction(req, 'GET', 'AuthorizationForm');
+    logUserAction(getCurrentUser(req), 'GET', 'AuthorizationForm');
 
     res.json({
       // Form UI fields from the JSON blob
@@ -620,7 +656,9 @@ router.get('/:clientID/form/:formType', async (req, res) => {
       formID:              form.formID,
       clientID:            form.clientID,
       formType:            form.formType,
-      checkboxData:        form.checkboxData ? JSON.parse(form.checkboxData) : formData.checkboxes || null,
+      checkboxData,
+      // Forms (e.g. orientation) read their checkbox state back as `checkboxes`
+      checkboxes:          checkboxData,
       signature:           form.signature    || formData.signature || null,
       completionPercentage: Number(form.completionPercentage ?? formData.completionPercentage ?? 0),
       status:              form.status,
@@ -632,6 +670,11 @@ router.get('/:clientID/form/:formType', async (req, res) => {
       createdAt:           form.createdAt,
       updatedBy:           form.updatedBy    || null,
       updatedAt:           form.updatedAt,
+      locked:              isLockedStatus(form.status),
+      canUnlock:           canUnlockSignedForms(req.user),
+      unlockedBy:          form.unlockedBy   || null,
+      unlockedAt:          form.unlockedAt   || null,
+      unlockReason:        form.unlockReason || null,
     });
     
   } catch (err) {
@@ -650,9 +693,13 @@ router.get('/:clientID/form/:formType', async (req, res) => {
 router.post('/:clientID/form/:formType/autosave', async (req, res) => {
   const { clientID, formType } = req.params;
 
+  if (!VALID_FORM_TYPES.includes(formType)) {
+    return res.status(400).json({ message: `Invalid form type: ${formType}` });
+  }
+
   try {
-    const pool        = await poolPromise;
-    const currentUser = req.userEmail || req.user?.email || req.user?.name || 'system';
+    const pool        = await getPool();
+    const currentUser = getCurrentUser(req);
     const incomingPct = Number(req.body.completionPercentage ?? 0);
     const formPriority = req.body.priority || FORM_METADATA[formType]?.priority || 'medium';
 
@@ -660,6 +707,7 @@ router.post('/:clientID/form/:formType/autosave', async (req, res) => {
     const { checkboxes, priority: _p, completionPercentage: _pct, status: _s,
             completedBy: _cb, completedAt: _ca, createdBy: _crb, updatedBy: _ub,
             submissionID: _sid, signature: _sig, checkboxData: _cd,
+            unlockedBy: _ulb, unlockedAt: _ula, unlockReason: _ulr, locked: _lk,
             ...formDataPayload } = req.body;
 
     const formDataJson = JSON.stringify({ ...formDataPayload, clientID, formType });
@@ -669,7 +717,12 @@ router.post('/:clientID/form/:formType/autosave', async (req, res) => {
     const existingForm = await pool.request()
       .input('clientID', sql.NVarChar(50), clientID)
       .input('formType', sql.NVarChar(50), formType)
-      .query('SELECT formID FROM AuthorizationForms WHERE clientID = @clientID AND formType = @formType');
+      .query('SELECT formID, status FROM AuthorizationForms WHERE clientID = @clientID AND formType = @formType');
+
+    const currentStatus = existingForm.recordset[0]?.status;
+    if (isLockedStatus(currentStatus)) {
+      return lockedResponse(res, currentStatus);
+    }
 
     if (existingForm.recordset.length > 0) {
       await pool.request()
@@ -742,8 +795,8 @@ router.post('/:clientID/forms/bulk', async (req, res) => {
   }
 
   try {
-    const pool        = await poolPromise;
-    const currentUser = req.userEmail || req.user?.email || req.user?.name || 'system';
+    const pool        = await getPool();
+    const currentUser = getCurrentUser(req);
     const transaction = new sql.Transaction(pool);
     await transaction.begin();
 
@@ -756,7 +809,7 @@ router.post('/:clientID/forms/bulk', async (req, res) => {
         if (!VALID_FORM_TYPES.includes(formType)) continue;
 
         const incomingPct  = Number(rest.completionPercentage ?? 0);
-        const isComplete   = isFormComplete(formType, rest, incomingPct);
+        const isComplete   = isFormComplete(formType, rest);
         const newStatus    = isComplete ? 'completed' : 'in_progress';
         const formPriority = rest.priority || FORM_METADATA[formType]?.priority || 'medium';
         const checkboxData = rest.checkboxes ? JSON.stringify(rest.checkboxes) : rest.checkboxData || null;
@@ -766,6 +819,7 @@ router.post('/:clientID/forms/bulk', async (req, res) => {
         const { checkboxes, priority: _p, completionPercentage: _pct, status: _s,
                 completedBy: _cb, completedAt: _ca, createdBy: _crb, updatedBy: _ub,
                 submissionID: _sid, signature: _sig, checkboxData: _cd,
+                unlockedBy: _ulb, unlockedAt: _ula, unlockReason: _ulr, locked: _lk,
                 ...formDataPayload } = rest;
 
         const formDataJson = JSON.stringify({ ...formDataPayload, clientID, formType });
@@ -776,6 +830,16 @@ router.post('/:clientID/forms/bulk', async (req, res) => {
           .query('SELECT formID, status, createdBy, completedBy, completedAt FROM AuthorizationForms WHERE clientID = @clientID AND formType = @formType');
 
         const prev = existing.recordset[0] || null;
+
+        if (prev && isLockedStatus(prev.status)) {
+          await transaction.rollback();
+          return res.status(409).json({
+            code: 'FORM_LOCKED',
+            message: `Form ${formType} has been signed and is locked. No forms were saved.`,
+            formType,
+            currentStatus: prev.status,
+          });
+        }
 
         if (prev) {
           const completedBy = isComplete ? (prev.completedBy || currentUser) : prev.completedBy;
@@ -864,7 +928,7 @@ router.post('/:clientID/submit', async (req, res) => {
   const { submissionNotes } = req.body;
   
   try {
-    const pool = await poolPromise;
+    const pool = await getPool();
     
     // Get all forms for this client
     const formsResult = await pool.request()
@@ -908,7 +972,7 @@ router.post('/:clientID/submit', async (req, res) => {
       const submissionResult = await transaction.request()
         .input('clientID', sql.VarChar(50), clientID)
         .input('submissionNotes', sql.Text, submissionNotes || '')
-        .input('submittedBy', sql.VarChar(100), req.userEmail || 'system')
+        .input('submittedBy', sql.VarChar(100), getCurrentUser(req))
         .query(`
           INSERT INTO FormSubmissions 
             (clientID, status, submittedBy, submittedAt, notes)
@@ -947,7 +1011,7 @@ router.get('/:clientID/submission-status', async (req, res) => {
   const { clientID } = req.params;
   
   try {
-    const pool = await poolPromise;
+    const pool = await getPool();
     const result = await pool.request()
       .input('clientID', sql.VarChar(50), clientID)
       .query(`
@@ -972,7 +1036,7 @@ router.get('/:clientID/submission-status', async (req, res) => {
     }
     
     // Log action
-    logUserAction(req, 'GET', 'FormSubmission');
+    logUserAction(getCurrentUser(req), 'GET', 'FormSubmission');
     
     res.json(result.recordset[0]);
   } catch (err) {
@@ -984,5 +1048,144 @@ router.get('/:clientID/submission-status', async (req, res) => {
   }
 });
 
+/**
+ * POST /:clientID/form/:formType/unlock
+ * IT Admin / Level 1 only. Archives the signed version to
+ * AuthorizationFormVersions, clears the client signature and returns the form
+ * to in_progress so it must be signed again. Body: { reason }
+ */
+router.post('/:clientID/form/:formType/unlock', requireSignedFormUnlock, async (req, res) => {
+  const { clientID, formType } = req.params;
+  const reason = typeof req.body?.reason === 'string' ? req.body.reason.trim() : '';
+
+  if (!VALID_FORM_TYPES.includes(formType)) {
+    return res.status(400).json({ message: `Invalid form type: ${formType}` });
+  }
+  if (reason.length < 5 || reason.length > 500) {
+    return res.status(422).json({ message: 'A reason between 5 and 500 characters is required to unlock a signed form' });
+  }
+
+  const currentUser = getCurrentUser(req);
+  const now = new Date();
+
+  try {
+    const pool = await getPool();
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+
+    try {
+      // UPDLOCK so a concurrent save or unlock can't slip in between read and write
+      const existing = await transaction.request()
+        .input('clientID', sql.NVarChar(50), clientID)
+        .input('formType', sql.NVarChar(50), formType)
+        .query(`
+          SELECT formID, formData, checkboxData, signature, status, completionPercentage,
+                 completedBy, completedAt, submissionID
+          FROM AuthorizationForms WITH (UPDLOCK, HOLDLOCK)
+          WHERE clientID = @clientID AND formType = @formType
+        `);
+
+      const form = existing.recordset[0];
+      if (!form) {
+        await transaction.rollback();
+        return res.status(404).json({ message: 'Form not found' });
+      }
+      if (!isLockedStatus(form.status)) {
+        await transaction.rollback();
+        return res.status(409).json({ code: 'FORM_NOT_LOCKED', message: 'Form is not signed or locked', currentStatus: form.status });
+      }
+
+      // Keep the signed version exactly as it was
+      await transaction.request()
+        .input('formID',               sql.Int,               form.formID)
+        .input('clientID',             sql.NVarChar(50),      clientID)
+        .input('formType',             sql.NVarChar(50),      formType)
+        .input('formData',             sql.NVarChar(sql.MAX), form.formData)
+        .input('checkboxData',         sql.NVarChar(sql.MAX), form.checkboxData)
+        .input('signature',            sql.NVarChar(200),     form.signature)
+        .input('status',               sql.NVarChar(20),      form.status)
+        .input('completionPercentage', sql.Decimal(5, 2),     form.completionPercentage)
+        .input('completedBy',          sql.NVarChar(100),     form.completedBy)
+        .input('completedAt',          sql.DateTime2,         form.completedAt)
+        .input('submissionID',         sql.Int,               form.submissionID)
+        .input('archivedBy',           sql.NVarChar(100),     currentUser)
+        .input('archivedAt',           sql.DateTime2,         now)
+        .input('unlockReason',         sql.NVarChar(500),     reason)
+        .query(`
+          INSERT INTO AuthorizationFormVersions
+            (formID, clientID, formType, formData, checkboxData, signature, status,
+             completionPercentage, completedBy, completedAt, submissionID,
+             archivedReason, archivedBy, archivedAt, unlockReason)
+          VALUES
+            (@formID, @clientID, @formType, @formData, @checkboxData, @signature, @status,
+             @completionPercentage, @completedBy, @completedAt, @submissionID,
+             'unlock', @archivedBy, @archivedAt, @unlockReason)
+        `);
+
+      let formData = {};
+      try { formData = JSON.parse(form.formData || '{}'); } catch (_) {}
+      const clearedFormData = JSON.stringify(clearSignatureFields(formType, formData));
+
+      await transaction.request()
+        .input('formID',       sql.Int,               form.formID)
+        .input('formData',     sql.NVarChar(sql.MAX), clearedFormData)
+        .input('updatedBy',    sql.NVarChar(100),     currentUser)
+        .input('unlockedAt',   sql.DateTime2,         now)
+        .input('unlockReason', sql.NVarChar(500),     reason)
+        .query(`
+          UPDATE AuthorizationForms
+          SET status       = 'in_progress',
+              signature    = NULL,
+              formData     = @formData,
+              completedBy  = NULL,
+              completedAt  = NULL,
+              unlockedBy   = @updatedBy,
+              unlockedAt   = @unlockedAt,
+              unlockReason = @unlockReason,
+              updatedBy    = @updatedBy,
+              updatedAt    = @unlockedAt
+          WHERE formID = @formID
+        `);
+
+      await transaction.commit();
+    } catch (err) {
+      await transaction.rollback().catch(() => {});
+      throw err;
+    }
+
+    // Admin audit trail. The reason is free text that may contain PHI, so it
+    // stays in AuthorizationForms / AuthorizationFormVersions only. The archived
+    // version and unlock columns are the durable record; failure here is non-fatal.
+    try {
+      await pool.request()
+        .input('userID',    sql.NVarChar(100),     currentUser)
+        .input('action',    sql.NVarChar(50),      'UNLOCK_SIGNED_FORM')
+        .input('tableName', sql.NVarChar(100),     'AuthorizationForms')
+        .input('recordID',  sql.NVarChar(100),     `${clientID}:${formType}`)
+        .input('newValues', sql.NVarChar(sql.MAX), JSON.stringify({ clientID, formType }))
+        .input('timestamp', sql.DateTime2,         now)
+        .query(`INSERT INTO dbo.AuditLog (userID, action, tableName, recordID, newValues, timestamp)
+                VALUES (@userID, @action, @tableName, @recordID, @newValues, @timestamp)`);
+    } catch (auditErr) {
+      console.warn('Audit log failed (non-fatal):', auditErr.message);
+    }
+
+    res.json({
+      message:      'Form unlocked. The client must sign again.',
+      clientID,
+      formType,
+      status:       'in_progress',
+      unlockedBy:   currentUser,
+      unlockedAt:   now.toISOString(),
+      unlockReason: reason,
+    });
+  } catch (err) {
+    console.error('Form unlock error:', err.message);
+    res.status(500).json({ message: 'Error unlocking form' });
+  }
+});
+
 // Export router
 module.exports = router;
+module.exports.isFormComplete = isFormComplete;
+module.exports.clearSignatureFields = clearSignatureFields;

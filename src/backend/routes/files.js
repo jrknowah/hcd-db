@@ -549,29 +549,36 @@ router.get('/list', async (_req, res) => {
  */
 router.get('/files/:clientID', async (req, res) => {
   try {
-    // Do NOT sanitize clientID — it must match the exact prefix used during upload
     const clientID = req.params.clientID;
     console.log(`📂 Listing files for client: ${clientID}`);
-    
-    const prefix = `${clientID}/`;
+
+    // Uploads store blobs under sanitizeSegment(clientID) (see buildBlobName), so a
+    // clientID with spaces, trailing whitespace or punctuation lives under a different
+    // prefix than the raw ID. Search both so no client's files go missing.
+    const prefixes = [...new Set([`${sanitizeSegment(clientID)}/`, `${clientID}/`])];
 
     // Try Azure first
     if (blobServiceClient) {
       try {
         const containerClient = await getContainerClient();
         const files = [];
+        const seen = new Set();
 
-        for await (const blob of containerClient.listBlobsFlat({ prefix })) {
-          files.push({
-            id: blob.name,
-            blobName: blob.name,
-            fileName: blob.name.split('/').pop(),
-            blobUrl: null, // Raw URLs are unauthenticated; use /file/download-url to get a signed SAS URL
-            docType: blob.name.split('/')[1] || 'Unknown',
-            uploadDate: blob.properties.lastModified,
-            fileSize: blob.properties.contentLength,
-            contentType: blob.properties.contentType
-          });
+        for (const prefix of prefixes) {
+          for await (const blob of containerClient.listBlobsFlat({ prefix })) {
+            if (seen.has(blob.name)) continue;
+            seen.add(blob.name);
+            files.push({
+              id: blob.name,
+              blobName: blob.name,
+              fileName: blob.name.split('/').pop(),
+              blobUrl: null, // Raw URLs are unauthenticated; use /file/download-url to get a signed SAS URL
+              docType: blob.name.split('/')[1] || 'Unknown',
+              uploadDate: blob.properties.lastModified,
+              fileSize: blob.properties.contentLength,
+              contentType: blob.properties.contentType
+            });
+          }
         }
         
         console.log(`   ✅ Found ${files.length} files in Azure for client ${clientID}`);

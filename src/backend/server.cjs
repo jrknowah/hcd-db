@@ -8,6 +8,12 @@ const { BlobServiceClient } = require('@azure/storage-blob');
 
 const authMiddleware = require('./middleware/auth.js');
 const { requireAdmin } = require('./middleware/auth.js');
+// Log stray promise rejections instead of letting Node kill the whole backend
+// (e.g. a DB connection timeout no caller awaited)
+process.on('unhandledRejection', (reason) => {
+  console.error('❌ Unhandled promise rejection:', reason);
+});
+
 // ✅ FIXED: Better database connection handling
 let dbConnected = false;
 let dbModule = null;
@@ -230,7 +236,8 @@ console.log('📝 Loading Section 2 Authorization & Signatures Routes...');
 // Try to load the Authorization & Signatures router
 try {
   const authSigRouter = require('./routes/authSig.js');
-  app.use('/api/authorization', authSigRouter);
+  // Signed-form PHI: every Section 2 call must be authenticated (unlock also needs IT Admin / Level 1)
+  app.use('/api/authorization', authMiddleware, authSigRouter);
   console.log('✅ Authorization & Signatures router loaded from ./routes/authSig.js');
   authSigRouterLoaded = true;
   console.log('✅ AuthSig router loaded from ./routes/authSig.js');

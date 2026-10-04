@@ -24,7 +24,8 @@ import {
   Alert,
   Tabs,
   Tab,
-  Badge
+  Badge,
+  TextField
 } from '@mui/material';
 import {
   Close as CloseIcon,
@@ -40,7 +41,9 @@ import {
   FilterList as FilterIcon,
   Save as SaveIcon,
   CheckCircle as CheckCircleIcon,
-  FolderOpen as ArchiveIcon
+  FolderOpen as ArchiveIcon,
+  Lock as LockIcon,
+  LockOpen as LockOpenIcon
 } from '@mui/icons-material';
 
 // ✅ Redux imports
@@ -48,6 +51,8 @@ import { useDispatch, useSelector } from 'react-redux';
 import { 
   saveFormData, 
   autoSaveFormData,
+  fetchFormData,
+  unlockForm,
   selectSaving,
   selectAutoSaving,
   selectSaveError,
@@ -285,6 +290,41 @@ const PRIORITY_COLORS = {
   low: 'success'
 };
 
+// Signed forms are locked; only an IT Admin / Level 1 unlock re-opens them
+const LOCKED_STATUSES = ['completed', 'submitted', 'approved'];
+
+const formatDateTime = (value) => (value ? new Date(value).toLocaleString() : '');
+
+// Swallows edits inside a locked form while still letting the user scroll,
+// tab through, expand sections and read it. Applied in the capture phase so
+// none of the 16 form components need changes; the backend rejects saves
+// to a locked form regardless.
+const EDIT_KEYS = new Set(['Backspace', 'Delete', 'Enter', ' ']);
+const FIELD_SELECTOR = 'input, textarea, select, [contenteditable="true"], [role="combobox"]';
+const TOGGLE_SELECTOR = 'input[type="checkbox"], input[type="radio"], [role="option"], [role="combobox"]';
+
+const cancel = (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+};
+
+const LOCKED_FORM_HANDLERS = {
+  onBeforeInputCapture: cancel,
+  onPasteCapture: cancel,
+  onCutCapture: cancel,
+  onDropCapture: cancel,
+  onChangeCapture: (e) => e.stopPropagation(),
+  onKeyDownCapture: (e) => {
+    if (e.target.closest?.(FIELD_SELECTOR) && (e.key.length === 1 || EDIT_KEYS.has(e.key))) cancel(e);
+  },
+  onMouseDownCapture: (e) => {
+    if (e.target.closest?.('[role="combobox"]')) cancel(e);
+  },
+  onClickCapture: (e) => {
+    if (e.target.closest?.(TOGGLE_SELECTOR)) cancel(e);
+  },
+};
+
 const PROGRAM_COLORS = {
   ODR:   { bg: '#1565c0', fg: '#ffffff' },
   HSH:   { bg: '#2e7d32', fg: '#ffffff' },
@@ -487,6 +527,21 @@ const FormModal = ({ form, open, onClose, clientID }) => {
   });
   
   const formRef = useRef(null);
+
+  const formState = useSelector(state => (form ? state.authSig.forms[form.id] : null)) || {};
+  const isLocked = LOCKED_STATUSES.includes(formState.status);
+  const [unlockOpen, setUnlockOpen] = useState(false);
+  const [unlockReason, setUnlockReason] = useState('');
+  const [unlocking, setUnlocking] = useState(false);
+  // Bumped after an unlock so the form component remounts with the cleared signature
+  const [formKey, setFormKey] = useState(0);
+
+  const formId = form?.id;
+  useEffect(() => {
+    if (open && formId && clientID) {
+      dispatch(fetchFormData({ clientID, formType: formId }));
+    }
+  }, [open, formId, clientID, dispatch]);
   
   if (!form) return null;
   
@@ -597,6 +652,56 @@ const FormModal = ({ form, open, onClose, clientID }) => {
   const handleViewForm = () => {
     setShowFormContent(true);
   };
+
+  const handleCloseUnlock = () => {
+    setUnlockOpen(false);
+    setUnlockReason('');
+  };
+
+  const handleConfirmUnlock = async () => {
+    setUnlocking(true);
+    try {
+      await dispatch(unlockForm({ clientID, formType: form.id, reason: unlockReason.trim() })).unwrap();
+      await dispatch(fetchFormData({ clientID, formType: form.id }));
+      setFormKey(k => k + 1);
+      handleCloseUnlock();
+      showNotification('Form unlocked. The client must sign again.', 'success');
+    } catch (error) {
+      showNotification(error?.message || error || 'Failed to unlock form', 'error');
+    } finally {
+      setUnlocking(false);
+    }
+  };
+
+  const lockBanner = isLocked ? (
+    <Alert
+      severity="info"
+      icon={<LockIcon />}
+      sx={{ borderRadius: 0 }}
+      action={formState.canUnlock ? (
+        <Button
+          color="inherit"
+          size="small"
+          startIcon={<LockOpenIcon />}
+          onClick={() => setUnlockOpen(true)}
+        >
+          Unlock
+        </Button>
+      ) : null}
+    >
+      <strong>Signed and locked.</strong>
+      {formState.completedAt && ` Signed ${formatDateTime(formState.completedAt)}${formState.completedBy ? ` (recorded by ${formState.completedBy})` : ''}.`}
+      {' '}
+      {formState.canUnlock
+        ? 'Unlocking keeps a copy of the signed version and the client must sign again.'
+        : 'Changes require an IT Admin or Level 1 user to unlock it.'}
+    </Alert>
+  ) : formState.unlockedAt ? (
+    <Alert severity="warning" icon={<LockOpenIcon />} sx={{ borderRadius: 0 }}>
+      Unlocked by {formState.unlockedBy} on {formatDateTime(formState.unlockedAt)}
+      {formState.unlockReason && `: ${formState.unlockReason}`}. The client must sign again.
+    </Alert>
+  ) : null;
   
   return (
     <>
@@ -638,6 +743,7 @@ const FormModal = ({ form, open, onClose, clientID }) => {
         </DialogTitle>
         
         <DialogContent sx={{ p: 0 }}>
+          {lockBanner}
           {!showFormContent ? (
             <Box sx={{ p: 4 }}>
               <Box sx={{ display: 'flex', alignItems: 'flex-start', mb: 3 }}>
@@ -719,8 +825,13 @@ const FormModal = ({ form, open, onClose, clientID }) => {
               )}
             </Box>
           ) : (
-            <Box sx={{ p: 3 }}>
+            <Box
+              sx={{ p: 3 }}
+              aria-readonly={isLocked || undefined}
+              {...(isLocked ? LOCKED_FORM_HANDLERS : {})}
+            >
               <FormComponent 
+                key={formKey}
                 ref={formRef}
                 clientID={clientID}
                 title={form.title}
@@ -771,7 +882,7 @@ const FormModal = ({ form, open, onClose, clientID }) => {
                 variant="outlined" 
                 color="primary"
                 onClick={handleSaveProgress}
-                disabled={saving || autoSaving}
+                disabled={saving || autoSaving || isLocked}
                 startIcon={
                   autoSaving && saveType === 'progress' ? (
                     <CircularProgress size={16} />
@@ -787,7 +898,7 @@ const FormModal = ({ form, open, onClose, clientID }) => {
                 variant="contained" 
                 color="success" 
                 onClick={handleSubmitForm}
-                disabled={saving || autoSaving}
+                disabled={saving || autoSaving || isLocked}
                 startIcon={
                   saving && saveType === 'submit' ? (
                     <CircularProgress size={16} />
@@ -803,7 +914,42 @@ const FormModal = ({ form, open, onClose, clientID }) => {
           )}
         </DialogActions>
       </Dialog>
-      
+
+      <Dialog open={unlockOpen} onClose={unlocking ? undefined : handleCloseUnlock} maxWidth="sm" fullWidth>
+        <DialogTitle>Unlock signed form</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" sx={{ mb: 2 }}>
+            A copy of the signed version of <strong>{form.title}</strong> will be kept. The signature
+            will be cleared and the client must sign the form again.
+          </Typography>
+          <TextField
+            autoFocus
+            fullWidth
+            multiline
+            minRows={3}
+            label="Reason for unlocking"
+            value={unlockReason}
+            onChange={(e) => setUnlockReason(e.target.value)}
+            inputProps={{ maxLength: 500 }}
+            helperText="Required. Recorded with the unlock (at least 5 characters)."
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseUnlock} disabled={unlocking} color="inherit">
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            color="warning"
+            onClick={handleConfirmUnlock}
+            disabled={unlocking || unlockReason.trim().length < 5}
+            startIcon={unlocking ? <CircularProgress size={16} /> : <LockOpenIcon />}
+          >
+            {unlocking ? 'Unlocking...' : 'Unlock form'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       <Snackbar
         open={snackbar.open}
         autoHideDuration={4000}

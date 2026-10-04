@@ -118,11 +118,18 @@ const ClientFace = ({ exportMode = false }) => {
     }
   }, [saveSuccess, dispatch]);
 
+  // Placeholder entries staff use when a client has no email on file
+  const NO_EMAIL_VALUES = ['n/a', 'na', 'none', 'no email', 'no', '-', 'unknown'];
+  const normalizeEmail = (email) => {
+    const trimmed = (email || '').trim();
+    return NO_EMAIL_VALUES.includes(trimmed.toLowerCase()) ? '' : trimmed;
+  };
+
   // Form validation function
-  const validateForm = () => {
+  const validateForm = (data = formData) => {
     const errors = [];
     
-    if (formData.clientEmail?.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.clientEmail)) {
+    if (data.clientEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.clientEmail)) {
       errors.push('Email must be a valid email address');
     }
     
@@ -131,8 +138,8 @@ const ClientFace = ({ exportMode = false }) => {
 
   // Calculate form completion percentage
   const getCompletionPercentage = () => {
-  const requiredFields = ['clientContactNum', 'clientEmail', 'clientMedInsType'];
-  const optionalFields = ['clientContactAltNum', 'clientEmgContactName', 'clientEmgContactNum', 
+  const requiredFields = ['clientContactNum', 'clientMedInsType'];
+  const optionalFields = ['clientEmail', 'clientContactAltNum', 'clientEmgContactName', 'clientEmgContactNum', 
                          'clientEmgContactRel', 'clientEmgContactAddress', 'clientMedCarrier', 
                          'clientMedInsNum']; // ✅ Removed 'clientAllergyComments'
   
@@ -183,7 +190,10 @@ const ClientFace = ({ exportMode = false }) => {
   const handleSubmit = async (event) => {
     event.preventDefault();
     
-    const errors = validateForm();
+    // Email is optional — treat "N/A"/"none" style entries as no email
+    const dataToSave = { ...formData, clientEmail: normalizeEmail(formData.clientEmail) };
+
+    const errors = validateForm(dataToSave);
     if (errors.length > 0) {
       dispatch(setValidationErrors(errors));
       return;
@@ -194,7 +204,7 @@ const ClientFace = ({ exportMode = false }) => {
     try {
       await dispatch(saveClientFaceData({
         clientID: currentClient.clientID,
-        formData
+        formData: dataToSave
         // ❌ Removed: allergies parameter - now managed in Section 5
       })).unwrap();
     } catch (error) {
@@ -308,7 +318,7 @@ const ClientFace = ({ exportMode = false }) => {
       )}
 
       {/* Main Form */}
-      <form onSubmit={handleSubmit}>
+      <form onSubmit={handleSubmit} noValidate>
         {/* Contact Information Section */}
         <Card elevation={1} sx={{ mb: 3 }}>
           <CardContent>
@@ -354,7 +364,8 @@ const ClientFace = ({ exportMode = false }) => {
                   value={formData.clientEmail || ""}
                   onChange={handleFieldChange('clientEmail')}
                   disabled={saving}
-                  error={!formData.clientEmail && validationErrors.some(err => err.includes('email'))}
+                  placeholder="Leave blank if client has no email"
+                  error={validationErrors.some(err => err.toLowerCase().includes('email'))}
                   InputProps={{
                     startAdornment: <EmailIcon sx={{ mr: 1, color: 'text.secondary' }} />
                   }}
