@@ -14,6 +14,20 @@ try {
   throw new Error('azureSql module not found');
 }
 
+const { bindSubmitInputs, lockedResponse, rejectIfLocked, getLockState } = require('../services/section5RecordLock');
+
+// POST/PUT accept `submit: true` to submit (lock) a record; without it the
+// record is saved as progress. Locked records can't be updated or deleted until
+// an IT Admin / Level 1 user unlocks them (routes/section5Lock.js).
+
+// A write matched no row: the record is gone (404) or was submitted after the
+// lock check (409)
+const notFoundOrLocked = async (pool, recordType, id, res, notFoundMessage) => {
+  const state = await getLockState(pool, recordType, id);
+  if (state.exists) return lockedResponse(res, recordType);
+  return res.status(404).json({ error: notFoundMessage });
+};
+
 // ✅ Helper function to format dates for database
 const formatDateForDB = (dateValue) => {
   if (!dateValue || dateValue === '' || dateValue === 'null' || dateValue === 'undefined') {
@@ -209,18 +223,21 @@ router.post('/medication-admin/:clientID', async (req, res) => {
     request.input('holdReason', sql.NVarChar(500), marData.holdReason || '');
     request.input('notes', sql.NVarChar(sql.MAX), marData.notes || '');
     request.input('createdBy', sql.NVarChar(255), marData.createdBy || marData.administeredBy || 'system');
+    bindSubmitInputs(request, req, marData.createdBy || marData.administeredBy);
     
     const query = `
       INSERT INTO medication_administration_record (
         clientID, medicationName, dosage, route, frequency, scheduledTime,
         administeredDate, administeredTime, administeredBy, status, holdReason,
-        notes, createdBy, createdAt, updatedAt
+        notes, createdBy, createdAt, updatedAt,
+        isLocked, submittedBy, submittedAt
       )
       OUTPUT INSERTED.*
       VALUES (
         @clientID, @medicationName, @dosage, @route, @frequency, @scheduledTime,
         @administeredDate, @administeredTime, @administeredBy, @status, @holdReason,
-        @notes, @createdBy, GETDATE(), GETDATE()
+        @notes, @createdBy, GETDATE(), GETDATE(),
+        @isLocked, @submittedBy, @submittedAt
       )
     `;
     
@@ -248,7 +265,7 @@ router.post('/medication-admin/:clientID', async (req, res) => {
 });
 
 // PUT /api/medication-admin/:marID - Update medication record
-router.put('/medication-admin/:marID', async (req, res) => {
+router.put('/medication-admin/:marID', rejectIfLocked('medication-admin', 'marID', () => getPool()), async (req, res) => {
   try {
     const pool = await getPool();
     const { marID } = req.params;
@@ -271,6 +288,7 @@ router.put('/medication-admin/:marID', async (req, res) => {
     request.input('holdReason', sql.NVarChar(500), marData.holdReason || '');
     request.input('notes', sql.NVarChar(sql.MAX), marData.notes || '');
     request.input('updatedBy', sql.NVarChar(255), marData.updatedBy || marData.administeredBy || 'system');
+    bindSubmitInputs(request, req, marData.updatedBy || marData.administeredBy);
     
     const query = `
       UPDATE medication_administration_record 
@@ -287,15 +305,18 @@ router.put('/medication-admin/:marID', async (req, res) => {
         holdReason = @holdReason,
         notes = @notes,
         updatedBy = @updatedBy,
-        updatedAt = GETDATE()
+        updatedAt = GETDATE(),
+        isLocked = @isLocked,
+        submittedBy = @submittedBy,
+        submittedAt = @submittedAt
       OUTPUT INSERTED.*
-      WHERE marID = @marID
+      WHERE marID = @marID AND ISNULL(isLocked, 0) = 0
     `;
     
     const result = await request.query(query);
     
     if (result.recordset.length === 0) {
-      return res.status(404).json({ error: 'Medication record not found' });
+      return notFoundOrLocked(pool, 'medication-admin', marID, res, 'Medication record not found');
     }
     
     const updatedRecord = result.recordset[0];
@@ -319,7 +340,7 @@ router.put('/medication-admin/:marID', async (req, res) => {
 });
 
 // DELETE /api/medication-admin/:marID - Delete medication record
-router.delete('/medication-admin/:marID', async (req, res) => {
+router.delete('/medication-admin/:marID', rejectIfLocked('medication-admin', 'marID', () => getPool()), async (req, res) => {
   try {
     const pool = await getPool();
     const { marID } = req.params;
@@ -328,7 +349,7 @@ router.delete('/medication-admin/:marID', async (req, res) => {
     
     const result = await pool.request()
       .input('marID', sql.BigInt, marID)
-      .query('DELETE FROM medication_administration_record WHERE marID = @marID');
+      .query('DELETE FROM medication_administration_record WHERE marID = @marID AND ISNULL(isLocked, 0) = 0');
     
     if (result.rowsAffected[0] === 0) {
       return res.status(404).json({ error: 'Medication record not found' });
@@ -444,18 +465,21 @@ router.post('/vital-signs/:clientID', async (req, res) => {
     request.input('painLevel', sql.Int, vitalData.painLevel || null);
     request.input('notes', sql.NVarChar(sql.MAX), vitalData.notes || '');
     request.input('recordedBy', sql.NVarChar(255), vitalData.recordedBy || 'system');
+    bindSubmitInputs(request, req, vitalData.recordedBy);
     
     const query = `
       INSERT INTO vital_signs (
         clientID, recordDate, recordTime, bloodPressureSystolic, bloodPressureDiastolic,
         temperature, pulse, respirations, oxygenSaturation, weight, bloodGlucose,
-        painLevel, notes, recordedBy, createdAt
+        painLevel, notes, recordedBy, createdAt,
+        isLocked, submittedBy, submittedAt
       )
       OUTPUT INSERTED.*
       VALUES (
         @clientID, @recordDate, @recordTime, @bloodPressureSystolic, @bloodPressureDiastolic,
         @temperature, @pulse, @respirations, @oxygenSaturation, @weight, @bloodGlucose,
-        @painLevel, @notes, @recordedBy, GETDATE()
+        @painLevel, @notes, @recordedBy, GETDATE(),
+        @isLocked, @submittedBy, @submittedAt
       )
     `;
     
@@ -482,7 +506,7 @@ router.post('/vital-signs/:clientID', async (req, res) => {
 });
 
 // PUT /api/vital-signs/:vitalSignID - Update vital signs record
-router.put('/vital-signs/:vitalSignID', async (req, res) => {
+router.put('/vital-signs/:vitalSignID', rejectIfLocked('vital-signs', 'vitalSignID', () => getPool()), async (req, res) => {
   try {
     const pool = await getPool();
     const { vitalSignID } = req.params;
@@ -507,6 +531,7 @@ router.put('/vital-signs/:vitalSignID', async (req, res) => {
     request.input('painLevel', sql.Int, vitalData.painLevel || null);
     request.input('notes', sql.NVarChar(sql.MAX), vitalData.notes || '');
     request.input('recordedBy', sql.NVarChar(255), vitalData.recordedBy || 'system');
+    bindSubmitInputs(request, req, vitalData.recordedBy);
     
     const query = `
       UPDATE vital_signs 
@@ -523,15 +548,18 @@ router.put('/vital-signs/:vitalSignID', async (req, res) => {
         bloodGlucose = @bloodGlucose,
         painLevel = @painLevel,
         notes = @notes,
-        recordedBy = @recordedBy
+        recordedBy = @recordedBy,
+        isLocked = @isLocked,
+        submittedBy = @submittedBy,
+        submittedAt = @submittedAt
       OUTPUT INSERTED.*
-      WHERE vitalSignID = @vitalSignID
+      WHERE vitalSignID = @vitalSignID AND ISNULL(isLocked, 0) = 0
     `;
     
     const result = await request.query(query);
     
     if (result.recordset.length === 0) {
-      return res.status(404).json({ error: 'Vital signs record not found' });
+      return notFoundOrLocked(pool, 'vital-signs', vitalSignID, res, 'Vital signs record not found');
     }
     
     const updatedRecord = result.recordset[0];
@@ -554,7 +582,7 @@ router.put('/vital-signs/:vitalSignID', async (req, res) => {
 });
 
 // DELETE /api/vital-signs/:vitalSignID - Delete vital signs record
-router.delete('/vital-signs/:vitalSignID', async (req, res) => {
+router.delete('/vital-signs/:vitalSignID', rejectIfLocked('vital-signs', 'vitalSignID', () => getPool()), async (req, res) => {
   try {
     const pool = await getPool();
     const { vitalSignID } = req.params;
@@ -563,7 +591,7 @@ router.delete('/vital-signs/:vitalSignID', async (req, res) => {
     
     const result = await pool.request()
       .input('vitalSignID', sql.BigInt, vitalSignID)
-      .query('DELETE FROM vital_signs WHERE vitalSignID = @vitalSignID');
+      .query('DELETE FROM vital_signs WHERE vitalSignID = @vitalSignID AND ISNULL(isLocked, 0) = 0');
     
     if (result.rowsAffected[0] === 0) {
       return res.status(404).json({ error: 'Vital signs record not found' });
@@ -724,20 +752,23 @@ router.post('/daily-observations/:clientID', async (req, res) => {
     request.input('observationNotes', sql.NVarChar(sql.MAX), obsData.observationNotes || '');
     request.input('recordedBy', sql.NVarChar(255), obsData.recordedBy || 'system');
     request.input('createdBy', sql.NVarChar(255), obsData.createdBy || obsData.recordedBy || 'system');
+    bindSubmitInputs(request, req, obsData.createdBy || obsData.recordedBy);
     
     const query = `
       INSERT INTO daily_observations (
         clientID, observationDate, generalCondition, moodBehavior, sleepQuality,
         appetiteIntake, bowelMovement, urinaryOutput, skinIntegrity, fallRisk,
         activityLevel, painAssessment, observationNotes, recordedBy, 
-        createdBy, createdAt, updatedAt
+        createdBy, createdAt, updatedAt,
+        isLocked, submittedBy, submittedAt
       )
       OUTPUT INSERTED.*
       VALUES (
         @clientID, @observationDate, @generalCondition, @moodBehavior, @sleepQuality,
         @appetiteIntake, @bowelMovement, @urinaryOutput, @skinIntegrity, @fallRisk,
         @activityLevel, @painAssessment, @observationNotes, @recordedBy,
-        @createdBy, GETDATE(), GETDATE()
+        @createdBy, GETDATE(), GETDATE(),
+        @isLocked, @submittedBy, @submittedAt
       )
     `;
     
@@ -763,7 +794,7 @@ router.post('/daily-observations/:clientID', async (req, res) => {
 });
 
 // PUT /api/daily-observations/:observationID - Update daily observation
-router.put('/daily-observations/:observationID', async (req, res) => {
+router.put('/daily-observations/:observationID', rejectIfLocked('daily-observation', 'observationID', () => getPool()), async (req, res) => {
   try {
     const pool = await getPool();
     const { observationID } = req.params;
@@ -787,6 +818,7 @@ router.put('/daily-observations/:observationID', async (req, res) => {
     request.input('observationNotes', sql.NVarChar(sql.MAX), obsData.observationNotes || '');
     request.input('recordedBy', sql.NVarChar(255), obsData.recordedBy || 'system');
     request.input('updatedBy', sql.NVarChar(255), obsData.updatedBy || obsData.recordedBy || 'system');
+    bindSubmitInputs(request, req, obsData.updatedBy || obsData.recordedBy);
     
     const query = `
       UPDATE daily_observations 
@@ -805,15 +837,18 @@ router.put('/daily-observations/:observationID', async (req, res) => {
         observationNotes = @observationNotes,
         recordedBy = @recordedBy,
         updatedBy = @updatedBy,
-        updatedAt = GETDATE()
+        updatedAt = GETDATE(),
+        isLocked = @isLocked,
+        submittedBy = @submittedBy,
+        submittedAt = @submittedAt
       OUTPUT INSERTED.*
-      WHERE observationID = @observationID
+      WHERE observationID = @observationID AND ISNULL(isLocked, 0) = 0
     `;
     
     const result = await request.query(query);
     
     if (result.recordset.length === 0) {
-      return res.status(404).json({ error: 'Daily observation not found' });
+      return notFoundOrLocked(pool, 'daily-observation', observationID, res, 'Daily observation not found');
     }
     
     const updatedRecord = result.recordset[0];
@@ -835,7 +870,7 @@ router.put('/daily-observations/:observationID', async (req, res) => {
 });
 
 // DELETE /api/daily-observations/:observationID - Delete daily observation
-router.delete('/daily-observations/:observationID', async (req, res) => {
+router.delete('/daily-observations/:observationID', rejectIfLocked('daily-observation', 'observationID', () => getPool()), async (req, res) => {
   try {
     const pool = await getPool();
     const { observationID } = req.params;
@@ -844,7 +879,7 @@ router.delete('/daily-observations/:observationID', async (req, res) => {
     
     const result = await pool.request()
       .input('observationID', sql.BigInt, observationID)
-      .query('DELETE FROM daily_observations WHERE observationID = @observationID');
+      .query('DELETE FROM daily_observations WHERE observationID = @observationID AND ISNULL(isLocked, 0) = 0');
     
     if (result.rowsAffected[0] === 0) {
       return res.status(404).json({ error: 'Daily observation not found' });

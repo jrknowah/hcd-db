@@ -985,6 +985,15 @@ try {
   console.log('⚠️  Could not load medObservation.js:', err.message);
 }
 
+// SECTION 5 RECORD UNLOCK / DELETE (submitted notes / observation records; IT Admin / Level 1 only)
+try {
+  const section5LockRouter = require('./routes/section5Lock.js');
+  app.use('/api/section5', authMiddleware, section5LockRouter);
+  console.log('✅ Section 5 record unlock router loaded');
+} catch (err) {
+  console.log('⚠️  Could not load section5Lock.js:', err.message);
+}
+
 console.log('✅ Section 5 Medical Routes Loading Complete');
 //End Section 5: Medical ===================================================================
 

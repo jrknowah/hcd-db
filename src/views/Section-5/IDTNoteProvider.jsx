@@ -40,12 +40,12 @@ import {
   Group as ConsultationIcon,
   ExitToApp as DischargeIcon,
   CheckCircle as ClearanceIcon,
-  Save as SaveIcon,
   TrendingUp as TrendingUpIcon,
   Add as AddIcon,
   Edit as EditIcon,
   Delete as DeleteIcon,
-  Search as SearchIcon
+  Search as SearchIcon,
+  Visibility as VisibilityIcon
 } from "@mui/icons-material";
 import PropTypes from 'prop-types';
 import { useDispatch, useSelector } from "react-redux";
@@ -59,6 +59,19 @@ import {
 } from "../../backend/store/slices/idtProviderSlice";
 import { ynd } from "../../data/arrayList";
 import logUserAction from "../../backend/config/logAction";
+import { selectUserRoles } from "../../backend/store/slices/authSlice";
+import { canUnlockSection5Records, isRecordLocked, errorMessage } from "../../utils/section5Lock";
+import {
+  RecordStatusChip,
+  UnlockRecordButton,
+  DeleteLockedRecordButton,
+  UnlockRecordDialog,
+  LockedRecordAlert,
+  SaveProgressSubmitActions,
+  SubmitLockNotice,
+} from "../../components/shared/Section5RecordLock";
+
+const SUBMIT_CONFIRM = "Submit this note? Once submitted it is locked and only an IT Admin or Level 1 user can unlock it.";
 
 const initialFormState = {
   idtHospital: "",
@@ -89,6 +102,7 @@ const initialFormState = {
 const IDTNoteProvider = ({ clientID }) => {
   const dispatch = useDispatch();
   const user = useSelector((state) => state.auth.user);
+  const canUnlock = canUnlockSection5Records(useSelector(selectUserRoles));
   const { notes, loading, error, saving, saveSuccess } = useSelector((state) => state.idtProvider);
 
   // Component state
@@ -98,6 +112,9 @@ const IDTNoteProvider = ({ clientID }) => {
   const [selectedNote, setSelectedNote] = useState(null);
   const [formData, setFormData] = useState(initialFormState);
   const [searchTerm, setSearchTerm] = useState("");
+  // A submitted note opens read-only; unlockTarget drives the unlock dialog
+  const [viewOnly, setViewOnly] = useState(false);
+  const [unlockTarget, setUnlockTarget] = useState(null);
 
   // Load notes on mount
   useEffect(() => {
@@ -131,14 +148,23 @@ const IDTNoteProvider = ({ clientID }) => {
 
   // Open add dialog
   const handleOpenDialog = () => {
+    setViewOnly(false);
     setFormData({ ...initialFormState, clientID });
     setDialogOpen(true);
+  };
+
+  const closeFormDialog = () => {
+    setDialogOpen(false);
+    setEditDialogOpen(false);
+    setViewOnly(false);
+    setFormData(initialFormState);
   };
 
   // Open edit dialog
   const handleEditNote = (note) => {
     setSelectedNote(note);
     setFormData(note);
+    setViewOnly(isRecordLocked(note));
     setEditDialogOpen(true);
   };
 
@@ -148,8 +174,8 @@ const IDTNoteProvider = ({ clientID }) => {
     setDeleteDialogOpen(true);
   };
 
-  // Save new note
-  const handleSaveNote = async () => {
+  // Save new note; submit = true locks it, false saves progress
+  const handleSaveNote = async (submit) => {
     if (!clientID || clientID === 'mock-123') {
       alert("⚠️ Please select a valid client before saving.");
       return;
@@ -169,10 +195,13 @@ const IDTNoteProvider = ({ clientID }) => {
       return;
     }
 
+    if (submit && !window.confirm(SUBMIT_CONFIRM)) return;
+
     try {
       await dispatch(addIDTNoteProvider({
         ...formData,
         clientID,
+        submit,
         userName: user?.email || "unknown"
       })).unwrap();
       
@@ -182,11 +211,12 @@ const IDTNoteProvider = ({ clientID }) => {
       await logUserAction(user, "ADD_IDT_PROVIDER_NOTE", { clientID });
     } catch (err) {
       console.error("Failed to save note:", err);
+      alert(`⚠️ Failed to save note: ${errorMessage(err)}`);
     }
   };
 
-  // Update existing note
-  const handleUpdateNote = async () => {
+  // Update existing note; submit = true locks it, false saves progress
+  const handleUpdateNote = async (submit) => {
     if (!selectedNote?.id) return;
 
     // Validate required fields
@@ -203,10 +233,12 @@ const IDTNoteProvider = ({ clientID }) => {
       return;
     }
 
+    if (submit && !window.confirm(SUBMIT_CONFIRM)) return;
+
     try {
       await dispatch(editIDTNoteProvider({
         id: selectedNote.id,
-        updates: { ...formData, userName: user?.email || "unknown" }
+        updates: { ...formData, userName: user?.email || "unknown", submit }
       })).unwrap();
       
       setEditDialogOpen(false);
@@ -216,6 +248,7 @@ const IDTNoteProvider = ({ clientID }) => {
       await logUserAction(user, "EDIT_IDT_PROVIDER_NOTE", { clientID, id: selectedNote.id });
     } catch (err) {
       console.error("Failed to update note:", err);
+      alert(`⚠️ Failed to update note: ${errorMessage(err)}`);
     }
   };
 
@@ -231,6 +264,7 @@ const IDTNoteProvider = ({ clientID }) => {
       await logUserAction(user, "DELETE_IDT_PROVIDER_NOTE", { clientID, id: selectedNote.id });
     } catch (err) {
       console.error("Failed to delete note:", err);
+      alert(`⚠️ Failed to delete note: ${errorMessage(err)}`);
     }
   };
 
@@ -773,6 +807,7 @@ const IDTNoteProvider = ({ clientID }) => {
                   <TableCell>Risk Level</TableCell>
                   <TableCell>Discharge Status</TableCell>
                   <TableCell>LOS</TableCell>
+                  <TableCell>Status</TableCell>
                   <TableCell align="center">Actions</TableCell>
                 </TableRow>
               </TableHead>
@@ -814,7 +849,34 @@ const IDTNoteProvider = ({ clientID }) => {
                       {note.idtLengthOfStay ? `${note.idtLengthOfStay}d` : 'N/A'}
                       {note.idtTargetLOS && ` / ${note.idtTargetLOS}d`}
                     </TableCell>
+                    <TableCell>
+                      <RecordStatusChip record={note} />
+                    </TableCell>
                     <TableCell align="center">
+                      {isRecordLocked(note) ? (
+                        <>
+                          <Tooltip title="View Note">
+                            <IconButton
+                              size="small"
+                              onClick={() => handleEditNote(note)}
+                              color="primary"
+                            >
+                              <VisibilityIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                          {canUnlock && (
+                            <>
+                            <UnlockRecordButton
+                              onClick={() => setUnlockTarget({ recordType: 'idt-provider', id: note.id, label: 'IDT provider note' })}
+                            />
+                            <DeleteLockedRecordButton
+                              onClick={() => setUnlockTarget({ recordType: 'idt-provider', id: note.id, label: 'IDT provider note', action: 'delete' })}
+                            />
+                            </>
+                          )}
+                        </>
+                      ) : (
+                      <>
                       <Tooltip title="Edit Note">
                         <IconButton 
                           size="small" 
@@ -833,6 +895,8 @@ const IDTNoteProvider = ({ clientID }) => {
                           <DeleteIcon fontSize="small" />
                         </IconButton>
                       </Tooltip>
+                      </>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -844,37 +908,38 @@ const IDTNoteProvider = ({ clientID }) => {
         {/* Add/Edit Dialog */}
         <Dialog 
           open={dialogOpen || editDialogOpen} 
-          onClose={() => {
-            setDialogOpen(false);
-            setEditDialogOpen(false);
-            setFormData(initialFormState);
-          }}
+          onClose={closeFormDialog}
           maxWidth="lg"
           fullWidth
         >
           <DialogTitle>
-            {editDialogOpen ? 'Edit IDT Provider Note' : 'Add New IDT Provider Note'}
+            {viewOnly ? 'IDT Provider Note (Submitted)' : (editDialogOpen ? 'Edit IDT Provider Note' : 'Add New IDT Provider Note')}
           </DialogTitle>
           <DialogContent>
-            {renderForm()}
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={() => {
-              setDialogOpen(false);
-              setEditDialogOpen(false);
-              setFormData(initialFormState);
-            }}>
-              Cancel
-            </Button>
-            <Button 
-              onClick={editDialogOpen ? handleUpdateNote : handleSaveNote}
-              variant="contained" 
-              disabled={saving}
-              startIcon={saving ? <CircularProgress size={16} /> : <SaveIcon />}
+            {viewOnly && <LockedRecordAlert label="note" />}
+            <Box
+              component="fieldset"
+              disabled={viewOnly}
+              sx={{ border: 0, p: 0, m: 0, minWidth: 0, ...(viewOnly && { pointerEvents: 'none' }) }}
             >
-              {saving ? 'Saving...' : (editDialogOpen ? 'Update Note' : 'Save Note')}
-            </Button>
-          </DialogActions>
+              {renderForm()}
+            </Box>
+          </DialogContent>
+          {viewOnly ? (
+            <DialogActions>
+              <Button onClick={closeFormDialog}>Close</Button>
+            </DialogActions>
+          ) : (
+            <>
+              <SubmitLockNotice />
+              <SaveProgressSubmitActions
+                onCancel={closeFormDialog}
+                onSaveProgress={() => (editDialogOpen ? handleUpdateNote(false) : handleSaveNote(false))}
+                onSubmit={() => (editDialogOpen ? handleUpdateNote(true) : handleSaveNote(true))}
+                saving={saving}
+              />
+            </>
+          )}
         </Dialog>
 
         {/* Delete Confirmation Dialog */}
@@ -897,6 +962,12 @@ const IDTNoteProvider = ({ clientID }) => {
             </Button>
           </DialogActions>
         </Dialog>
+
+        <UnlockRecordDialog
+          target={unlockTarget}
+          onClose={() => setUnlockTarget(null)}
+          onUnlocked={() => dispatch(fetchIDTNoteProvider(clientID))}
+        />
       </CardContent>
     </Card>
   );

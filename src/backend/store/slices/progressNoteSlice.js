@@ -1,5 +1,6 @@
 // src/store/apps/notes/progressNoteSlice.js
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
+import { httpError } from '../../../utils/section5Lock';
 
 const API_URL = import.meta.env.VITE_API_URL;
 
@@ -101,7 +102,7 @@ export const fetchProgressNotes = createAsyncThunk(
       });
       
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        throw await httpError(response);
       }
       
       const data = await response.json();
@@ -139,7 +140,7 @@ export const addProgressNote = createAsyncThunk(
       });
       
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        throw await httpError(response);
       }
       
       const data = await response.json();
@@ -177,7 +178,7 @@ export const editProgressNote = createAsyncThunk(
       });
       
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        throw await httpError(response);
       }
       
       const data = await response.json();
@@ -208,7 +209,7 @@ export const deleteProgressNote = createAsyncThunk(
       });
       
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        throw await httpError(response);
       }
       
       return noteId;
@@ -238,7 +239,7 @@ export const fetchNotesSummary = createAsyncThunk(
       });
       
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        throw await httpError(response);
       }
       
       const data = await response.json();
@@ -269,7 +270,7 @@ export const fetchRecentNotes = createAsyncThunk(
       });
       
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        throw await httpError(response);
       }
       
       const data = await response.json();
@@ -300,7 +301,7 @@ export const fetchNotesBySite = createAsyncThunk(
       });
       
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        throw await httpError(response);
       }
       
       const data = await response.json();
@@ -511,9 +512,10 @@ const progressNoteSlice = createSlice({
       .addCase(editProgressNote.fulfilled, (state, action) => {
         state.saving = false;
         const { noteId, updatedData } = action.payload;
-        const index = state.data.findIndex(note => note._id === noteId);
+        // Real notes are keyed by `id`, mock notes by `_id`; the API wraps the row in {success, data}
+        const index = state.data.findIndex(note => (note.id ?? note._id) === noteId);
         if (index !== -1) {
-          state.data[index] = { ...state.data[index], ...updatedData };
+          state.data[index] = { ...state.data[index], ...(updatedData?.data || updatedData) };
         }
         state.saveSuccess = true;
         state.saveError = null;
@@ -533,7 +535,7 @@ const progressNoteSlice = createSlice({
       .addCase(deleteProgressNote.fulfilled, (state, action) => {
         state.deleting = false;
         const noteId = action.payload;
-        state.data = state.data.filter(note => note._id !== noteId);
+        state.data = state.data.filter(note => (note.id ?? note._id) !== noteId);
         state.deleteSuccess = true;
         state.deleteError = null;
       })

@@ -45,7 +45,8 @@ import {
   TrendingUp as TrendIcon,
   CheckCircle as CheckIcon,
   Cancel as CancelIcon,
-  AccessTime as TimeIcon
+  AccessTime as TimeIcon,
+  VisibilityOutlined as ViewIcon
 } from "@mui/icons-material";
 import {
   fetchMedicationRecords,
@@ -63,6 +64,35 @@ import {
   fetchMedicalObservationSummary,
 } from "../../backend/store/slices/medObservationSlice";
 import logUserAction from "../../backend/config/logAction";
+import { selectUserRoles } from "../../backend/store/slices/authSlice";
+import { canUnlockSection5Records, isRecordLocked, errorMessage } from "../../utils/section5Lock";
+import {
+  RecordStatusChip,
+  UnlockRecordButton,
+  DeleteLockedRecordButton,
+  UnlockRecordDialog,
+  LockedRecordAlert,
+  SaveProgressSubmitActions,
+  SubmitLockNotice,
+} from "../../components/shared/Section5RecordLock";
+
+const SUBMIT_CONFIRM = "Submit this record? Once submitted it is locked and only an IT Admin or Level 1 user can unlock it.";
+
+// Read-only wrapper for a submitted record's form
+const LockableFields = ({ locked, children }) => (
+  <Box
+    component="fieldset"
+    disabled={locked}
+    sx={{ border: 0, p: 0, m: 0, minWidth: 0, ...(locked && { pointerEvents: 'none' }) }}
+  >
+    {children}
+  </Box>
+);
+
+LockableFields.propTypes = {
+  locked: PropTypes.bool,
+  children: PropTypes.node,
+};
 
 const MedicalObservationRecord = ({ clientID }) => {
   const dispatch = useDispatch();
@@ -82,6 +112,7 @@ const MedicalObservationRecord = ({ clientID }) => {
   } = medObservationState;
   
   const user = useSelector((state) => state.auth?.user);
+  const canUnlock = canUnlockSection5Records(useSelector(selectUserRoles));
 
   // Environment detection
   const isDevelopment = import.meta.env.MODE === 'development';
@@ -98,6 +129,9 @@ const MedicalObservationRecord = ({ clientID }) => {
   // Edit mode states
   const [editMode, setEditMode] = useState(false);
   const [editingId, setEditingId] = useState(null);
+  // A submitted record opens read-only; unlockTarget drives the unlock dialog
+  const [viewOnly, setViewOnly] = useState(false);
+  const [unlockTarget, setUnlockTarget] = useState(null);
   
   // Success states
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -143,24 +177,29 @@ const MedicalObservationRecord = ({ clientID }) => {
     setMedData({ ...medData, [e.target.name]: e.target.value });
   };
 
-  const handleSaveMedication = async () => {
+  // submit = true locks the record; false saves progress
+  const handleSaveMedication = async (submit) => {
+    if (submit && !window.confirm(SUBMIT_CONFIRM)) return;
+
     try {
       const medPayload = {
         ...medData,
         administeredBy: user?.name || medData.administeredBy,
-        createdBy: user?.email || 'system'
+        createdBy: user?.email || 'system',
+        updatedBy: user?.email || 'system',
+        submit
       };
 
       if (editMode && editingId) {
         await dispatch(updateMedicationRecord({ 
           marID: editingId, 
           medicationData: medPayload 
-        }));
+        })).unwrap();
       } else {
         await dispatch(saveMedicationRecord({ 
           clientID, 
           medicationData: medPayload 
-        }));
+        })).unwrap();
       }
 
       if (user) {
@@ -180,6 +219,7 @@ const MedicalObservationRecord = ({ clientID }) => {
       dispatch(fetchMedicationRecords({ clientID }));
     } catch (error) {
       console.error("Error saving medication:", error);
+      alert(`⚠️ Failed to save: ${errorMessage(error)}`);
     }
   };
 
@@ -199,6 +239,7 @@ const MedicalObservationRecord = ({ clientID }) => {
     });
     setEditMode(false);
     setEditingId(null);
+    setViewOnly(false);
   };
 
   const handleEditMedication = (record) => {
@@ -217,19 +258,21 @@ const MedicalObservationRecord = ({ clientID }) => {
     });
     setEditingId(record.marID);
     setEditMode(true);
+    setViewOnly(isRecordLocked(record));
     setMedDialog(true);
   };
 
   const handleDeleteMedication = async (marID) => {
     if (window.confirm("Are you sure you want to delete this medication record?")) {
       try {
-        await dispatch(deleteMedicationRecord({ clientID, marID }));
+        await dispatch(deleteMedicationRecord({ clientID, marID })).unwrap();
         if (user) {
           await logUserAction(user, "DELETE_MEDICATION", { clientID, marID });
         }
         dispatch(fetchMedicationRecords({ clientID }));
       } catch (error) {
         console.error("Error deleting medication:", error);
+        alert(`⚠️ Failed to delete: ${errorMessage(error)}`);
       }
     }
   };
@@ -258,23 +301,27 @@ const MedicalObservationRecord = ({ clientID }) => {
     setVitalData({ ...vitalData, [e.target.name]: e.target.value });
   };
 
-  const handleSaveVitals = async () => {
+  // submit = true locks the record; false saves progress
+  const handleSaveVitals = async (submit) => {
+    if (submit && !window.confirm(SUBMIT_CONFIRM)) return;
+
     try {
       const vitalPayload = {
         ...vitalData,
-        recordedBy: user?.name || vitalData.recordedBy
+        recordedBy: user?.name || vitalData.recordedBy,
+        submit
       };
 
       if (editMode && editingId) {
         await dispatch(updateVitalSigns({ 
           vitalSignID: editingId, 
           vitalData: vitalPayload 
-        }));
+        })).unwrap();
       } else {
         await dispatch(saveVitalSigns({ 
           clientID, 
           vitalData: vitalPayload 
-        }));
+        })).unwrap();
       }
 
       if (user) {
@@ -293,6 +340,7 @@ const MedicalObservationRecord = ({ clientID }) => {
       dispatch(fetchVitalSigns({ clientID, limit: 30 }));
     } catch (error) {
       console.error("Error saving vitals:", error);
+      alert(`⚠️ Failed to save: ${errorMessage(error)}`);
     }
   };
 
@@ -314,6 +362,7 @@ const MedicalObservationRecord = ({ clientID }) => {
     });
     setEditMode(false);
     setEditingId(null);
+    setViewOnly(false);
   };
 
   const handleEditVitals = (record) => {
@@ -334,19 +383,21 @@ const MedicalObservationRecord = ({ clientID }) => {
     });
     setEditingId(record.vitalSignID);
     setEditMode(true);
+    setViewOnly(isRecordLocked(record));
     setVitalDialog(true);
   };
 
   const handleDeleteVitals = async (vitalSignID) => {
     if (window.confirm("Are you sure you want to delete this vital signs record?")) {
       try {
-        await dispatch(deleteVitalSigns({ clientID, vitalSignID }));
+        await dispatch(deleteVitalSigns({ clientID, vitalSignID })).unwrap();
         if (user) {
           await logUserAction(user, "DELETE_VITALS", { clientID, vitalSignID });
         }
         dispatch(fetchVitalSigns({ clientID, limit: 30 }));
       } catch (error) {
         console.error("Error deleting vitals:", error);
+        alert(`⚠️ Failed to delete: ${errorMessage(error)}`);
       }
     }
   };
@@ -375,24 +426,29 @@ const MedicalObservationRecord = ({ clientID }) => {
     setObsData({ ...obsData, [e.target.name]: e.target.value });
   };
 
-  const handleSaveObservation = async () => {
+  // submit = true locks the record; false saves progress
+  const handleSaveObservation = async (submit) => {
+    if (submit && !window.confirm(SUBMIT_CONFIRM)) return;
+
     try {
       const obsPayload = {
         ...obsData,
         recordedBy: user?.name || obsData.recordedBy,
-        createdBy: user?.email || 'system'
+        createdBy: user?.email || 'system',
+        updatedBy: user?.email || 'system',
+        submit
       };
 
       if (editMode && editingId) {
         await dispatch(updateDailyObservation({ 
           observationID: editingId, 
           observationData: obsPayload 
-        }));
+        })).unwrap();
       } else {
         await dispatch(saveDailyObservation({ 
           clientID, 
           observationData: obsPayload 
-        }));
+        })).unwrap();
       }
 
       if (user) {
@@ -411,6 +467,7 @@ const MedicalObservationRecord = ({ clientID }) => {
       dispatch(fetchDailyObservations({ clientID }));
     } catch (error) {
       console.error("Error saving observation:", error);
+      alert(`⚠️ Failed to save: ${errorMessage(error)}`);
     }
   };
 
@@ -432,6 +489,7 @@ const MedicalObservationRecord = ({ clientID }) => {
     });
     setEditMode(false);
     setEditingId(null);
+    setViewOnly(false);
   };
 
   const handleEditObservation = (record) => {
@@ -452,19 +510,21 @@ const MedicalObservationRecord = ({ clientID }) => {
     });
     setEditingId(record.observationID);
     setEditMode(true);
+    setViewOnly(isRecordLocked(record));
     setObsDialog(true);
   };
 
   const handleDeleteObservation = async (observationID) => {
     if (window.confirm("Are you sure you want to delete this observation?")) {
       try {
-        await dispatch(deleteDailyObservation({ clientID, observationID }));
+        await dispatch(deleteDailyObservation({ clientID, observationID })).unwrap();
         if (user) {
           await logUserAction(user, "DELETE_OBSERVATION", { clientID, observationID });
         }
         dispatch(fetchDailyObservations({ clientID }));
       } catch (error) {
         console.error("Error deleting observation:", error);
+        alert(`⚠️ Failed to delete: ${errorMessage(error)}`);
       }
     }
   };
@@ -472,6 +532,13 @@ const MedicalObservationRecord = ({ clientID }) => {
   // ============================================================================
   // HELPER FUNCTIONS
   // ============================================================================
+
+  // Reload the list the unlocked record belongs to
+  const handleUnlocked = ({ recordType }) => {
+    if (recordType === 'medication-admin') dispatch(fetchMedicationRecords({ clientID }));
+    else if (recordType === 'vital-signs') dispatch(fetchVitalSigns({ clientID, limit: 30 }));
+    else if (recordType === 'daily-observation') dispatch(fetchDailyObservations({ clientID }));
+  };
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -651,13 +718,14 @@ const MedicalObservationRecord = ({ clientID }) => {
                           <TableCell>Route</TableCell>
                           <TableCell>Status</TableCell>
                           <TableCell>Given By</TableCell>
+                          <TableCell>Record Status</TableCell>
                           <TableCell>Actions</TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
                         {medicationRecords.length === 0 ? (
                           <TableRow>
-                            <TableCell colSpan={8} align="center">
+                            <TableCell colSpan={9} align="center">
                               <Alert severity="info">No medication records found.</Alert>
                             </TableCell>
                           </TableRow>
@@ -689,6 +757,32 @@ const MedicalObservationRecord = ({ clientID }) => {
                               </TableCell>
                               <TableCell>{record.administeredBy}</TableCell>
                               <TableCell>
+                                <RecordStatusChip record={record} />
+                              </TableCell>
+                              <TableCell>
+                                {isRecordLocked(record) ? (
+                                  <>
+                                    <IconButton
+                                      size="small"
+                                      color="primary"
+                                      aria-label="View record"
+                                      onClick={() => handleEditMedication(record)}
+                                    >
+                                      <ViewIcon />
+                                    </IconButton>
+                                    {canUnlock && (
+                                      <>
+                                      <UnlockRecordButton
+                                        onClick={() => setUnlockTarget({ recordType: 'medication-admin', id: record.marID, label: 'medication record' })}
+                                      />
+                                      <DeleteLockedRecordButton
+                                        onClick={() => setUnlockTarget({ recordType: 'medication-admin', id: record.marID, label: 'medication record', action: 'delete' })}
+                                      />
+                                      </>
+                                    )}
+                                  </>
+                                ) : (
+                                  <>
                                 <IconButton
                                   size="small"
                                   color="primary"
@@ -703,6 +797,8 @@ const MedicalObservationRecord = ({ clientID }) => {
                                 >
                                   <DeleteIcon />
                                 </IconButton>
+                                  </>
+                                )}
                               </TableCell>
                             </TableRow>
                           ))
@@ -751,13 +847,14 @@ const MedicalObservationRecord = ({ clientID }) => {
                           <TableCell>O2 Sat (%)</TableCell>
                           <TableCell>Pain (0-10)</TableCell>
                           <TableCell>Recorded By</TableCell>
+                          <TableCell>Record Status</TableCell>
                           <TableCell>Actions</TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
                         {vitalSigns.length === 0 ? (
                           <TableRow>
-                            <TableCell colSpan={10} align="center">
+                            <TableCell colSpan={11} align="center">
                               <Alert severity="info">No vital signs recorded.</Alert>
                             </TableCell>
                           </TableRow>
@@ -786,6 +883,32 @@ const MedicalObservationRecord = ({ clientID }) => {
                               </TableCell>
                               <TableCell>{vital.recordedBy}</TableCell>
                               <TableCell>
+                                <RecordStatusChip record={vital} />
+                              </TableCell>
+                              <TableCell>
+                                {isRecordLocked(vital) ? (
+                                  <>
+                                    <IconButton
+                                      size="small"
+                                      color="primary"
+                                      aria-label="View record"
+                                      onClick={() => handleEditVitals(vital)}
+                                    >
+                                      <ViewIcon />
+                                    </IconButton>
+                                    {canUnlock && (
+                                      <>
+                                      <UnlockRecordButton
+                                        onClick={() => setUnlockTarget({ recordType: 'vital-signs', id: vital.vitalSignID, label: 'vital signs record' })}
+                                      />
+                                      <DeleteLockedRecordButton
+                                        onClick={() => setUnlockTarget({ recordType: 'vital-signs', id: vital.vitalSignID, label: 'vital signs record', action: 'delete' })}
+                                      />
+                                      </>
+                                    )}
+                                  </>
+                                ) : (
+                                  <>
                                 <IconButton
                                   size="small"
                                   color="primary"
@@ -800,6 +923,8 @@ const MedicalObservationRecord = ({ clientID }) => {
                                 >
                                   <DeleteIcon />
                                 </IconButton>
+                                  </>
+                                )}
                               </TableCell>
                             </TableRow>
                           ))
@@ -845,13 +970,14 @@ const MedicalObservationRecord = ({ clientID }) => {
                           <TableCell>Sleep Quality</TableCell>
                           <TableCell>Fall Risk</TableCell>
                           <TableCell>Recorded By</TableCell>
+                          <TableCell>Record Status</TableCell>
                           <TableCell>Actions</TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
                         {dailyObservations.length === 0 ? (
                           <TableRow>
-                            <TableCell colSpan={7} align="center">
+                            <TableCell colSpan={8} align="center">
                               <Alert severity="info">No daily observations recorded.</Alert>
                             </TableCell>
                           </TableRow>
@@ -874,6 +1000,32 @@ const MedicalObservationRecord = ({ clientID }) => {
                               </TableCell>
                               <TableCell>{obs.recordedBy}</TableCell>
                               <TableCell>
+                                <RecordStatusChip record={obs} />
+                              </TableCell>
+                              <TableCell>
+                                {isRecordLocked(obs) ? (
+                                  <>
+                                    <IconButton
+                                      size="small"
+                                      color="primary"
+                                      aria-label="View record"
+                                      onClick={() => handleEditObservation(obs)}
+                                    >
+                                      <ViewIcon />
+                                    </IconButton>
+                                    {canUnlock && (
+                                      <>
+                                      <UnlockRecordButton
+                                        onClick={() => setUnlockTarget({ recordType: 'daily-observation', id: obs.observationID, label: 'daily observation' })}
+                                      />
+                                      <DeleteLockedRecordButton
+                                        onClick={() => setUnlockTarget({ recordType: 'daily-observation', id: obs.observationID, label: 'daily observation', action: 'delete' })}
+                                      />
+                                      </>
+                                    )}
+                                  </>
+                                ) : (
+                                  <>
                                 <IconButton
                                   size="small"
                                   color="primary"
@@ -888,6 +1040,8 @@ const MedicalObservationRecord = ({ clientID }) => {
                                 >
                                   <DeleteIcon />
                                 </IconButton>
+                                  </>
+                                )}
                               </TableCell>
                             </TableRow>
                           ))
@@ -911,6 +1065,8 @@ const MedicalObservationRecord = ({ clientID }) => {
           </Box>
         </DialogTitle>
         <DialogContent>
+          {viewOnly && <LockedRecordAlert label="record" />}
+          <LockableFields locked={viewOnly}>
           <Grid container spacing={2} sx={{ mt: 1 }}>
             <Grid item xs={12} sm={6}>
               <TextField
@@ -1032,15 +1188,22 @@ const MedicalObservationRecord = ({ clientID }) => {
               />
             </Grid>
           </Grid>
+          </LockableFields>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={handleSaveMedication} variant="contained" color="primary">
-            {editMode ? 'Update' : 'Save'}
-          </Button>
-          <Button onClick={() => setMedDialog(false)} color="secondary">
-            Cancel
-          </Button>
-        </DialogActions>
+        {viewOnly ? (
+          <DialogActions>
+            <Button onClick={() => setMedDialog(false)}>Close</Button>
+          </DialogActions>
+        ) : (
+          <>
+            <SubmitLockNotice />
+            <SaveProgressSubmitActions
+              onCancel={() => setMedDialog(false)}
+              onSaveProgress={() => handleSaveMedication(false)}
+              onSubmit={() => handleSaveMedication(true)}
+            />
+          </>
+        )}
       </Dialog>
 
       {/* DIALOG: Add/Edit Vital Signs */}
@@ -1052,6 +1215,8 @@ const MedicalObservationRecord = ({ clientID }) => {
           </Box>
         </DialogTitle>
         <DialogContent>
+          {viewOnly && <LockedRecordAlert label="record" />}
+          <LockableFields locked={viewOnly}>
           <Grid container spacing={2} sx={{ mt: 1 }}>
             <Grid item xs={12} sm={6}>
               <TextField
@@ -1201,15 +1366,22 @@ const MedicalObservationRecord = ({ clientID }) => {
               />
             </Grid>
           </Grid>
+          </LockableFields>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={handleSaveVitals} variant="contained" color="primary">
-            {editMode ? 'Update' : 'Save'}
-          </Button>
-          <Button onClick={() => setVitalDialog(false)} color="secondary">
-            Cancel
-          </Button>
-        </DialogActions>
+        {viewOnly ? (
+          <DialogActions>
+            <Button onClick={() => setVitalDialog(false)}>Close</Button>
+          </DialogActions>
+        ) : (
+          <>
+            <SubmitLockNotice />
+            <SaveProgressSubmitActions
+              onCancel={() => setVitalDialog(false)}
+              onSaveProgress={() => handleSaveVitals(false)}
+              onSubmit={() => handleSaveVitals(true)}
+            />
+          </>
+        )}
       </Dialog>
 
       {/* DIALOG: Add/Edit Daily Observation */}
@@ -1221,6 +1393,8 @@ const MedicalObservationRecord = ({ clientID }) => {
           </Box>
         </DialogTitle>
         <DialogContent>
+          {viewOnly && <LockedRecordAlert label="record" />}
+          <LockableFields locked={viewOnly}>
           <Grid container spacing={2} sx={{ mt: 1 }}>
             <Grid item xs={12}>
               <TextField
@@ -1360,16 +1534,29 @@ const MedicalObservationRecord = ({ clientID }) => {
               />
             </Grid>
           </Grid>
+          </LockableFields>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={handleSaveObservation} variant="contained" color="primary">
-            {editMode ? 'Update' : 'Save'}
-          </Button>
-          <Button onClick={() => setObsDialog(false)} color="secondary">
-            Cancel
-          </Button>
-        </DialogActions>
+        {viewOnly ? (
+          <DialogActions>
+            <Button onClick={() => setObsDialog(false)}>Close</Button>
+          </DialogActions>
+        ) : (
+          <>
+            <SubmitLockNotice />
+            <SaveProgressSubmitActions
+              onCancel={() => setObsDialog(false)}
+              onSaveProgress={() => handleSaveObservation(false)}
+              onSubmit={() => handleSaveObservation(true)}
+            />
+          </>
+        )}
       </Dialog>
+
+      <UnlockRecordDialog
+        target={unlockTarget}
+        onClose={() => setUnlockTarget(null)}
+        onUnlocked={handleUnlocked}
+      />
     </Box>
   );
 };
