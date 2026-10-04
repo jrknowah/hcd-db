@@ -1,0 +1,207 @@
+/* ============================================================================
+   trimClientIDs.sql
+   Removes leading/trailing whitespace from client IDs (e.g. '  187145') in
+   EVERY table that has a clientID / client_id column, in one transaction.
+
+   Why: uploads store files under the trimmed ID, so clients whose ID has stray
+   spaces could not see their uploaded documents.
+
+   HOW TO RUN
+     1. Run as-is (@DryRun = 1). It changes nothing and shows:
+          - the affected IDs and what they become
+          - every table/row count that would change
+          - any collision (trimmed ID already exists) -> must be resolved first
+     2. Review the output. Then set @DryRun = 0 and run again.
+     3. Every change is logged to dbo.ClientIDTrimLog. The UNDO section at the
+        bottom restores the original IDs from that log.
+
+   Take a database backup / point-in-time restore point before step 2.
+============================================================================ */
+SET NOCOUNT ON;
+SET XACT_ABORT ON;
+
+DECLARE @DryRun BIT = 1;   -- <<< set to 0 to apply
+
+-- Whitespace characters to strip: space, tab, LF, CR, non-breaking space
+DECLARE @ws NVARCHAR(10) = NCHAR(32) + NCHAR(9) + NCHAR(10) + NCHAR(13) + NCHAR(160);
+
+/* 1. Affected client IDs. DATALENGTH is used because SQL Server's = and <>
+      ignore trailing spaces, which would hide IDs like '231257 '.            */
+IF OBJECT_ID('tempdb..#fix') IS NOT NULL DROP TABLE #fix;
+SELECT clientID                    AS oldID,
+       TRIM(@ws FROM clientID)     AS newID
+INTO   #fix
+FROM   dbo.Clients
+WHERE  DATALENGTH(clientID) <> DATALENGTH(TRIM(@ws FROM clientID));
+
+SELECT '[' + oldID + ']' AS oldID, '[' + newID + ']' AS newID FROM #fix;
+
+IF NOT EXISTS (SELECT 1 FROM #fix)
+BEGIN
+  PRINT 'No client IDs with leading/trailing whitespace. Nothing to do.';
+  RETURN;
+END
+
+/* 2. Collisions: the trimmed ID already belongs to a different client.       */
+IF EXISTS (
+  SELECT 1 FROM #fix f
+  JOIN dbo.Clients c
+    ON c.clientID = f.newID
+   AND DATALENGTH(c.clientID) = DATALENGTH(f.newID)
+)
+BEGIN
+  SELECT f.oldID, f.newID AS collidesWith
+  FROM #fix f
+  JOIN dbo.Clients c
+    ON c.clientID = f.newID AND DATALENGTH(c.clientID) = DATALENGTH(f.newID);
+  RAISERROR('Trimmed ID already exists for another client. Resolve these manually first. Nothing was changed.', 16, 1);
+  RETURN;
+END
+
+/* 3. Every base table with a client ID column.                              */
+IF OBJECT_ID('tempdb..#cols') IS NOT NULL DROP TABLE #cols;
+SELECT c.TABLE_SCHEMA AS sch, c.TABLE_NAME AS tbl, c.COLUMN_NAME AS col,
+       CAST(0 AS INT) AS rowsAffected
+INTO   #cols
+FROM   INFORMATION_SCHEMA.COLUMNS c
+JOIN   INFORMATION_SCHEMA.TABLES  t
+  ON   t.TABLE_SCHEMA = c.TABLE_SCHEMA AND t.TABLE_NAME = c.TABLE_NAME
+WHERE  t.TABLE_TYPE = 'BASE TABLE'
+  AND  c.COLUMN_NAME IN ('clientID', 'client_id')
+  AND  c.DATA_TYPE IN ('char', 'nchar', 'varchar', 'nvarchar')
+  AND  c.TABLE_NAME <> 'ClientIDTrimLog';
+
+DECLARE @sch SYSNAME, @tbl SYSNAME, @col SYSNAME, @sql NVARCHAR(MAX), @n INT;
+
+-- Rows that would change, per table. A row matches only if its value has the
+-- exact same bytes as the bad ID (so already-trimmed rows are not counted).
+DECLARE cur CURSOR LOCAL FAST_FORWARD FOR SELECT sch, tbl, col FROM #cols;
+OPEN cur;
+FETCH NEXT FROM cur INTO @sch, @tbl, @col;
+WHILE @@FETCH_STATUS = 0
+BEGIN
+  SET @sql = N'SELECT @n = COUNT(*) FROM ' + QUOTENAME(@sch) + N'.' + QUOTENAME(@tbl) + N' x
+               JOIN #fix f ON x.' + QUOTENAME(@col) + N' = f.oldID
+                          AND DATALENGTH(x.' + QUOTENAME(@col) + N') = DATALENGTH(f.oldID);';
+  EXEC sp_executesql @sql, N'@n INT OUTPUT', @n = @n OUTPUT;
+  UPDATE #cols SET rowsAffected = @n WHERE sch = @sch AND tbl = @tbl AND col = @col;
+  FETCH NEXT FROM cur INTO @sch, @tbl, @col;
+END
+CLOSE cur; DEALLOCATE cur;
+
+SELECT sch AS [schema], tbl AS [table], col AS [column], rowsAffected
+FROM   #cols WHERE rowsAffected > 0 ORDER BY tbl;
+
+/* Foreign keys on these columns must be paused while parent and child rows
+   are renamed, then re-validated.                                           */
+IF OBJECT_ID('tempdb..#fks') IS NOT NULL DROP TABLE #fks;
+SELECT DISTINCT
+       OBJECT_SCHEMA_NAME(fk.parent_object_id) AS sch,
+       OBJECT_NAME(fk.parent_object_id)        AS tbl,
+       fk.name                                 AS fkName
+INTO   #fks
+FROM   sys.foreign_keys fk
+JOIN   sys.foreign_key_columns fkc ON fkc.constraint_object_id = fk.object_id
+JOIN   sys.columns pc ON pc.object_id = fkc.parent_object_id     AND pc.column_id = fkc.parent_column_id
+JOIN   sys.columns rc ON rc.object_id = fkc.referenced_object_id AND rc.column_id = fkc.referenced_column_id
+WHERE  (pc.name IN ('clientID', 'client_id') OR rc.name IN ('clientID', 'client_id'))
+  AND  fk.is_disabled = 0;
+
+SELECT sch, tbl, fkName AS foreignKeyPausedDuringFix FROM #fks;
+
+IF @DryRun = 1
+BEGIN
+  PRINT 'DRY RUN: nothing was changed. Review the results, then set @DryRun = 0.';
+  RETURN;
+END
+
+/* 4. Apply.                                                                 */
+IF OBJECT_ID('dbo.ClientIDTrimLog') IS NULL
+  CREATE TABLE dbo.ClientIDTrimLog (
+    id           INT IDENTITY PRIMARY KEY,
+    oldID        NVARCHAR(100) NOT NULL,
+    newID        NVARCHAR(100) NOT NULL,
+    tableSchema  SYSNAME       NOT NULL,
+    tableName    SYSNAME       NOT NULL,
+    columnName   SYSNAME       NOT NULL,
+    rowsUpdated  INT           NOT NULL,
+    fixedAt      DATETIME2     NOT NULL DEFAULT SYSUTCDATETIME()
+  );
+
+BEGIN TRY
+  BEGIN TRANSACTION;
+
+  DECLARE @fk SYSNAME;
+  DECLARE fkcur CURSOR LOCAL FAST_FORWARD FOR SELECT sch, tbl, fkName FROM #fks;
+  OPEN fkcur;
+  FETCH NEXT FROM fkcur INTO @sch, @tbl, @fk;
+  WHILE @@FETCH_STATUS = 0
+  BEGIN
+    SET @sql = N'ALTER TABLE ' + QUOTENAME(@sch) + N'.' + QUOTENAME(@tbl) + N' NOCHECK CONSTRAINT ' + QUOTENAME(@fk) + N';';
+    EXEC sp_executesql @sql;
+    FETCH NEXT FROM fkcur INTO @sch, @tbl, @fk;
+  END
+  CLOSE fkcur; DEALLOCATE fkcur;
+
+  DECLARE upcur CURSOR LOCAL FAST_FORWARD FOR SELECT sch, tbl, col FROM #cols WHERE rowsAffected > 0;
+  OPEN upcur;
+  FETCH NEXT FROM upcur INTO @sch, @tbl, @col;
+  WHILE @@FETCH_STATUS = 0
+  BEGIN
+    -- Log first (one row per old ID per table), then update
+    SET @sql = N'INSERT INTO dbo.ClientIDTrimLog (oldID, newID, tableSchema, tableName, columnName, rowsUpdated)
+                 SELECT f.oldID, f.newID, @sch, @tbl, @col, COUNT(*)
+                 FROM ' + QUOTENAME(@sch) + N'.' + QUOTENAME(@tbl) + N' x
+                 JOIN #fix f ON x.' + QUOTENAME(@col) + N' = f.oldID
+                            AND DATALENGTH(x.' + QUOTENAME(@col) + N') = DATALENGTH(f.oldID)
+                 GROUP BY f.oldID, f.newID;
+
+                 UPDATE x SET ' + QUOTENAME(@col) + N' = f.newID
+                 FROM ' + QUOTENAME(@sch) + N'.' + QUOTENAME(@tbl) + N' x
+                 JOIN #fix f ON x.' + QUOTENAME(@col) + N' = f.oldID
+                            AND DATALENGTH(x.' + QUOTENAME(@col) + N') = DATALENGTH(f.oldID);';
+    EXEC sp_executesql @sql, N'@sch SYSNAME, @tbl SYSNAME, @col SYSNAME', @sch = @sch, @tbl = @tbl, @col = @col;
+    FETCH NEXT FROM upcur INTO @sch, @tbl, @col;
+  END
+  CLOSE upcur; DEALLOCATE upcur;
+
+  -- Re-enable and re-validate the paused foreign keys (fails -> rolls back)
+  DECLARE fkcur2 CURSOR LOCAL FAST_FORWARD FOR SELECT sch, tbl, fkName FROM #fks;
+  OPEN fkcur2;
+  FETCH NEXT FROM fkcur2 INTO @sch, @tbl, @fk;
+  WHILE @@FETCH_STATUS = 0
+  BEGIN
+    SET @sql = N'ALTER TABLE ' + QUOTENAME(@sch) + N'.' + QUOTENAME(@tbl) + N' WITH CHECK CHECK CONSTRAINT ' + QUOTENAME(@fk) + N';';
+    EXEC sp_executesql @sql;
+    FETCH NEXT FROM fkcur2 INTO @sch, @tbl, @fk;
+  END
+  CLOSE fkcur2; DEALLOCATE fkcur2;
+
+  COMMIT TRANSACTION;
+  PRINT 'Done. Changes are logged in dbo.ClientIDTrimLog.';
+  SELECT * FROM dbo.ClientIDTrimLog ORDER BY id DESC;
+END TRY
+BEGIN CATCH
+  IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
+  PRINT 'FAILED and rolled back. Nothing was changed.';
+  THROW;
+END CATCH;
+
+/* ============================================================================
+   UNDO (run separately, only if you need to put the old IDs back)
+   ----------------------------------------------------------------------------
+   DECLARE @s SYSNAME, @t SYSNAME, @c SYSNAME, @o NVARCHAR(100), @nw NVARCHAR(100), @q NVARCHAR(MAX);
+   -- Pause the same foreign keys first (see step 3 query), then:
+   DECLARE u CURSOR LOCAL FAST_FORWARD FOR
+     SELECT tableSchema, tableName, columnName, oldID, newID FROM dbo.ClientIDTrimLog;
+   OPEN u; FETCH NEXT FROM u INTO @s, @t, @c, @o, @nw;
+   WHILE @@FETCH_STATUS = 0
+   BEGIN
+     SET @q = N'UPDATE ' + QUOTENAME(@s) + N'.' + QUOTENAME(@t) + N' SET ' + QUOTENAME(@c)
+            + N' = @o WHERE ' + QUOTENAME(@c) + N' = @nw AND DATALENGTH(' + QUOTENAME(@c) + N') = DATALENGTH(@nw);';
+     EXEC sp_executesql @q, N'@o NVARCHAR(100), @nw NVARCHAR(100)', @o = @o, @nw = @nw;
+     FETCH NEXT FROM u INTO @s, @t, @c, @o, @nw;
+   END
+   CLOSE u; DEALLOCATE u;
+   -- Re-enable the foreign keys WITH CHECK.
+============================================================================ */
