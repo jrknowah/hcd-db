@@ -134,7 +134,8 @@ router.post('/', async (req, res) => {
     }
     
     // Generate clientID if not provided
-    const clientID = client.clientID || generateClientID();
+    // Trim so IDs like '  187145' can't be created; blob folders use the trimmed ID
+    const clientID = String(client.clientID || '').trim() || generateClientID();
     
     console.log(`Creating client: ${clientID} - ${client.clientFirstName} ${client.clientLastName}`);
     

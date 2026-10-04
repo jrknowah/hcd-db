@@ -151,7 +151,7 @@ class AzureBlobService {
       const params = { clientID };
       if (docType) params.docType = docType;
       
-      const response = await axios.get(`${this.apiUrl}/api/files/${clientID}`);
+      const response = await axios.get(`${this.apiUrl}/api/files/${encodeURIComponent(clientID)}`);
       
       console.log(`Found ${response.data.length} files for client ${clientID}`);
       return response.data;
@@ -183,7 +183,9 @@ class AzureBlobService {
         ];
       }
       
-      return []; // Return empty array on other errors
+      // Surface real failures; returning [] here made a failed request look like
+      // "No documents uploaded yet"
+      throw new Error(error.response?.data?.message || error.message || 'Failed to list files');
     }
   }
 
