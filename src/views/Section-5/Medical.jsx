@@ -39,6 +39,8 @@ import {
 } from '@mui/icons-material';
 import { getApiAuthHeaders } from "../../utils/apiAuth";
 import { httpError } from "../../utils/section5Lock";
+import { azureBlobService } from "../../backend/services/azureBlobService";
+import { ARCHIVE_SECTIONS, SECTION_CATEGORIES, filterSectionFiles } from "../../utils/archiveSections";
 import MedFaceSheet from "./MedFaceSheet";
 import MedScreening from "./MedScreening";
 import NursingAdmission from "./NursingAdmission";
@@ -73,6 +75,7 @@ const MAIN_TAB_ITEMS = [
   { key: 'observationRecord', label: 'Medical Observation Record', tab: 5 },
   { key: 'nursingIdt', label: 'Nursing IDT Notes', tab: 6 },
   { key: 'providerIdt', label: 'Provider IDT Notes', tab: 7 },
+  { key: 'nursingArchive', label: 'Nursing Archive', tab: 8, files: true },
 ];
 
 const formatDateTime = (value) => {
@@ -118,19 +121,57 @@ const Medical = () => {
   const loadSummary = useCallback(async (signal) => {
     if (!clientID || shouldUseMockData) return;
     setSummary(prev => ({ ...prev, clientID, loading: true, error: null }));
-    try {
+
+    const loadRecords = async () => {
       const response = await fetch(
         `${API_BASE_URL}/api/section5/summary/${encodeURIComponent(clientID)}`,
         { headers: await getApiAuthHeaders(), signal }
       );
       if (!response.ok) throw await httpError(response);
       const body = await response.json();
-      const sections = Object.fromEntries((body.sections || []).map(sec => [sec.key, sec]));
-      setSummary({ clientID, sections, loading: false, error: null });
-    } catch (err) {
-      if (err.name === 'AbortError') return;
-      setSummary({ clientID, sections: {}, loading: false, error: err.message || 'Failed to load summary' });
+      return body.sections || [];
+    };
+
+    // Archive uploads live in blob storage, not the database: list them the same
+    // way the Nursing Archive tab does so the counts match. Uploads don't record
+    // who uploaded them, so there is no "by" for this row.
+    const loadArchive = async () => {
+      const files = filterSectionFiles(
+        await azureBlobService.listClientFiles(clientID, 'nursing_archive'),
+        ARCHIVE_SECTIONS.NURSING,
+        SECTION_CATEGORIES[ARCHIVE_SECTIONS.NURSING]
+      );
+      const latest = files
+        .map(f => f.uploadDate)
+        .filter(Boolean)
+        .sort((a, b) => new Date(b) - new Date(a))[0];
+      return {
+        key: 'nursingArchive',
+        hasData: files.length > 0,
+        total: files.length,
+        lastUpdatedAt: latest || null,
+        lastUpdatedBy: null,
+        error: false,
+      };
+    };
+
+    const [records, archive] = await Promise.allSettled([loadRecords(), loadArchive()]);
+    if (signal?.aborted) return;
+
+    const sections = {};
+    if (records.status === 'fulfilled') {
+      records.value.forEach(sec => { sections[sec.key] = sec; });
     }
+    sections.nursingArchive = archive.status === 'fulfilled'
+      ? archive.value
+      : { key: 'nursingArchive', hasData: false, total: 0, error: true };
+
+    setSummary({
+      clientID,
+      sections,
+      loading: false,
+      error: records.status === 'rejected' ? (records.reason?.message || 'Failed to load summary') : null,
+    });
   }, [clientID, shouldUseMockData]);
 
   useEffect(() => {
@@ -279,16 +320,18 @@ const Medical = () => {
                                     <Chip label="Unavailable" color="warning" variant="outlined" size="small" />
                                   ) : hasData ? (
                                     <Chip
-                                      label={`Data entered${sec.total > 1 ? ` (${sec.total} records)` : ''}`}
+                                      label={item.files
+                                        ? `${sec.total} file${sec.total === 1 ? '' : 's'} uploaded`
+                                        : `Data entered${sec.total > 1 ? ` (${sec.total} records)` : ''}`}
                                       color="success"
                                       size="small"
                                     />
                                   ) : (
-                                    <Chip label="No data entered" variant="outlined" size="small" />
+                                    <Chip label={item.files ? 'No files uploaded' : 'No data entered'} variant="outlined" size="small" />
                                   )}
                                   {hasData && lastAt && (
                                     <Typography variant="body2" color="text.secondary" component="span">
-                                      Last entered {lastAt}
+                                      {item.files ? 'Last uploaded' : 'Last entered'} {lastAt}
                                       {sec.lastUpdatedBy ? ` by ${sec.lastUpdatedBy}` : ''}
                                     </Typography>
                                   )}
