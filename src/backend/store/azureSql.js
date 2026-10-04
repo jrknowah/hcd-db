@@ -7,6 +7,8 @@ const config = {
   password: process.env.AZURE_SQL_PASSWORD,
   database: process.env.AZURE_SQL_DATABASE,
   server: process.env.AZURE_SQL_SERVER,
+  // Default is 15s, which is too short for a serverless Azure SQL DB resuming from auto-pause
+  connectionTimeout: Number(process.env.AZURE_SQL_CONNECT_TIMEOUT_MS) || 60000,
   pool: {
     max: 10,
     min: 0,
@@ -90,7 +92,12 @@ process.on('SIGTERM', async () => {
 });
 
 module.exports = {
-  poolPromise: connectToAzureSQL(),
+  // Lazy and self-healing: each access goes through getPool(). The old eager
+  // connectToAzureSQL() here crashed the process with an unhandled rejection when
+  // the DB was unreachable at startup, and left callers with a permanently failed pool.
+  get poolPromise() {
+    return getPool();
+  },
   connectToAzureSQL,
   getPool,
   closePool,

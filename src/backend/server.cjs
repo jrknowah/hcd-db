@@ -8,6 +8,12 @@ const { BlobServiceClient } = require('@azure/storage-blob');
 
 const authMiddleware = require('./middleware/auth.js');
 const { requireAdmin } = require('./middleware/auth.js');
+// Log stray promise rejections instead of letting Node kill the whole backend
+// (e.g. a DB connection timeout no caller awaited)
+process.on('unhandledRejection', (reason) => {
+  console.error('❌ Unhandled promise rejection:', reason);
+});
+
 // ✅ FIXED: Better database connection handling
 let dbConnected = false;
 let dbModule = null;

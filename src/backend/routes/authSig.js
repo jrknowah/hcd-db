@@ -1,7 +1,7 @@
 // backend/routes/authSig.js - Complete with all fixes
 const express = require('express');
 const sql = require('mssql');
-const { poolPromise } = require('../store/azureSql');
+const { getPool } = require('../store/azureSql');
 const { logUserAction } = require('../config/logAction');
 const { requireSignedFormUnlock, canUnlockSignedForms } = require('../middleware/signedFormUnlock');
 
@@ -317,7 +317,7 @@ router.get('/:clientID/forms', async (req, res) => {
   const { clientID } = req.params;
 
   try {
-    const pool = await poolPromise;
+    const pool = await getPool();
 
     // Fetch all saved forms for this client — read every dedicated column
     const formsResult = await pool.request()
@@ -427,7 +427,7 @@ router.post('/:clientID/form/:formType', async (req, res) => {
   const { clientID, formType } = req.params;
   
   try {
-    const pool = await poolPromise;
+    const pool = await getPool();
     
     // Validate form type
     if (!VALID_FORM_TYPES.includes(formType)) {
@@ -626,7 +626,7 @@ router.get('/:clientID/form/:formType', async (req, res) => {
   const { clientID, formType } = req.params;
   
   try {
-    const pool = await poolPromise;
+    const pool = await getPool();
     const result = await pool.request()
       .input('clientID', sql.VarChar(50), clientID)
       .input('formType', sql.VarChar(50), formType)
@@ -698,7 +698,7 @@ router.post('/:clientID/form/:formType/autosave', async (req, res) => {
   }
 
   try {
-    const pool        = await poolPromise;
+    const pool        = await getPool();
     const currentUser = getCurrentUser(req);
     const incomingPct = Number(req.body.completionPercentage ?? 0);
     const formPriority = req.body.priority || FORM_METADATA[formType]?.priority || 'medium';
@@ -795,7 +795,7 @@ router.post('/:clientID/forms/bulk', async (req, res) => {
   }
 
   try {
-    const pool        = await poolPromise;
+    const pool        = await getPool();
     const currentUser = getCurrentUser(req);
     const transaction = new sql.Transaction(pool);
     await transaction.begin();
@@ -928,7 +928,7 @@ router.post('/:clientID/submit', async (req, res) => {
   const { submissionNotes } = req.body;
   
   try {
-    const pool = await poolPromise;
+    const pool = await getPool();
     
     // Get all forms for this client
     const formsResult = await pool.request()
@@ -1011,7 +1011,7 @@ router.get('/:clientID/submission-status', async (req, res) => {
   const { clientID } = req.params;
   
   try {
-    const pool = await poolPromise;
+    const pool = await getPool();
     const result = await pool.request()
       .input('clientID', sql.VarChar(50), clientID)
       .query(`
@@ -1069,7 +1069,7 @@ router.post('/:clientID/form/:formType/unlock', requireSignedFormUnlock, async (
   const now = new Date();
 
   try {
-    const pool = await poolPromise;
+    const pool = await getPool();
     const transaction = new sql.Transaction(pool);
     await transaction.begin();
 
