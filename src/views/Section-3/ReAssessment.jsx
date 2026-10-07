@@ -886,6 +886,8 @@ const ReAssessment = () => {
                                             name="diagDescriptCode"
                                             value={formData.diagDescriptCode || ''}
                                             onChange={handleInputChange}
+                                            inputProps={{ maxLength: 255 }}
+                                            helperText="Separate multiple codes with spaces or commas"
                                         />
                                     </Grid>
                                 </Grid>
