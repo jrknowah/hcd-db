@@ -561,7 +561,7 @@ const EncounterNote = ({ clientID, exportMode }) => {
         {encounterNotes.length > 0 && (
           <Paper sx={{ p: 2, mb: 3, bgcolor: 'grey.50' }}>
             <Grid container spacing={2}>
-              <Grid item xs={12} sm={4}>
+              <Grid size={{ xs: 12, sm: 4 }}>
                 <Box textAlign="center">
                   <Typography variant="h4" color="primary.main">
                     {encounterNotes.length}
@@ -571,7 +571,7 @@ const EncounterNote = ({ clientID, exportMode }) => {
                   </Typography>
                 </Box>
               </Grid>
-              <Grid item xs={12} sm={4}>
+              <Grid size={{ xs: 12, sm: 4 }}>
                 <Box textAlign="center">
                   <Typography variant="h4" color="info.main">
                     {encounterNotes.filter(note => note.careNoteType === 'Individual').length}
@@ -581,7 +581,7 @@ const EncounterNote = ({ clientID, exportMode }) => {
                   </Typography>
                 </Box>
               </Grid>
-              <Grid item xs={12} sm={4}>
+              <Grid size={{ xs: 12, sm: 4 }}>
                 <Box textAlign="center">
                   <Typography variant="h4" color="success.main">
                     {encounterNotes.filter(note => 
@@ -807,7 +807,7 @@ const EncounterNote = ({ clientID, exportMode }) => {
           <DialogContent sx={{ overflow: 'visible' }}>
             {/* ✅ Date field - Full width */}
             <Grid container spacing={3} sx={{ mt: 1 }}>
-              <Grid item xs={12}>
+              <Grid size={12}>
                 <TextField
                   fullWidth
                   type="date"
@@ -823,7 +823,7 @@ const EncounterNote = ({ clientID, exportMode }) => {
             
             {/* ✅ Note Type and Site - Side by side */}
             <Grid container spacing={3} sx={{ mt: 1 }}>
-              <Grid item xs={12} sm={6}>
+              <Grid size={{ xs: 12, sm: 6 }}>
                 <Typography variant="body1" sx={{ mb: 1 }}>Note Type *</Typography>
                 <Select
                   options={cmNoteType}
@@ -835,7 +835,7 @@ const EncounterNote = ({ clientID, exportMode }) => {
                   menuPlacement="auto"  // ✅ Auto-adjusts menu position
                 />
               </Grid>
-              <Grid item xs={12} sm={6}>
+              <Grid size={{ xs: 12, sm: 6 }}>
                 <Typography variant="body1" sx={{ mb: 1 }}>Site</Typography>
                 <Select
                   options={hhhSiteList2}
@@ -852,7 +852,7 @@ const EncounterNote = ({ clientID, exportMode }) => {
             
             {/* ✅ Note Content - MUCH WIDER with more rows */}
             <Grid container spacing={3} sx={{ mt: 1 }}>
-              <Grid item xs={12}>
+              <Grid size={12}>
                 <TextField
                   fullWidth
                   multiline
@@ -941,7 +941,7 @@ const EncounterNote = ({ clientID, exportMode }) => {
           <DialogContent sx={{ overflow: 'visible' }}>
             {/* ✅ Date field - Full width */}
             <Grid container spacing={3} sx={{ mt: 1 }}>
-              <Grid item xs={12}>
+              <Grid size={12}>
                 <TextField
                   fullWidth
                   type="date"
@@ -958,7 +958,7 @@ const EncounterNote = ({ clientID, exportMode }) => {
             
             {/* ✅ Note Type and Site - Side by side */}
             <Grid container spacing={3} sx={{ mt: 1 }}>
-              <Grid item xs={12} sm={6}>
+              <Grid size={{ xs: 12, sm: 6 }}>
                 <Typography variant="body1" sx={{ mb: 1 }}>Note Type *</Typography>
                 <Select
                   options={cmNoteType}
@@ -971,7 +971,7 @@ const EncounterNote = ({ clientID, exportMode }) => {
                   isDisabled={editingLocked}
                 />
               </Grid>
-              <Grid item xs={12} sm={6}>
+              <Grid size={{ xs: 12, sm: 6 }}>
                 <Typography variant="body1" sx={{ mb: 1 }}>Site</Typography>
                 <Select
                   options={hhhSiteList2}
@@ -989,7 +989,7 @@ const EncounterNote = ({ clientID, exportMode }) => {
             
             {/* ✅ Note Content - MUCH WIDER with more rows */}
             <Grid container spacing={3} sx={{ mt: 1 }}>
-              <Grid item xs={12}>
+              <Grid size={12}>
                 <TextField
                   fullWidth
                   multiline
