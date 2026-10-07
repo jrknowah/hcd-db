@@ -40,6 +40,7 @@ const SECTIONS = [
   },
   { key: 'nursingIdt', label: 'Nursing IDT Notes', sources: [source('idt_nursing_notes')] },
   { key: 'providerIdt', label: 'Provider IDT Notes', sources: [source('dbo.idt_provider_notes')] },
+  { key: 'dischargePlan', label: 'Discharge Plan', sources: [source('dbo.discharge_plan')] },
 ];
 
 async function summarizeSource(pool, clientID, src) {

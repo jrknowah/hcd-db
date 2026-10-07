@@ -19,6 +19,7 @@ import { useClientPersistence } from '../../hooks/useClientPersistence';
 import logUserAction from '../../backend/config/logAction';
 import ClientFace from './ClientFace';
 import Referrals from './Referrals';
+import ExitForm from './ExitForm';
 import ClientExportPDF from '../../components/ClientExportPDF';
 import ClientInfoBanner from '../../components/shared/ClientInfoBanner';
 
@@ -414,6 +415,7 @@ const Identification = () => {
         <Tab label="Client Face Sheet" />
         <Tab label="Documents & Uploads" />
         <Tab label="Referrals" />
+        <Tab label="Exit Form" />
         <Tab label="Export Complete Chart" />
       </Tabs>
 
@@ -571,8 +573,11 @@ const Identification = () => {
       {/* Tab 2: Referrals */}
       {tabIndex === 2 && <Box p={3}><Referrals /></Box>}
       
-      {/* Tab 3: Export Complete Chart */}
-      {tabIndex === 3 && (
+      {/* Tab 3: Exit Form */}
+      {tabIndex === 3 && <Box p={3}><ExitForm /></Box>}
+
+      {/* Tab 4: Export Complete Chart */}
+      {tabIndex === 4 && (
         <Box p={3}>
           <ClientExportPDF clientID={clientID} />
         </Box>
