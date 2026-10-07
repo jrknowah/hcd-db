@@ -41,7 +41,8 @@ import {
   Notes as NotesIcon,
   Search as SearchIcon,
   FilterList as FilterListIcon,
-  Timeline as TimelineIcon
+  Timeline as TimelineIcon,
+  Visibility as VisibilityIcon
 } from "@mui/icons-material";
 
 import PropTypes from 'prop-types';
@@ -56,10 +57,51 @@ import {
 import logUserAction from "../../backend/config/logAction";
 import { hhhSiteList } from "../../data/arrayList";
 import { formatDateOnly, toDateInputValue } from "../../utils/dateOnly";
+import { selectUserRoles } from "../../backend/store/slices/authSlice";
+import { canUnlockSection5Records, isRecordLocked, errorMessage } from "../../utils/section5Lock";
+import {
+  RecordStatusChip,
+  UnlockRecordButton,
+  DeleteLockedRecordButton,
+  UnlockRecordDialog,
+  LockedRecordAlert,
+  SaveProgressSubmitActions,
+  SubmitLockNotice,
+} from "../../components/shared/Section5RecordLock";
+
+// Real notes are keyed by `id`, mock notes by `_id`
+const noteKey = (note) => note.id ?? note._id;
+
+// Who last changed the note and when: the editor if it was edited, otherwise its author
+const lastUpdate = (note) => {
+  const edited = note.updatedAt && (!note.createdAt || new Date(note.updatedAt) > new Date(note.createdAt));
+  const by = (edited && note.updatedBy) || note.createdBy || note.updatedBy || null;
+  const at = edited ? note.updatedAt : (note.createdAt || note.updatedAt || null);
+  const d = at ? new Date(at) : null;
+  return {
+    by,
+    at: d && !Number.isNaN(d.getTime()) ? d.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : null,
+  };
+};
+
+const LastUpdated = ({ note }) => {
+  const { by, at } = lastUpdate(note);
+  return (
+    <>
+      <Typography variant="body2">{by || '—'}</Typography>
+      {at && <Typography variant="caption" color="text.secondary">{at}</Typography>}
+    </>
+  );
+};
+
+LastUpdated.propTypes = { note: PropTypes.object.isRequired };
+
+const SUBMIT_CONFIRM = "Submit this note? Once submitted it is locked and only an IT Admin or Level 1 user can unlock it.";
 
 const ProgressNote = ({ clientID }) => {
   const dispatch = useDispatch();
   const user = useSelector((state) => state.auth.user);
+  const canUnlock = canUnlockSection5Records(useSelector(selectUserRoles));
 
   // Redux state
   const progressNoteState = useSelector((state) => state.progressNote);
@@ -78,6 +120,9 @@ const ProgressNote = ({ clientID }) => {
   const [editNoteId, setEditNoteId] = useState(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteNoteId, setDeleteNoteId] = useState(null);
+  // A submitted note opens read-only; unlockTarget drives the unlock dialog
+  const [viewOnly, setViewOnly] = useState(false);
+  const [unlockTarget, setUnlockTarget] = useState(null);
   
   // Search and filter state
   const [searchTerm, setSearchTerm] = useState('');
@@ -173,6 +218,8 @@ const ProgressNote = ({ clientID }) => {
     setEditNoteId(null);
     setDeleteDialogOpen(false);
     setDeleteNoteId(null);
+    setViewOnly(false);
+    setUnlockTarget(null);
     setFormData(initialFormState);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientID]);
@@ -191,11 +238,13 @@ const ProgressNote = ({ clientID }) => {
       requiresFollowUp: note.requiresFollowUp || false,
       followUpDate: toDateInputValue(note.followUpDate),
     });
-    setEditNoteId(note._id);
+    setEditNoteId(noteKey(note));
+    setViewOnly(isRecordLocked(note));
     setEditDialogOpen(true);
   };
 
-  const handleSaveNote = async () => {
+  // submit = true locks the note; false saves progress
+  const handleSaveNote = async (submit) => {
     if (!clientID) {
       alert("⚠️ Please select a client before saving.");
       return;
@@ -206,11 +255,14 @@ const ProgressNote = ({ clientID }) => {
       return;
     }
 
+    if (submit && !window.confirm(SUBMIT_CONFIRM)) return;
+
     const noteData = {
       ...formData,
       followUpDate: formData.followUpDate || null,
       createdBy: user?.email || "unknown",
       createdAt: new Date().toISOString(),
+      submit,
     };
 
     try {
@@ -226,14 +278,14 @@ const ProgressNote = ({ clientID }) => {
 
       setFormData(initialFormState);
       setDialogOpen(false);
-      alert("✅ Note saved successfully.");
+      alert(submit ? "✅ Note submitted and locked." : "✅ Progress saved.");
     } catch (err) {
       console.error("❌ Error saving note:", err);
-      alert(`⚠️ Failed to save note: ${err.message || err}`);
+      alert(`⚠️ Failed to save note: ${errorMessage(err)}`);
     }
   };
 
-  const handleUpdateNote = async () => {
+  const handleUpdateNote = async (submit) => {
     if (!editNoteId) {
       alert("⚠️ No note selected for editing.");
       return;
@@ -244,12 +296,15 @@ const ProgressNote = ({ clientID }) => {
       return;
     }
 
+    if (submit && !window.confirm(SUBMIT_CONFIRM)) return;
+
     try {
       const updatedData = {
         ...formData,
         followUpDate: formData.followUpDate || null,
         updatedBy: user?.email || "unknown",
         updatedAt: new Date().toISOString(),
+        submit,
       };
 
       if (import.meta.env.VITE_USE_MOCK_DATA === 'true') {
@@ -264,10 +319,10 @@ const ProgressNote = ({ clientID }) => {
       setFormData(initialFormState);
       setEditDialogOpen(false);
       setEditNoteId(null);
-      alert("✅ Note updated successfully.");
+      alert(submit ? "✅ Note submitted and locked." : "✅ Progress saved.");
     } catch (err) {
       console.error("❌ Error updating note:", err);
-      alert(`⚠️ Failed to update note: ${err.message || err}`);
+      alert(`⚠️ Failed to update note: ${errorMessage(err)}`);
     }
   };
 
@@ -289,11 +344,13 @@ const ProgressNote = ({ clientID }) => {
       alert("✅ Note deleted successfully.");
     } catch (err) {
       console.error("❌ Error deleting note:", err);
-      alert(`⚠️ Failed to delete note: ${err.message || err}`);
+      alert(`⚠️ Failed to delete note: ${errorMessage(err)}`);
     }
   };
 
   // Filter notes based on search and filters
+  const editingNote = editNoteId != null ? notes.find(note => noteKey(note) === editNoteId) : null;
+
   const filteredNotes = notes.filter(note => {
     const matchesSearch = note.nurseNote.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          note.nurseNoteSite.toLowerCase().includes(searchTerm.toLowerCase());
@@ -466,20 +523,22 @@ const ProgressNote = ({ clientID }) => {
                   <TableCell>Priority</TableCell>
                   <TableCell>Note</TableCell>
                   <TableCell>Follow-up</TableCell>
+                  <TableCell>Status</TableCell>
+                  <TableCell>Last Updated By</TableCell>
                   <TableCell>Actions</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan="7" align="center" sx={{ py: 4 }}>
+                    <TableCell colSpan="9" align="center" sx={{ py: 4 }}>
                       <CircularProgress size={24} />
                       <Typography variant="body2" sx={{ mt: 1 }}>Loading notes...</Typography>
                     </TableCell>
                   </TableRow>
                 ) : filteredNotes.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan="7" align="center" sx={{ py: 4 }}>
+                    <TableCell colSpan="9" align="center" sx={{ py: 4 }}>
                       <Typography variant="body2" color="text.secondary">
                         {searchTerm || filterSite || filterCategory || filterPriority 
                           ? "No notes match your search criteria." 
@@ -489,7 +548,7 @@ const ProgressNote = ({ clientID }) => {
                   </TableRow>
                 ) : (
                   filteredNotes.map((note) => (
-                    <TableRow key={note._id} hover>
+                    <TableRow key={noteKey(note)} hover>
                       <TableCell>{formatDateOnly(note.nurseNoteDate)}</TableCell>
                       <TableCell>{note.nurseNoteSite}</TableCell>
                       <TableCell>
@@ -522,6 +581,35 @@ const ProgressNote = ({ clientID }) => {
                         )}
                       </TableCell>
                       <TableCell>
+                        <RecordStatusChip record={note} />
+                      </TableCell>
+                      <TableCell>
+                        <LastUpdated note={note} />
+                      </TableCell>
+                      <TableCell>
+                        {isRecordLocked(note) ? (
+                          <Box display="flex" gap={1}>
+                            <Tooltip title="View Note">
+                              <IconButton
+                                size="small"
+                                color="primary"
+                                onClick={() => openEditDialog(note)}
+                              >
+                                <VisibilityIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                            {canUnlock && (
+                              <>
+                              <UnlockRecordButton
+                                onClick={() => setUnlockTarget({ recordType: 'progress-note', id: noteKey(note), label: 'progress note' })}
+                              />
+                              <DeleteLockedRecordButton
+                                onClick={() => setUnlockTarget({ recordType: 'progress-note', id: noteKey(note), label: 'progress note', action: 'delete' })}
+                              />
+                              </>
+                            )}
+                          </Box>
+                        ) : (
                         <Box display="flex" gap={1}>
                           <Tooltip title="Edit Note">
                             <IconButton
@@ -537,7 +625,7 @@ const ProgressNote = ({ clientID }) => {
                               size="small"
                               color="error"
                               onClick={() => {
-                                setDeleteNoteId(note._id);
+                                setDeleteNoteId(noteKey(note));
                                 setDeleteDialogOpen(true);
                               }}
                             >
@@ -545,6 +633,7 @@ const ProgressNote = ({ clientID }) => {
                             </IconButton>
                           </Tooltip>
                         </Box>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))
@@ -660,23 +749,31 @@ const ProgressNote = ({ clientID }) => {
                 )}
               </Grid>
             </DialogContent>
-            <DialogActions>
-              <Button onClick={() => setDialogOpen(false)}>Cancel</Button>
-              <Button 
-                onClick={handleSaveNote} 
-                variant="contained" 
-                disabled={saving}
-                startIcon={saving ? <CircularProgress size={16} /> : null}
-              >
-                {saving ? 'Saving...' : 'Save Note'}
-              </Button>
-            </DialogActions>
+            <SubmitLockNotice />
+            <SaveProgressSubmitActions
+              onCancel={() => setDialogOpen(false)}
+              onSaveProgress={() => handleSaveNote(false)}
+              onSubmit={() => handleSaveNote(true)}
+              saving={saving}
+            />
           </Dialog>
 
           {/* Edit Note Dialog */}
           <Dialog open={editDialogOpen} onClose={() => setEditDialogOpen(false)} maxWidth="md" fullWidth>
-            <DialogTitle>Edit Progress Note</DialogTitle>
+            <DialogTitle>{viewOnly ? 'Progress Note (Submitted)' : 'Edit Progress Note'}</DialogTitle>
             <DialogContent>
+              {viewOnly && <LockedRecordAlert label="note" />}
+              {editingNote && lastUpdate(editingNote).by && (
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                  Last updated by {lastUpdate(editingNote).by}
+                  {lastUpdate(editingNote).at ? ` on ${lastUpdate(editingNote).at}` : ''}
+                </Typography>
+              )}
+              <Box
+                component="fieldset"
+                disabled={viewOnly}
+                sx={{ border: 0, p: 0, m: 0, minWidth: 0, ...(viewOnly && { pointerEvents: 'none' }) }}
+              >
               <Grid container spacing={2} sx={{ mt: 1 }}>
                 <Grid item xs={12} md={6}>
                   <TextField
@@ -766,18 +863,23 @@ const ProgressNote = ({ clientID }) => {
                   </Grid>
                 )}
               </Grid>
+              </Box>
             </DialogContent>
-            <DialogActions>
-              <Button onClick={() => setEditDialogOpen(false)}>Cancel</Button>
-              <Button 
-                onClick={handleUpdateNote} 
-                variant="contained" 
-                disabled={saving}
-                startIcon={saving ? <CircularProgress size={16} /> : null}
-              >
-                {saving ? 'Updating...' : 'Update Note'}
-              </Button>
-            </DialogActions>
+            {viewOnly ? (
+              <DialogActions>
+                <Button onClick={() => setEditDialogOpen(false)}>Close</Button>
+              </DialogActions>
+            ) : (
+              <>
+                <SubmitLockNotice />
+                <SaveProgressSubmitActions
+                  onCancel={() => setEditDialogOpen(false)}
+                  onSaveProgress={() => handleUpdateNote(false)}
+                  onSubmit={() => handleUpdateNote(true)}
+                  saving={saving}
+                />
+              </>
+            )}
           </Dialog>
 
           {/* Delete Confirmation Dialog */}
@@ -795,6 +897,15 @@ const ProgressNote = ({ clientID }) => {
               </Button>
             </DialogActions>
           </Dialog>
+
+          <UnlockRecordDialog
+            target={unlockTarget}
+            onClose={() => setUnlockTarget(null)}
+            onUnlocked={() => {
+              dispatch(fetchProgressNotes(clientID));
+              dispatch(fetchNotesSummary(clientID));
+            }}
+          />
         </CardContent>
       </Card>
     );

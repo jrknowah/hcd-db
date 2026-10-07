@@ -1,7 +1,7 @@
 // backend/routes/authSig.js - Complete with all fixes
 const express = require('express');
 const sql = require('mssql');
-const { poolPromise } = require('../store/azureSql');
+const { getPool } = require('../store/azureSql');
 const { logUserAction } = require('../config/logAction');
 
 const router = express.Router();
@@ -206,7 +206,7 @@ router.post('/:clientID/form/:formType', async (req, res) => {
   const { clientID, formType } = req.params;
   
   try {
-    const pool = await poolPromise;
+    const pool = await getPool();
     
     // Validate form type
     if (!VALID_FORM_TYPES.includes(formType)) {
@@ -342,7 +342,7 @@ router.get('/:clientID/form/:formType', async (req, res) => {
   const { clientID, formType } = req.params;
   
   try {
-    const pool = await poolPromise;
+    const pool = await getPool();
     const result = await pool.request()
       .input('clientID', sql.VarChar(50), clientID)
       .input('formType', sql.VarChar(50), formType)
@@ -382,7 +382,7 @@ router.post('/:clientID/form/:formType/autosave', async (req, res) => {
   const { clientID, formType } = req.params;
   
   try {
-    const pool = await poolPromise;
+    const pool = await getPool();
     
     const formData = {
       ...req.body,
@@ -448,7 +448,7 @@ router.post('/:clientID/forms/bulk', async (req, res) => {
   }
   
   try {
-    const pool = await poolPromise;
+    const pool = await getPool();
     const transaction = new sql.Transaction(pool);
     await transaction.begin();
     
@@ -524,7 +524,7 @@ router.post('/:clientID/submit', async (req, res) => {
   const { submissionNotes } = req.body;
   
   try {
-    const pool = await poolPromise;
+    const pool = await getPool();
     
     // Get all forms for this client
     const formsResult = await pool.request()
@@ -607,7 +607,7 @@ router.get('/:clientID/submission-status', async (req, res) => {
   const { clientID } = req.params;
   
   try {
-    const pool = await poolPromise;
+    const pool = await getPool();
     const result = await pool.request()
       .input('clientID', sql.VarChar(50), clientID)
       .query(`

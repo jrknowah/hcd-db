@@ -1,4 +1,5 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
+import { httpError } from '../../../utils/section5Lock';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
 
@@ -12,7 +13,7 @@ export const fetchIDTNoteNursing = createAsyncThunk(
       const response = await fetch(`${API_BASE_URL}/api/idt-nursing/${clientID}`);
       
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        throw await httpError(response);
       }
       
       const data = await response.json();
@@ -35,7 +36,7 @@ export const fetchSingleIDTNoteNursing = createAsyncThunk(
       const response = await fetch(`${API_BASE_URL}/api/idt-nursing/note/${idtNursingID}`);
       
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        throw await httpError(response);
       }
       
       const data = await response.json();
@@ -64,7 +65,7 @@ export const addIDTNoteNursing = createAsyncThunk(
       });
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        throw await httpError(response);
       }
 
       const data = await response.json();
@@ -93,7 +94,7 @@ export const editIDTNoteNursing = createAsyncThunk(
       });
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        throw await httpError(response);
       }
 
       const data = await response.json();
@@ -118,7 +119,7 @@ export const deleteIDTNoteNursing = createAsyncThunk(
       });
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        throw await httpError(response);
       }
 
       const data = await response.json();

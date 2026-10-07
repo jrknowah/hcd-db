@@ -354,7 +354,7 @@ const ClientProgress = () => {
 
           {/* Tab Content */}
           <Box sx={{ p: 3 }}>
-            <ClientInfoBanner sx={{ mb: 3 }} />
+            <ClientInfoBanner sx={{ mb: 3 }} exportSection={4} />
             {/* Timeline Tab */}
             <Box role="tabpanel" hidden={activeTab !== 0}>
               {activeTab === 0 && (

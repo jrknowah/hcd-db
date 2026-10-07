@@ -2,10 +2,15 @@ const express = require('express');
 const router = express.Router();
 const sql = require('mssql');
 const { getPool } = require('../store/azureSql'); // ✅ FIXED: Changed from getConnection
+const { bindSubmitInputs, lockedResponse, rejectIfLocked } = require('../services/section5RecordLock');
 
 /**
  * Progress Notes Routes
  * Handles nursing progress notes for clients with CRUD operations
+ *
+ * POST/PUT accept `submit: true` to submit (lock) the note; without it the
+ * note is saved as progress. Locked notes can't be updated or deleted until
+ * an IT Admin / Level 1 user unlocks them (routes/section5Lock.js).
  */
 
 // ============================================================================
@@ -195,7 +200,8 @@ router.get('/progress-notes/:clientID/:noteID', async (req, res) => {
  *   requiresFollowUp: boolean (optional),
  *   followUpDate: date (optional),
  *   noteStatus: string (optional),
- *   createdBy: string (required)
+ *   createdBy: string (required),
+ *   submit: boolean (optional) - true locks the note
  * }
  */
 router.post('/progress-notes/:clientID', async (req, res) => {
@@ -225,7 +231,7 @@ router.post('/progress-notes/:clientID', async (req, res) => {
     }
 
     const pool = await getPool(); // ✅ FIXED: Changed from getConnection()
-    const result = await pool.request()
+    const insertRequest = pool.request()
       .input('clientID', sql.VarChar(50), clientID)
       .input('nurseNoteDate', sql.Date, new Date(nurseNoteDate))
       .input('nurseNoteSite', sql.VarChar(200), nurseNoteSite)
@@ -235,18 +241,22 @@ router.post('/progress-notes/:clientID', async (req, res) => {
       .input('requiresFollowUp', sql.Bit, requiresFollowUp)
       .input('followUpDate', sql.Date, followUpDate)
       .input('noteStatus', sql.VarChar(50), noteStatus)
-      .input('createdBy', sql.VarChar(200), createdBy)
-      .query(`
+      .input('createdBy', sql.VarChar(200), createdBy);
+    bindSubmitInputs(insertRequest, req, createdBy);
+
+    const result = await insertRequest.query(`
         INSERT INTO dbo.progress_notes (
           clientID, nurseNoteDate, nurseNoteSite, nurseNote,
           noteCategory, notePriority, requiresFollowUp, followUpDate,
-          noteStatus, createdBy, createdAt
+          noteStatus, createdBy, createdAt,
+          isLocked, submittedBy, submittedAt
         )
         OUTPUT INSERTED.*
         VALUES (
           @clientID, @nurseNoteDate, @nurseNoteSite, @nurseNote,
           @noteCategory, @notePriority, @requiresFollowUp, @followUpDate,
-          @noteStatus, @createdBy, GETDATE()
+          @noteStatus, @createdBy, GETDATE(),
+          @isLocked, @submittedBy, @submittedAt
         )
       `);
 
@@ -284,10 +294,11 @@ router.post('/progress-notes/:clientID', async (req, res) => {
  *   requiresFollowUp: boolean (optional),
  *   followUpDate: date (optional),
  *   noteStatus: string (optional),
- *   updatedBy: string (required)
+ *   updatedBy: string (required),
+ *   submit: boolean (optional) - true locks the note
  * }
  */
-router.put('/progress-notes/:noteID', async (req, res) => {
+router.put('/progress-notes/:noteID', rejectIfLocked('progress-note', 'noteID', getPool), async (req, res) => {
   try {
     const { noteID } = req.params;
     const {
@@ -368,12 +379,20 @@ router.put('/progress-notes/:noteID', async (req, res) => {
     updates.push('updatedAt = GETDATE()');
     request.input('updatedBy', sql.VarChar(200), updatedBy);
 
+    updates.push('isLocked = @isLocked', 'submittedBy = @submittedBy', 'submittedAt = @submittedAt');
+    bindSubmitInputs(request, req, updatedBy);
+
     const result = await request.query(`
       UPDATE dbo.progress_notes
       SET ${updates.join(', ')}
       OUTPUT INSERTED.*
-      WHERE id = @noteID
+      WHERE id = @noteID AND ISNULL(isLocked, 0) = 0
     `);
+
+    // The note exists (checked above), so no row means it was submitted meanwhile
+    if (result.recordset.length === 0) {
+      return lockedResponse(res, 'progress-note');
+    }
 
     console.log('✅ Progress note updated');
     res.json({
@@ -402,7 +421,7 @@ router.put('/progress-notes/:noteID', async (req, res) => {
  * @access  Private
  * @query   permanent - Set to 'true' for hard delete (optional)
  */
-router.delete('/progress-notes/:noteID', async (req, res) => {
+router.delete('/progress-notes/:noteID', rejectIfLocked('progress-note', 'noteID', getPool), async (req, res) => {
   try {
     const { noteID } = req.params;
     const { permanent = 'false' } = req.query;
@@ -418,7 +437,7 @@ router.delete('/progress-notes/:noteID', async (req, res) => {
         .input('noteID', sql.Int, parseInt(noteID))
         .query(`
           DELETE FROM dbo.progress_notes
-          WHERE id = @noteID
+          WHERE id = @noteID AND ISNULL(isLocked, 0) = 0
         `);
 
       if (result.rowsAffected[0] === 0) {
@@ -442,7 +461,7 @@ router.delete('/progress-notes/:noteID', async (req, res) => {
           UPDATE dbo.progress_notes
           SET noteStatus = 'Archived', updatedAt = GETDATE()
           OUTPUT INSERTED.*
-          WHERE id = @noteID
+          WHERE id = @noteID AND ISNULL(isLocked, 0) = 0
         `);
 
       if (result.recordset.length === 0) {

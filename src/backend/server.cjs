@@ -10,6 +10,13 @@ const { BlobServiceClient } = require('@azure/storage-blob');
 
 const authMiddleware = require('./middleware/auth.js');
 const { requireAdmin } = require('./middleware/auth.js');
+const { requireAuditAccess } = require('./middleware/signedFormUnlock');
+// Log stray promise rejections instead of letting Node kill the whole backend
+// (e.g. a DB connection timeout no caller awaited)
+process.on('unhandledRejection', (reason) => {
+  console.error('❌ Unhandled promise rejection:', reason);
+});
+
 // ✅ FIXED: Better database connection handling
 let dbConnected = false;
 let dbModule = null;
@@ -55,9 +62,10 @@ try {
   // const adminAccessRouter = require('./routes/admin/access.cjs');
   // const adminHealthRouter = require('./routes/admin/health.cjs');
 
-  // requireAdmin applied once at mount — covers all sub-routes
+  // Access applied once at mount — covers all sub-routes. The audit trail is
+  // also open to Level 1; errors and analytics are IT Admin only.
   app.use('/api/admin/errors', authMiddleware, requireAdmin, adminErrorsRouter);
-  app.use('/api/admin/audit', authMiddleware, requireAdmin, adminAuditRouter);
+  app.use('/api/admin/audit', authMiddleware, requireAuditAccess, adminAuditRouter);
   app.use('/api/admin/analytics', authMiddleware, requireAdmin, adminAnalyticsRouter);
   // app.use('/api/admin/access', requireAdmin, adminAccessRouter);
   // app.use('/api/admin/health', requireAdmin, adminHealthRouter);
@@ -977,6 +985,33 @@ try {
   medObservationRouterLoaded = true;
 } catch (err) {
   console.log('⚠️  Could not load medObservation.js:', err.message);
+}
+
+// SECTION 5 RECORD UNLOCK / DELETE (submitted notes / observation records; IT Admin / Level 1 only)
+try {
+  const section5LockRouter = require('./routes/section5Lock.js');
+  app.use('/api/section5', authMiddleware, section5LockRouter);
+  console.log('✅ Section 5 record unlock router loaded');
+} catch (err) {
+  console.log('⚠️  Could not load section5Lock.js:', err.message);
+}
+
+// SECTION 5 MAIN TAB SUMMARY (per-tab data present / last updated / by whom)
+try {
+  const section5SummaryRouter = require('./routes/section5Summary.js');
+  app.use('/api/section5', authMiddleware, section5SummaryRouter);
+  console.log('✅ Section 5 summary router loaded');
+} catch (err) {
+  console.log('⚠️  Could not load section5Summary.js:', err.message);
+}
+
+// SECTION 5 NURSING ARCHIVE UPLOADERS (who uploaded each file; DB + AuditLog)
+try {
+  const nursingArchiveUploadsRouter = require('./routes/nursingArchiveUploads.js');
+  app.use('/api/section5', authMiddleware, nursingArchiveUploadsRouter);
+  console.log('✅ Nursing Archive uploads router loaded');
+} catch (err) {
+  console.log('⚠️  Could not load nursingArchiveUploads.js:', err.message);
 }
 
 console.log('✅ Section 5 Medical Routes Loading Complete');

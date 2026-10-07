@@ -90,7 +90,7 @@ export const fetchClientFiles = createAsyncThunk(
       }
 
       // Real API call
-      const response = await axios.get(`${API_URL}/api/files/${clientID}`);
+      const response = await axios.get(`${API_URL}/api/files/${encodeURIComponent(clientID)}`);
       return Array.isArray(response.data) ? response.data : [];
     } catch (error) {
       return rejectWithValue(error.response?.data?.message || error.message || 'Failed to fetch files');
@@ -107,10 +107,13 @@ export const fetchMentalArchiveFiles = createAsyncThunk(
       
       if (shouldUseMockData) {
         await new Promise(resolve => setTimeout(resolve, 1000));
-        return MOCK_FILES.filter(f => MENTAL_ARCHIVE_DOC_TYPES.includes(f.docType));
+        return MOCK_FILES;
       }
 
-      const response = await axios.get(`${API_URL}/api/mental-archive/${clientID}`);
+      // /api/mental-archive compared unsanitized names against sanitized blob
+      // folders, so multi-word types never matched. List everything and let
+      // MentalArchive filter to Section 3's folders (utils/archiveSections).
+      const response = await axios.get(`${API_URL}/api/files/${encodeURIComponent(clientID)}`);
       return Array.isArray(response.data) ? response.data : [];
     } catch (error) {
       console.error('Fetch mental archive error:', error);

@@ -40,6 +40,7 @@ import {
 } from '@mui/icons-material';
 import { useClientPersistence } from '../../hooks/useClientPersistence';
 import { azureBlobService } from '../../backend/services/azureBlobService';
+import { ARCHIVE_SECTIONS, SECTION_CATEGORIES, sectionDocType, filterSectionFiles } from '../../utils/archiveSections';
 
 /**
  * ✅ CORRECTED AuthSigArchive Component
@@ -55,23 +56,7 @@ import { azureBlobService } from '../../backend/services/azureBlobService';
  */
 
 // Authorization form types that can be archived
-const AUTH_FORM_TYPES = [
-  'Consent for Treatment',
-  'Photo Release',
-  'Release of PHI',
-  'Authorization for Disclosure',
-  'Housing Agreement',
-  'Residence Policy',
-  'Termination Agreement',
-  'HIPAA Notice',
-  'Client Rights',
-  'Financial Agreement',
-  'Medication Consent',
-  'Transportation Consent',
-  'Emergency Treatment',
-  'General Consent',
-  'Other Authorization Forms'
-];
+const AUTH_FORM_TYPES = SECTION_CATEGORIES[ARCHIVE_SECTIONS.AUTH_SIG];
 
 // Allowed file types
 const ALLOWED_FILE_TYPES = [
@@ -161,7 +146,7 @@ const AuthSigArchive = () => {
       );
 
       console.log('✅ Files fetched successfully:', result?.length || 0);
-      setFiles(result || []);
+      setFiles(filterSectionFiles(result, ARCHIVE_SECTIONS.AUTH_SIG, AUTH_FORM_TYPES));
 
     } catch (error) {
       console.error('❌ Error fetching files:', error);
@@ -241,7 +226,7 @@ const AuthSigArchive = () => {
       const result = await azureBlobService.uploadFile(
         selectedFile,
         clientID,
-        selectedFormType  // docType parameter (using formType as docType)
+        sectionDocType(ARCHIVE_SECTIONS.AUTH_SIG, selectedFormType)
       );
 
       console.log('✅ Upload successful:', result);

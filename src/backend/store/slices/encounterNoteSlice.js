@@ -1,6 +1,7 @@
 // src/store/apps/notes/encounterNoteActions.js
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
+import { getApiAuthHeaders } from "../../../utils/apiAuth";
 
 const API_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
 
@@ -128,7 +129,7 @@ export const addEncounterNote = createAsyncThunk(
     }
 
     try {
-      const response = await axios.post(`${API_URL}/api/encounter-notes/${clientID}`, noteData);
+      const response = await axios.post(`${API_URL}/api/encounter-notes/${clientID}`, noteData, { headers: await getApiAuthHeaders() });
       return response.data;
     } catch (error) {
       console.error("❌ Error adding encounter note:", error);
@@ -151,7 +152,7 @@ export const editEncounterNote = createAsyncThunk(
     }
 
     try {
-      const response = await axios.put(`${API_URL}/api/encounter-notes/${noteId}`, updatedData);
+      const response = await axios.put(`${API_URL}/api/encounter-notes/${noteId}`, updatedData, { headers: await getApiAuthHeaders() });
       return response.data;
     } catch (error) {
       console.error("❌ Error editing encounter note:", error);
@@ -160,10 +161,29 @@ export const editEncounterNote = createAsyncThunk(
   }
 );
 
+// 🔓 Async thunk to unlock a submitted encounter note (IT Admin / Level 1 only)
+export const unlockEncounterNote = createAsyncThunk(
+  "encounterNote/unlockEncounterNote",
+  async ({ noteId, reason }, thunkAPI) => {
+    try {
+      const headers = await getApiAuthHeaders();
+      const response = await axios.post(
+        `${API_URL}/api/encounter-notes/${noteId}/unlock`,
+        { reason },
+        { headers }
+      );
+      return response.data;
+    } catch (error) {
+      console.error("❌ Error unlocking encounter note:", error);
+      return thunkAPI.rejectWithValue(toErrorMessage(error, 'Unlock failed'));
+    }
+  }
+);
+
 // 🗑️ Async thunk to delete encounter note
 export const deleteEncounterNote = createAsyncThunk(
   "encounterNote/deleteEncounterNote",
-  async ({ noteId, clientID }, thunkAPI) => {
+  async ({ noteId, clientID, reason }, thunkAPI) => {
     // ✅ PROTECTION: Return mock success for mock clients
     if (shouldUseMockData(clientID)) {
       console.log("🔧 Mock mode: Simulating encounter note delete for", noteId);
@@ -171,7 +191,11 @@ export const deleteEncounterNote = createAsyncThunk(
     }
 
     try {
-      await axios.delete(`${API_URL}/api/encounter-notes/${noteId}`);
+      // A submitted note can only be deleted by IT Admin / Level 1, with a reason
+      await axios.delete(`${API_URL}/api/encounter-notes/${noteId}`, {
+        data: { reason },
+        headers: await getApiAuthHeaders(),
+      });
       return noteId;
     } catch (error) {
       console.error("❌ Error deleting encounter note:", error);
@@ -277,6 +301,14 @@ const encounterNoteSlice = createSlice({
       .addCase(editEncounterNote.rejected, (state, action) => {
         state.status = "failed";
         state.error = toErrorMessage(action.payload, 'Edit failed');
+      })
+      // Unlock encounter note. A failed unlock is shown in the dialog, not as
+      // a slice-wide error that would replace the notes table.
+      .addCase(unlockEncounterNote.fulfilled, (state, action) => {
+        const index = state.data.findIndex(note => note._id === action.payload._id);
+        if (index !== -1) {
+          state.data[index] = action.payload;
+        }
       })
       // Delete encounter note
       .addCase(deleteEncounterNote.fulfilled, (state, action) => {

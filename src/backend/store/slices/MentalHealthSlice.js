@@ -51,6 +51,29 @@ export const saveMentalHealthData = createAsyncThunk(
   }
 );
 
+// 🗑️ Shared remove for providers / hospitalizations / medications.
+// Default: mark inactive (record kept for HIPAA), with who removed it and why.
+// permanent: admin-only hard delete for entries made in error (duplicates);
+// needs a reason and the user's ID token, which the backend verifies.
+const removeRecord = async (kind, { clientID, id, deletedBy, reason, permanent, token }, thunkAPI) => {
+  if (shouldUseMockData(clientID)) {
+    console.log(`🔧 Mock mode: Removing ${kind} record locally`);
+    return id;
+  }
+
+  try {
+    const url = `${API_URL}/api/mental-health/${clientID}/${kind}/${id}${permanent ? '/permanent' : ''}`;
+    await axios.delete(url, {
+      data: { deletedBy: deletedBy || 'unknown', reason: reason || '' },
+      headers: permanent && token ? { Authorization: `Bearer ${token}` } : undefined,
+    });
+    return id;
+  } catch (error) {
+    console.error(`❌ Error removing ${kind} record:`, error);
+    return thunkAPI.rejectWithValue(error.response?.data || `Remove ${kind} record failed`);
+  }
+};
+
 // 🔄 Async thunk to add provider
 export const addProvider = createAsyncThunk(
   "mentalHealth/addProvider",
@@ -76,20 +99,8 @@ export const addProvider = createAsyncThunk(
 // 🗑️ Async thunk to remove provider
 export const removeProvider = createAsyncThunk(
   "mentalHealth/removeProvider",
-  async ({ clientID, providerID }, thunkAPI) => {
-    if (shouldUseMockData(clientID)) {
-      console.log("🔧 Mock mode: Removing provider locally");
-      return providerID;
-    }
-
-    try {
-      await axios.delete(`${API_URL}/api/mental-health/${clientID}/providers/${providerID}`);
-      return providerID;
-    } catch (error) {
-      console.error("❌ Error removing provider:", error);
-      return thunkAPI.rejectWithValue(error.response?.data || "Remove provider failed");
-    }
-  }
+  ({ clientID, providerID, ...options }, thunkAPI) =>
+    removeRecord('providers', { clientID, id: providerID, ...options }, thunkAPI)
 );
 
 // 🔄 Async thunk to add hospitalization
@@ -117,20 +128,8 @@ export const addHospitalization = createAsyncThunk(
 // 🗑️ Async thunk to remove hospitalization
 export const removeHospitalization = createAsyncThunk(
   "mentalHealth/removeHospitalization",
-  async ({ clientID, hospitalizationID }, thunkAPI) => {
-    if (shouldUseMockData(clientID)) {
-      console.log("🔧 Mock mode: Removing hospitalization locally");
-      return hospitalizationID;
-    }
-
-    try {
-      await axios.delete(`${API_URL}/api/mental-health/${clientID}/hospitalizations/${hospitalizationID}`);
-      return hospitalizationID;
-    } catch (error) {
-      console.error("❌ Error removing hospitalization:", error);
-      return thunkAPI.rejectWithValue(error.response?.data || "Remove hospitalization failed");
-    }
-  }
+  ({ clientID, hospitalizationID, ...options }, thunkAPI) =>
+    removeRecord('hospitalizations', { clientID, id: hospitalizationID, ...options }, thunkAPI)
 );
 
 // 🔄 Async thunk to add medication
@@ -158,20 +157,8 @@ export const addMedication = createAsyncThunk(
 // 🗑️ Async thunk to remove medication
 export const removeMedication = createAsyncThunk(
   "mentalHealth/removeMedication",
-  async ({ clientID, medicationID }, thunkAPI) => {
-    if (shouldUseMockData(clientID)) {
-      console.log("🔧 Mock mode: Removing medication locally");
-      return medicationID;
-    }
-
-    try {
-      await axios.delete(`${API_URL}/api/mental-health/${clientID}/medications/${medicationID}`);
-      return medicationID;
-    } catch (error) {
-      console.error("❌ Error removing medication:", error);
-      return thunkAPI.rejectWithValue(error.response?.data || "Remove medication failed");
-    }
-  }
+  ({ clientID, medicationID, ...options }, thunkAPI) =>
+    removeRecord('medications', { clientID, id: medicationID, ...options }, thunkAPI)
 );
 
 const initialState = {

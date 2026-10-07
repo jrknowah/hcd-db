@@ -2,6 +2,11 @@ const express = require('express');
 const router = express.Router();
 const sql = require('mssql');
 const { connectToAzureSQL } = require('../store/azureSql');
+const { bindSubmitInputs, lockedResponse, rejectIfLocked } = require('../services/section5RecordLock');
+
+// POST/PUT accept `submit: true` to submit (lock) the note; without it the
+// note is saved as progress. Locked notes can't be updated or deleted until an
+// IT Admin / Level 1 user unlocks them (routes/section5Lock.js).
 
 // GET /api/idt-nursing/note/:idtNursingID - Get specific IDT nursing note
 router.get('/idt-nursing/note/:idtNursingID', async (req, res) => {
@@ -81,7 +86,7 @@ router.post('/idt-nursing/:clientID', async (req, res) => {
     console.log(`📡 Creating IDT nursing note for client: ${clientID}`);
     
     const pool = await connectToAzureSQL();
-    const result = await pool.request()
+    const insertRequest = pool.request()
       .input('clientID', sql.VarChar(50), clientID)
       .input('idtNursingAppointYN', sql.NVarChar(sql.MAX), noteData.idtNursingAppointYN || null)
       .input('idtNursingAppoint', sql.NVarChar(sql.MAX), noteData.idtNursingAppoint || null)
@@ -93,20 +98,24 @@ router.post('/idt-nursing/:clientID', async (req, res) => {
       .input('goalPriority', sql.NVarChar(50), noteData.goalPriority || null)
       .input('goalTargetDate', sql.Date, noteData.goalTargetDate || null)
       .input('complianceScore', sql.Int, noteData.complianceScore || null)
-      .input('createdBy', sql.NVarChar(100), noteData.createdBy || 'System')
-      .query(`
+      .input('createdBy', sql.NVarChar(100), noteData.createdBy || 'System');
+    bindSubmitInputs(insertRequest, req, noteData.createdBy);
+
+    const result = await insertRequest.query(`
         INSERT INTO idt_nursing_notes (
           clientID, idtNursingAppointYN, idtNursingAppoint, idtNursingProb,
           idtNursingGoal, idtNursingCompliant, idtNursingInfo,
           goalStatus, goalPriority, goalTargetDate, complianceScore,
-          createdBy, createdAt, updatedBy, updatedAt
+          createdBy, createdAt, updatedBy, updatedAt,
+          isLocked, submittedBy, submittedAt
         )
         OUTPUT INSERTED.*
         VALUES (
           @clientID, @idtNursingAppointYN, @idtNursingAppoint, @idtNursingProb,
           @idtNursingGoal, @idtNursingCompliant, @idtNursingInfo,
           @goalStatus, @goalPriority, @goalTargetDate, @complianceScore,
-          @createdBy, GETDATE(), @createdBy, GETDATE()
+          @createdBy, GETDATE(), @createdBy, GETDATE(),
+          @isLocked, @submittedBy, @submittedAt
         )
       `);
     
@@ -123,7 +132,7 @@ router.post('/idt-nursing/:clientID', async (req, res) => {
 });
 
 // PUT /api/idt-nursing/note/:idtNursingID - Update existing IDT nursing note
-router.put('/idt-nursing/note/:idtNursingID', async (req, res) => {
+router.put('/idt-nursing/note/:idtNursingID', rejectIfLocked('idt-nursing', 'idtNursingID', connectToAzureSQL), async (req, res) => {
   try {
     const { idtNursingID } = req.params;
     const updates = req.body;
@@ -131,7 +140,7 @@ router.put('/idt-nursing/note/:idtNursingID', async (req, res) => {
     console.log(`📡 Updating IDT nursing note: ${idtNursingID}`);
     
     const pool = await connectToAzureSQL();
-    const result = await pool.request()
+    const updateRequest = pool.request()
       .input('idtNursingID', sql.Int, idtNursingID)
       .input('idtNursingAppointYN', sql.NVarChar(sql.MAX), updates.idtNursingAppointYN || null)
       .input('idtNursingAppoint', sql.NVarChar(sql.MAX), updates.idtNursingAppoint || null)
@@ -143,8 +152,10 @@ router.put('/idt-nursing/note/:idtNursingID', async (req, res) => {
       .input('goalPriority', sql.NVarChar(50), updates.goalPriority || null)
       .input('goalTargetDate', sql.Date, updates.goalTargetDate || null)
       .input('complianceScore', sql.Int, updates.complianceScore || null)
-      .input('updatedBy', sql.NVarChar(100), updates.updatedBy || 'System')
-      .query(`
+      .input('updatedBy', sql.NVarChar(100), updates.updatedBy || 'System');
+    bindSubmitInputs(updateRequest, req, updates.updatedBy);
+
+    const result = await updateRequest.query(`
         UPDATE idt_nursing_notes
         SET 
           idtNursingAppointYN = @idtNursingAppointYN,
@@ -158,12 +169,21 @@ router.put('/idt-nursing/note/:idtNursingID', async (req, res) => {
           goalTargetDate = @goalTargetDate,
           complianceScore = @complianceScore,
           updatedBy = @updatedBy,
-          updatedAt = GETDATE()
+          updatedAt = GETDATE(),
+          isLocked = @isLocked,
+          submittedBy = @submittedBy,
+          submittedAt = @submittedAt
         OUTPUT INSERTED.*
-        WHERE idtNursingID = @idtNursingID
+        WHERE idtNursingID = @idtNursingID AND ISNULL(isLocked, 0) = 0
       `);
     
     if (result.recordset.length === 0) {
+      // Submitted between the lock check and this update
+      const stillThere = await pool.request()
+        .input('idtNursingID', sql.Int, idtNursingID)
+        .query('SELECT 1 AS found FROM idt_nursing_notes WHERE idtNursingID = @idtNursingID');
+      if (stillThere.recordset.length > 0) return lockedResponse(res, 'idt-nursing');
+
       console.log(`⚠️ IDT nursing note not found: ${idtNursingID}`);
       return res.status(404).json({ 
         message: 'IDT nursing note not found'
@@ -183,7 +203,7 @@ router.put('/idt-nursing/note/:idtNursingID', async (req, res) => {
 });
 
 // DELETE /api/idt-nursing/note/:idtNursingID - Delete IDT nursing note
-router.delete('/idt-nursing/note/:idtNursingID', async (req, res) => {
+router.delete('/idt-nursing/note/:idtNursingID', rejectIfLocked('idt-nursing', 'idtNursingID', connectToAzureSQL), async (req, res) => {
   try {
     const { idtNursingID } = req.params;
     
@@ -194,7 +214,7 @@ router.delete('/idt-nursing/note/:idtNursingID', async (req, res) => {
       .input('idtNursingID', sql.Int, idtNursingID)
       .query(`
         DELETE FROM idt_nursing_notes
-        WHERE idtNursingID = @idtNursingID
+        WHERE idtNursingID = @idtNursingID AND ISNULL(isLocked, 0) = 0
       `);
     
     if (result.rowsAffected[0] === 0) {

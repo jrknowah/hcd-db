@@ -38,12 +38,12 @@ import {
   Event as EventIcon,
   Psychology as GoalIcon,
   MedicalServices as ComplianceIcon,
-  Save as SaveIcon,
   TrendingUp as TrendingUpIcon,
   Add as AddIcon,
   Edit as EditIcon,
   Delete as DeleteIcon,
-  Search as SearchIcon
+  Search as SearchIcon,
+  Visibility as VisibilityIcon
 } from "@mui/icons-material";
 import PropTypes from 'prop-types';
 import { useDispatch, useSelector } from "react-redux";
@@ -57,6 +57,19 @@ import {
 } from "../../backend/store/slices/idtNursingSlice";
 import logUserAction from "../../backend/config/logAction";
 import { formatDateOnly } from "../../utils/dateOnly";
+import { selectUserRoles } from "../../backend/store/slices/authSlice";
+import { canUnlockSection5Records, isRecordLocked, errorMessage } from "../../utils/section5Lock";
+import {
+  RecordStatusChip,
+  UnlockRecordButton,
+  DeleteLockedRecordButton,
+  UnlockRecordDialog,
+  LockedRecordAlert,
+  SaveProgressSubmitActions,
+  SubmitLockNotice,
+} from "../../components/shared/Section5RecordLock";
+
+const SUBMIT_CONFIRM = "Submit this note? Once submitted it is locked and only an IT Admin or Level 1 user can unlock it.";
 
 const initialFormState = {
   idtNursingAppointYN: "",
@@ -74,6 +87,7 @@ const initialFormState = {
 const IDTNoteNursing = ({ clientID }) => {
   const dispatch = useDispatch();
   const user = useSelector((state) => state.auth.user);
+  const canUnlock = canUnlockSection5Records(useSelector(selectUserRoles));
   const { notes, loading, error, saving, saveSuccess } = useSelector((state) => state.idtNursing);
 
   // Component state
@@ -83,6 +97,9 @@ const IDTNoteNursing = ({ clientID }) => {
   const [selectedNote, setSelectedNote] = useState(null);
   const [formData, setFormData] = useState(initialFormState);
   const [searchTerm, setSearchTerm] = useState("");
+  // A submitted note opens read-only; unlockTarget drives the unlock dialog
+  const [viewOnly, setViewOnly] = useState(false);
+  const [unlockTarget, setUnlockTarget] = useState(null);
 
   // Load notes on mount
   useEffect(() => {
@@ -116,14 +133,23 @@ const IDTNoteNursing = ({ clientID }) => {
 
   // Open add dialog
   const handleOpenDialog = () => {
+    setViewOnly(false);
     setFormData({ ...initialFormState, clientID });
     setDialogOpen(true);
+  };
+
+  const closeFormDialog = () => {
+    setDialogOpen(false);
+    setEditDialogOpen(false);
+    setViewOnly(false);
+    setFormData(initialFormState);
   };
 
   // Open edit dialog
   const handleEditNote = (note) => {
     setSelectedNote(note);
     setFormData(note);
+    setViewOnly(isRecordLocked(note));
     setEditDialogOpen(true);
   };
 
@@ -133,8 +159,8 @@ const IDTNoteNursing = ({ clientID }) => {
     setDeleteDialogOpen(true);
   };
 
-  // Save new note
-  const handleSaveNote = async () => {
+  // Save new note; submit = true locks it, false saves progress
+  const handleSaveNote = async (submit) => {
     if (!clientID || clientID === 'mock-123') {
       alert("⚠️ Please select a valid client before saving.");
       return;
@@ -145,10 +171,13 @@ const IDTNoteNursing = ({ clientID }) => {
       return;
     }
 
+    if (submit && !window.confirm(SUBMIT_CONFIRM)) return;
+
     try {
       await dispatch(addIDTNoteNursing({
         ...formData,
         clientID,
+        submit,
         createdBy: user?.email || "unknown"
       })).unwrap();
       
@@ -158,11 +187,12 @@ const IDTNoteNursing = ({ clientID }) => {
       await logUserAction(user, "ADD_IDT_NURSING_NOTE", { clientID });
     } catch (err) {
       console.error("Failed to save note:", err);
+      alert(`⚠️ Failed to save note: ${errorMessage(err)}`);
     }
   };
 
-  // Update existing note
-  const handleUpdateNote = async () => {
+  // Update existing note; submit = true locks it, false saves progress
+  const handleUpdateNote = async (submit) => {
     if (!selectedNote?.idtNursingID) return;
 
     if (!formData.idtNursingGoal.trim()) {
@@ -170,10 +200,12 @@ const IDTNoteNursing = ({ clientID }) => {
       return;
     }
 
+    if (submit && !window.confirm(SUBMIT_CONFIRM)) return;
+
     try {
       await dispatch(editIDTNoteNursing({
         idtNursingID: selectedNote.idtNursingID,
-        updates: formData
+        updates: { ...formData, updatedBy: user?.email || "unknown", submit }
       })).unwrap();
       
       setEditDialogOpen(false);
@@ -183,6 +215,7 @@ const IDTNoteNursing = ({ clientID }) => {
       await logUserAction(user, "EDIT_IDT_NURSING_NOTE", { clientID, idtNursingID: selectedNote.idtNursingID });
     } catch (err) {
       console.error("Failed to update note:", err);
+      alert(`⚠️ Failed to update note: ${errorMessage(err)}`);
     }
   };
 
@@ -198,6 +231,7 @@ const IDTNoteNursing = ({ clientID }) => {
       await logUserAction(user, "DELETE_IDT_NURSING_NOTE", { clientID, idtNursingID: selectedNote.idtNursingID });
     } catch (err) {
       console.error("Failed to delete note:", err);
+      alert(`⚠️ Failed to delete note: ${errorMessage(err)}`);
     }
   };
 
@@ -564,6 +598,7 @@ const IDTNoteNursing = ({ clientID }) => {
                   <TableCell>Compliance</TableCell>
                   <TableCell>Goal Summary</TableCell>
                   <TableCell>Created By</TableCell>
+                  <TableCell>Status</TableCell>
                   <TableCell align="center">Actions</TableCell>
                 </TableRow>
               </TableHead>
@@ -599,7 +634,34 @@ const IDTNoteNursing = ({ clientID }) => {
                       {note.idtNursingGoal?.length > 80 ? '...' : ''}
                     </TableCell>
                     <TableCell>{note.createdBy || 'N/A'}</TableCell>
+                    <TableCell>
+                      <RecordStatusChip record={note} />
+                    </TableCell>
                     <TableCell align="center">
+                      {isRecordLocked(note) ? (
+                        <>
+                          <Tooltip title="View Note">
+                            <IconButton
+                              size="small"
+                              onClick={() => handleEditNote(note)}
+                              color="primary"
+                            >
+                              <VisibilityIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                          {canUnlock && (
+                            <>
+                            <UnlockRecordButton
+                              onClick={() => setUnlockTarget({ recordType: 'idt-nursing', id: note.idtNursingID, label: 'IDT nursing note' })}
+                            />
+                            <DeleteLockedRecordButton
+                              onClick={() => setUnlockTarget({ recordType: 'idt-nursing', id: note.idtNursingID, label: 'IDT nursing note', action: 'delete' })}
+                            />
+                            </>
+                          )}
+                        </>
+                      ) : (
+                      <>
                       <Tooltip title="Edit Note">
                         <IconButton 
                           size="small" 
@@ -618,6 +680,8 @@ const IDTNoteNursing = ({ clientID }) => {
                           <DeleteIcon fontSize="small" />
                         </IconButton>
                       </Tooltip>
+                      </>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -629,37 +693,38 @@ const IDTNoteNursing = ({ clientID }) => {
         {/* Add/Edit Dialog */}
         <Dialog 
           open={dialogOpen || editDialogOpen} 
-          onClose={() => {
-            setDialogOpen(false);
-            setEditDialogOpen(false);
-            setFormData(initialFormState);
-          }}
+          onClose={closeFormDialog}
           maxWidth="lg"
           fullWidth
         >
           <DialogTitle>
-            {editDialogOpen ? 'Edit IDT Nursing Note' : 'Add New IDT Nursing Note'}
+            {viewOnly ? 'IDT Nursing Note (Submitted)' : (editDialogOpen ? 'Edit IDT Nursing Note' : 'Add New IDT Nursing Note')}
           </DialogTitle>
           <DialogContent>
-            {renderForm()}
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={() => {
-              setDialogOpen(false);
-              setEditDialogOpen(false);
-              setFormData(initialFormState);
-            }}>
-              Cancel
-            </Button>
-            <Button 
-              onClick={editDialogOpen ? handleUpdateNote : handleSaveNote}
-              variant="contained" 
-              disabled={saving}
-              startIcon={saving ? <CircularProgress size={16} /> : <SaveIcon />}
+            {viewOnly && <LockedRecordAlert label="note" />}
+            <Box
+              component="fieldset"
+              disabled={viewOnly}
+              sx={{ border: 0, p: 0, m: 0, minWidth: 0, ...(viewOnly && { pointerEvents: 'none' }) }}
             >
-              {saving ? 'Saving...' : (editDialogOpen ? 'Update Note' : 'Save Note')}
-            </Button>
-          </DialogActions>
+              {renderForm()}
+            </Box>
+          </DialogContent>
+          {viewOnly ? (
+            <DialogActions>
+              <Button onClick={closeFormDialog}>Close</Button>
+            </DialogActions>
+          ) : (
+            <>
+              <SubmitLockNotice />
+              <SaveProgressSubmitActions
+                onCancel={closeFormDialog}
+                onSaveProgress={() => (editDialogOpen ? handleUpdateNote(false) : handleSaveNote(false))}
+                onSubmit={() => (editDialogOpen ? handleUpdateNote(true) : handleSaveNote(true))}
+                saving={saving}
+              />
+            </>
+          )}
         </Dialog>
 
         {/* Delete Confirmation Dialog */}
@@ -682,6 +747,12 @@ const IDTNoteNursing = ({ clientID }) => {
             </Button>
           </DialogActions>
         </Dialog>
+
+        <UnlockRecordDialog
+          target={unlockTarget}
+          onClose={() => setUnlockTarget(null)}
+          onUnlocked={() => dispatch(fetchIDTNoteNursing(clientID))}
+        />
       </CardContent>
     </Card>
   );

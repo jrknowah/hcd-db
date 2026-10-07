@@ -48,6 +48,25 @@ const parseRow = (row) => {
   return parsed;
 };
 
+// The ICD Code field holds several codes (e.g. "300.02 309.81 F32.9 F10.11"),
+// but diagDescriptCode was created as a short column, so saves failed with
+// "String or binary data would be truncated". Widen it once per process;
+// dbScripts/reassessmentDiagCode.sql does the same for a manual run.
+const DIAG_CODE_MAX_LENGTH = 255;
+let diagCodeColumnReady = null;
+const ensureDiagCodeColumn = (pool) => {
+  if (!diagCodeColumnReady) {
+    diagCodeColumnReady = pool.request().query(`
+      IF COLUMNPROPERTY(OBJECT_ID('dbo.ReassessmentData'), 'diagDescriptCode', 'CharMaxLength') BETWEEN 1 AND ${DIAG_CODE_MAX_LENGTH - 1}
+        ALTER TABLE dbo.ReassessmentData ALTER COLUMN diagDescriptCode NVARCHAR(${DIAG_CODE_MAX_LENGTH}) NULL;
+    `).catch(err => {
+      console.error('⚠️ Could not widen ReassessmentData.diagDescriptCode:', err.message);
+      diagCodeColumnReady = null;
+    });
+  }
+  return diagCodeColumnReady;
+};
+
 // ✅ Validate client exists in database
 const validateClientExists = async (clientID) => {
   const pool = await getPool();
@@ -149,6 +168,7 @@ const getByAssessmentId = async (assessmentID) => {
 const create = async (reassessmentData) => {
   try {
     const pool = await getPool();
+    await ensureDiagCodeColumn(pool);
     const { clientID } = reassessmentData;
     
     console.log(`🧠 Creating reassessment for client: ${clientID}`);
@@ -193,7 +213,7 @@ const create = async (reassessmentData) => {
       .input('clientFormReAssessSummary', sql.NVarChar, reassessmentData.clientFormReAssessSummary || null)
       .input('diagDescript', sql.NVarChar, reassessmentData.diagDescript || null)
       .input('diagDescriptCodeChoice', sql.VarChar, reassessmentData.diagDescriptCodeChoice || null)  // ✅ NULL now allowed
-      .input('diagDescriptCode', sql.VarChar, reassessmentData.diagDescriptCode || null)
+      .input('diagDescriptCode', sql.NVarChar, reassessmentData.diagDescriptCode || null)
       .input('completionStatus', sql.VarChar, reassessmentData.completionStatus || 'In Progress')
       .input('completionPercentage', sql.Decimal, reassessmentData.completionPercentage || 0)
       .input('createdBy', sql.VarChar, reassessmentData.createdBy || 'system')
@@ -234,6 +254,7 @@ const create = async (reassessmentData) => {
 // Shared UPDATE for a single reassessment row
 const updateRow = async (reassessmentID, updateData) => {
   const pool = await getPool();
+  await ensureDiagCodeColumn(pool);
 
   await pool.request()
     .input('reassessmentID', sql.VarChar, reassessmentID)
@@ -265,7 +286,7 @@ const updateRow = async (reassessmentID, updateData) => {
     .input('clientFormReAssessSummary', sql.NVarChar, updateData.clientFormReAssessSummary || null)
     .input('diagDescript', sql.NVarChar, updateData.diagDescript || null)
     .input('diagDescriptCodeChoice', sql.VarChar, updateData.diagDescriptCodeChoice || null)  // ✅ NULL now allowed
-    .input('diagDescriptCode', sql.VarChar, updateData.diagDescriptCode || null)
+    .input('diagDescriptCode', sql.NVarChar, updateData.diagDescriptCode || null)
     .input('completionStatus', sql.VarChar, updateData.completionStatus || 'In Progress')
     .input('completionPercentage', sql.Decimal, updateData.completionPercentage || 0)
     .input('updatedBy', sql.VarChar, updateData.updatedBy || 'system')

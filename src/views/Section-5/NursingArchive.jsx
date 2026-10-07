@@ -39,6 +39,8 @@ import {
 } from '@mui/icons-material';
 import { useClientPersistence } from '../../hooks/useClientPersistence';
 import { azureBlobService } from '../../backend/services/azureBlobService';
+import { ARCHIVE_SECTIONS, SECTION_CATEGORIES, sectionDocType, filterSectionFiles } from '../../utils/archiveSections';
+import { recordNursingArchiveUpload, withUploaders } from '../../utils/nursingArchiveUploads';
 
 /**
  * ✅ REFACTORED NursingArchive Component
@@ -57,24 +59,7 @@ import { azureBlobService } from '../../backend/services/azureBlobService';
  */
 
 // Nursing document types for the archive
-const NURSING_DOC_TYPES = [
-  'Nursing Assessment',
-  'Nursing Notes',
-  'Progress Notes',
-  'Vital Signs Record',
-  'Medication Administration Record (MAR)',
-  'Treatment Plan',
-  'Care Plan',
-  'Wound Care Documentation',
-  'IV Therapy Record',
-  'Discharge Summary',
-  'Lab Results',
-  'Imaging Reports',
-  'Consultation Notes',
-  'Incident Report',
-  'Transfer Summary',
-  'Other Nursing Documentation'
-];
+const NURSING_DOC_TYPES = SECTION_CATEGORIES[ARCHIVE_SECTIONS.NURSING];
 
 // Confidentiality levels
 const CONFIDENTIALITY_LEVELS = [
@@ -189,7 +174,8 @@ const NursingArchive = () => {
       );
 
       console.log('✅ Nursing documents fetched:', result?.length || 0);
-      setFiles(result || []);
+      const nursingFiles = filterSectionFiles(result, ARCHIVE_SECTIONS.NURSING, NURSING_DOC_TYPES);
+      setFiles(await withUploaders(clientID, nursingFiles));
 
     } catch (error) {
       console.error('❌ Error fetching nursing documents:', error);
@@ -268,12 +254,28 @@ const NursingArchive = () => {
       const result = await azureBlobService.uploadFile(
         selectedFile,
         clientID,
-        selectedDocType  // docType parameter
+        sectionDocType(ARCHIVE_SECTIONS.NURSING, selectedDocType)
       );
 
       console.log('✅ Upload successful:', result);
 
-      setSuccess(`Document "${selectedFile.name}" uploaded successfully!`);
+      // Record who uploaded it (DB + audit log); the file is already stored either way
+      let uploaderNote = '';
+      if (!result?.mock) {
+        try {
+          await recordNursingArchiveUpload({
+            clientID,
+            blobName: result.blobName,
+            fileName: selectedFile.name,
+            docType: selectedDocType,
+          });
+        } catch (recordErr) {
+          console.error('❌ Could not record uploader:', recordErr);
+          uploaderNote = ` (but who uploaded it could not be recorded: ${recordErr.message})`;
+        }
+      }
+
+      setSuccess(`Document "${selectedFile.name}" uploaded successfully!${uploaderNote}`);
       
       // Reset form
       setSelectedFile(null);
@@ -600,6 +602,7 @@ const NursingArchive = () => {
                     <TableCell>Document Type</TableCell>
                     <TableCell>Size</TableCell>
                     <TableCell>Uploaded</TableCell>
+                    <TableCell>Uploaded By</TableCell>
                     <TableCell align="right">Actions</TableCell>
                   </TableRow>
                 </TableHead>
@@ -624,6 +627,7 @@ const NursingArchive = () => {
                       </TableCell>
                       <TableCell>{formatFileSize(file.fileSize)}</TableCell>
                       <TableCell>{formatDate(file.uploadDate)}</TableCell>
+                      <TableCell>{file.uploader || '—'}</TableCell>
                       <TableCell align="right">
                         <Tooltip title="View Details">
                           <IconButton
@@ -712,6 +716,9 @@ const NursingArchive = () => {
               </Typography>
               <Typography variant="body2" gutterBottom>
                 <strong>Uploaded:</strong> {formatDate(viewDialog.file.uploadDate)}
+              </Typography>
+              <Typography variant="body2" gutterBottom>
+                <strong>Uploaded By:</strong> {viewDialog.file.uploader || 'Unknown'}
               </Typography>
               <Typography variant="body2" gutterBottom>
                 <strong>Blob Name:</strong> {viewDialog.file.blobName}

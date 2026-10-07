@@ -1,8 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useDispatch } from 'react-redux';
 import { useClientPersistence } from '../../hooks/useClientPersistence';
 import ClientInfoBanner from '../../components/shared/ClientInfoBanner';
-import ExportPdfButton from '../../components/shared/ExportPdfButton';
 import {
   Card,
   CardContent,
@@ -16,8 +15,11 @@ import {
   List,
   ListItem,
   ListItemIcon,
+  ListItemButton,
   ListItemText,
-  Paper
+  Paper,
+  CircularProgress,
+  Button
 } from '@mui/material';
 import {
   CheckCircle as CheckCircleIcon,
@@ -32,9 +34,14 @@ import {
   Archive as ArchiveIcon,
   Timeline as TimelineIcon,
   Medication as MedicationIcon,
+  Refresh as RefreshIcon,
   // ExitToApp as DischargeIcon
 } from '@mui/icons-material';
-import { section5List } from "../../data/arrayList";
+import { getApiAuthHeaders } from "../../utils/apiAuth";
+import { httpError } from "../../utils/section5Lock";
+import { azureBlobService } from "../../backend/services/azureBlobService";
+import { ARCHIVE_SECTIONS, SECTION_CATEGORIES, filterSectionFiles } from "../../utils/archiveSections";
+import { withUploaders } from "../../utils/nursingArchiveUploads";
 import MedFaceSheet from "./MedFaceSheet";
 import MedScreening from "./MedScreening";
 import NursingAdmission from "./NursingAdmission";
@@ -58,12 +65,33 @@ import { setCurrentClient as setMedScreeningClient } from "../../backend/store/s
 import { setCurrentClient as setNursingAdmissionClient } from "../../backend/store/slices/nursingAdmissionSlice";
 import { setCurrentClient as setProgressNoteClient } from "../../backend/store/slices/progressNoteSlice";
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+
+// Main tab rows: summary key from /api/section5/summary -> tab index to open
+const MAIN_TAB_ITEMS = [
+  { key: 'faceSheet', label: 'Medical Face Sheet', tab: 1 },
+  { key: 'nursingScreening', label: 'Nursing Screening', tab: 2 },
+  { key: 'nursingAssessment', label: 'Nursing Assessment', tab: 3 },
+  { key: 'progressNotes', label: 'Progress Notes', tab: 4 },
+  { key: 'observationRecord', label: 'Medical Observation Record', tab: 5 },
+  { key: 'nursingIdt', label: 'Nursing IDT Notes', tab: 6 },
+  { key: 'providerIdt', label: 'Provider IDT Notes', tab: 7 },
+  { key: 'nursingArchive', label: 'Nursing Archive', tab: 8, files: true },
+];
+
+const formatDateTime = (value) => {
+  if (!value) return null;
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
+};
+
 const Medical = () => {
   // ✅ ALIGNED: Match Identification.jsx pattern exactly
   const { clientID, client, hasClient, user, shouldUseMockData, isDevelopment } = useClientPersistence();
   const dispatch = useDispatch();
 
   const [activeTab, setActiveTab] = useState(0);
+  const [summary, setSummary] = useState({ clientID: null, sections: {}, loading: false, error: null });
 
   // 🔁 Section-switch fix: whenever the selected client changes, wipe every
   // Section-5 slice immediately. Each child tab (MedFaceSheet, MedScreening,
@@ -89,17 +117,73 @@ const Medical = () => {
     setActiveTab(newValue);
   };
 
-  // Mock section5List if not available
-  const timelineItems = section5List || [
-    { section5Title: 'Medical Face Sheet', section5Date: '2024-03-01' },
-    { section5Title: 'Initial Nursing Screening', section5Date: '2024-03-02' },
-    { section5Title: 'Nursing Assessment', section5Date: '2024-03-05' },
-    { section5Title: 'Medical Observation Record', section5Date: '' },
-    { section5Title: 'First Progress Note', section5Date: '' },
-    { section5Title: 'IDT Meeting - Nursing', section5Date: '' },
-    { section5Title: 'IDT Meeting - Provider', section5Date: '' },
-    // { section5Title: 'Discharge Planning', section5Date: '' }, // ✅ ADDED
-  ];
+  // Main tab: which tabs have data and when/by whom they were last changed.
+  // Refetched every time the Main tab is shown so edits made on other tabs show up.
+  const loadSummary = useCallback(async (signal) => {
+    if (!clientID || shouldUseMockData) return;
+    setSummary(prev => ({ ...prev, clientID, loading: true, error: null }));
+
+    const loadRecords = async () => {
+      const response = await fetch(
+        `${API_BASE_URL}/api/section5/summary/${encodeURIComponent(clientID)}`,
+        { headers: await getApiAuthHeaders(), signal }
+      );
+      if (!response.ok) throw await httpError(response);
+      const body = await response.json();
+      return body.sections || [];
+    };
+
+    // Archive files live in blob storage: list them the same way the Nursing
+    // Archive tab does so the counts match; the uploader comes from the DB.
+    const loadArchive = async () => {
+      const files = await withUploaders(clientID, filterSectionFiles(
+        await azureBlobService.listClientFiles(clientID, 'nursing_archive'),
+        ARCHIVE_SECTIONS.NURSING,
+        SECTION_CATEGORIES[ARCHIVE_SECTIONS.NURSING]
+      ));
+      const latest = files
+        .filter(f => f.uploadDate)
+        .sort((a, b) => new Date(b.uploadDate) - new Date(a.uploadDate))[0];
+      return {
+        key: 'nursingArchive',
+        hasData: files.length > 0,
+        total: files.length,
+        lastUpdatedAt: latest?.uploadDate || null,
+        lastUpdatedBy: latest?.uploader || null,
+        error: false,
+      };
+    };
+
+    const [records, archive] = await Promise.allSettled([loadRecords(), loadArchive()]);
+    if (signal?.aborted) return;
+
+    const sections = {};
+    if (records.status === 'fulfilled') {
+      records.value.forEach(sec => { sections[sec.key] = sec; });
+    }
+    sections.nursingArchive = archive.status === 'fulfilled'
+      ? archive.value
+      : { key: 'nursingArchive', hasData: false, total: 0, error: true };
+
+    setSummary({
+      clientID,
+      sections,
+      loading: false,
+      error: records.status === 'rejected' ? (records.reason?.message || 'Failed to load summary') : null,
+    });
+  }, [clientID, shouldUseMockData]);
+
+  useEffect(() => {
+    if (activeTab !== 0) return undefined;
+    const controller = new AbortController();
+    loadSummary(controller.signal);
+    return () => controller.abort();
+  }, [activeTab, loadSummary]);
+
+  // Never show the previous client's summary while the new one loads
+  const summarySections = summary.clientID === clientID ? summary.sections : {};
+  const withData = MAIN_TAB_ITEMS.filter(item => summarySections[item.key]?.hasData).length;
+  const summaryLoaded = MAIN_TAB_ITEMS.some(item => summarySections[item.key]);
 
   // ✅ ALIGNED: Same client check pattern as Identification.jsx
   if (!hasClient && !shouldUseMockData) {
@@ -133,13 +217,6 @@ const Medical = () => {
                 Medical Dashboard
               </Typography>
             </Box>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
-            <ExportPdfButton
-              clientID={clientID}
-              sections={[5]}
-              label="Export Section 5 PDF"
-              tooltip="Download all of Section 5 (Medical Information & Screenings) as a PDF"
-            />
             <Chip
               icon={<PersonIcon />}
               label={
@@ -151,7 +228,6 @@ const Medical = () => {
               variant={client ? "filled" : "outlined"}
               size="medium"
             />
-            </Box>
           </Box>
         </CardContent>
       </Card>
@@ -181,85 +257,110 @@ const Medical = () => {
 
           {/* Tab Content */}
           <Box sx={{ p: 3 }}>
-            <ClientInfoBanner sx={{ mb: 3 }} />
-            {/* Main/Timeline Tab */}
+            <ClientInfoBanner sx={{ mb: 3 }} exportSection={5} />
+            {/* Main Tab: status of every other tab */}
             {activeTab === 0 && (
               <Box>
-                <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <TimelineIcon color="primary" />
-                  Medical Progress Timeline
-                </Typography>
-                
-                <Paper sx={{ p: 3, mt: 2 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1 }}>
+                  <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0 }}>
+                    <TimelineIcon color="primary" />
+                    Medical Records Overview
+                  </Typography>
+                  {!shouldUseMockData && (
+                    <Button
+                      size="small"
+                      startIcon={summary.loading ? <CircularProgress size={16} /> : <RefreshIcon />}
+                      onClick={() => loadSummary()}
+                      disabled={summary.loading}
+                    >
+                      Refresh
+                    </Button>
+                  )}
+                </Box>
+
+                {shouldUseMockData && (
+                  <Alert severity="info" sx={{ mt: 2 }}>Record status isn&apos;t available with mock data.</Alert>
+                )}
+                {summary.error && (
+                  <Alert severity="error" sx={{ mt: 2 }}>Could not load record status: {summary.error}</Alert>
+                )}
+
+                <Paper sx={{ p: 1, mt: 2 }}>
                   <List>
-                    {timelineItems.map((item, index) => (
-                      <ListItem key={index}>
-                        <ListItemIcon>
-                          {item.section5Date ? (
-                            <CheckCircleIcon color="success" />
-                          ) : (
-                            <UncheckedIcon color="disabled" />
-                          )}
-                        </ListItemIcon>
-                        <ListItemText
-                          primary={
-                            <Typography 
-                              variant="subtitle1" 
-                              sx={{ 
-                                fontWeight: 'medium',
-                                color: item.section5Date ? 'success.main' : 'text.secondary' 
-                              }}
-                            >
-                              {item.section5Title}
-                            </Typography>
-                          }
-                          secondary={
-                            <span style={{ display: 'inline-block', marginTop: '4px' }}>
-                              {item.section5Date ? (
-                                <Chip
-                                  label={`Completed: ${new Date(item.section5Date).toLocaleDateString()}`}
-                                  color="success"
-                                  size="small"
-                                />
-                              ) : (
-                                <Chip
-                                  label="Pending"
-                                  color="default"
-                                  variant="outlined"
-                                  size="small"
-                                />
-                              )}
-                            </span>
-                          }
-                        />
-                      </ListItem>
-                    ))}
+                    {MAIN_TAB_ITEMS.map((item) => {
+                      const sec = summarySections[item.key];
+                      const hasData = !!sec?.hasData;
+                      const lastAt = formatDateTime(sec?.lastUpdatedAt);
+                      return (
+                        <ListItem key={item.key} disablePadding>
+                          <ListItemButton onClick={() => setActiveTab(item.tab)}>
+                            <ListItemIcon>
+                              {hasData ? <CheckCircleIcon color="success" /> : <UncheckedIcon color="disabled" />}
+                            </ListItemIcon>
+                            <ListItemText
+                              primary={
+                                <Typography
+                                  variant="subtitle1"
+                                  sx={{ fontWeight: 'medium', color: hasData ? 'success.main' : 'text.secondary' }}
+                                >
+                                  {item.label}
+                                </Typography>
+                              }
+                              secondaryTypographyProps={{ component: 'div' }}
+                              secondary={
+                                <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 1, mt: 0.5 }}>
+                                  {!sec ? (
+                                    <Chip
+                                      label={summary.loading ? 'Loading…' : 'Unknown'}
+                                      variant="outlined"
+                                      size="small"
+                                    />
+                                  ) : sec.error ? (
+                                    <Chip label="Unavailable" color="warning" variant="outlined" size="small" />
+                                  ) : hasData ? (
+                                    <Chip
+                                      label={item.files
+                                        ? `${sec.total} file${sec.total === 1 ? '' : 's'} uploaded`
+                                        : `Data entered${sec.total > 1 ? ` (${sec.total} records)` : ''}`}
+                                      color="success"
+                                      size="small"
+                                    />
+                                  ) : (
+                                    <Chip label={item.files ? 'No files uploaded' : 'No data entered'} variant="outlined" size="small" />
+                                  )}
+                                  {hasData && lastAt && (
+                                    <Typography variant="body2" color="text.secondary" component="span">
+                                      {item.files ? 'Last uploaded' : 'Last entered'} {lastAt}
+                                      {sec.lastUpdatedBy ? ` by ${sec.lastUpdatedBy}` : ''}
+                                    </Typography>
+                                  )}
+                                </Box>
+                              }
+                            />
+                          </ListItemButton>
+                        </ListItem>
+                      );
+                    })}
                   </List>
                 </Paper>
-                
-                {/* Progress Summary */}
-                <Grid container spacing={2} sx={{ mt: 3 }}>
-                  <Grid item xs={12} sm={6}>
-                    <Paper sx={{ p: 2, textAlign: 'center', bgcolor: 'success.light' }}>
-                      <Typography variant="h4" color="success.contrastText">
-                        {timelineItems.filter(item => item.section5Date).length}
-                      </Typography>
-                      <Typography variant="body2" color="success.contrastText">
-                        Completed Medical Tasks
-                      </Typography>
-                    </Paper>
+
+                {/* Summary counts */}
+                {summaryLoaded && (
+                  <Grid container spacing={2} sx={{ mt: 3 }}>
+                    <Grid item xs={12} sm={6}>
+                      <Paper sx={{ p: 2, textAlign: 'center', bgcolor: 'success.light' }}>
+                        <Typography variant="h4" color="success.contrastText">{withData}</Typography>
+                        <Typography variant="body2" color="success.contrastText">Tabs With Data</Typography>
+                      </Paper>
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                      <Paper sx={{ p: 2, textAlign: 'center', bgcolor: 'warning.light' }}>
+                        <Typography variant="h4" color="warning.contrastText">{MAIN_TAB_ITEMS.length - withData}</Typography>
+                        <Typography variant="body2" color="warning.contrastText">Tabs Without Data</Typography>
+                      </Paper>
+                    </Grid>
                   </Grid>
-                  <Grid item xs={12} sm={6}>
-                    <Paper sx={{ p: 2, textAlign: 'center', bgcolor: 'warning.light' }}>
-                      <Typography variant="h4" color="warning.contrastText">
-                        {timelineItems.filter(item => !item.section5Date).length}
-                      </Typography>
-                      <Typography variant="body2" color="warning.contrastText">
-                        Pending Medical Tasks
-                      </Typography>
-                    </Paper>
-                  </Grid>
-                </Grid>
+                )}
               </Box>
             )}
 

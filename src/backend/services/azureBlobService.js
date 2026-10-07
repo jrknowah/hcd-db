@@ -151,7 +151,7 @@ class AzureBlobService {
       const params = { clientID };
       if (docType) params.docType = docType;
       
-      const response = await axios.get(`${this.apiUrl}/api/files/${clientID}`);
+      const response = await axios.get(`${this.apiUrl}/api/files/${encodeURIComponent(clientID)}`);
       
       console.log(`Found ${response.data.length} files for client ${clientID}`);
       return response.data;
@@ -183,7 +183,9 @@ class AzureBlobService {
         ];
       }
       
-      return []; // Return empty array on other errors
+      // Surface real failures; returning [] here made a failed request look like
+      // "No documents uploaded yet"
+      throw new Error(error.response?.data?.message || error.message || 'Failed to list files');
     }
   }
 
@@ -204,8 +206,11 @@ class AzureBlobService {
       // Real API call
       console.log(`Deleting ${blobName} via backend...`);
       
-      const response = await axios.delete(`${this.apiUrl}/api/file`, {
-        data: { blobName }
+      // Backend route is DELETE /api/file/:fileName; the full blob path
+      // (which contains slashes) goes in the blobName query param.
+      const fileName = blobName.split('/').pop();
+      await axios.delete(`${this.apiUrl}/api/file/${encodeURIComponent(fileName)}`, {
+        params: { blobName }
       });
       
       console.log(`Successfully deleted ${blobName}`);

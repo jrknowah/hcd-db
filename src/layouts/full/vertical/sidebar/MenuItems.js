@@ -67,15 +67,16 @@ const Menuitems = [
   },
 
   // ---------------------------------------------------------------------------
-  // Administration — hidden entirely for non-admins.
-  // These entries carry adminOnly: true and are stripped by filterMenuItems()
-  // before render. The route guard (ProtectedAdminRoute) is the real boundary;
-  // this only keeps a dead link out of the case manager's sidebar.
+  // Administration — hidden entirely for staff without access.
+  // adminOnly entries are IT Admin only; auditAccess entries are also shown to
+  // Level 1. filterMenuItems() strips them before render. The /admin route
+  // guards in App.jsx are the real boundary; this only keeps dead links out
+  // of the case manager's sidebar.
   // ---------------------------------------------------------------------------
   {
     navlabel: true,
     subheader: 'Administration',
-    adminOnly: true,
+    auditAccess: true,
   },
   {
     id: uniqueId(),
@@ -89,7 +90,7 @@ const Menuitems = [
     title: 'Audit Trail',
     icon: 'solar:history-linear',
     href: '/admin/audit',
-    adminOnly: true,
+    auditAccess: true,
   },
   {
     id: uniqueId(),
@@ -102,17 +103,19 @@ const Menuitems = [
 
 /**
  * Strips adminOnly entries (and any adminOnly children) when the current user
- * is not an admin. Returns the array unchanged when isAdmin is true, so the
- * common path allocates nothing.
+ * is not an admin, and auditAccess entries when they can't view the audit
+ * trail either. Returns the array unchanged for admins, so the common path
+ * allocates nothing.
  */
-export const filterMenuItems = (items, { isAdmin } = {}) => {
+export const filterMenuItems = (items, { isAdmin, canViewAudit } = {}) => {
   if (isAdmin) return items;
 
+  const visible = (item) => !item.adminOnly && (!item.auditAccess || canViewAudit);
   return items
-    .filter((item) => !item.adminOnly)
+    .filter(visible)
     .map((item) =>
       item.children
-        ? { ...item, children: item.children.filter((child) => !child.adminOnly) }
+        ? { ...item, children: item.children.filter(visible) }
         : item
     );
 };
