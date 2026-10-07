@@ -35,7 +35,7 @@ import {
   Timeline as TimelineIcon,
   Medication as MedicationIcon,
   Refresh as RefreshIcon,
-  // ExitToApp as DischargeIcon
+  ExitToApp as DischargeIcon
 } from '@mui/icons-material';
 import { getApiAuthHeaders } from "../../utils/apiAuth";
 import { httpError } from "../../utils/section5Lock";
@@ -50,8 +50,7 @@ import IDTNoteNursing from './IDTNoteNursing';
 import IDTNoteProvider from './IDTNoteProvider';
 import NursingArchive from './NursingArchive';
 import MedicalObservationRecord from './MedicalObservationRecord';
-// ✅ ADDED: Discharge component from Section 1
-// import Discharge from '../Section-1/Discharge';
+import DischargePlan from './DischargePlan';
 
 // 🔁 Section-switch fix: import each slice's setCurrentClient (aliased) so we
 // can wipe ALL Section-5 Redux state the instant the selected client changes.
@@ -76,7 +75,8 @@ const MAIN_TAB_ITEMS = [
   { key: 'observationRecord', label: 'Medical Observation Record', tab: 5 },
   { key: 'nursingIdt', label: 'Nursing IDT Notes', tab: 6 },
   { key: 'providerIdt', label: 'Provider IDT Notes', tab: 7 },
-  { key: 'nursingArchive', label: 'Nursing Archive', tab: 8, files: true },
+  { key: 'dischargePlan', label: 'Discharge Plan', tab: 8 },
+  { key: 'nursingArchive', label: 'Nursing Archive', tab: 9, files: true },
 ];
 
 const formatDateTime = (value) => {
@@ -235,7 +235,6 @@ const Medical = () => {
       {/* Main Content Card */}
       <Card>
         <CardContent sx={{ p: 0 }}>
-          {/* ✅ UPDATED: Added Discharge tab - now 10 tabs total */}
           <Tabs 
             value={activeTab} 
             onChange={handleTabChange}
@@ -251,7 +250,7 @@ const Medical = () => {
             <Tab icon={<MedicationIcon />} label="Observation Record" iconPosition="start" />
             <Tab icon={<IDTIcon />} label="Nursing IDT" iconPosition="start" />
             <Tab icon={<IDTIcon />} label="Provider IDT" iconPosition="start" />
-            {/* <Tab icon={<DischargeIcon />} label="Discharge" iconPosition="start" /> */}
+            <Tab icon={<DischargeIcon />} label="Discharge Plan" iconPosition="start" />
             <Tab icon={<ArchiveIcon />} label="Nursing Archive" iconPosition="start" />
           </Tabs>
 
@@ -441,19 +440,19 @@ const Medical = () => {
               </Box>
             )}
 
-            {/* ✅ NEW: Discharge Tab 
+            {/* Discharge Plan Tab */}
             {activeTab === 8 && (
               <Box>
                 <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                   <DischargeIcon color="primary" />
-                  Client Discharge Summary
+                  Discharge Plan
                 </Typography>
-                <Discharge />
+                <DischargePlan />
               </Box>
             )}
-*/}
+
             {/* Nursing Archive Tab */}
-            {activeTab === 8 && (
+            {activeTab === 9 && (
               <Box>
                 <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                   <ArchiveIcon color="primary" />

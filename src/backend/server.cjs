@@ -1005,6 +1005,24 @@ try {
   console.log('⚠️  Could not load section5Summary.js:', err.message);
 }
 
+// SECTION 5 DISCHARGE PLAN (one per client)
+try {
+  const dischargePlanRouter = require('./routes/dischargePlan.js');
+  app.use('/api/discharge-plan', authMiddleware, dischargePlanRouter);
+  console.log('✅ Discharge Plan router loaded');
+} catch (err) {
+  console.log('⚠️  Could not load dischargePlan.js:', err.message);
+}
+
+// SECTION 1 EXIT FORM (one per client)
+try {
+  const exitFormRouter = require('./routes/exitForm.js');
+  app.use('/api/exit-form', authMiddleware, exitFormRouter);
+  console.log('✅ Exit Form router loaded');
+} catch (err) {
+  console.log('⚠️  Could not load exitForm.js:', err.message);
+}
+
 // SECTION 5 NURSING ARCHIVE UPLOADERS (who uploaded each file; DB + AuditLog)
 try {
   const nursingArchiveUploadsRouter = require('./routes/nursingArchiveUploads.js');

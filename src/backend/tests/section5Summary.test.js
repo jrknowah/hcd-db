@@ -50,7 +50,7 @@ describe('GET /api/section5/summary/:clientID', () => {
     const s = byKey(res.body);
     expect(Object.keys(s)).toEqual([
       'faceSheet', 'nursingScreening', 'nursingAssessment', 'progressNotes',
-      'observationRecord', 'nursingIdt', 'providerIdt',
+      'observationRecord', 'nursingIdt', 'providerIdt', 'dischargePlan',
     ]);
     for (const sec of res.body.sections) {
       expect(sec).toMatchObject({ hasData: false, total: 0, lastUpdatedAt: null, lastUpdatedBy: null, error: false });
