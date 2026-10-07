@@ -131,9 +131,17 @@ function selectList(S, { includeUserAgent = false } = {}) {
 
 function actorFrom(req) {
   return {
-    userId: req.user?.oid || req.user?.sub || req.user?.userID || 'unknown',
-    userName: req.user?.name || req.user?.preferred_username || null,
+    // authMiddleware sets { userId, email, name }. Prefer email to match what the
+    // other audit writers store in userID (see routes/clientExport.js).
+    userId: req.user?.email || req.user?.userId || 'unknown',
+    userName: req.user?.name || null,
   };
+}
+
+/** Caller IP without the IPv4-mapped prefix or the port Azure appends to X-Forwarded-For. */
+function clientIp(req) {
+  const ip = (req.ip || '').replace(/^::ffff:/, '');
+  return (/^[\d.]+:\d+$/.test(ip) ? ip.split(':')[0] : ip) || null;
 }
 
 /**
@@ -153,7 +161,7 @@ async function recordAuditAccess(req, action, resourceId) {
       ['action', sql.NVarChar(100), action],
       ['resourceType', sql.NVarChar(100), 'AuditLog'],
       ['resourceId', sql.NVarChar(255), resourceId || null],
-      ['ip', sql.NVarChar(64), req.ip || null],
+      ['ip', sql.NVarChar(64), clientIp(req)],
       ['userAgent', sql.NVarChar(500), (req.get('user-agent') || '').slice(0, 500)],
     ].filter(([key]) => S.cols[key]);
 
