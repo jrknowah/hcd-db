@@ -257,7 +257,7 @@ export default function DocumentationReport({ area, title, subtitle }) {
               >
                 <CardActionArea onClick={() => toggleCheck(ch.key)} sx={{ height: '100%' }}>
                   <CardContent>
-                    <Typography variant="caption" color="text.secondary" noWrap component="div">
+                    <Typography variant="caption" color="text.secondary" component="div" sx={{ lineHeight: 1.3 }}>
                       S{ch.section} · {ch.label}
                     </Typography>
                     <Typography variant="h5" color={gapCounts[ch.key] ? 'error.main' : 'text.primary'}>
