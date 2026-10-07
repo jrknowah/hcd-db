@@ -69,14 +69,15 @@ const Menuitems = [
   // ---------------------------------------------------------------------------
   // Administration — hidden entirely for staff without access.
   // adminOnly entries are IT Admin only; auditAccess entries are also shown to
-  // Level 1. filterMenuItems() strips them before render. The /admin route
+  // Level 1; reportArea entries to that area's admin group (HOPE_nursing_admin /
+  // HOPE_behavioral_admin). filterMenuItems() strips them before render. The /admin route
   // guards in App.jsx are the real boundary; this only keeps dead links out
   // of the case manager's sidebar.
   // ---------------------------------------------------------------------------
   {
     navlabel: true,
     subheader: 'Administration',
-    auditAccess: true,
+    anyAdminPage: true,
   },
   {
     id: uniqueId(),
@@ -97,14 +98,14 @@ const Menuitems = [
     title: 'Behavioral Health (S1–4)',
     icon: 'solar:clipboard-check-linear',
     href: '/admin/behavioral',
-    auditAccess: true,
+    reportArea: 'behavioral',
   },
   {
     id: uniqueId(),
     title: 'Nursing (S5)',
     icon: 'solar:health-linear',
     href: '/admin/nursing',
-    auditAccess: true,
+    reportArea: 'nursing',
   },
   {
     id: uniqueId(),
@@ -117,14 +118,22 @@ const Menuitems = [
 
 /**
  * Strips adminOnly entries (and any adminOnly children) when the current user
- * is not an admin, and auditAccess entries when they can't view the audit
- * trail either. Returns the array unchanged for admins, so the common path
- * allocates nothing.
+ * is not an admin, auditAccess entries when they can't view the audit trail,
+ * reportArea entries when they can't view that report, and the Administration
+ * heading when none of those are left. Returns the array unchanged for
+ * admins, so the common path allocates nothing.
  */
-export const filterMenuItems = (items, { isAdmin, canViewAudit } = {}) => {
+export const filterMenuItems = (items, {
+  isAdmin, canViewAudit, canViewNursing, canViewBehavioral,
+} = {}) => {
   if (isAdmin) return items;
 
-  const visible = (item) => !item.adminOnly && (!item.auditAccess || canViewAudit);
+  const reports = { nursing: !!canViewNursing, behavioral: !!canViewBehavioral };
+  const anyAdminPage = !!canViewAudit || reports.nursing || reports.behavioral;
+  const visible = (item) => !item.adminOnly
+    && (!item.auditAccess || canViewAudit)
+    && (!item.reportArea || reports[item.reportArea])
+    && (!item.anyAdminPage || anyAdminPage);
   return items
     .filter(visible)
     .map((item) =>

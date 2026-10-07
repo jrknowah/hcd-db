@@ -1,8 +1,9 @@
 // routes/admin/documentation.cjs
 // Admin > Behavioral Health (Sections 1-4) and Admin > Nursing (Section 5):
 // which active clients have documentation that is missing, unfinished or out
-// of date. Mounted at /api/admin/documentation behind authMiddleware +
-// requireSupervisorAccess (IT Admin or Level 1).
+// of date. Mounted at /api/admin/documentation behind authMiddleware;
+// requireDocumentationAccess limits each report to IT Admin and that area's
+// admin group (HOPE_behavioral_admin / HOPE_nursing_admin).
 //
 //   GET /api/admin/documentation/behavioral
 //   GET /api/admin/documentation/nursing
@@ -27,6 +28,7 @@
 const express = require('express');
 const sql = require('mssql');
 const { getPool } = require('../../store/azureSql.js');
+const { requireDocumentationAccess } = require('../../middleware/documentationAccess.js');
 
 const router = express.Router();
 
@@ -549,11 +551,9 @@ async function recordView(pool, req, areaKey, clientCount) {
   }
 }
 
-router.get('/:area', async (req, res) => {
+// requireDocumentationAccess also answers 404 for an unknown area
+router.get('/:area', requireDocumentationAccess, async (req, res) => {
   const areaKey = req.params.area;
-  if (!AREAS[areaKey]) {
-    return res.status(404).json({ error: `Unknown report area: ${areaKey}` });
-  }
 
   try {
     const pool = await getPool();

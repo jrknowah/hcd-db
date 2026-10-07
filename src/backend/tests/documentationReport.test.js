@@ -41,10 +41,18 @@ require.cache[azureSqlPath] = {
 };
 
 const router = require('../routes/admin/documentation.cjs');
+const { AREA_GROUP_IDS } = require('../middleware/documentationAccess.js');
+
+// The real Object Ids are filled in once known; use sample ones here
+AREA_GROUP_IDS.nursing = 'nursing-admin-group';
+AREA_GROUP_IDS.behavioral = 'behavioral-admin-group';
+const LEVEL1_GROUP = 'f47eca14-0206-4719-91c7-fba7b2be382c';
 const { buildReport } = router;
 
 const app = express();
-app.use((req, _res, next) => { req.user = { email: 'sup@hope.org', name: 'Supervisor' }; next(); });
+// Signed-in user for the next request (IT Admin unless a test says otherwise)
+let user;
+app.use((req, _res, next) => { req.user = user; next(); });
 app.use('/api/admin/documentation', router);
 
 const daysAgo = (n) => new Date(Date.now() - n * 24 * 60 * 60 * 1000);
@@ -58,6 +66,39 @@ describe('GET /api/admin/documentation/:area', () => {
     rows = {};
     failing = new Set();
     audit = [];
+    user = { email: 'sup@hope.org', name: 'Supervisor', isAdmin: true, groups: [] };
+  });
+
+  describe('access', () => {
+    beforeEach(() => { rows.Clients = []; });
+
+    it('lets the nursing admin group open the nursing report only', async () => {
+      user = { email: 'rn@hope.org', isAdmin: false, groups: ['nursing-admin-group'] };
+      expect((await request(app).get('/api/admin/documentation/nursing')).status).toBe(200);
+      expect((await request(app).get('/api/admin/documentation/behavioral')).status).toBe(403);
+    });
+
+    it('lets the behavioral admin group open the behavioral report only', async () => {
+      user = { email: 'cm@hope.org', isAdmin: false, groups: ['behavioral-admin-group'] };
+      expect((await request(app).get('/api/admin/documentation/behavioral')).status).toBe(200);
+      expect((await request(app).get('/api/admin/documentation/nursing')).status).toBe(403);
+    });
+
+    it('keeps Level 1 and other staff out, without logging a view', async () => {
+      user = { email: 'l1@hope.org', isAdmin: false, groups: [LEVEL1_GROUP] };
+      const res = await request(app).get('/api/admin/documentation/nursing');
+      expect(res.status).toBe(403);
+      expect(res.body.code).toBe('DOCUMENTATION_ACCESS_REQUIRED');
+      expect(audit).toHaveLength(0);
+    });
+
+    it('matches nobody while a group Id is blank', async () => {
+      AREA_GROUP_IDS.nursing = '';
+      user = { email: 'x@hope.org', isAdmin: false, groups: [''] };
+      const res = await request(app).get('/api/admin/documentation/nursing');
+      AREA_GROUP_IDS.nursing = 'nursing-admin-group';
+      expect(res.status).toBe(403);
+    });
   });
 
   it('rejects an unknown area', async () => {

@@ -11,6 +11,11 @@ export const GROUP_MAPPINGS = {
   'HOPE_level1': 'f47eca14-0206-4719-91c7-fba7b2be382c',
   'HOPE_audit': 'fec5c917-431c-4663-85b2-efc9e9053e96',
   'HOPE_readonly': 'e95d2a7a-0390-414e-92bd-26fb5b745acf',
+  // Documentation report supervisors (Admin > Nursing / Behavioral Health).
+  // TODO: fill in the Object Id from Entra > Groups. Empty = nobody matches.
+  // Must match middleware/documentationAccess.js.
+  'HOPE_nursing_admin': '',
+  'HOPE_behavioral_admin': '',
   'hope_eubanks': 'd5115dd6-74f0-4abe-951f-6dc3e96fb1ee',
   'hope_pacific': '1985ac8b-285d-45c1-9d0e-1ded3d3f6fca',
   'hope_heart': '',
@@ -123,10 +128,27 @@ export const canUnlockLockedRecords = (account) => {
 // (middleware/signedFormUnlock.js) on /api/admin/audit.
 export const canViewAuditTrail = (account) => canUnlockLockedRecords(account);
 
-// Admin > Behavioral Health / Nursing documentation reports: IT Admin or
-// Level 1. Must stay in sync with requireSupervisorAccess
-// (middleware/signedFormUnlock.js) on /api/admin/documentation.
-export const canViewDocumentationReports = (account) => canUnlockLockedRecords(account);
+// Admin > Behavioral Health (Sections 1-4) and Admin > Nursing (Section 5)
+// documentation reports: IT Admin sees both; HOPE_behavioral_admin and
+// HOPE_nursing_admin each see their own. Display-only; the backend
+// (middleware/documentationAccess.js) enforces it.
+export const DOCUMENTATION_REPORT_GROUPS = {
+  behavioral: GROUP_MAPPINGS.HOPE_behavioral_admin,
+  nursing: GROUP_MAPPINGS.HOPE_nursing_admin,
+};
+
+export const canViewDocumentationReport = (account, area) => {
+  if (isAdminAccount(account)) return true;
+  const groupId = DOCUMENTATION_REPORT_GROUPS[area];
+  return !!groupId && (account?.idTokenClaims?.groups || []).includes(groupId);
+};
+
+export const canViewNursingReport = (account) => canViewDocumentationReport(account, 'nursing');
+export const canViewBehavioralReport = (account) => canViewDocumentationReport(account, 'behavioral');
+
+// Who may open the /admin console at all: anyone with at least one page in it
+export const canOpenAdminConsole = (account) =>
+  canViewAuditTrail(account) || canViewNursingReport(account) || canViewBehavioralReport(account);
 
 export const ROLE_DISPLAY_NAMES = {
   IT_ADMIN: 'IT Administrator',

@@ -44,24 +44,8 @@ const requireAuditAccess = (req, res, next) => {
   next();
 };
 
-// Admin > Behavioral Health / Nursing documentation reports
-// (/api/admin/documentation): IT Admin or Level 1, same as the audit trail.
-const requireSupervisorAccess = (req, res, next) => {
-  if (!req.user) {
-    return res.status(401).json({ error: 'Authentication required', code: 'AUTH_REQUIRED' });
-  }
-  if (!canUnlockSignedForms(req.user)) {
-    return res.status(403).json({
-      error: 'Only IT Admin or Level 1 users can view documentation reports',
-      code: 'SUPERVISOR_ACCESS_REQUIRED',
-    });
-  }
-  next();
-};
-
 module.exports = {
   canUnlockSignedForms,
-  requireSupervisorAccess,
   requireSignedFormUnlock,
   requireUnlockPermission,
   requireAuditAccess,

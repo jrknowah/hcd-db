@@ -86,12 +86,23 @@ describe('DocumentationReport', () => {
 });
 
 describe('sidebar', () => {
-  const titles = (items) => items.map((i) => i.title).filter(Boolean);
+  const titles = (items) => items.map((i) => i.title || i.subheader).filter(Boolean);
 
-  it('shows the documentation reports to Level 1 but not to other staff', () => {
-    expect(titles(filterMenuItems(Menuitems, { isAdmin: false, canViewAudit: true })))
-      .toEqual(expect.arrayContaining(['Behavioral Health (S1–4)', 'Nursing (S5)']));
-    expect(titles(filterMenuItems(Menuitems, { isAdmin: false, canViewAudit: false })))
-      .not.toContain('Nursing (S5)');
+  it('shows each documentation report only to its admin group', () => {
+    const nursing = titles(filterMenuItems(Menuitems, { isAdmin: false, canViewNursing: true }));
+    expect(nursing).toEqual(expect.arrayContaining(['Administration', 'Nursing (S5)']));
+    expect(nursing).not.toContain('Behavioral Health (S1–4)');
+    expect(nursing).not.toContain('Audit Trail');
+
+    const behavioral = titles(filterMenuItems(Menuitems, { isAdmin: false, canViewBehavioral: true }));
+    expect(behavioral).toContain('Behavioral Health (S1–4)');
+    expect(behavioral).not.toContain('Nursing (S5)');
+  });
+
+  it('hides the reports from Level 1', () => {
+    const level1 = titles(filterMenuItems(Menuitems, { isAdmin: false, canViewAudit: true }));
+    expect(level1).toContain('Audit Trail');
+    expect(level1).not.toContain('Nursing (S5)');
+    expect(level1).not.toContain('Behavioral Health (S1–4)');
   });
 });

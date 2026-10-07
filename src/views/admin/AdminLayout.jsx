@@ -1,7 +1,9 @@
 // src/components/admin/AdminLayout.jsx
 import { NavLink, Outlet } from 'react-router-dom';
 import { useMsal } from '@azure/msal-react';
-import { isAdminAccount } from '../../backend/config/groupConfig';
+import {
+  isAdminAccount, canViewAuditTrail, canViewNursingReport, canViewBehavioralReport,
+} from '../../backend/config/groupConfig';
 import {
   Box,
   Drawer,
@@ -27,13 +29,13 @@ import {
 
 const DRAWER_WIDTH = 220;
 
-// Level 1 users can open the console for the Audit Trail and the
-// documentation reports; everything marked adminOnly is IT Admin only.
+// IT Admin sees everything. Other entries carry canAccess: Level 1 gets the
+// Audit Trail, HOPE_behavioral_admin / HOPE_nursing_admin their report.
 const adminNav = [
   { label: 'System Errors', path: '/admin/errors', icon: <BugReportIcon />, adminOnly: true },
-  { label: 'Audit Trail', path: '/admin/audit', icon: <HistoryIcon /> },
-  { label: 'Behavioral Health (S1–4)', path: '/admin/behavioral', icon: <FactCheckIcon /> },
-  { label: 'Nursing (S5)', path: '/admin/nursing', icon: <LocalHospitalIcon /> },
+  { label: 'Audit Trail', path: '/admin/audit', icon: <HistoryIcon />, canAccess: canViewAuditTrail },
+  { label: 'Behavioral Health (S1–4)', path: '/admin/behavioral', icon: <FactCheckIcon />, canAccess: canViewBehavioralReport },
+  { label: 'Nursing (S5)', path: '/admin/nursing', icon: <LocalHospitalIcon />, canAccess: canViewNursingReport },
   { label: 'Reports & Analytics', path: '/admin/analytics', icon: <InsightsIcon />, adminOnly: true },
   { label: 'User Access', path: '/admin/access', icon: <PeopleIcon />, disabled: true, adminOnly: true },
   { label: 'Backend Health', path: '/admin/health', icon: <MonitorHeartIcon />, disabled: true, adminOnly: true },
@@ -42,7 +44,9 @@ const adminNav = [
 export default function AdminLayout() {
   const { accounts } = useMsal();
   const isAdmin = isAdminAccount(accounts[0]);
-  const navItems = isAdmin ? adminNav : adminNav.filter((item) => !item.adminOnly);
+  const navItems = isAdmin
+    ? adminNav
+    : adminNav.filter((item) => !item.adminOnly && item.canAccess?.(accounts[0]));
 
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh' }}>

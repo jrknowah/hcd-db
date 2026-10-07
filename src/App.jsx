@@ -14,7 +14,9 @@ import  store  from './backend/store/store';
 import AdminErrors from './views/Dashboard/AdminErrors';
 // import { ProtectedAdminRoute } from './views/Dashboard/ProtectedAdminRoute';
 import ProtectedRoute from './components/Auth/ProtectedRoute';
-import { isAdminAccount, canViewAuditTrail, canViewDocumentationReports } from './backend/config/groupConfig';
+import {
+  isAdminAccount, canViewAuditTrail, canOpenAdminConsole, canViewNursingReport, canViewBehavioralReport,
+} from './backend/config/groupConfig';
 import AdminLayout from './views/admin/AdminLayout';
 
 // At the very top of App.jsx, before any other code:
@@ -350,13 +352,14 @@ const AppRoutes = () => {
 
             {/* ========================================
                 ✅ ADMIN — its own layout branch, sibling to FullLayout.
-                Guard is applied ONCE on the parent, so every child route
-                inherits it. AdminLayout renders the admin sidebar + <Outlet />.
+                The parent lets in anyone with at least one admin page; each
+                child route then guards its own page. AdminLayout renders the admin sidebar + <Outlet />.
                 No client-scoped section state applies here.
                 ======================================== */}
             <Route path="/admin" element={
-              // IT Admin sees the whole console; Level 1 sees only the audit trail
-              <ProtectedRoute canAccess={canViewAuditTrail}>
+              // IT Admin sees the whole console; Level 1 the audit trail;
+              // nursing / behavioral admins their documentation report
+              <ProtectedRoute canAccess={canOpenAdminConsole}>
                 <ComponentErrorBoundary name="AdminLayout">
                   <AdminLayout />
                 </ComponentErrorBoundary>
@@ -373,11 +376,13 @@ const AppRoutes = () => {
               } />
 
               <Route path="audit" element={
-                <ComponentErrorBoundary name="Admin Audit">
-                  <Suspense fallback={<LoadingFallback name="Audit Trail" />}>
-                    <AdminAudit />
-                  </Suspense>
-                </ComponentErrorBoundary>
+                <ProtectedRoute canAccess={canViewAuditTrail}>
+                  <ComponentErrorBoundary name="Admin Audit">
+                    <Suspense fallback={<LoadingFallback name="Audit Trail" />}>
+                      <AdminAudit />
+                    </Suspense>
+                  </ComponentErrorBoundary>
+                </ProtectedRoute>
               } />
 
               <Route path="analytics" element={
@@ -391,7 +396,7 @@ const AppRoutes = () => {
               } />
 
               <Route path="behavioral" element={
-                <ProtectedRoute canAccess={canViewDocumentationReports}>
+                <ProtectedRoute canAccess={canViewBehavioralReport}>
                   <ComponentErrorBoundary name="Behavioral Health Documentation">
                     <Suspense fallback={<LoadingFallback name="Behavioral Health Documentation" />}>
                       <DocumentationReport
@@ -406,7 +411,7 @@ const AppRoutes = () => {
               } />
 
               <Route path="nursing" element={
-                <ProtectedRoute canAccess={canViewDocumentationReports}>
+                <ProtectedRoute canAccess={canViewNursingReport}>
                   <ComponentErrorBoundary name="Nursing Documentation">
                     <Suspense fallback={<LoadingFallback name="Nursing Documentation" />}>
                       <DocumentationReport
@@ -448,11 +453,16 @@ const AppRoutes = () => {
 };
 
 // ✅ Main App Component with MSAL Initialization
-// /admin landing page: IT Admin starts on System Errors, Level 1 (audit
-// trail only) on the Audit Trail.
+// /admin landing page: IT Admin starts on System Errors, everyone else on
+// the first admin page they can open.
 function AdminHomeRedirect() {
   const { accounts } = useMsal();
-  const to = isAdminAccount(accounts[0]) ? '/admin/errors' : '/admin/audit';
+  const account = accounts[0];
+  let to = '/unauthorized';
+  if (isAdminAccount(account)) to = '/admin/errors';
+  else if (canViewAuditTrail(account)) to = '/admin/audit';
+  else if (canViewBehavioralReport(account)) to = '/admin/behavioral';
+  else if (canViewNursingReport(account)) to = '/admin/nursing';
   return <Navigate to={to} replace />;
 }
 
