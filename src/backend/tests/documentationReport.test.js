@@ -76,7 +76,8 @@ describe('GET /api/admin/documentation/:area', () => {
     const [c1] = res.body.clients;
     expect(c1.items.nursingAssessment.status).toBe('missing');
     expect(c1.items.observationRecord.status).toBe('na');
-    expect(c1.gapCount).toBe(6);
+    expect(c1.items.nursingIdt.status).toBe('pending'); // first IDT note has 90 days
+    expect(c1.gapCount).toBe(4);
     expect(res.body.summary).toMatchObject({ activeClients: 1, clientsWithGaps: 1 });
 
     expect(audit).toHaveLength(1);
@@ -103,6 +104,20 @@ describe('GET /api/admin/documentation/:area', () => {
     expect(item('C2').status).toBe('overdue');
     expect(item('C3').status).toBe('ok');
     expect(report.summary.byCheck.progressNotes).toMatchObject({ incomplete: 1, overdue: 1, ok: 1 });
+  });
+
+  it('requires IDT notes every 90 days', async () => {
+    rows.Clients = [client('C1', 60), client('C2', 200), client('C3', 200)];
+    rows.idt_nursing_notes = [
+      { clientID: 'C2', total: 2, drafts: 0, lastAt: daysAgo(80) },
+      { clientID: 'C3', total: 2, drafts: 0, lastAt: daysAgo(100) },
+    ];
+    const report = await buildReport(fakePool, 'nursing');
+    const item = (id) => report.clients.find((c) => c.clientID === id).items;
+    expect(item('C1').nursingIdt.status).toBe('pending');
+    expect(item('C2').nursingIdt.status).toBe('ok');
+    expect(item('C3').nursingIdt.status).toBe('overdue');
+    expect(item('C3').providerIdt.status).toBe('missing');
   });
 
   it('blanks only the check whose table fails', async () => {
@@ -137,6 +152,38 @@ describe('GET /api/admin/documentation/:area', () => {
       expect(item('C3')).toMatchObject({ status: 'incomplete', detail: '2 forms started but not signed' });
     });
 
+    it('makes Sections 1-3 due 72 hours after the admit date', async () => {
+      rows.Clients = [client('C1', 2), client('C2', 3)];
+      const report = await buildReport(fakePool, 'behavioral');
+      const items = (id) => report.clients.find((c) => c.clientID === id).items;
+      for (const key of ['faceSheet', 'consentForms', 'bioSocial', 'mentalHealth', 'assessmentPlan']) {
+        expect(items('C1')[key].status).toBe('pending');
+        expect(items('C2')[key].status).toBe('missing');
+      }
+    });
+
+    it('requires a re-assessment one year after admission, then yearly', async () => {
+      rows.Clients = [client('C1', 300), client('C2', 370), client('C3', 700)];
+      rows.ReassessmentData = [{ clientID: 'C3', total: 1, unfinished: 0, lastAt: daysAgo(300) }];
+      const report = await buildReport(fakePool, 'behavioral');
+      const item = (id) => report.clients.find((c) => c.clientID === id).items.reassessment;
+      expect(item('C1').status).toBe('pending');
+      expect(item('C2').status).toBe('missing');
+      expect(item('C3').status).toBe('ok');
+    });
+
+    it('requires a care plan update every 90 days', async () => {
+      rows.Clients = [client('C1', 200), client('C2', 200)];
+      rows.CarePlans = [
+        { clientID: 'C1', total: 1, drafts: 0, lastAt: daysAgo(80) },
+        { clientID: 'C2', total: 1, drafts: 0, lastAt: daysAgo(95) },
+      ];
+      const report = await buildReport(fakePool, 'behavioral');
+      const item = (id) => report.clients.find((c) => c.clientID === id).items.carePlan;
+      expect(item('C1').status).toBe('ok');
+      expect(item('C2').status).toBe('overdue');
+    });
+
     it('flags assessments not marked Complete', async () => {
       rows.Clients = [client('C1', 30)];
       rows.BioSocialAssessment = [{ clientID: 'C1', total: 1, complete: 0, pct: 40, lastAt: daysAgo(3) }];
@@ -147,8 +194,8 @@ describe('GET /api/admin/documentation/:area', () => {
     });
 
     it('flags overdue re-assessments and assessment care plans', async () => {
-      rows.Clients = [client('C1', 400)];
-      rows.ReassessmentData = [{ clientID: 'C1', total: 1, unfinished: 0, lastAt: daysAgo(200) }];
+      rows.Clients = [client('C1', 800)];
+      rows.ReassessmentData = [{ clientID: 'C1', total: 1, unfinished: 0, lastAt: daysAgo(400) }];
       rows.AssessmentCarePlans = [{ clientID: 'C1', total: 1, open: 1, pastDue: 1, lastAt: daysAgo(30) }];
       const { items } = (await buildReport(fakePool, 'behavioral')).clients[0];
       expect(items.reassessment.status).toBe('overdue');

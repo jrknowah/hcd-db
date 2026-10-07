@@ -41,6 +41,12 @@ const ENCOUNTER_NOTES_PER_WEEK = 2;
 const CORE_CONSENT_FORMS = ['orientation', 'clientRights', 'consentTreatment'];
 const SIGNED_FORM_STATUSES = ['completed', 'submitted', 'approved'];
 
+// Agency deadlines
+const INTAKE_DUE_DAYS = 3;         // Sections 1-3 due within 72 hours of the admit date
+const REASSESS_EVERY_DAYS = 365;   // Section 3 re-assessment annually after admission
+const CARE_PLAN_REVIEW_DAYS = 90;  // Section 4 care plan updated every 90 days
+const IDT_EVERY_DAYS = 90;         // Section 5 nursing / provider IDT notes every 90 days
+
 // clientIDs are stored as different types (and sometimes padded) across tables
 const CID = (col = 'clientID') => `LTRIM(RTRIM(CAST(${col} AS NVARCHAR(50))))`;
 // Latest of createdAt / updatedAt (updatedAt may be NULL)
@@ -64,15 +70,23 @@ const fmtDate = (value) => {
   return Number.isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10);
 };
 
+// Admit date + days, as YYYY-MM-DD; "within N days of admission" if unknown
+const fmtDue = (client, days) => {
+  if (!client.admitDate) return `within ${days} days of admission`;
+  const d = new Date(client.admitDate);
+  d.setUTCDate(d.getUTCDate() + days);
+  return `by ${d.toISOString().slice(0, 10)}`;
+};
+
 const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
-// Nothing on file: "missing" once the client has been here longer than the
-// grace period, "pending" before that. Clients with no admit date are treated
+// Nothing on file: "missing" once the grace period has run out (graceDays
+// full days since the admit date, so 3 = 72 hours), "pending" before that. Clients with no admit date are treated
 // as past the grace period.
 const notEntered = (client, graceDays, what = 'Not entered') =>
-  client.daysEnrolled === null || client.daysEnrolled > graceDays
+  client.daysEnrolled === null || client.daysEnrolled >= graceDays
     ? { status: 'missing', detail: what }
-    : { status: 'pending', detail: `${what} (due within ${graceDays} days of admission)` };
+    : { status: 'pending', detail: `${what} (due ${fmtDue(client, graceDays)})` };
 
 // Simple "is there a record, is any of it a draft, is it recent enough" check
 // used by most notes and forms.
@@ -106,18 +120,18 @@ const BEHAVIORAL_CHECKS = [
     key: 'faceSheet',
     section: 1,
     label: 'Client Face Sheet',
-    rule: 'Contact / insurance face sheet entered within 7 days of admission.',
+    rule: 'Contact / insurance face sheet entered within 72 hours of the admit date.',
     sql: () => `
       SELECT ${CID()} AS clientID, COUNT(*) AS total
       FROM ClientFace
       GROUP BY ${CID()}`,
-    evaluate: recordCheck({ graceDays: 7 }),
+    evaluate: recordCheck({ graceDays: INTAKE_DUE_DAYS }),
   },
   {
     key: 'consentForms',
     section: 2,
     label: 'Consent Forms',
-    rule: `Core intake forms (Orientation, Client Rights, Consent for Treatment) signed within 3 days of admission; any other form that was started but never signed is flagged.`,
+    rule: `Core intake forms (Orientation, Client Rights, Consent for Treatment) signed within 72 hours of the admit date; any other form that was started but never signed is flagged.`,
     sql: () => `
       SELECT ${CID()} AS clientID,
              COUNT(*) AS total,
@@ -132,9 +146,9 @@ const BEHAVIORAL_CHECKS = [
       const unsigned = Number(row?.unsigned) || 0;
       const lastAt = row?.lastAt || null;
       const coreMissing = CORE_CONSENT_FORMS.length - coreSigned;
-      if (!row || !row.total) return notEntered(client, 3, 'No forms started');
+      if (!row || !row.total) return notEntered(client, INTAKE_DUE_DAYS, 'No forms started');
       if (coreMissing > 0) {
-        const late = client.daysEnrolled === null || client.daysEnrolled > 3;
+        const late = client.daysEnrolled === null || client.daysEnrolled >= INTAKE_DUE_DAYS;
         const detail = `${coreSigned} of ${CORE_CONSENT_FORMS.length} core forms signed` +
           (unsigned ? `; ${plural(unsigned, 'form')} unsigned` : '');
         return { status: late ? 'incomplete' : 'pending', detail, lastAt };
@@ -147,7 +161,7 @@ const BEHAVIORAL_CHECKS = [
     key: 'bioSocial',
     section: 3,
     label: 'Bio-Social Assessment',
-    rule: 'Completed (marked Complete) within 14 days of admission.',
+    rule: 'Completed (marked Complete) within 72 hours of the admit date.',
     sql: () => `
       SELECT ${CID()} AS clientID, COUNT(*) AS total,
              SUM(CASE WHEN completionStatus = 'Complete' THEN 1 ELSE 0 END) AS complete,
@@ -155,13 +169,13 @@ const BEHAVIORAL_CHECKS = [
              ${LAST_AT()} AS lastAt
       FROM BioSocialAssessment
       GROUP BY ${CID()}`,
-    evaluate: assessmentCheck(14),
+    evaluate: assessmentCheck(INTAKE_DUE_DAYS),
   },
   {
     key: 'mentalHealth',
     section: 3,
     label: 'Mental Health Assessment',
-    rule: 'Completed (marked Complete) within 14 days of admission.',
+    rule: 'Completed (marked Complete) within 72 hours of the admit date.',
     sql: () => `
       SELECT ${CID()} AS clientID, COUNT(*) AS total,
              SUM(CASE WHEN completionStatus = 'Complete' THEN 1 ELSE 0 END) AS complete,
@@ -169,13 +183,13 @@ const BEHAVIORAL_CHECKS = [
              ${LAST_AT()} AS lastAt
       FROM MentalHealthAssessments
       GROUP BY ${CID()}`,
-    evaluate: assessmentCheck(14),
+    evaluate: assessmentCheck(INTAKE_DUE_DAYS),
   },
   {
     key: 'reassessment',
     section: 3,
     label: 'Re-Assessment',
-    rule: 'A re-assessment every 180 days after admission; the latest one must be marked Complete.',
+    rule: 'A re-assessment annually: the first is due one year after the admit date, then every year after the last one. The latest one must be marked Complete.',
     sql: () => `
       SELECT ${CID()} AS clientID, COUNT(*) AS total,
              MAX(COALESCE(CAST(dateLastReAssess AS DATETIME2), createdAt)) AS lastAt,
@@ -183,7 +197,7 @@ const BEHAVIORAL_CHECKS = [
       FROM ReassessmentData
       GROUP BY ${CID()}`,
     evaluate: (row, client, ctx) => {
-      const every = 180;
+      const every = REASSESS_EVERY_DAYS;
       if (!row || !row.total) {
         return notEntered(client, every, 'No re-assessment on file');
       }
@@ -202,7 +216,7 @@ const BEHAVIORAL_CHECKS = [
     key: 'assessmentPlan',
     section: 3,
     label: 'Assessment Care Plan',
-    rule: 'An assessment care plan within 14 days of admission; flagged while not Complete, and overdue once past its expected completion date.',
+    rule: 'An assessment care plan within 72 hours of the admit date; flagged while not Complete, and overdue once past its expected completion date.',
     sql: () => `
       SELECT ${CID()} AS clientID, COUNT(*) AS total,
              SUM(CASE WHEN assessmentStatus <> 'Complete' THEN 1 ELSE 0 END) AS open,
@@ -213,7 +227,7 @@ const BEHAVIORAL_CHECKS = [
       WHERE ISNULL(assessmentStatus, '') NOT IN ('Deleted', 'Cancelled')
       GROUP BY ${CID()}`,
     evaluate: (row, client) => {
-      if (!row || !row.total) return notEntered(client, 14);
+      if (!row || !row.total) return notEntered(client, INTAKE_DUE_DAYS);
       const lastAt = row.lastAt || null;
       if (row.pastDue > 0) return { status: 'overdue', detail: `${plural(row.pastDue, 'plan')} past expected completion date`, lastAt };
       if (row.open > 0) return { status: 'incomplete', detail: `${plural(row.open, 'plan')} not Complete`, lastAt };
@@ -224,14 +238,14 @@ const BEHAVIORAL_CHECKS = [
     key: 'carePlan',
     section: 4,
     label: 'Care Plan',
-    rule: 'A care plan within 30 days of admission, reviewed at least every 90 days; drafts are flagged until submitted.',
+    rule: 'A care plan within 30 days of admission, updated at least every 90 days; drafts are flagged until submitted.',
     sql: () => `
       SELECT ${CID()} AS clientID, COUNT(*) AS total,
              SUM(CASE WHEN submissionStatus = 'draft' THEN 1 ELSE 0 END) AS drafts,
              ${LAST_AT()} AS lastAt
       FROM CarePlans
       GROUP BY ${CID()}`,
-    evaluate: recordCheck({ graceDays: 30, staleDays: 90 }),
+    evaluate: recordCheck({ graceDays: 30, staleDays: CARE_PLAN_REVIEW_DAYS }),
   },
   {
     key: 'encounterNotes',
@@ -342,27 +356,27 @@ const NURSING_CHECKS = [
     key: 'nursingIdt',
     section: 5,
     label: 'Nursing IDT Notes',
-    rule: 'A nursing IDT note at least every 30 days; notes saved but not submitted are flagged.',
+    rule: 'A nursing IDT note at least every 90 days (first one within 90 days of admission); notes saved but not submitted are flagged.',
     sql: () => `
       SELECT ${CID()} AS clientID, COUNT(*) AS total,
              SUM(CASE WHEN ISNULL(isLocked, 0) = 0 THEN 1 ELSE 0 END) AS drafts,
              ${LAST_AT()} AS lastAt
       FROM dbo.idt_nursing_notes
       GROUP BY ${CID()}`,
-    evaluate: recordCheck({ graceDays: 30, staleDays: 30, draftLabel: 'note' }),
+    evaluate: recordCheck({ graceDays: IDT_EVERY_DAYS, staleDays: IDT_EVERY_DAYS, draftLabel: 'note' }),
   },
   {
     key: 'providerIdt',
     section: 5,
     label: 'Provider IDT Notes',
-    rule: 'A provider IDT note at least every 30 days; notes saved but not submitted are flagged.',
+    rule: 'A provider IDT note at least every 90 days (first one within 90 days of admission); notes saved but not submitted are flagged.',
     sql: () => `
       SELECT ${CID()} AS clientID, COUNT(*) AS total,
              SUM(CASE WHEN ISNULL(isLocked, 0) = 0 THEN 1 ELSE 0 END) AS drafts,
              ${LAST_AT()} AS lastAt
       FROM dbo.idt_provider_notes
       GROUP BY ${CID()}`,
-    evaluate: recordCheck({ graceDays: 30, staleDays: 30, draftLabel: 'note' }),
+    evaluate: recordCheck({ graceDays: IDT_EVERY_DAYS, staleDays: IDT_EVERY_DAYS, draftLabel: 'note' }),
   },
   {
     key: 'observationRecord',
