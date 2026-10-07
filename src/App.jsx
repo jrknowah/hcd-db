@@ -14,7 +14,7 @@ import  store  from './backend/store/store';
 import AdminErrors from './views/Dashboard/AdminErrors';
 // import { ProtectedAdminRoute } from './views/Dashboard/ProtectedAdminRoute';
 import ProtectedRoute from './components/Auth/ProtectedRoute';
-import { isAdminAccount, canViewAuditTrail } from './backend/config/groupConfig';
+import { isAdminAccount, canViewAuditTrail, canViewDocumentationReports } from './backend/config/groupConfig';
 import AdminLayout from './views/admin/AdminLayout';
 
 // At the very top of App.jsx, before any other code:
@@ -42,6 +42,7 @@ const Section6 = React.lazy(() => import('./views/Section-6/Section6'));
 // ✅ Admin pages (lazy — these are heavy and only IT loads them)
 const AdminAudit = React.lazy(() => import('./views/admin/AdminAudit'));
 const AdminAnalytics = React.lazy(() => import('./views/admin/AdminAnalytics'));
+const DocumentationReport = React.lazy(() => import('./views/admin/DocumentationReport'));
 
 // ✅ Simple loading fallback
 const LoadingFallback = ({ name }) => (
@@ -384,6 +385,36 @@ const AppRoutes = () => {
                   <ComponentErrorBoundary name="Admin Analytics">
                     <Suspense fallback={<LoadingFallback name="Reports & Analytics" />}>
                       <AdminAnalytics />
+                    </Suspense>
+                  </ComponentErrorBoundary>
+                </ProtectedRoute>
+              } />
+
+              <Route path="behavioral" element={
+                <ProtectedRoute canAccess={canViewDocumentationReports}>
+                  <ComponentErrorBoundary name="Behavioral Health Documentation">
+                    <Suspense fallback={<LoadingFallback name="Behavioral Health Documentation" />}>
+                      <DocumentationReport
+                        key="behavioral"
+                        area="behavioral"
+                        title="Behavioral Health Documentation"
+                        subtitle="Sections 1–4: active clients whose face sheet, consent forms, assessments, care plans or encounter notes are missing, unfinished or out of date."
+                      />
+                    </Suspense>
+                  </ComponentErrorBoundary>
+                </ProtectedRoute>
+              } />
+
+              <Route path="nursing" element={
+                <ProtectedRoute canAccess={canViewDocumentationReports}>
+                  <ComponentErrorBoundary name="Nursing Documentation">
+                    <Suspense fallback={<LoadingFallback name="Nursing Documentation" />}>
+                      <DocumentationReport
+                        key="nursing"
+                        area="nursing"
+                        title="Nursing Documentation"
+                        subtitle="Section 5: active clients whose medical face sheet, screening, nursing assessment, progress notes, IDT notes or observation records are missing, unsubmitted or out of date."
+                      />
                     </Suspense>
                   </ComponentErrorBoundary>
                 </ProtectedRoute>

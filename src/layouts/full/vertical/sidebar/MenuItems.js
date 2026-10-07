@@ -94,6 +94,20 @@ const Menuitems = [
   },
   {
     id: uniqueId(),
+    title: 'Behavioral Health (S1–4)',
+    icon: 'solar:clipboard-check-linear',
+    href: '/admin/behavioral',
+    auditAccess: true,
+  },
+  {
+    id: uniqueId(),
+    title: 'Nursing (S5)',
+    icon: 'solar:health-linear',
+    href: '/admin/nursing',
+    auditAccess: true,
+  },
+  {
+    id: uniqueId(),
     title: 'Reports & Analytics',
     icon: 'solar:chart-square-linear',
     href: '/admin/analytics',

@@ -10,7 +10,7 @@ const { BlobServiceClient } = require('@azure/storage-blob');
 
 const authMiddleware = require('./middleware/auth.js');
 const { requireAdmin } = require('./middleware/auth.js');
-const { requireAuditAccess } = require('./middleware/signedFormUnlock');
+const { requireAuditAccess, requireSupervisorAccess } = require('./middleware/signedFormUnlock');
 // Log stray promise rejections instead of letting Node kill the whole backend
 // (e.g. a DB connection timeout no caller awaited)
 process.on('unhandledRejection', (reason) => {
@@ -59,19 +59,22 @@ try {
   const adminErrorsRouter = require('./routes/admin/errors.cjs');
   const adminAuditRouter = require('./routes/admin/audit.cjs');
   const adminAnalyticsRouter = require('./routes/admin/analytics.cjs');
+  const adminDocumentationRouter = require('./routes/admin/documentation.cjs');
   // const adminAccessRouter = require('./routes/admin/access.cjs');
   // const adminHealthRouter = require('./routes/admin/health.cjs');
 
-  // Access applied once at mount — covers all sub-routes. The audit trail is
-  // also open to Level 1; errors and analytics are IT Admin only.
+  // Access applied once at mount — covers all sub-routes. The audit trail and
+  // documentation reports are also open to Level 1; errors and analytics are
+  // IT Admin only.
   app.use('/api/admin/errors', authMiddleware, requireAdmin, adminErrorsRouter);
   app.use('/api/admin/audit', authMiddleware, requireAuditAccess, adminAuditRouter);
   app.use('/api/admin/analytics', authMiddleware, requireAdmin, adminAnalyticsRouter);
+  app.use('/api/admin/documentation', authMiddleware, requireSupervisorAccess, adminDocumentationRouter);
   // app.use('/api/admin/access', requireAdmin, adminAccessRouter);
   // app.use('/api/admin/health', requireAdmin, adminHealthRouter);
 
   adminRoutesLoaded = true;
-  console.log('✓ Admin routes loaded (errors, audit, analytics)');
+  console.log('✓ Admin routes loaded (errors, audit, analytics, documentation)');
 } catch (err) {
   console.error('✗ Failed to load admin routes:', err.message);
 }

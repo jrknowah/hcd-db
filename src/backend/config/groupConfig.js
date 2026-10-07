@@ -123,6 +123,11 @@ export const canUnlockLockedRecords = (account) => {
 // (middleware/signedFormUnlock.js) on /api/admin/audit.
 export const canViewAuditTrail = (account) => canUnlockLockedRecords(account);
 
+// Admin > Behavioral Health / Nursing documentation reports: IT Admin or
+// Level 1. Must stay in sync with requireSupervisorAccess
+// (middleware/signedFormUnlock.js) on /api/admin/documentation.
+export const canViewDocumentationReports = (account) => canUnlockLockedRecords(account);
+
 export const ROLE_DISPLAY_NAMES = {
   IT_ADMIN: 'IT Administrator',
   LEVEL1: 'Level 1 Staff',

@@ -19,17 +19,21 @@ import {
   People as PeopleIcon,
   History as HistoryIcon,
   Insights as InsightsIcon,
+  FactCheck as FactCheckIcon,
+  LocalHospital as LocalHospitalIcon,
   MonitorHeart as MonitorHeartIcon,
   ArrowBack as ArrowBackIcon,
 } from '@mui/icons-material';
 
 const DRAWER_WIDTH = 220;
 
-// Level 1 users can open the console for the Audit Trail only;
-// everything marked adminOnly is IT Admin only.
+// Level 1 users can open the console for the Audit Trail and the
+// documentation reports; everything marked adminOnly is IT Admin only.
 const adminNav = [
   { label: 'System Errors', path: '/admin/errors', icon: <BugReportIcon />, adminOnly: true },
   { label: 'Audit Trail', path: '/admin/audit', icon: <HistoryIcon /> },
+  { label: 'Behavioral Health (S1–4)', path: '/admin/behavioral', icon: <FactCheckIcon /> },
+  { label: 'Nursing (S5)', path: '/admin/nursing', icon: <LocalHospitalIcon /> },
   { label: 'Reports & Analytics', path: '/admin/analytics', icon: <InsightsIcon />, adminOnly: true },
   { label: 'User Access', path: '/admin/access', icon: <PeopleIcon />, disabled: true, adminOnly: true },
   { label: 'Backend Health', path: '/admin/health', icon: <MonitorHeartIcon />, disabled: true, adminOnly: true },
@@ -54,7 +58,7 @@ export default function AdminLayout() {
         }}
       >
         <Toolbar sx={{ px: 2 }}>
-          <Typography variant="h6" noWrap>{isAdmin ? 'Admin · IT' : 'Audit'}</Typography>
+          <Typography variant="h6" noWrap>{isAdmin ? 'Admin · IT' : 'Supervisor'}</Typography>
         </Toolbar>
         <Divider />
         <List>
