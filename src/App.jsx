@@ -14,7 +14,9 @@ import  store  from './backend/store/store';
 import AdminErrors from './views/Dashboard/AdminErrors';
 // import { ProtectedAdminRoute } from './views/Dashboard/ProtectedAdminRoute';
 import ProtectedRoute from './components/Auth/ProtectedRoute';
-import { isAdminAccount, canViewAuditTrail } from './backend/config/groupConfig';
+import {
+  isAdminAccount, canViewAuditTrail, canOpenAdminConsole, canViewNursingReport, canViewBehavioralReport,
+} from './backend/config/groupConfig';
 import AdminLayout from './views/admin/AdminLayout';
 
 // At the very top of App.jsx, before any other code:
@@ -42,6 +44,7 @@ const Section6 = React.lazy(() => import('./views/Section-6/Section6'));
 // ✅ Admin pages (lazy — these are heavy and only IT loads them)
 const AdminAudit = React.lazy(() => import('./views/admin/AdminAudit'));
 const AdminAnalytics = React.lazy(() => import('./views/admin/AdminAnalytics'));
+const DocumentationReport = React.lazy(() => import('./views/admin/DocumentationReport'));
 
 // ✅ Simple loading fallback
 const LoadingFallback = ({ name }) => (
@@ -349,13 +352,14 @@ const AppRoutes = () => {
 
             {/* ========================================
                 ✅ ADMIN — its own layout branch, sibling to FullLayout.
-                Guard is applied ONCE on the parent, so every child route
-                inherits it. AdminLayout renders the admin sidebar + <Outlet />.
+                The parent lets in anyone with at least one admin page; each
+                child route then guards its own page. AdminLayout renders the admin sidebar + <Outlet />.
                 No client-scoped section state applies here.
                 ======================================== */}
             <Route path="/admin" element={
-              // IT Admin sees the whole console; Level 1 sees only the audit trail
-              <ProtectedRoute canAccess={canViewAuditTrail}>
+              // IT Admin sees the whole console; Level 1 the audit trail;
+              // nursing / behavioral admins their documentation report
+              <ProtectedRoute canAccess={canOpenAdminConsole}>
                 <ComponentErrorBoundary name="AdminLayout">
                   <AdminLayout />
                 </ComponentErrorBoundary>
@@ -372,11 +376,13 @@ const AppRoutes = () => {
               } />
 
               <Route path="audit" element={
-                <ComponentErrorBoundary name="Admin Audit">
-                  <Suspense fallback={<LoadingFallback name="Audit Trail" />}>
-                    <AdminAudit />
-                  </Suspense>
-                </ComponentErrorBoundary>
+                <ProtectedRoute canAccess={canViewAuditTrail}>
+                  <ComponentErrorBoundary name="Admin Audit">
+                    <Suspense fallback={<LoadingFallback name="Audit Trail" />}>
+                      <AdminAudit />
+                    </Suspense>
+                  </ComponentErrorBoundary>
+                </ProtectedRoute>
               } />
 
               <Route path="analytics" element={
@@ -384,6 +390,36 @@ const AppRoutes = () => {
                   <ComponentErrorBoundary name="Admin Analytics">
                     <Suspense fallback={<LoadingFallback name="Reports & Analytics" />}>
                       <AdminAnalytics />
+                    </Suspense>
+                  </ComponentErrorBoundary>
+                </ProtectedRoute>
+              } />
+
+              <Route path="behavioral" element={
+                <ProtectedRoute canAccess={canViewBehavioralReport}>
+                  <ComponentErrorBoundary name="Behavioral Health Documentation">
+                    <Suspense fallback={<LoadingFallback name="Behavioral Health Documentation" />}>
+                      <DocumentationReport
+                        key="behavioral"
+                        area="behavioral"
+                        title="Behavioral Health Documentation"
+                        subtitle="Sections 1–4: active clients whose face sheet, consent forms, assessments, care plans or encounter notes are missing, unfinished or out of date."
+                      />
+                    </Suspense>
+                  </ComponentErrorBoundary>
+                </ProtectedRoute>
+              } />
+
+              <Route path="nursing" element={
+                <ProtectedRoute canAccess={canViewNursingReport}>
+                  <ComponentErrorBoundary name="Nursing Documentation">
+                    <Suspense fallback={<LoadingFallback name="Nursing Documentation" />}>
+                      <DocumentationReport
+                        key="nursing"
+                        area="nursing"
+                        title="Nursing Documentation"
+                        subtitle="Section 5: active clients whose medical face sheet, screening, nursing assessment, progress notes, IDT notes or observation records are missing, unsubmitted or out of date."
+                      />
                     </Suspense>
                   </ComponentErrorBoundary>
                 </ProtectedRoute>
@@ -417,11 +453,16 @@ const AppRoutes = () => {
 };
 
 // ✅ Main App Component with MSAL Initialization
-// /admin landing page: IT Admin starts on System Errors, Level 1 (audit
-// trail only) on the Audit Trail.
+// /admin landing page: IT Admin starts on System Errors, everyone else on
+// the first admin page they can open.
 function AdminHomeRedirect() {
   const { accounts } = useMsal();
-  const to = isAdminAccount(accounts[0]) ? '/admin/errors' : '/admin/audit';
+  const account = accounts[0];
+  let to = '/unauthorized';
+  if (isAdminAccount(account)) to = '/admin/errors';
+  else if (canViewAuditTrail(account)) to = '/admin/audit';
+  else if (canViewBehavioralReport(account)) to = '/admin/behavioral';
+  else if (canViewNursingReport(account)) to = '/admin/nursing';
   return <Navigate to={to} replace />;
 }
 

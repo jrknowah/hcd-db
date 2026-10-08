@@ -59,19 +59,22 @@ try {
   const adminErrorsRouter = require('./routes/admin/errors.cjs');
   const adminAuditRouter = require('./routes/admin/audit.cjs');
   const adminAnalyticsRouter = require('./routes/admin/analytics.cjs');
+  const adminDocumentationRouter = require('./routes/admin/documentation.cjs');
   // const adminAccessRouter = require('./routes/admin/access.cjs');
   // const adminHealthRouter = require('./routes/admin/health.cjs');
 
   // Access applied once at mount — covers all sub-routes. The audit trail is
-  // also open to Level 1; errors and analytics are IT Admin only.
+  // also open to Level 1; errors and analytics are IT Admin only. The
+  // documentation router checks per report (middleware/documentationAccess.js).
   app.use('/api/admin/errors', authMiddleware, requireAdmin, adminErrorsRouter);
   app.use('/api/admin/audit', authMiddleware, requireAuditAccess, adminAuditRouter);
   app.use('/api/admin/analytics', authMiddleware, requireAdmin, adminAnalyticsRouter);
+  app.use('/api/admin/documentation', authMiddleware, adminDocumentationRouter);
   // app.use('/api/admin/access', requireAdmin, adminAccessRouter);
   // app.use('/api/admin/health', requireAdmin, adminHealthRouter);
 
   adminRoutesLoaded = true;
-  console.log('✓ Admin routes loaded (errors, audit, analytics)');
+  console.log('✓ Admin routes loaded (errors, audit, analytics, documentation)');
 } catch (err) {
   console.error('✗ Failed to load admin routes:', err.message);
 }
