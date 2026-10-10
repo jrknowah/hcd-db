@@ -1,61 +1,30 @@
 import React, { useState, useEffect } from 'react';
 import {
   Box,
-  Button,
-  Card,
-  CardContent,
   Grid,
-  Typography,
   Alert,
   LinearProgress,
-  IconButton,
-  Chip,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Paper,
   TextField,
   Select,
   MenuItem,
   FormControl,
-  InputLabel,
-  Tooltip,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Snackbar
+  InputLabel
 } from '@mui/material';
-import {
-  CloudUpload,
-  Delete as DeleteIcon,
-  Download as DownloadIcon,
-  Description as FileIcon,
-  Visibility as ViewIcon,
-  LocalHospital as MedicalIcon
-} from '@mui/icons-material';
+import { LocalHospital as MedicalIcon } from '@mui/icons-material';
 import { useClientPersistence } from '../../hooks/useClientPersistence';
 import { azureBlobService } from '../../backend/services/azureBlobService';
 import { ARCHIVE_SECTIONS, SECTION_CATEGORIES, sectionDocType, filterSectionFiles } from '../../utils/archiveSections';
 import { recordNursingArchiveUpload, withUploaders } from '../../utils/nursingArchiveUploads';
+import SectionArchiveLayout from '../../components/shared/SectionArchiveLayout';
 
 /**
- * ✅ REFACTORED NursingArchive Component
- * 
- * NOW MATCHES AuthSigArchive PATTERN:
- * 1. ✅ Uses useClientPersistence hook for clientID
- * 2. ✅ Direct azureBlobService calls (no Redux)
- * 3. ✅ Same file operations as AuthSigArchive
- * 4. ✅ Simplified UI matching AuthSigArchive structure
- * 5. ✅ Snackbar notifications
- * 
- * Nursing-specific features retained:
- * - Nursing document types
- * - Confidentiality levels
- * - Medical document categories
+ * NursingArchive (Section 5)
+ *
+ * Uses the same layout as Section 3's Mental Health Archive
+ * (components/shared/SectionArchiveLayout). Data stays local:
+ * - useClientPersistence hook for clientID
+ * - Direct azureBlobService calls (no Redux)
+ * - Uploader recorded per file and shown in an "Uploaded By" column
  */
 
 // Nursing document types for the archive
@@ -112,17 +81,12 @@ const NursingArchive = () => {
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
   
-  // Upload form state
-  const [selectedFile, setSelectedFile] = useState(null);
-  const [selectedDocType, setSelectedDocType] = useState('');
+  // Upload dialog state
   const [confidentialityLevel, setConfidentialityLevel] = useState('Standard');
   const [description, setDescription] = useState('');
   const [documentDate, setDocumentDate] = useState('');
   const [isUploading, setIsUploading] = useState(false);
-  
-  // Dialog state
-  const [deleteDialog, setDeleteDialog] = useState({ open: false, file: null });
-  const [viewDialog, setViewDialog] = useState({ open: false, file: null });
+
 
   // ✅ Fetch files when component mounts (matches AuthSigArchive)
   // 🔁 Section-switch fix: this component is NOT backed by Redux, so the
@@ -135,13 +99,9 @@ const NursingArchive = () => {
     setFiles([]);
     setError(null);
     setSuccess(null);
-    setSelectedFile(null);
-    setSelectedDocType('');
     setConfidentialityLevel('Standard');
     setDescription('');
     setDocumentDate('');
-    setDeleteDialog({ open: false, file: null });
-    setViewDialog({ open: false, file: null });
 
     if (clientID) {
       console.log('🏥 Fetching nursing documents for client:', clientID);
@@ -187,51 +147,9 @@ const NursingArchive = () => {
   };
 
   /**
-   * Handle file selection (matches AuthSigArchive)
-   */
-  const handleFileSelect = (event) => {
-    const file = event.target.files[0];
-    
-    if (!file) {
-      return;
-    }
-
-    // Validate file type
-    if (!ALLOWED_FILE_TYPES.includes(file.type)) {
-      setError(`Invalid file type. Allowed: PDF, JPG, PNG, DOC, DOCX`);
-      return;
-    }
-
-    // Validate file size
-    if (file.size > MAX_FILE_SIZE) {
-      setError(`File too large. Maximum size: 15MB`);
-      return;
-    }
-
-    console.log('📎 File selected:', {
-      name: file.name,
-      type: file.type,
-      size: `${(file.size / 1024).toFixed(2)} KB`
-    });
-
-    setSelectedFile(file);
-    setError(null);
-  };
-
-  /**
    * ✅ Upload file using azureBlobService.uploadFile (matches AuthSigArchive)
    */
-  const handleUpload = async () => {
-    if (!selectedFile) {
-      setError('Please select a file to upload');
-      return;
-    }
-
-    if (!selectedDocType) {
-      setError('Please select a document type');
-      return;
-    }
-
+  const handleUpload = async (docType, file) => {
     if (!clientID) {
       setError('No client selected. Please select a client first.');
       return;
@@ -244,17 +162,16 @@ const NursingArchive = () => {
     try {
       console.log('🚀 Starting nursing document upload:', {
         clientID,
-        fileName: selectedFile.name,
-        docType: selectedDocType,
+        fileName: file.name,
+        docType,
         confidentiality: confidentialityLevel,
-        fileSize: selectedFile.size
+        fileSize: file.size
       });
 
-      // ✅ Use existing azureBlobService function (matches AuthSigArchive)
       const result = await azureBlobService.uploadFile(
-        selectedFile,
+        file,
         clientID,
-        sectionDocType(ARCHIVE_SECTIONS.NURSING, selectedDocType)
+        sectionDocType(ARCHIVE_SECTIONS.NURSING, docType)
       );
 
       console.log('✅ Upload successful:', result);
@@ -266,8 +183,8 @@ const NursingArchive = () => {
           await recordNursingArchiveUpload({
             clientID,
             blobName: result.blobName,
-            fileName: selectedFile.name,
-            docType: selectedDocType,
+            fileName: file.name,
+            docType,
           });
         } catch (recordErr) {
           console.error('❌ Could not record uploader:', recordErr);
@@ -275,14 +192,7 @@ const NursingArchive = () => {
         }
       }
 
-      setSuccess(`Document "${selectedFile.name}" uploaded successfully!${uploaderNote}`);
-      
-      // Reset form
-      setSelectedFile(null);
-      setSelectedDocType('');
-      setConfidentialityLevel('Standard');
-      setDescription('');
-      setDocumentDate('');
+      setSuccess(`Document "${file.name}" uploaded successfully!${uploaderNote}`);
 
       // Refresh file list
       await fetchFiles();
@@ -329,54 +239,11 @@ const NursingArchive = () => {
       console.log('✅ Delete complete');
       setSuccess(`Document "${file.fileName}" deleted successfully!`);
 
-      setDeleteDialog({ open: false, file: null });
       await fetchFiles();
 
     } catch (error) {
       console.error('❌ Delete failed:', error);
       setError(error.message || 'Failed to delete document');
-      setDeleteDialog({ open: false, file: null });
-    }
-  };
-
-  /**
-   * View file details
-   */
-  const handleView = (file) => {
-    setViewDialog({ open: true, file });
-  };
-
-  // Format helpers (matches AuthSigArchive)
-  const formatFileSize = (bytes) => {
-    if (!bytes) return 'Unknown';
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(2)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
-  };
-
-  const formatDate = (dateString) => {
-    if (!dateString) return 'Unknown';
-    try {
-      return new Date(dateString).toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-      });
-    } catch {
-      return 'Invalid Date';
-    }
-  };
-
-  // Get confidentiality color
-  const getConfidentialityColor = (level) => {
-    switch (level) {
-      case 'Standard': return 'default';
-      case 'Confidential': return 'warning';
-      case 'Restricted': return 'error';
-      case 'Highly Confidential': return 'error';
-      default: return 'default';
     }
   };
 
@@ -403,349 +270,82 @@ const NursingArchive = () => {
     );
   }
 
+  const resetDialogFields = () => {
+    setConfidentialityLevel('Standard');
+    setDescription('');
+    setDocumentDate('');
+  };
+
   return (
-    <Box sx={{ p: 3 }}>
-      {/* Header (matches AuthSigArchive) */}
-      <Box sx={{ mb: 3, display: 'flex', alignItems: 'center', gap: 2 }}>
-        <MedicalIcon color="primary" sx={{ fontSize: 40 }} />
-        <Box>
-          <Typography variant="h5" gutterBottom>
-            Nursing Documentation Archive
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Manage nursing documents and medical records for client: {clientID}
-          </Typography>
-        </Box>
-      </Box>
-
-      {/* Error Alert (matches AuthSigArchive) */}
-      {error && (
-        <Alert severity="error" onClose={() => setError(null)} sx={{ mb: 2 }}>
-          {error}
-        </Alert>
-      )}
-
-      {/* Success Snackbar (matches AuthSigArchive) */}
-      <Snackbar
-        open={!!success}
-        autoHideDuration={6000}
-        onClose={() => setSuccess(null)}
-        anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
-      >
-        <Alert severity="success" onClose={() => setSuccess(null)}>
-          {success}
-        </Alert>
-      </Snackbar>
-
-      {/* Upload Section (matches AuthSigArchive structure) */}
-      <Card sx={{ mb: 3 }}>
-        <CardContent>
-          <Typography variant="h6" gutterBottom>
-            Upload Nursing Document
-          </Typography>
-
-          <Grid container spacing={2}>
-            {/* Document Type Selection */}
-            <Grid item xs={12} md={6}>
-              <FormControl fullWidth variant="outlined">
-                <InputLabel>Document Type *</InputLabel>
-                <Select
-                  value={selectedDocType}
-                  onChange={(e) => setSelectedDocType(e.target.value)}
-                  label="Document Type *"
-                  disabled={isUploading}
-                >
-                  {NURSING_DOC_TYPES.map((type) => (
-                    <MenuItem key={type} value={type}>
-                      {type}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
-
-            {/* Confidentiality Level */}
-            <Grid item xs={12} md={6}>
-              <FormControl fullWidth variant="outlined">
-                <InputLabel>Confidentiality Level</InputLabel>
-                <Select
-                  value={confidentialityLevel}
-                  onChange={(e) => setConfidentialityLevel(e.target.value)}
-                  label="Confidentiality Level"
-                  disabled={isUploading}
-                >
-                  {CONFIDENTIALITY_LEVELS.map((level) => (
-                    <MenuItem key={level} value={level}>
-                      {level}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
-
-            {/* File Selection */}
-            <Grid item xs={12} md={6}>
-              <Button
-                component="label"
-                variant="outlined"
-                startIcon={<CloudUpload />}
-                fullWidth
+    <SectionArchiveLayout
+      icon={<MedicalIcon color="primary" fontSize="large" />}
+      title="Nursing Documentation Archive"
+      subtitle={`Upload and manage nursing documents and medical records for client: ${clientID}`}
+      files={files}
+      loading={loading}
+      uploading={isUploading}
+      error={error}
+      success={success}
+      onClearError={() => setError(null)}
+      onClearSuccess={() => setSuccess(null)}
+      onError={setError}
+      categories={NURSING_DOC_TYPES}
+      accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+      allowedTypes={ALLOWED_FILE_TYPES}
+      maxSize={MAX_FILE_SIZE}
+      onUpload={handleUpload}
+      onDownload={handleDownload}
+      onDelete={handleDelete}
+      onRefresh={fetchFiles}
+      extraColumns={[{ header: 'Uploaded By', render: (file) => file.uploader || '—' }]}
+      onDialogClose={resetDialogFields}
+      dialogFields={
+        <Grid container spacing={2} sx={{ mt: 1 }}>
+          <Grid item xs={12} sm={6}>
+            <FormControl fullWidth>
+              <InputLabel>Confidentiality Level</InputLabel>
+              <Select
+                value={confidentialityLevel}
+                onChange={(e) => setConfidentialityLevel(e.target.value)}
+                label="Confidentiality Level"
                 disabled={isUploading}
               >
-                {selectedFile ? selectedFile.name : 'Select File'}
-                <input
-                  type="file"
-                  hidden
-                  accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
-                  onChange={handleFileSelect}
-                />
-              </Button>
-            </Grid>
-
-            {/* Document Date */}
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                type="date"
-                label="Document Date"
-                value={documentDate}
-                onChange={(e) => setDocumentDate(e.target.value)}
-                InputLabelProps={{ shrink: true }}
-                disabled={isUploading}
-              />
-            </Grid>
-
-            {/* Description */}
-            <Grid item xs={12}>
-              <TextField
-                fullWidth
-                multiline
-                rows={2}
-                label="Description (Optional)"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="Additional notes about this document"
-                disabled={isUploading}
-              />
-            </Grid>
-
-            {/* Upload Button */}
-            <Grid item xs={12}>
-              <Button
-                variant="contained"
-                color="primary"
-                startIcon={isUploading ? <LinearProgress /> : <CloudUpload />}
-                onClick={handleUpload}
-                disabled={isUploading || !selectedFile || !selectedDocType}
-                fullWidth
-              >
-                {isUploading ? 'Uploading...' : 'Upload Document'}
-              </Button>
-            </Grid>
+                {CONFIDENTIALITY_LEVELS.map((level) => (
+                  <MenuItem key={level} value={level}>
+                    {level}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
           </Grid>
-
-          {/* File Info (matches AuthSigArchive) */}
-          {selectedFile && (
-            <Box sx={{ mt: 2, p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
-              <Typography variant="body2" color="text.secondary">
-                <strong>File:</strong> {selectedFile.name} ({formatFileSize(selectedFile.size)})
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                <strong>Type:</strong> {selectedFile.type}
-              </Typography>
-              {confidentialityLevel && (
-                <Chip
-                  label={confidentialityLevel}
-                  size="small"
-                  color={getConfidentialityColor(confidentialityLevel)}
-                  sx={{ mt: 1 }}
-                />
-              )}
-            </Box>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Files List (matches AuthSigArchive structure) */}
-      <Card>
-        <CardContent>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-            <Typography variant="h6">
-              Nursing Documents ({files.length})
-            </Typography>
-            <Button
-              size="small"
-              onClick={fetchFiles}
-              disabled={loading}
-            >
-              {loading ? 'Loading...' : 'Refresh'}
-            </Button>
-          </Box>
-
-          {loading ? (
-            <Box sx={{ textAlign: 'center', py: 4 }}>
-              <LinearProgress />
-              <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-                Loading documents...
-              </Typography>
-            </Box>
-          ) : files.length === 0 ? (
-            <Alert severity="info" icon={<MedicalIcon />}>
-              No nursing documents found. Upload your first document above.
-            </Alert>
-          ) : (
-            <TableContainer component={Paper}>
-              <Table>
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Document Name</TableCell>
-                    <TableCell>Document Type</TableCell>
-                    <TableCell>Size</TableCell>
-                    <TableCell>Uploaded</TableCell>
-                    <TableCell>Uploaded By</TableCell>
-                    <TableCell align="right">Actions</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {files.map((file, index) => (
-                    <TableRow key={file.blobName || index}>
-                      <TableCell>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <FileIcon color="primary" />
-                          <Typography variant="body2">
-                            {file.fileName}
-                          </Typography>
-                        </Box>
-                      </TableCell>
-                      <TableCell>
-                        <Chip
-                          label={file.docType || 'Unknown'}
-                          size="small"
-                          color="primary"
-                          variant="outlined"
-                        />
-                      </TableCell>
-                      <TableCell>{formatFileSize(file.fileSize)}</TableCell>
-                      <TableCell>{formatDate(file.uploadDate)}</TableCell>
-                      <TableCell>{file.uploader || '—'}</TableCell>
-                      <TableCell align="right">
-                        <Tooltip title="View Details">
-                          <IconButton
-                            size="small"
-                            onClick={() => handleView(file)}
-                            color="info"
-                          >
-                            <ViewIcon />
-                          </IconButton>
-                        </Tooltip>
-                        <Tooltip title="Download">
-                          <IconButton
-                            size="small"
-                            onClick={() => handleDownload(file)}
-                            color="primary"
-                          >
-                            <DownloadIcon />
-                          </IconButton>
-                        </Tooltip>
-                        <Tooltip title="Delete">
-                          <IconButton
-                            size="small"
-                            onClick={() => setDeleteDialog({ open: true, file })}
-                            color="error"
-                          >
-                            <DeleteIcon />
-                          </IconButton>
-                        </Tooltip>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Delete Confirmation Dialog (matches AuthSigArchive) */}
-      <Dialog
-        open={deleteDialog.open}
-        onClose={() => setDeleteDialog({ open: false, file: null })}
-      >
-        <DialogTitle>Confirm Delete</DialogTitle>
-        <DialogContent>
-          <Typography>
-            Are you sure you want to delete "{deleteDialog.file?.fileName}"?
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-            This action cannot be undone.
-          </Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDeleteDialog({ open: false, file: null })}>
-            Cancel
-          </Button>
-          <Button
-            onClick={() => handleDelete(deleteDialog.file)}
-            color="error"
-            variant="contained"
-          >
-            Delete
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* View File Details Dialog (matches AuthSigArchive) */}
-      <Dialog
-        open={viewDialog.open}
-        onClose={() => setViewDialog({ open: false, file: null })}
-        maxWidth="sm"
-        fullWidth
-      >
-        <DialogTitle>Document Details</DialogTitle>
-        <DialogContent>
-          {viewDialog.file && (
-            <Box sx={{ pt: 1 }}>
-              <Typography variant="body2" gutterBottom>
-                <strong>Document Name:</strong> {viewDialog.file.fileName}
-              </Typography>
-              <Typography variant="body2" gutterBottom>
-                <strong>Document Type:</strong> {viewDialog.file.docType}
-              </Typography>
-              <Typography variant="body2" gutterBottom>
-                <strong>Size:</strong> {formatFileSize(viewDialog.file.fileSize)}
-              </Typography>
-              <Typography variant="body2" gutterBottom>
-                <strong>Uploaded:</strong> {formatDate(viewDialog.file.uploadDate)}
-              </Typography>
-              <Typography variant="body2" gutterBottom>
-                <strong>Uploaded By:</strong> {viewDialog.file.uploader || 'Unknown'}
-              </Typography>
-              <Typography variant="body2" gutterBottom>
-                <strong>Blob Name:</strong> {viewDialog.file.blobName}
-              </Typography>
-              {viewDialog.file.blobUrl && (
-                <Typography variant="body2" gutterBottom>
-                  <strong>URL:</strong> {viewDialog.file.blobUrl}
-                </Typography>
-              )}
-            </Box>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setViewDialog({ open: false, file: null })}>
-            Close
-          </Button>
-          <Button
-            onClick={() => handleDownload(viewDialog.file)}
-            color="primary"
-            variant="contained"
-            startIcon={<DownloadIcon />}
-          >
-            Download
-          </Button>
-        </DialogActions>
-      </Dialog>
-    </Box>
+          <Grid item xs={12} sm={6}>
+            <TextField
+              fullWidth
+              type="date"
+              label="Document Date"
+              value={documentDate}
+              onChange={(e) => setDocumentDate(e.target.value)}
+              InputLabelProps={{ shrink: true }}
+              disabled={isUploading}
+            />
+          </Grid>
+          <Grid item xs={12}>
+            <TextField
+              fullWidth
+              multiline
+              rows={3}
+              label="Description (Optional)"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Additional notes about this document"
+              disabled={isUploading}
+            />
+          </Grid>
+        </Grid>
+      }
+      emptyTitle="No nursing documents found"
+      emptyText="Upload nursing documents using the forms above"
+    />
   );
 };
 
