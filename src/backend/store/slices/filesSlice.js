@@ -146,7 +146,7 @@ export const deleteFile = createAsyncThunk(
 
 export const downloadFile = createAsyncThunk(
   'files/downloadFile',
-  async ({ fileId, fileName, blobUrl }, { rejectWithValue }) => {
+  async ({ fileId, fileName, blobUrl, blobName }, { rejectWithValue }) => {
     try {
       const isDevelopment = import.meta.env.MODE === 'development';
       const shouldUseMockData = isDevelopment && !import.meta.env.VITE_USE_REAL_DATA;
@@ -157,12 +157,15 @@ export const downloadFile = createAsyncThunk(
         return { fileName };
       }
 
-      // Real download - get download URL from backend
-      const response = await axios.get(`${API_URL}/api/files/${fileId}/download`);
+      // Real download - get a signed URL from backend. Blob-backed files
+      // (id is the blob path) go through /api/file/download-url.
+      const response = blobName
+        ? await axios.get(`${API_URL}/api/file/download-url`, { params: { blobName } })
+        : await axios.get(`${API_URL}/api/files/${fileId}/download`);
       
       // Create download link
       const link = document.createElement('a');
-      link.href = response.data.downloadUrl;
+      link.href = response.data.url || response.data.downloadUrl;
       link.download = fileName;
       link.target = '_blank';
       document.body.appendChild(link);
@@ -204,6 +207,10 @@ const filesSlice = createSlice({
     
     clearError: (state) => {
       state.error = null;
+    },
+
+    setError: (state, action) => {
+      state.error = action.payload;
     },
     
     clearSuccess: (state) => {
@@ -327,6 +334,7 @@ export const {
   setUploadProgress,
   clearUploadProgress,
   clearError,
+  setError,
   clearSuccess,
   setCurrentClient,
   resetFiles,
