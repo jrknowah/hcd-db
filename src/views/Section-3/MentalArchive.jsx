@@ -26,6 +26,7 @@ import {
   selectFilesSuccess,
   selectUploadProgress
 } from '../../backend/store/slices/filesSlice';
+import { azureBlobService } from '../../backend/services/azureBlobService';
 
 // Complete document types for Mental Archive
 import { ARCHIVE_SECTIONS, SECTION_CATEGORIES, sectionDocType, filterSectionFiles } from '../../utils/archiveSections';
@@ -171,9 +172,34 @@ const MentalArchive = ({ clientID: propClientID, exportMode = false }) => {
     setFileToDelete(null);
   };
 
-  const handlePreviewFile = (file) => {
-    setFilePreview(file);
-    setPreviewOpen(true);
+  const handlePreviewFile = async (file) => {
+    const name = file.fileName?.toLowerCase() || '';
+    const canPreview = name.endsWith('.pdf') || /\.(jpe?g|png|gif)$/.test(name);
+
+    // The list API returns blobUrl: null, so blob-backed files need a signed
+    // inline URL. Mock files (no blobName) and other types use the dialog.
+    if (!file.blobName || !canPreview) {
+      setFilePreview(file);
+      setPreviewOpen(true);
+      return;
+    }
+
+    // Open the tab immediately, inside the click, or the popup blocker kills it
+    const tab = window.open('', '_blank');
+
+    try {
+      const url = await azureBlobService.generateDownloadUrl(file.blobName, 1, { inline: true });
+      if (tab) {
+        tab.opener = null;
+        tab.location.href = url;
+      } else {
+        window.location.assign(url); // popup blocked: open in same tab
+      }
+    } catch (err) {
+      tab?.close();
+      console.error('Preview failed:', err);
+      dispatch({ type: 'files/setError', payload: `Failed to open ${file.fileName}: ${err.message}` });
+    }
   };
 
   const handleDownloadFile = async (file) => {
