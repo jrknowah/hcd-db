@@ -239,6 +239,7 @@ router.post('/nursing-admission/:clientID', async (req, res) => {
           
           -- Cardio-Pulmonary
           cpT = @cpT, cpP = @cpP, cpR = @cpR, cpBP = @cpBP,
+          height = @height, weight = @weight,
           tList = @tList, pList = @pList, rList = @rList,
           historyOf = @historyOf, edema = @edema, edemaLocation = @edemaLocation,
           
@@ -280,7 +281,7 @@ router.post('/nursing-admission/:clientID', async (req, res) => {
           -- Basic Assessment
           loc, orientedToList, orientedToRoomList,
           -- Cardio-Pulmonary
-          cpT, cpP, cpR, cpBP, tList, pList, rList, historyOf, edema, edemaLocation,
+          cpT, cpP, cpR, cpBP, height, weight, tList, pList, rList, historyOf, edema, edemaLocation,
           -- Pain Assessment
           clientPain, painHistory, lungSounds,
           -- Bowel & Bladder
@@ -300,7 +301,7 @@ router.post('/nursing-admission/:clientID', async (req, res) => {
         VALUES (
           @clientID,
           @loc, @orientedToList, @orientedToRoomList,
-          @cpT, @cpP, @cpR, @cpBP, @tList, @pList, @rList, @historyOf, @edema, @edemaLocation,
+          @cpT, @cpP, @cpR, @cpBP, @height, @weight, @tList, @pList, @rList, @historyOf, @edema, @edemaLocation,
           @clientPain, @painHistory, @lungSounds,
           @bowelBladder, @cathType, @cathSize, @cathDiag, @elimMethUsed, @lastBowelDate, @lastVoidDate, @abdomen,
           @physicalFuncStat, @clientPhysicalFuncNotes, @weightBearing, @transfers, @ambulation, @mobDevices,
@@ -328,6 +329,8 @@ router.post('/nursing-admission/:clientID', async (req, res) => {
     request.input('cpP', sql.NVarChar(50), admissionData.cpP || null);
     request.input('cpR', sql.NVarChar(50), admissionData.cpR || null);
     request.input('cpBP', sql.NVarChar(50), admissionData.cpBP || null);
+    request.input('height', sql.NVarChar(50), admissionData.height || null);
+    request.input('weight', sql.NVarChar(50), admissionData.weight || null);
     request.input('tList', sql.NVarChar(sql.MAX), safeStringify(admissionData.tList || []));
     request.input('pList', sql.NVarChar(sql.MAX), safeStringify(admissionData.pList || []));
     request.input('rList', sql.NVarChar(sql.MAX), safeStringify(admissionData.rList || []));

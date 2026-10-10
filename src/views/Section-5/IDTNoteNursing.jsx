@@ -56,6 +56,7 @@ import {
   clearSaveSuccess
 } from "../../backend/store/slices/idtNursingSlice";
 import logUserAction from "../../backend/config/logAction";
+import IdtDueNotice from "../../components/shared/IdtDueNotice";
 import { formatDateOnly } from "../../utils/dateOnly";
 import { selectUserRoles } from "../../backend/store/slices/authSlice";
 import { canUnlockSection5Records, isRecordLocked, errorMessage } from "../../utils/section5Lock";
@@ -503,6 +504,8 @@ const IDTNoteNursing = ({ clientID }) => {
             Add New Note
           </Button>
         </Box>
+
+        {clientID && !loading && <IdtDueNotice notes={notes} label="Nursing" />}
 
         {/* Success/Error Alerts */}
         {saveSuccess && (

@@ -59,6 +59,7 @@ import {
 } from "../../backend/store/slices/idtProviderSlice";
 import { ynd } from "../../data/arrayList";
 import logUserAction from "../../backend/config/logAction";
+import IdtDueNotice from "../../components/shared/IdtDueNotice";
 import { selectUserRoles } from "../../backend/store/slices/authSlice";
 import { canUnlockSection5Records, isRecordLocked, errorMessage } from "../../utils/section5Lock";
 import {
@@ -715,6 +716,8 @@ const IDTNoteProvider = ({ clientID }) => {
             Add New Note
           </Button>
         </Box>
+
+        {clientID && !loading && <IdtDueNotice notes={notes} label="Provider" />}
 
         {/* Success/Error Alerts */}
         {saveSuccess && (
