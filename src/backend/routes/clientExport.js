@@ -2069,6 +2069,7 @@ async function renderSection5(doc, pool, clientID) {
       drawS4MetaGrid(doc, [
         ['Temp (°F)',      na.cpT],   ['Pulse (bpm)',    na.cpP],
         ['Resp (br/min)', na.cpR],   ['Blood Pressure', na.cpBP],
+        ['Height',        na.height], ['Weight (lbs)',   na.weight],
       ]);
       [
         ['Level of Consciousness',   na.loc],

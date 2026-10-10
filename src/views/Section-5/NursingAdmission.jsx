@@ -87,6 +87,8 @@ const INITIAL_NURSING_FORM = {
   cpP: '',
   cpR: '',
   cpBP: '',
+  height: '',
+  weight: '',
   tList: [],
   pList: [],
   rList: [],
@@ -204,6 +206,8 @@ const NursingAdmission = ({ clientID }) => {
     cpP: '72',
     cpR: '16',
     cpBP: '120/80',
+    height: `5' 9"`,
+    weight: '165',
     tList: ['Oral'],
     pList: ['Regular'],
     rList: ['Regular'],
@@ -592,6 +596,30 @@ export const store = configureStore({
                     onChange={(e) => handleInputChange('cpBP', e.target.value)}
                     InputProps={{
                       startAdornment: <InputAdornment position="start">BP =</InputAdornment>,
+                    }}
+                  />
+                </Grid>
+                <Grid item xs={12} md={3}>
+                  <TextField
+                    fullWidth
+                    label="Height"
+                    placeholder={`e.g. 5' 9"`}
+                    value={formData.height || ''}
+                    onChange={(e) => handleInputChange('height', e.target.value)}
+                    InputProps={{
+                      startAdornment: <InputAdornment position="start">Ht =</InputAdornment>,
+                    }}
+                  />
+                </Grid>
+                <Grid item xs={12} md={3}>
+                  <TextField
+                    fullWidth
+                    label="Weight"
+                    value={formData.weight || ''}
+                    onChange={(e) => handleInputChange('weight', e.target.value)}
+                    InputProps={{
+                      startAdornment: <InputAdornment position="start">Wt =</InputAdornment>,
+                      endAdornment: <InputAdornment position="end">lbs</InputAdornment>,
                     }}
                   />
                 </Grid>

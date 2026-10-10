@@ -26,6 +26,8 @@ const MOCK_NURSING_ADMISSION = {
   cpP: '72',
   cpR: '16',
   cpBP: '120/80',
+  height: `5' 9"`,
+  weight: '165',
   tList: ['Oral'],
   pList: ['Regular', 'Strong'],
   rList: ['Regular', 'Unlabored'],
