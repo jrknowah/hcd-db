@@ -52,12 +52,13 @@ const submittedNote = {
 
 const draftNote = { ...submittedNote, _id: 'n2', submissionStatus: 'draft', submittedBy: null, submittedAt: null, locked: false };
 
+// Submitted and Completed: locked
 const submittedPlan = {
   _id: 'p1',
   clientID: 'C1',
   careGoal: 'Stable housing',
   careSteps: 'Apply for housing',
-  status: 'Active',
+  status: 'Completed',
   priority: 'High',
   createdBy: 'cm@hope.org',
   submissionStatus: 'submitted',
@@ -283,17 +284,43 @@ describe('Section 4 care plans lock', () => {
     expect(within(rowFor('Draft goal')).getByText('Not submitted')).toBeInTheDocument();
   });
 
-  it('hides edit and delete on a submitted plan for regular staff', async () => {
+  it('hides edit and delete on a completed plan for regular staff', async () => {
     renderWithProviders(<CarePlan clientID="C1" />, { store: makeStore() });
     await screen.findByText('Stable housing');
     const row = rowFor('Stable housing');
-    expect(within(row).getByText('Submitted')).toBeInTheDocument();
+    expect(within(row).getByText('Locked')).toBeInTheDocument();
     expect(within(row).getByRole('button', { name: /view care plan/i })).toBeInTheDocument();
     expect(within(row).queryByRole('button', { name: /edit draft/i })).not.toBeInTheDocument();
     expect(within(row).queryByRole('button', { name: /delete draft/i })).not.toBeInTheDocument();
     expect(within(row).queryByRole('button', { name: /unlock care plan/i })).not.toBeInTheDocument();
     expect(within(row).queryByRole('button', { name: /delete care plan/i })).not.toBeInTheDocument();
   });
+
+  it('lets staff keep updating a submitted plan until it is completed', async () => {
+    const openPlan = { ...submittedPlan, status: 'Active', locked: false, submittedBy: 'lead@hope.org' };
+    axios.get.mockResolvedValue({ data: [openPlan] });
+    axios.put.mockImplementation(async (_url, body) => ({ data: { ...openPlan, ...body, locked: false } }));
+    const user = userEvent.setup();
+    renderWithProviders(<CarePlan clientID="C1" />, { store: makeStore() });
+
+    await screen.findByText('Stable housing');
+    const row = rowFor('Stable housing');
+    expect(within(row).getByText('Submitted')).toBeInTheDocument();
+    expect(within(row).getByText('lead@hope.org')).toBeInTheDocument();
+    // Regular staff can edit, but not delete, a submitted plan
+    expect(within(row).queryByRole('button', { name: /delete/i })).not.toBeInTheDocument();
+    await user.click(within(row).getByRole('button', { name: /edit care plan/i }));
+
+    const dialog = await screen.findByRole('dialog', { name: /edit submitted care plan goal/i });
+    expect(within(dialog).queryByRole('button', { name: /submit goal/i })).not.toBeInTheDocument();
+    await user.click(within(dialog).getByRole('button', { name: /save changes/i }));
+
+    await waitFor(() => expect(axios.put).toHaveBeenCalledWith(
+      expect.stringMatching(/\/api\/care-plans\/p1$/),
+      expect.objectContaining({ careGoal: 'Stable housing', submit: false }),
+      expect.anything(),
+    ));
+  }, 20000);
 
   it('lets IT Admin delete a submitted plan with a reason', async () => {
     groups = [IT_GROUP];
@@ -325,7 +352,7 @@ describe('Section 4 care plans lock', () => {
 
     await screen.findByText('Stable housing');
     await user.click(within(rowFor('Stable housing')).getByRole('button', { name: /unlock care plan/i }));
-    const unlockDialog = await screen.findByRole('dialog', { name: /unlock submitted care plan/i });
+    const unlockDialog = await screen.findByRole('dialog', { name: /unlock completed care plan/i });
     await user.click(within(unlockDialog).getByLabelText(/reason for unlocking/i));
     await user.paste('Goal needs revising');
     await user.click(within(unlockDialog).getByRole('button', { name: /unlock care plan/i }));

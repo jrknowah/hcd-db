@@ -1,5 +1,6 @@
-// Section 4: encounter notes and care plans save as drafts, lock once
-// submitted, and only IT Admin / Level 1 can unlock or delete them.
+// Section 4: encounter notes and care plans save as drafts. Notes lock once
+// submitted; care plans lock once submitted and Completed. Only IT Admin /
+// Level 1 can unlock or delete them.
 import { describe, it, expect, beforeEach } from 'vitest';
 import { createRequire } from 'module';
 import path from 'path';
@@ -105,7 +106,8 @@ function makeRequest() {
       if (/UPDATE CarePlans\s+SET\s+careGoal/.test(q) || /UPDATE CarePlans\s+SET\s+status = @status/.test(q)) {
         const row = plans[params.carePlanID];
         let affected = 0;
-        if (row && row.submissionStatus === 'draft') {
+        // Mirrors EDITABLE_PLAN_SQL: drafts, and submitted plans not yet Completed
+        if (row && (row.submissionStatus === 'draft' || (row.status ?? '') !== 'Completed')) {
           if (params.careGoal !== undefined) {
             Object.assign(row, {
               careGoal: params.careGoal, careSteps: params.careSteps,
@@ -476,31 +478,116 @@ describe('Section 4 draft / submit / unlock', () => {
       expect(res.body.errors.careSteps).toBeDefined();
     });
 
-    it('locks a plan when it is submitted', async () => {
-      plans[PLAN_ID] = planRow({ submissionStatus: 'draft' });
+    it('keeps a plan editable when it is submitted but not completed', async () => {
+      plans[PLAN_ID] = planRow({ submissionStatus: 'draft', submittedBy: null, submittedAt: null });
       const res = await request(app)
         .put(`/api/care-plans/${PLAN_ID}`).set(asUser(caseManager))
         .send({ careGoal: 'Stable housing', careSteps: 'Apply', status: 'Active', priority: 'High', submit: true });
       expect(res.status).toBe(200);
+      expect(res.body.submissionStatus).toBe('submitted');
+      expect(res.body.submittedBy).toBe('cm@hope.org');
+      expect(res.body.locked).toBe(false);
+    });
+
+    it('locks a plan when it is submitted as Completed', async () => {
+      plans[PLAN_ID] = planRow({ submissionStatus: 'draft', submittedBy: null, submittedAt: null });
+      const res = await request(app)
+        .put(`/api/care-plans/${PLAN_ID}`).set(asUser(caseManager))
+        .send({ careGoal: 'Stable housing', careSteps: 'Apply', status: 'Completed', priority: 'High', submit: true });
+      expect(res.status).toBe(200);
       expect(res.body.locked).toBe(true);
     });
 
-    it('rejects editing, status changes and deleting a submitted plan', async () => {
+    it('keeps a Completed draft editable until it is submitted', async () => {
+      const res = await request(app)
+        .post('/api/care-plans/C1').set(asUser(caseManager))
+        .send({ careGoal: 'Stable housing', careSteps: 'Apply', status: 'Completed' });
+      expect(res.body.locked).toBe(false);
+    });
+
+    it('lets staff update a submitted plan until it is completed, keeping each prior version', async () => {
       plans[PLAN_ID] = planRow();
+      const put = await request(app)
+        .put(`/api/care-plans/${PLAN_ID}`).set(asUser(level1))
+        .send({ careGoal: 'Stable housing', careSteps: 'Apply and follow up', status: 'In Progress', priority: 'High' });
+      expect(put.status).toBe(200);
+      expect(put.body.locked).toBe(false);
+      expect(plans[PLAN_ID].careSteps).toBe('Apply and follow up');
+      expect(plans[PLAN_ID].status).toBe('In Progress');
+      // Still submitted, by the original submitter
+      expect(plans[PLAN_ID].submissionStatus).toBe('submitted');
+      expect(plans[PLAN_ID].submittedBy).toBe('cm@hope.org');
+      expect(plans[PLAN_ID].updatedBy).toBe('lead@hope.org');
+      expect(versions).toHaveLength(1);
+      expect(versions[0]).toMatchObject({ recordType: 'CarePlan', archivedReason: 'update', archivedBy: 'lead@hope.org' });
+      expect(JSON.parse(versions[0].snapshot).careSteps).toBe('Apply for housing');
+
+      // Marking it Completed locks it
+      const patch = await request(app).patch(`/api/care-plans/${PLAN_ID}/status`).set(asUser(caseManager)).send({ status: 'Completed' });
+      expect(patch.status).toBe(200);
+      expect(patch.body.locked).toBe(true);
+      expect(versions).toHaveLength(2);
+
+      const again = await request(app)
+        .put(`/api/care-plans/${PLAN_ID}`).set(asUser(caseManager))
+        .send({ careGoal: 'Changed', careSteps: 'Changed', status: 'Active' });
+      expect(again.status).toBe(409);
+      expect(again.body.code).toBe('RECORD_LOCKED');
+      expect(plans[PLAN_ID].careGoal).toBe('Stable housing');
+    });
+
+    it('requires steps to save a submitted plan', async () => {
+      plans[PLAN_ID] = planRow();
+      const res = await request(app)
+        .put(`/api/care-plans/${PLAN_ID}`).set(asUser(caseManager))
+        .send({ careGoal: 'Stable housing', careSteps: ' ', status: 'Active' });
+      expect(res.status).toBe(400);
+      expect(res.body.errors.careSteps).toBeDefined();
+      expect(versions).toHaveLength(0);
+      expect(transactions[0].state).toBe('rolledback');
+    });
+
+    it('does not archive a version when a draft is edited', async () => {
+      plans[PLAN_ID] = planRow({ submissionStatus: 'draft', submittedBy: null, submittedAt: null });
+      const res = await request(app)
+        .put(`/api/care-plans/${PLAN_ID}`).set(asUser(caseManager))
+        .send({ careGoal: 'Stable housing', careSteps: '', status: 'Active' });
+      expect(res.status).toBe(200);
+      expect(res.body.submissionStatus).toBe('draft');
+      expect(versions).toHaveLength(0);
+    });
+
+    it('rejects editing, status changes and deleting a completed plan', async () => {
+      plans[PLAN_ID] = planRow({ status: 'Completed' });
       const put = await request(app)
         .put(`/api/care-plans/${PLAN_ID}`).set(asUser(caseManager))
         .send({ careGoal: 'Changed', careSteps: 'Changed' });
       expect(put.status).toBe(409);
       expect(put.body.code).toBe('RECORD_LOCKED');
 
-      const patch = await request(app).patch(`/api/care-plans/${PLAN_ID}/status`).set(asUser(caseManager)).send({ status: 'Completed' });
+      const patch = await request(app).patch(`/api/care-plans/${PLAN_ID}/status`).set(asUser(caseManager)).send({ status: 'Active' });
       expect(patch.status).toBe(409);
-      expect(plans[PLAN_ID].status).toBe('Active');
+      expect(plans[PLAN_ID].status).toBe('Completed');
 
       const del = await request(app).delete(`/api/care-plans/${PLAN_ID}`).set(asUser(caseManager)).send({ reason: 'Not needed' });
       expect(del.status).toBe(403);
       expect(del.body.code).toBe('DELETE_NOT_PERMITTED');
       expect(plans[PLAN_ID].careGoal).toBe('Stable housing');
+      expect(versions).toHaveLength(0);
+    });
+
+    it('does not let a case manager delete a submitted plan that is still open', async () => {
+      plans[PLAN_ID] = planRow();
+      const del = await request(app).delete(`/api/care-plans/${PLAN_ID}`).set(asUser(caseManager)).send({ reason: 'Not needed' });
+      expect(del.status).toBe(403);
+      expect(plans[PLAN_ID]).toBeDefined();
+    });
+
+    it('returns 404 when updating a missing plan', async () => {
+      const res = await request(app)
+        .put(`/api/care-plans/${PLAN_ID}`).set(asUser(caseManager))
+        .send({ careGoal: 'Stable housing', careSteps: 'Apply' });
+      expect(res.status).toBe(404);
     });
 
     it.each([['IT Admin', itAdmin], ['Level 1', level1]])('lets %s delete a submitted plan with a reason', async (_label, user) => {
@@ -526,19 +613,26 @@ describe('Section 4 draft / submit / unlock', () => {
         .send({ reason: 'Goal needs revising' });
 
       it('returns 403 for a case manager', async () => {
-        plans[PLAN_ID] = planRow();
+        plans[PLAN_ID] = planRow({ status: 'Completed' });
         expect((await unlock(caseManager)).status).toBe(403);
         expect(plans[PLAN_ID].submissionStatus).toBe('submitted');
       });
 
       it.each([['IT Admin', itAdmin], ['Level 1', level1]])('lets %s unlock', async (_label, user) => {
-        plans[PLAN_ID] = planRow();
+        plans[PLAN_ID] = planRow({ status: 'Completed' });
         const res = await unlock(user);
         expect(res.status).toBe(200);
         expect(res.body.locked).toBe(false);
         expect(plans[PLAN_ID].submissionStatus).toBe('draft');
         expect(versions[0].recordType).toBe('CarePlan');
         expect(JSON.parse(versions[0].snapshot).careGoal).toBe('Stable housing');
+      });
+
+      it('returns 409 for a submitted plan that is not completed', async () => {
+        plans[PLAN_ID] = planRow();
+        const res = await unlock(itAdmin);
+        expect(res.status).toBe(409);
+        expect(res.body.code).toBe('RECORD_NOT_LOCKED');
       });
     });
   });

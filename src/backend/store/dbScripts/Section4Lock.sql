@@ -1,6 +1,8 @@
 -- ========================================
 -- Section 4: draft / submitted encounter notes and care plans
--- Submitted records are locked. Only IT Admin / Level 1 can unlock them.
+-- Submitted encounter notes are locked. Submitted care plans can still be
+-- updated until they are marked Completed, then they lock. Only IT Admin /
+-- Level 1 can unlock them.
 -- Idempotent: safe to run more than once. Run before deploying the backend
 -- that includes POST /api/encounter-notes/:noteId/unlock and
 -- POST /api/care-plans/:carePlanID/unlock. IT Admin / Level 1 can also delete
@@ -98,7 +100,7 @@ BEGIN
         submittedBy   NVARCHAR(255)  NULL,
         submittedAt   DATETIME2      NULL,
 
-        archivedReason NVARCHAR(50)  NOT NULL,   -- 'unlock' | 'delete'
+        archivedReason NVARCHAR(50)  NOT NULL,   -- 'unlock' | 'delete' | 'update' (care plan edited after submit)
         archivedBy    NVARCHAR(255)  NOT NULL,
         archivedAt    DATETIME2      NOT NULL DEFAULT SYSUTCDATETIME(),
         reason        NVARCHAR(500)  NULL        -- why it was unlocked / deleted
