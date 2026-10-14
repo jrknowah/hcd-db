@@ -52,6 +52,7 @@ import ClientProfileCard from 'src/components/cards/ClientProfileCard';
 import ClientTable from 'src/components/tables/ClientTable';
 import NewClient from './NewClient';
 import NavigationDebugger from '../../components/debug/NavigationDebugger';
+import { matchesClientSearch } from '../../utils/clientSearch';
 
 // Import Redux actions
 import { 
@@ -161,14 +162,8 @@ const DashboardClient = () => {
     // Ensure clients is always an array
     let filtered = Array.isArray(clients) ? [...clients] : [];
 
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(client => 
-        client.clientFirstName?.toLowerCase().includes(query) ||
-        client.clientLastName?.toLowerCase().includes(query) ||
-        client.clientID?.toLowerCase().includes(query) ||
-        client.clientSite?.toLowerCase().includes(query)
-      );
+    if (searchQuery.trim()) {
+      filtered = filtered.filter(client => matchesClientSearch(client, searchQuery));
     }
 
     if (filterBy !== 'all') {
