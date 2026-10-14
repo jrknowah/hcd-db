@@ -2,7 +2,7 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
 import { azureBlobService } from "../../services/azureBlobService";
-import { ARCHIVE_SECTIONS, sectionDocType, filterSectionFiles } from "../../../utils/archiveSections";
+import { ARCHIVE_SECTIONS, SECTION_CATEGORIES, sectionDocType, filterSectionFiles } from "../../../utils/archiveSections";
 
 const API = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
 
@@ -22,8 +22,7 @@ const createAxiosInstance = (timeout = FETCH_TIMEOUT) => {
 // uploads (/api/upload + /api/files/:clientID), in Section 4's own folder
 // (see utils/archiveSections). The old /api/note-archive route wrote to a
 // separate path + SQL table that this tab couldn't reliably read back.
-const CM_NOTES_CATEGORIES = ['CM Notes Archive'];
-const CM_NOTES_DOC_TYPE = sectionDocType(ARCHIVE_SECTIONS.CM_NOTES, CM_NOTES_CATEGORIES[0]);
+const CM_NOTES_CATEGORIES = SECTION_CATEGORIES[ARCHIVE_SECTIONS.CM_NOTES];
 
 const toArchiveFile = (f) => ({
   fileName: f.fileName,
@@ -37,19 +36,25 @@ const toArchiveFile = (f) => ({
 export const uploadNoteFile = createAsyncThunk(
   "noteArchive/uploadNoteFile",
   async (fileOrPayload, { rejectWithValue }) => {
-    // Support both signatures: dispatch(uploadNoteFile(file)) OR dispatch(uploadNoteFile({ file, clientID }))
+    // Support both signatures: dispatch(uploadNoteFile(file)) OR
+    // dispatch(uploadNoteFile({ file, clientID, category }))
     const file = fileOrPayload?.file || fileOrPayload;
     const clientID = fileOrPayload?.clientID || null;
+    const category = CM_NOTES_CATEGORIES.includes(fileOrPayload?.category)
+      ? fileOrPayload.category
+      : CM_NOTES_CATEGORIES[0];
 
     if (!clientID) {
       return rejectWithValue('No client selected - select a client before uploading');
     }
 
     try {
-      const result = await azureBlobService.uploadFile(file, clientID, CM_NOTES_DOC_TYPE);
+      const result = await azureBlobService.uploadFile(
+        file, clientID, sectionDocType(ARCHIVE_SECTIONS.CM_NOTES, category)
+      );
       return {
         message: 'File uploaded successfully',
-        ...toArchiveFile({ ...result, fileName: result.fileName || file.name, fileSize: result.fileSize ?? file.size })
+        ...toArchiveFile({ ...result, docType: category, fileName: result.fileName || file.name, fileSize: result.fileSize ?? file.size })
       };
     } catch (error) {
       console.error('❌ Upload note file error:', error);

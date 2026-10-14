@@ -101,7 +101,7 @@ export const SECTION_CATEGORIES = {
     'Paper Conversion',
     'Other'
   ],
-  [ARCHIVE_SECTIONS.CM_NOTES]: ['CM Notes Archive']
+  [ARCHIVE_SECTIONS.CM_NOTES]: ['CM Notes Archive', 'Care Plans']
 };
 
 const SEPARATOR = '__';

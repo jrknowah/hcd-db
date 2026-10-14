@@ -46,6 +46,18 @@ describe('archiveSections', () => {
     expect(filterSectionFiles(files, ARCHIVE_SECTIONS.MISC_DOCS)).toEqual([]);
   });
 
+  it('keeps Section 4 care plans separate from Section 5 care plans', () => {
+    const files = [
+      folder(sectionDocType(ARCHIVE_SECTIONS.CM_NOTES, 'Care Plans')),
+      folder(sectionDocType(ARCHIVE_SECTIONS.CM_NOTES, 'CM Notes Archive')),
+      folder(sectionDocType(ARCHIVE_SECTIONS.NURSING, 'Care Plan'))
+    ];
+    expect(filterSectionFiles(files, ARCHIVE_SECTIONS.CM_NOTES).map(f => f.docType))
+      .toEqual(['Care Plans', 'CM Notes Archive']);
+    expect(filterSectionFiles(files, ARCHIVE_SECTIONS.NURSING).map(f => f.docType))
+      .toEqual(['Care Plan']);
+  });
+
   it('handles missing input', () => {
     expect(filterSectionFiles(null, ARCHIVE_SECTIONS.NURSING)).toEqual([]);
   });
