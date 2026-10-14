@@ -43,11 +43,80 @@ const PLAN_COLUMNS = `
   unlockedAt,
   unlockReason`;
 
+// A submitted care plan can still be updated while the goal is being worked
+// on. It locks once it is both submitted and marked Completed.
+const COMPLETED = 'Completed';
+const isPlanLocked = (plan) => isSubmitted(plan.submissionStatus) && plan.status === COMPLETED;
+// SQL form of !isPlanLocked, for WHERE guards (status may be NULL)
+const EDITABLE_PLAN_SQL = `(submissionStatus = '${DRAFT}' OR ISNULL(status, '') <> '${COMPLETED}')`;
+
+const lockedPlanResponse = (res) => lockedResponse(res, 'completed care plan');
+
 const mapPlan = (plan) => ({
   ...plan,
   submissionStatus: plan.submissionStatus || SUBMITTED,
-  locked: isSubmitted(plan.submissionStatus),
+  locked: isPlanLocked(plan),
 });
+
+// Runs apply(transaction, plan) with the plan row locked, if it can still be
+// changed and validate(plan) (optional) returns no errors. Before a submitted
+// plan is changed, its current version is archived to Section4RecordVersions
+// ('update') so earlier submitted versions are kept. Returns apply's result,
+// or null if a response was already sent.
+const updateEditablePlan = async (res, carePlanID, currentUser, { validate, apply }) => {
+  const pool = await getPool();
+  const transaction = new sql.Transaction(pool);
+  await transaction.begin();
+  try {
+    // UPDLOCK so a concurrent save, unlock or delete can't slip in between read and write
+    const existing = await transaction.request()
+      .input('carePlanID', sql.VarChar, carePlanID)
+      .query(`
+        SELECT ${PLAN_COLUMNS}
+        FROM CarePlans WITH (UPDLOCK, HOLDLOCK)
+        WHERE carePlanID = @carePlanID
+      `);
+
+    const plan = existing.recordset[0];
+    if (!plan) {
+      await transaction.rollback();
+      res.status(404).json({ error: 'Care plan not found' });
+      return null;
+    }
+    if (isPlanLocked(plan)) {
+      await transaction.rollback();
+      lockedPlanResponse(res);
+      return null;
+    }
+    const validationErrors = validate?.(plan);
+    if (validationErrors) {
+      await transaction.rollback();
+      res.status(400).json({ error: 'Validation failed', errors: validationErrors });
+      return null;
+    }
+
+    if (isSubmitted(plan.submissionStatus)) {
+      await archiveVersion(transaction, {
+        action: 'update',
+        recordType: 'CarePlan',
+        recordID: plan._id,
+        clientID: plan.clientID,
+        snapshot: mapPlan(plan),
+        submittedBy: plan.submittedBy,
+        submittedAt: plan.submittedAt,
+        archivedBy: currentUser,
+        archivedAt: new Date(),
+      });
+    }
+
+    const result = await apply(transaction, plan);
+    await transaction.commit();
+    return result;
+  } catch (err) {
+    await transaction.rollback().catch(() => {});
+    throw err;
+  }
+};
 
 // Generate unique carePlanID
 const generateCarePlanID = (clientID) => {
@@ -178,84 +247,70 @@ router.post('/care-plans/:clientID', authMiddleware, async (req, res) => {
   }
 });
 
-// PUT /api/care-plans/:carePlanID - Update a draft care plan
-// { submit: true } submits (locks) it. Submitted plans return 409 RECORD_LOCKED.
+// PUT /api/care-plans/:carePlanID - Update a care plan
+// Drafts and submitted plans can be changed until the plan is submitted and
+// marked Completed; then it returns 409 RECORD_LOCKED. { submit: true }
+// submits a draft. A submitted plan stays submitted (its submitter is kept).
 router.put('/care-plans/:carePlanID', authMiddleware, async (req, res) => {
   try {
-    const pool = await getPool();
     const { carePlanID } = req.params;
     const updateData = req.body;
     const submit = wantsSubmit(updateData);
     
-    // Validation
-    const validationErrors = validateCarePlanData(updateData, submit);
-    if (validationErrors) {
-      return res.status(400).json({
-        error: 'Validation failed',
-        errors: validationErrors
-      });
-    }
-    
     console.log(`📝 Updating care plan: ${carePlanID}`);
-    
-    // Check if care plan exists and is still a draft
-    const checkResult = await pool.request()
-      .input('carePlanID', sql.VarChar, carePlanID)
-      .query('SELECT carePlanID, submissionStatus FROM CarePlans WHERE carePlanID = @carePlanID');
-    
-    if (checkResult.recordset.length === 0) {
-      return res.status(404).json({ error: 'Care plan not found' });
-    }
-    if (isSubmitted(checkResult.recordset[0].submissionStatus)) {
-      return lockedResponse(res, 'care plan');
-    }
     
     // Recorded from the signed-in user, never from the request body
     const updatedBy = getCurrentUser(req);
-    // The status guard in the WHERE clause stops a save that races a submit
-    const result = await pool.request()
-      .input('carePlanID', sql.VarChar, carePlanID)
-      .input('careGoal', sql.NVarChar, updateData.careGoal)
-      .input('careSteps', sql.NVarChar, updateData.careSteps || '')
-      .input('careClientAct', sql.NVarChar, updateData.careClientAct || null)
-      .input('careCmAct', sql.NVarChar, updateData.careCmAct || null)
-      .input('careOutcome', sql.NVarChar, updateData.careOutcome || null)
-      .input('status', sql.VarChar, updateData.status || 'Planning')
-      .input('priority', sql.VarChar, updateData.priority || 'Medium')
-      .input('targetDate', sql.Date, updateData.targetDate || null)
-      .input('updatedBy', sql.VarChar, updatedBy)
-      .input('submissionStatus', sql.NVarChar(20), submit ? SUBMITTED : DRAFT)
-      .input('submittedBy', sql.NVarChar, submit ? updatedBy : null)
-      .input('submittedAt', sql.DateTime2, submit ? new Date() : null)
-      .query(`
-        UPDATE CarePlans 
-        SET 
-          careGoal = @careGoal, 
-          careSteps = @careSteps, 
-          careClientAct = @careClientAct,
-          careCmAct = @careCmAct, 
-          careOutcome = @careOutcome, 
-          status = @status,
-          priority = @priority, 
-          targetDate = @targetDate, 
-          submissionStatus = @submissionStatus,
-          submittedBy = @submittedBy,
-          submittedAt = @submittedAt,
-          updatedBy = @updatedBy, 
-          updatedAt = GETDATE()
-        WHERE carePlanID = @carePlanID AND submissionStatus = '${DRAFT}';
-        
-        SELECT ${PLAN_COLUMNS}
-        FROM CarePlans 
-        WHERE carePlanID = @carePlanID;
-      `);
-    
-    if (result.rowsAffected && result.rowsAffected[0] === 0) {
-      return lockedResponse(res, 'care plan');
-    }
+    const updated = await updateEditablePlan(res, carePlanID, updatedBy, {
+      // A submitted plan must keep its steps
+      validate: (existing) => validateCarePlanData(updateData, submit || isSubmitted(existing.submissionStatus)),
+      apply: async (transaction, existing) => {
+        const alreadySubmitted = isSubmitted(existing.submissionStatus);
+        const nowSubmitted = alreadySubmitted || submit;
+
+        const result = await transaction.request()
+          .input('carePlanID', sql.VarChar, carePlanID)
+          .input('careGoal', sql.NVarChar, updateData.careGoal)
+          .input('careSteps', sql.NVarChar, updateData.careSteps || '')
+          .input('careClientAct', sql.NVarChar, updateData.careClientAct || null)
+          .input('careCmAct', sql.NVarChar, updateData.careCmAct || null)
+          .input('careOutcome', sql.NVarChar, updateData.careOutcome || null)
+          .input('status', sql.VarChar, updateData.status || 'Planning')
+          .input('priority', sql.VarChar, updateData.priority || 'Medium')
+          .input('targetDate', sql.Date, updateData.targetDate || null)
+          .input('updatedBy', sql.VarChar, updatedBy)
+          .input('submissionStatus', sql.NVarChar(20), nowSubmitted ? SUBMITTED : DRAFT)
+          .input('submittedBy', sql.NVarChar, alreadySubmitted ? existing.submittedBy : (submit ? updatedBy : null))
+          .input('submittedAt', sql.DateTime2, alreadySubmitted ? existing.submittedAt : (submit ? new Date() : null))
+          .query(`
+            UPDATE CarePlans 
+            SET 
+              careGoal = @careGoal, 
+              careSteps = @careSteps, 
+              careClientAct = @careClientAct,
+              careCmAct = @careCmAct, 
+              careOutcome = @careOutcome, 
+              status = @status,
+              priority = @priority, 
+              targetDate = @targetDate, 
+              submissionStatus = @submissionStatus,
+              submittedBy = @submittedBy,
+              submittedAt = @submittedAt,
+              updatedBy = @updatedBy, 
+              updatedAt = GETDATE()
+            WHERE carePlanID = @carePlanID AND ${EDITABLE_PLAN_SQL};
+          
+            SELECT ${PLAN_COLUMNS}
+            FROM CarePlans 
+            WHERE carePlanID = @carePlanID;
+          `);
+        return result.recordset[0];
+      },
+    });
+    if (!updated) return;
 
     console.log(`✅ Care plan updated: ${carePlanID}`);
-    res.json(mapPlan(result.recordset[0]));
+    res.json(mapPlan(updated));
   } catch (err) {
     console.error('❌ Error updating care plan:', err);
     res.status(500).json({ 
@@ -265,10 +320,10 @@ router.put('/care-plans/:carePlanID', authMiddleware, async (req, res) => {
   }
 });
 
-// PATCH /api/care-plans/:carePlanID/status - Update status only (drafts only)
+// PATCH /api/care-plans/:carePlanID/status - Update status only.
+// Allowed until the plan is locked; setting a submitted plan to Completed locks it.
 router.patch('/care-plans/:carePlanID/status', authMiddleware, async (req, res) => {
   try {
-    const pool = await getPool();
     const { carePlanID } = req.params;
     const { status } = req.body;
     
@@ -282,32 +337,32 @@ router.patch('/care-plans/:carePlanID/status', authMiddleware, async (req, res) 
     
     console.log(`📊 Updating care plan status: ${carePlanID} -> ${status}`);
     
-    const result = await pool.request()
-      .input('carePlanID', sql.VarChar, carePlanID)
-      .input('status', sql.VarChar, status)
-      .input('updatedBy', sql.VarChar, getCurrentUser(req))
-      .query(`
-        UPDATE CarePlans 
-        SET 
-          status = @status, 
-          updatedBy = @updatedBy, 
-          updatedAt = GETDATE()
-        WHERE carePlanID = @carePlanID AND submissionStatus = '${DRAFT}';
-        
-        SELECT ${PLAN_COLUMNS}
-        FROM CarePlans 
-        WHERE carePlanID = @carePlanID;
-      `);
-    
-    if (result.recordset.length === 0) {
-      return res.status(404).json({ error: 'Care plan not found' });
-    }
-    if (result.rowsAffected && result.rowsAffected[0] === 0) {
-      return lockedResponse(res, 'care plan');
-    }
+    const updatedBy = getCurrentUser(req);
+    const updated = await updateEditablePlan(res, carePlanID, updatedBy, {
+      apply: async (transaction) => {
+        const result = await transaction.request()
+          .input('carePlanID', sql.VarChar, carePlanID)
+          .input('status', sql.VarChar, status)
+          .input('updatedBy', sql.VarChar, updatedBy)
+          .query(`
+            UPDATE CarePlans 
+            SET 
+              status = @status, 
+              updatedBy = @updatedBy, 
+              updatedAt = GETDATE()
+            WHERE carePlanID = @carePlanID AND ${EDITABLE_PLAN_SQL};
+          
+            SELECT ${PLAN_COLUMNS}
+            FROM CarePlans 
+            WHERE carePlanID = @carePlanID;
+          `);
+        return result.recordset[0];
+      },
+    });
+    if (!updated) return;
     
     console.log(`✅ Care plan status updated: ${carePlanID} -> ${status}`);
-    res.json(mapPlan(result.recordset[0]));
+    res.json(mapPlan(updated));
   } catch (err) {
     console.error('❌ Error updating care plan status:', err);
     res.status(500).json({ 
@@ -318,7 +373,8 @@ router.patch('/care-plans/:carePlanID/status', authMiddleware, async (req, res) 
 });
 
 // POST /api/care-plans/:carePlanID/unlock - IT Admin / Level 1 only.
-// Archives the submitted plan and returns it to draft so it can be edited.
+// Archives a locked (submitted and Completed) plan and returns it to draft
+// so it can be edited.
 router.post(
   '/care-plans/:carePlanID/unlock',
   authMiddleware,
@@ -354,9 +410,9 @@ router.post(
           await transaction.rollback();
           return res.status(404).json({ message: 'Care plan not found' });
         }
-        if (!isSubmitted(plan.submissionStatus)) {
+        if (!isPlanLocked(plan)) {
           await transaction.rollback();
-          return res.status(409).json({ code: 'RECORD_NOT_LOCKED', message: 'Care plan is not submitted or locked' });
+          return res.status(409).json({ code: 'RECORD_NOT_LOCKED', message: 'Care plan is not locked. It can be edited until it is completed.' });
         }
 
         await archiveVersion(transaction, {
@@ -424,8 +480,9 @@ router.post(
 );
 
 // DELETE /api/care-plans/:carePlanID - Delete a care plan
-// Drafts: any signed-in user. Submitted (locked): IT Admin / Level 1 only,
-// with { reason }. A copy is archived to Section4RecordVersions first.
+// Drafts: any signed-in user. Submitted plans (still editable or locked):
+// IT Admin / Level 1 only, with { reason }. A copy is archived to
+// Section4RecordVersions first.
 router.delete('/care-plans/:carePlanID', authMiddleware, async (req, res) => {
   const { carePlanID } = req.params;
   const canDeleteSubmitted = canUnlockSignedForms(req.user);
@@ -544,3 +601,4 @@ router.get('/:clientID/summary', async (req, res) => {
 
 module.exports = router;
 module.exports.validateCarePlanData = validateCarePlanData;
+module.exports.isPlanLocked = isPlanLocked;
