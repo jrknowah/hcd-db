@@ -68,8 +68,8 @@ const CmNoteArchive = ({ clientID: clientIDProp, exportMode = false }) => {
 
   const refresh = () => clientID && dispatch(fetchNoteArchiveFiles(clientID));
 
-  const handleUpload = async (_category, file) => {
-    await dispatch(uploadNoteFile({ file, clientID }));
+  const handleUpload = async (category, file) => {
+    await dispatch(uploadNoteFile({ file, clientID, category }));
     refresh();
   };
 
@@ -116,7 +116,7 @@ const CmNoteArchive = ({ clientID: clientIDProp, exportMode = false }) => {
     <SectionArchiveLayout
       icon={<ArchiveIcon color="primary" fontSize="large" />}
       title="Notes Archive"
-      subtitle={`Upload and manage case management note documents${clientName ? ` for ${clientName}` : ''}`}
+      subtitle={`Upload and manage case management notes and care plans${clientName ? ` for ${clientName}` : ''}`}
       files={files}
       loading={filesLoading}
       uploading={loading}
@@ -134,7 +134,7 @@ const CmNoteArchive = ({ clientID: clientIDProp, exportMode = false }) => {
       canDelete={(file) => !!file.blobName}
       onRefresh={refresh}
       emptyTitle="No files in notes archive"
-      emptyText="Upload case management notes using the form above"
+      emptyText="Upload case management notes or care plans using the forms above"
       exportMode={exportMode}
     />
   );
