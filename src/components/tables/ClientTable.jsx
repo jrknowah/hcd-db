@@ -49,11 +49,26 @@ const headCells = [
   { id: 'clientName', numeric: false, disablePadding: false, label: 'Client Name' },
   { id: 'clientID', numeric: false, disablePadding: false, label: 'ID' },
   { id: 'clientSite', numeric: false, disablePadding: false, label: 'Site' },
+  { id: 'clientProgram', numeric: false, disablePadding: false, label: 'Program' },
+  { id: 'status', numeric: false, disablePadding: false, label: 'Status' },
   { id: 'clientGender', numeric: false, disablePadding: false, label: 'Gender' },
   { id: 'clientDOB', numeric: false, disablePadding: false, label: 'Date of Birth' },
   { id: 'createdAt', numeric: false, disablePadding: false, label: 'Created' },
   { id: 'actions', numeric: false, disablePadding: false, label: 'Actions' }
 ];
+
+// Active / Discharged (with the exit date). Status comes from the API (utils/clientStatus.js).
+export function ClientStatusChip({ client }) {
+  if (client.status === 'discharged') {
+    const date = formatDateOnly(client.clientDischargeDate);
+    return (
+      <Tooltip title={client.clientExitReason || ''}>
+        <Chip label={date ? `Discharged ${date}` : 'Discharged'} size="small" />
+      </Tooltip>
+    );
+  }
+  return <Chip label="Active" size="small" color="success" variant="outlined" />;
+}
 
 // Enhanced table head component
 function EnhancedTableHead({ 
@@ -268,6 +283,10 @@ function ClientCard({ client, isSelected, onSelect, onView, onEdit, onViewForms,
             size="small"
             variant="outlined"
           />
+          <ClientStatusChip client={client} />
+          {client.clientProgram && (
+            <Chip label={client.clientProgram} size="small" variant="outlined" color="primary" />
+          )}
           {client.clientVetStatus?.includes('veteran') && (
             <Chip 
               label="Veteran"
@@ -596,6 +615,16 @@ const ClientTable = ({
                         variant="outlined"
                         color="primary"
                       />
+                    </TableCell>
+
+                    <TableCell>
+                      <Typography variant="body2">
+                        {client.clientProgram || 'Not set'}
+                      </Typography>
+                    </TableCell>
+
+                    <TableCell>
+                      <ClientStatusChip client={client} />
                     </TableCell>
 
                     <TableCell>

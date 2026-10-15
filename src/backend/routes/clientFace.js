@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { getPool } = require('../store/azureSql');
 const sql = require('mssql');
+const { programError } = require('../utils/clientStatus');
 
 // ✅ VALIDATION HELPERS
 const validatePhone = (phone) => {
@@ -33,10 +34,17 @@ router.get('/getClientFace/:clientID', async (req, res) => {
     const pool = await getPool();
     const result = await pool.request()
       .input('clientID', sql.NVarChar, req.params.clientID)
-      .query('SELECT * FROM ClientFace WHERE clientID = @clientID');
+      .query(`
+        SELECT * FROM ClientFace WHERE clientID = @clientID;
+        SELECT clientProgram FROM Clients WHERE clientID = @clientID;
+      `);
     
     console.log(`📄 Fetched ClientFace for: ${req.params.clientID}`);
-    res.json(result.recordset[0] || {});
+    // The program is kept on the client (dbo.Clients) but edited on the face sheet
+    const [faceRows = [], clientRows = []] = result.recordsets || [];
+    const face = faceRows[0] || {};
+    const program = clientRows[0]?.clientProgram;
+    res.json(program ? { ...face, clientProgram: program } : face);
   } catch (err) {
     console.error('❌ Error fetching ClientFace:', err);
     res.status(500).json({ 
@@ -60,6 +68,17 @@ router.post('/saveClientFace', async (req, res) => {
     return res.status(400).json({ 
       error: 'ClientID is required',
       field: 'clientID'
+    });
+  }
+
+  // ✅ VALIDATION: Program (saved to dbo.Clients)
+  const { clientProgram } = req.body;
+  const invalidProgram = programError(clientProgram);
+  if (invalidProgram) {
+    return res.status(400).json({
+      error: invalidProgram,
+      field: 'clientProgram',
+      value: clientProgram
     });
   }
 
@@ -121,7 +140,12 @@ router.post('/saveClientFace', async (req, res) => {
       .input('clientMedPrimaryPhyFacility', sql.NVarChar, clientMedPrimaryPhyFacility || null)
       .input('clientMedPrimaryPhyPhone', sql.NVarChar, clientMedPrimaryPhyPhone || null)
       .input('clientAllergyComments', sql.NVarChar, clientAllergyComments || null)
+      .input('updateProgram', sql.Bit, clientProgram !== undefined)
+      .input('clientProgram', sql.NVarChar(50), clientProgram || null)
       .query(`
+        SET XACT_ABORT ON;
+        BEGIN TRANSACTION;
+
         MERGE ClientFace AS target
         USING (SELECT @clientID AS clientID) AS source
         ON target.clientID = source.clientID
@@ -154,6 +178,12 @@ router.post('/saveClientFace', async (req, res) => {
           @clientMedPrimaryPhy, @clientMedPrimaryPhyFacility, @clientMedPrimaryPhyPhone,
           @clientAllergyComments, GETDATE(), GETDATE()
         );
+
+        IF @updateProgram = 1
+          UPDATE Clients SET clientProgram = @clientProgram, updatedAt = GETDATE()
+          WHERE clientID = @clientID;
+
+        COMMIT TRANSACTION;
       `);
 
     console.log(`✅ ClientFace saved for: ${clientID}`);

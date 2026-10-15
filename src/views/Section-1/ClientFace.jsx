@@ -13,7 +13,8 @@ import {
   LinearProgress,
   Chip,
   Paper,
-  IconButton
+  IconButton,
+  MenuItem
 } from "@mui/material";
 import {
   ContactPhone as ContactPhoneIcon,
@@ -21,8 +22,10 @@ import {
   LocalHospital as MedicalIcon,
   Save as SaveIcon,
   Warning as AllergyIcon,
-  Edit as EditIcon
+  Edit as EditIcon,
+  AccountTree as ProgramIcon
 } from "@mui/icons-material";
+import { programList } from "../../data/arrayList";
 import {
   fetchClientFaceData,
   saveClientFaceData,
@@ -39,6 +42,7 @@ import {
   selectSaveSuccess,
   selectDataLoaded
 } from "../../backend/store/slices/clientFaceSlice";
+import { setSelectedClient } from "../../backend/store/slices/clientSlice";
 
 // ✅ Import medical slice to fetch allergies
 import { fetchMedicalInfo } from "../../backend/store/slices/medFaceSheetSlice";
@@ -128,6 +132,10 @@ const ClientFace = ({ exportMode = false }) => {
   // Form validation function
   const validateForm = (data = formData) => {
     const errors = [];
+
+    if (!data.clientProgram) {
+      errors.push('Program is required');
+    }
     
     if (data.clientEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.clientEmail)) {
       errors.push('Email must be a valid email address');
@@ -138,7 +146,7 @@ const ClientFace = ({ exportMode = false }) => {
 
   // Calculate form completion percentage
   const getCompletionPercentage = () => {
-  const requiredFields = ['clientContactNum', 'clientMedInsType'];
+  const requiredFields = ['clientProgram', 'clientContactNum', 'clientMedInsType'];
   const optionalFields = ['clientEmail', 'clientContactAltNum', 'clientEmgContactName', 'clientEmgContactNum', 
                          'clientEmgContactRel', 'clientEmgContactAddress', 'clientMedCarrier', 
                          'clientMedInsNum']; // ✅ Removed 'clientAllergyComments'
@@ -207,6 +215,10 @@ const ClientFace = ({ exportMode = false }) => {
         formData: dataToSave
         // ❌ Removed: allergies parameter - now managed in Section 5
       })).unwrap();
+      // The program is stored on the client, so keep the selected client in step
+      if (currentClient.clientProgram !== dataToSave.clientProgram) {
+        dispatch(setSelectedClient({ ...currentClient, clientProgram: dataToSave.clientProgram }));
+      }
     } catch (error) {
       console.error('Save failed:', error);
     }
@@ -319,6 +331,38 @@ const ClientFace = ({ exportMode = false }) => {
 
       {/* Main Form */}
       <form onSubmit={handleSubmit} noValidate>
+        {/* Program Section */}
+        <Card elevation={1} sx={{ mb: 3 }}>
+          <CardContent>
+            <Box display="flex" alignItems="center" gap={1} mb={3}>
+              <ProgramIcon color="primary" />
+              <Typography variant="h6">Program</Typography>
+            </Box>
+
+            <Grid container spacing={2}>
+              <Grid item xs={12} md={4}>
+                <Typography>Program *</Typography>
+                <TextField
+                  select
+                  fullWidth
+                  label=""
+                  name="clientProgram"
+                  value={formData.clientProgram || ""}
+                  onChange={handleFieldChange('clientProgram')}
+                  disabled={saving}
+                  error={!formData.clientProgram && validationErrors.some(err => err.includes('Program'))}
+                  SelectProps={{ displayEmpty: true }}
+                >
+                  <MenuItem value="" disabled>Select a program</MenuItem>
+                  {programList.map((program) => (
+                    <MenuItem key={program.value} value={program.value}>{program.label}</MenuItem>
+                  ))}
+                </TextField>
+              </Grid>
+            </Grid>
+          </CardContent>
+        </Card>
+
         {/* Contact Information Section */}
         <Card elevation={1} sx={{ mb: 3 }}>
           <CardContent>

@@ -22,6 +22,8 @@ try {
   }
 }
 
+const { getClientStatus, programError } = require('../utils/clientStatus');
+
 // Generate client ID helper
 const generateClientID = () => {
   const timestamp = Date.now().toString().slice(-6);
@@ -51,7 +53,8 @@ const mapClientForAuthForms = (client) => {
     fullName: fullName,
     dateOfBirth: client.clientDOB,
     admitDate: client.clientAdmitDate,
-    status: client.status || 'active'
+    // Discharged once the Exit Form's exit date has arrived (utils/clientStatus.js)
+    status: getClientStatus(client)
   };
 };
 
@@ -88,7 +91,11 @@ const validateClientData = (clientData, isUpdate = false) => {
     }
   }
   
-  // In clients.js, update validateClientData function:
+  const invalidProgram = programError(clientData.clientProgram);
+  if (invalidProgram) {
+    errors.clientProgram = invalidProgram;
+  }
+
 
   // Validate SSN format if provided
    if (clientData.clientSSN && clientData.clientSSN.trim().length > 0) {
@@ -369,6 +376,10 @@ router.put('/:clientID', async (req, res) => {
     if (updates.clientHighEd !== undefined) {
       request.input('clientHighEd', sql.NVarChar(100), updates.clientHighEd);
       updateFields.push('clientHighEd = @clientHighEd');
+    }
+    if (updates.clientProgram !== undefined) {
+      request.input('clientProgram', sql.NVarChar(50), updates.clientProgram || null);
+      updateFields.push('clientProgram = @clientProgram');
     }
     
     if (updateFields.length === 0) {

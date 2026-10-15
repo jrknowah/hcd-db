@@ -94,8 +94,10 @@ const clientFaceSlice = createSlice({
     updateFormField: (state, action) => {
       const { field, value } = action.payload;
       state.formData[field] = value;
+      // Messages name the field without the "client" prefix ("Program is required")
+      const name = field.replace(/^client/, '').toLowerCase();
       state.validationErrors = state.validationErrors.filter(
-        error => !error.toLowerCase().includes(field.toLowerCase())
+        error => !error.toLowerCase().includes(name)
       );
     },
     
