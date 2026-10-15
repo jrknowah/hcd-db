@@ -1,6 +1,7 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import axios from 'axios';
 import mockData from '../../../utils/mockData';
+import { getApiAuthHeaders } from '../../../utils/apiAuth';
 
 // ✅ FIX: Simple, clean API URL construction
 const API_BASE_URL = import.meta.env.VITE_API_URL || '';
@@ -23,7 +24,7 @@ export const fetchClients = createAsyncThunk('clients/fetchClients', async (_, {
     
     // Otherwise use real API
     console.log('🌐 Fetching real clients from:', `${API_BASE_URL}/api/clients`);
-    const response = await axios.get(`${API_BASE_URL}/api/clients`);
+    const response = await axios.get(`${API_BASE_URL}/api/clients`, { headers: await getApiAuthHeaders() });
     console.log('✅ Real clients fetched:', response.data.length, 'clients');
     return response.data;
   } catch (error) {
@@ -47,7 +48,7 @@ export const addClient = createAsyncThunk('clients/addClient', async (clientData
     }
     
     console.log('🌐 Adding real client to database');
-    const response = await axios.post(`${API_BASE_URL}/api/clients`, clientData);
+    const response = await axios.post(`${API_BASE_URL}/api/clients`, clientData, { headers: await getApiAuthHeaders() });
     console.log('✅ Client added successfully');
     return response.data;
   } catch (error) {
@@ -68,7 +69,7 @@ export const fetchClientById = createAsyncThunk('clients/fetchClientById', async
     }
     
     console.log('🌐 Fetching real client by ID:', `${API_BASE_URL}/api/clients/${clientID}`);
-    const response = await axios.get(`${API_BASE_URL}/api/clients/${clientID}`);
+    const response = await axios.get(`${API_BASE_URL}/api/clients/${clientID}`, { headers: await getApiAuthHeaders() });
     console.log('✅ Client fetched by ID successfully:', response.data);
     
     return response.data;
@@ -95,7 +96,7 @@ export const updateClient = createAsyncThunk(
       }
       
       console.log('🌐 Updating real client in database');
-      const response = await axios.put(`${API_BASE_URL}/api/clients/${clientID}`, updates);
+      const response = await axios.put(`${API_BASE_URL}/api/clients/${clientID}`, updates, { headers: await getApiAuthHeaders() });
       console.log('✅ Client updated successfully');
       return response.data;
     } catch (error) {

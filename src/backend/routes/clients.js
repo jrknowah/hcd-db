@@ -23,6 +23,7 @@ try {
 }
 
 const { getClientStatus, programError } = require('../utils/clientStatus');
+const { allowedSites, canSeeClient } = require('../config/siteAccess');
 
 // Generate client ID helper
 const generateClientID = () => {
@@ -140,6 +141,10 @@ router.post('/', async (req, res) => {
       });
     }
     
+    if (!canSeeClient(allowedSites(req.user), client)) {
+      return res.status(403).json({ error: 'You can only add clients at your own sites' });
+    }
+
     // Generate clientID if not provided
     // Trim so IDs like '  187145' can't be created; blob folders use the trimmed ID
     const clientID = String(client.clientID || '').trim() || generateClientID();
@@ -232,8 +237,12 @@ router.get('/', async (req, res) => {
       ORDER BY createdAt DESC
     `);
     
+    // Only the sites this user has access to (config/siteAccess.js)
+    const sites = allowedSites(req.user);
+    const visible = result.recordset.filter(client => canSeeClient(sites, client));
+
     // ✅ Map all clients for authorization forms compatibility
-    const mappedClients = result.recordset.map(mapClientForAuthForms);
+    const mappedClients = visible.map(mapClientForAuthForms);
     
     console.log(`📋 Fetched ${mappedClients.length} clients from Clients table`);
     res.json(mappedClients);
@@ -256,6 +265,10 @@ router.get('/:clientID', async (req, res) => {
     
     if (result.recordset.length === 0) {
       return res.status(404).json({ error: 'Client not found' });
+    }
+
+    if (!canSeeClient(allowedSites(req.user), result.recordset[0])) {
+      return res.status(403).json({ error: 'You do not have access to clients at this site' });
     }
     
     // ✅ Map client for authorization forms compatibility
@@ -298,6 +311,10 @@ router.put('/:clientID', async (req, res) => {
     
     if (checkResult.recordset.length === 0) {
       return res.status(404).json({ error: 'Client not found' });
+    }
+
+    if (!canSeeClient(allowedSites(req.user), checkResult.recordset[0])) {
+      return res.status(403).json({ error: 'You do not have access to clients at this site' });
     }
     
     // Build update query

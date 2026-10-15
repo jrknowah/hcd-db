@@ -11,7 +11,7 @@ describe('Unified Allergy System Integration Tests', () => {
     
     // Create test client
     await request(app)
-      .post('/api/clients')
+      .post('/api/clients').set('Authorization', 'Bearer dev-bypass-token')
       .send({
         clientID: testClientID,
         clientFirstName: 'Allergy',
@@ -97,7 +97,7 @@ describe('Unified Allergy System Integration Tests', () => {
       const noAllergiesClientID = testClientID + '-NO-ALLERGY';
       
       // Create client
-      await request(app).post('/api/clients').send({
+      await request(app).post('/api/clients').set('Authorization', 'Bearer dev-bypass-token').send({
         clientID: noAllergiesClientID,
         clientFirstName: 'No',
         clientLastName: 'Allergy',
@@ -178,7 +178,7 @@ describe('Unified Allergy System Integration Tests', () => {
       const crossTestClientID = testClientID + '-CROSS';
       
       // Create client
-      await request(app).post('/api/clients').send({
+      await request(app).post('/api/clients').set('Authorization', 'Bearer dev-bypass-token').send({
         clientID: crossTestClientID,
         clientFirstName: 'Cross',
         clientLastName: 'Test',
@@ -280,7 +280,7 @@ describe('Unified Allergy System Integration Tests', () => {
       const integrityClientID = testClientID + '-INTEGRITY';
       
       // Create client
-      await request(app).post('/api/clients').send({
+      await request(app).post('/api/clients').set('Authorization', 'Bearer dev-bypass-token').send({
         clientID: integrityClientID,
         clientFirstName: 'Integrity',
         clientLastName: 'Test',

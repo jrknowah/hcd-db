@@ -36,7 +36,7 @@ describe('Discharge Summary API', () => {
     };
 
     await request(app)
-      .post('/api/clients')
+      .post('/api/clients').set('Authorization', 'Bearer dev-bypass-token')
       .send(clientData)
       .expect(201);  // ✅ FIX: API returns 201 Created, not 200
 
@@ -260,7 +260,7 @@ describe('Discharge Summary API', () => {
       const consistencyID = `${testClientID}-CONSISTENCY`;
       
       await request(app)
-        .post('/api/clients')
+        .post('/api/clients').set('Authorization', 'Bearer dev-bypass-token')
         .send({
           clientID: consistencyID,
           clientFirstName: 'Consistency',
@@ -313,7 +313,7 @@ describe('Discharge Summary API', () => {
       const client2ID = `${testClientID}-ISO2`;
       
       // Create two separate clients
-      await request(app).post('/api/clients').send({
+      await request(app).post('/api/clients').set('Authorization', 'Bearer dev-bypass-token').send({
         clientID: client1ID,
         clientFirstName: 'Client1',
         clientLastName: 'Test',
@@ -324,7 +324,7 @@ describe('Discharge Summary API', () => {
         clientAdmitDate: new Date().toISOString().split('T')[0]
       }).expect(201);  // ✅ FIX: Expect 201 for client creation
 
-      await request(app).post('/api/clients').send({
+      await request(app).post('/api/clients').set('Authorization', 'Bearer dev-bypass-token').send({
         clientID: client2ID,
         clientFirstName: 'Client2',
         clientLastName: 'Test',
@@ -368,7 +368,7 @@ describe('Discharge Summary API', () => {
     it('should handle multiple updates to same client', async () => {
       const multiID = `${testClientID}-MULTI`;
       
-      await request(app).post('/api/clients').send({
+      await request(app).post('/api/clients').set('Authorization', 'Bearer dev-bypass-token').send({
         clientID: multiID,
         clientFirstName: 'Multi',
         clientLastName: 'Test',
@@ -428,7 +428,7 @@ describe('Discharge Summary API', () => {
         const dateClientID = `${testClientID}-DATE-${date}`;
         
         await request(app)
-          .post('/api/clients')
+          .post('/api/clients').set('Authorization', 'Bearer dev-bypass-token')
           .send({
             clientID: dateClientID,
             clientFirstName: 'Date',
