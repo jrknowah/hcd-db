@@ -644,8 +644,8 @@ router.post('/:clientID/readmit', async (req, res) => {
     });
   } catch (err) {
     console.error('❌ Error readmitting client:', err);
-    // Errors raised by usp_ReadmitClient (50001-50004) are explained to the user
-    if (err.number >= 50001 && err.number <= 50004) {
+    // Errors raised by usp_ReadmitClient (50001-50005) are explained to the user
+    if (err.number >= 50001 && err.number <= 50005) {
       return res.status(409).json({ error: err.message });
     }
     res.status(500).json({ error: 'Failed to readmit client', message: err.message });

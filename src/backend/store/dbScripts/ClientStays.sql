@@ -11,7 +11,9 @@
 
    dbo.usp_ReadmitClient does this in one transaction:
      1. copies the client's dbo.Clients row to the archived ID
-        (clientPriorStayOf = the client ID, clientStayNumber = n)
+        (clientPriorStayOf = the client ID, clientStayNumber = n). Columns
+        that must be unique, such as clientSSN, are left blank on the copy;
+        the client row keeps them.
      2. moves every row in every table with a clientID / client_id column to
         the archived ID, except the tables listed in @keep below
         (the same approach as renameClient154404.sql)
@@ -108,8 +110,37 @@ BEGIN
         IF EXISTS (SELECT 1 FROM dbo.Clients WHERE clientID = @priorID)
             THROW 50004, 'The archived stay ID already exists. Nothing was changed.', 1;
 
-        -- 1. Archived copy of the client row
-        SELECT @cols = STRING_AGG(CAST(QUOTENAME(c.name) AS NVARCHAR(MAX)), N', ')
+        -- 1. Archived copy of the client row.
+        --    Columns that must be unique in dbo.Clients (e.g. clientSSN) are left
+        --    blank on the copy: the client row keeps the value.
+        DECLARE @unique TABLE (name SYSNAME PRIMARY KEY, nullable BIT);
+        INSERT INTO @unique
+        SELECT DISTINCT c.name, c.is_nullable
+        FROM sys.indexes i
+        JOIN sys.index_columns ic ON ic.object_id = i.object_id AND ic.index_id = i.index_id
+        JOIN sys.columns c ON c.object_id = ic.object_id AND c.column_id = ic.column_id
+        WHERE i.object_id = OBJECT_ID('dbo.Clients')
+          AND i.is_unique = 1
+          AND ic.is_included_column = 0
+          AND c.is_identity = 0
+          -- an index that includes clientID is already unique for the archived ID
+          AND NOT EXISTS (SELECT 1 FROM sys.index_columns ic2
+                          JOIN sys.columns c2 ON c2.object_id = ic2.object_id AND c2.column_id = ic2.column_id
+                          WHERE ic2.object_id = i.object_id AND ic2.index_id = i.index_id
+                            AND ic2.is_included_column = 0
+                            AND (c2.name = 'clientID' OR c2.is_identity = 1));
+
+        IF EXISTS (SELECT 1 FROM @unique WHERE nullable = 0)
+        BEGIN
+            DECLARE @msg NVARCHAR(400) = CONCAT(N'Clients.', (SELECT TOP 1 name FROM @unique WHERE nullable = 0),
+                N' must be unique and cannot be blank, so the stay cannot be archived. Nothing was changed.');
+            THROW 50005, @msg, 1;
+        END
+
+        DECLARE @src NVARCHAR(MAX);
+        SELECT @cols = STRING_AGG(CAST(QUOTENAME(c.name) AS NVARCHAR(MAX)), N', ') WITHIN GROUP (ORDER BY c.column_id),
+               @src  = STRING_AGG(CAST(CASE WHEN c.name IN (SELECT name FROM @unique) THEN N'NULL'
+                                            ELSE QUOTENAME(c.name) END AS NVARCHAR(MAX)), N', ') WITHIN GROUP (ORDER BY c.column_id)
         FROM sys.columns c
         WHERE c.object_id = OBJECT_ID('dbo.Clients')
           AND c.is_identity = 0 AND c.is_computed = 0
@@ -117,7 +148,7 @@ BEGIN
           AND c.name NOT IN ('clientID', 'clientPriorStayOf', 'clientStayNumber');
 
         SET @sql = N'INSERT INTO dbo.Clients (clientID, clientPriorStayOf, clientStayNumber, ' + @cols + N')
-                     SELECT @priorID, @clientID, @stayNumber, ' + @cols + N'
+                     SELECT @priorID, @clientID, @stayNumber, ' + @src + N'
                      FROM dbo.Clients
                      WHERE clientID = @clientID AND clientID + N''|'' = @clientID + N''|'';';
         EXEC sp_executesql @sql, N'@priorID NVARCHAR(50), @clientID NVARCHAR(50), @stayNumber INT',
