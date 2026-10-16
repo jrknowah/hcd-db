@@ -39,6 +39,7 @@ import {
   Email as EmailIcon,
   Person as PersonIcon,
   ContactPage as ContactPageIcon, // ✅ Add this import for View Chart
+  Replay as ReadmitIcon,
 } from '@mui/icons-material';
 import { visuallyHidden } from '@mui/utils';
 import { formatDateOnly } from '../../utils/dateOnly';
@@ -126,7 +127,7 @@ function EnhancedTableHead({
 }
 
 // ✅ FIXED: Client row action menu component with View Chart
-function ClientActionMenu({ client, onEdit, onView, onViewForms, onViewChart }) {
+function ClientActionMenu({ client, onEdit, onView, onViewForms, onViewChart, onReadmit }) {
   const [anchorEl, setAnchorEl] = useState(null);
   const open = Boolean(anchorEl);
 
@@ -179,6 +180,16 @@ function ClientActionMenu({ client, onEdit, onView, onViewForms, onViewChart }) 
         onClose={handleClose}
         onClick={(e) => e.stopPropagation()}
       >
+        {/* Discharged clients referred back to the same program */}
+        {client.status === 'discharged' && onReadmit && (
+          <MenuItem onClick={() => { onReadmit(client); handleClose(); }}>
+            <ListItemIcon>
+              <ReadmitIcon fontSize="small" />
+            </ListItemIcon>
+            <ListItemText>Readmit</ListItemText>
+          </MenuItem>
+        )}
+
         {/* ✅ NEW: View Chart option - first item for visibility */}
         <MenuItem onClick={handleViewChart}>
           <ListItemIcon>
@@ -227,7 +238,7 @@ function ClientActionMenu({ client, onEdit, onView, onViewForms, onViewChart }) 
 }
 
 // ✅ FIXED: Client card component with View Chart button
-function ClientCard({ client, isSelected, onSelect, onView, onEdit, onViewForms, onViewChart }) {
+function ClientCard({ client, isSelected, onSelect, onView, onEdit, onViewForms, onViewChart, onReadmit }) {
   const avatarInitials = `${client.clientFirstName?.charAt(0) || ''}${client.clientLastName?.charAt(0) || ''}`;
 
   return (
@@ -274,6 +285,7 @@ function ClientCard({ client, isSelected, onSelect, onView, onEdit, onViewForms,
             onView={onView}
             onViewForms={onViewForms}
             onViewChart={onViewChart} // ✅ Pass View Chart handler
+            onReadmit={onReadmit}
           />
         </Box>
 
@@ -352,7 +364,8 @@ const ClientTable = ({
   loading = false,
   onEditClient,  // Edit functionality
   onViewForms,   // View forms functionality
-  onViewChart    // ✅ NEW: View Chart functionality
+  onViewChart,   // ✅ NEW: View Chart functionality
+  onReadmit      // Readmit a discharged client (same program, same ID)
 }) => {
   // State management
   const [order, setOrder] = useState('asc');
@@ -529,6 +542,7 @@ const ClientTable = ({
               onEdit={handleEdit}
               onViewForms={handleViewForms}
               onViewChart={handleViewChart} // ✅ Pass View Chart handler
+              onReadmit={onReadmit}
             />
           </Grid>
         ))}
@@ -652,6 +666,7 @@ const ClientTable = ({
                         onView={handleRowClick}
                         onViewForms={handleViewForms}
                         onViewChart={handleViewChart} // ✅ Pass View Chart handler
+                        onReadmit={onReadmit}
                       />
                     </TableCell>
                   </TableRow>

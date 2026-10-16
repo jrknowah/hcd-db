@@ -43,4 +43,9 @@ const programError = (program) => {
   return PROGRAMS.includes(program) ? null : `Program must be one of: ${PROGRAMS.join(', ')}`;
 };
 
-module.exports = { PROGRAMS, toYMD, todayAtSites, getClientStatus, programError };
+// A readmitted client's earlier stays are kept read-only under '<clientID>~<n>'
+// (store/dbScripts/ClientStays.sql). '~' is not allowed in new client IDs.
+const PRIOR_STAY_ID = /~\d+$/;
+const isPriorStayID = (clientID) => typeof clientID === 'string' && PRIOR_STAY_ID.test(clientID.trim());
+
+module.exports = { PROGRAMS, toYMD, todayAtSites, getClientStatus, programError, isPriorStayID };

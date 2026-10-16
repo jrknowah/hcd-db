@@ -51,7 +51,7 @@ const fakePool = {
       input(name, _type, value) { params[name] = value; return req; },
       async query(q) {
         queries.push(q);
-        if (/SELECT \* FROM Clients\s+ORDER BY/.test(q)) return { recordset: CLIENTS };
+        if (/FROM Clients\s+WHERE clientPriorStayOf IS NULL/.test(q)) return { recordset: CLIENTS };
         if (/SELECT \* FROM Clients WHERE clientID/.test(q) || /SELECT clientID FROM Clients/.test(q)) {
           return { recordset: CLIENTS.filter(c => c.clientID === params.clientID) };
         }

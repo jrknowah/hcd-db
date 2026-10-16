@@ -52,6 +52,7 @@ import {
 import ClientProfileCard from 'src/components/cards/ClientProfileCard';
 import ClientTable from 'src/components/tables/ClientTable';
 import NewClient from './NewClient';
+import ReadmitDialog from './ReadmitDialog';
 import NavigationDebugger from '../../components/debug/NavigationDebugger';
 import { matchesClientSearch } from '../../utils/clientSearch';
 
@@ -90,6 +91,7 @@ const DashboardClient = () => {
   const [viewMode, setViewMode] = useState('table');
   const [activeTab, setActiveTab] = useState(0);
   const [showDebugModal, setShowDebugModal] = useState(false);
+  const [readmitClient, setReadmitClient] = useState(null);
   const [successMessage, setSuccessMessage] = useState('');
   const [showSuccess, setShowSuccess] = useState(false);
 
@@ -345,6 +347,15 @@ const DashboardClient = () => {
     setShowSuccess(true);
     
     // Refresh clients list
+    dispatch(fetchClients());
+  }, [dispatch]);
+
+  // Readmission: the client returns to Current Clients with a new, blank stay
+  const handleReadmitted = useCallback(({ client, stayNumber }) => {
+    setReadmitClient(null);
+    setSuccessMessage(`${client.clientFirstName || ''} ${client.clientLastName || ''} readmitted. Stay ${stayNumber} is under Previous Stays on their profile.`);
+    setShowSuccess(true);
+    setActiveTab(0);
     dispatch(fetchClients());
   }, [dispatch]);
 
@@ -635,6 +646,7 @@ const DashboardClient = () => {
                     onEditClient={handleEditClient}
                     onViewForms={handleViewForms}
                     onViewChart={handleViewChart}
+                    onReadmit={setReadmitClient}
                   />
                 )}
 
@@ -789,6 +801,12 @@ const DashboardClient = () => {
           )}
         </DialogContent>
       </Dialog>
+
+      <ReadmitDialog
+        client={readmitClient}
+        onClose={() => setReadmitClient(null)}
+        onReadmitted={handleReadmitted}
+      />
 
       {/* Success Notification */}
       <Snackbar

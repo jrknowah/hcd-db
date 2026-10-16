@@ -37,9 +37,11 @@ import {
   Close as CloseIcon,
   Visibility as VisibilityIcon,
   Home as HomeIcon,
+  History as HistoryIcon,
 } from '@mui/icons-material';
 import { fetchClientById } from '../../backend/store/slices/clientSlice';
 import { formatDateOnly } from '../../utils/dateOnly';
+import PreviousStays from './PreviousStays';
 
 const ClientProfileCard = ({ 
   clientID, 
@@ -366,6 +368,22 @@ const ClientProfileCard = ({
                 />
               </ListItem>
             </List>
+          </AccordionDetails>
+        </Accordion>
+
+        {/* Earlier stays of a readmitted client (read-only) */}
+        <Accordion 
+          expanded={expandedSection === 'stays'} 
+          onChange={handleAccordionChange('stays')}
+        >
+          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+              <HistoryIcon sx={{ mr: 1, color: 'text.secondary' }} />
+              <Typography sx={{ fontWeight: 600 }}>Previous Stays</Typography>
+            </Box>
+          </AccordionSummary>
+          <AccordionDetails>
+            {expandedSection === 'stays' && <PreviousStays clientID={selectedClient.clientID} />}
           </AccordionDetails>
         </Accordion>
       </CardContent>

@@ -166,6 +166,9 @@ app.use((req, res, next) => {
   next();
 });
 
+// A readmitted client's previous stays ('<clientID>~<n>') are read-only
+app.use('/api', require('./middleware/priorStayReadOnly.js'));
+
 // ✅ NEW: Track which routers are loaded
 let clientsRouterLoaded = false;
 let clientFaceRouterLoaded = false;

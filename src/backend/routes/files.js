@@ -2,6 +2,7 @@ const express = require('express');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const { stayFileScope, blobInScope } = require('../utils/stayFiles');
 
 const router = express.Router();
 
@@ -555,7 +556,10 @@ router.get('/files/:clientID', async (req, res) => {
     // Uploads store blobs under sanitizeSegment(clientID) (see buildBlobName), so a
     // clientID with spaces, trailing whitespace or punctuation lives under a different
     // prefix than the raw ID. Search both so no client's files go missing.
-    const prefixes = [...new Set([`${sanitizeSegment(clientID)}/`, `${clientID}/`])];
+    // A readmitted client's files stay in one folder; list only this stay's (utils/stayFiles.js)
+    const scope = await stayFileScope(clientID);
+    const folderID = scope.folderID;
+    const prefixes = [...new Set([`${sanitizeSegment(folderID)}/`, `${folderID}/`])];
 
     // Try Azure first
     if (blobServiceClient) {
@@ -568,6 +572,7 @@ router.get('/files/:clientID', async (req, res) => {
           for await (const blob of containerClient.listBlobsFlat({ prefix })) {
             if (seen.has(blob.name)) continue;
             seen.add(blob.name);
+            if (!blobInScope(blob, scope)) continue;
             files.push({
               id: blob.name,
               blobName: blob.name,
@@ -759,8 +764,10 @@ router.get('/mental-archive-metadata/:clientID', async (req, res) => {
  */
 router.get('/mental-archive/:clientID', async (req, res) => {
   try {
-    const clientID = sanitizeSegment(req.params.clientID);
-    
+    // A readmitted client's files stay in one folder; list only this stay's (utils/stayFiles.js)
+    const scope = await stayFileScope(req.params.clientID);
+    const clientID = sanitizeSegment(scope.folderID);
+
     // Mental health document types
     const mentalHealthTypes = [
       'Mental Health Archive', 'Assessment Report', 'Treatment Plan',
@@ -777,9 +784,9 @@ router.get('/mental-archive/:clientID', async (req, res) => {
     // List all files for this client
     for await (const blob of containerClient.listBlobsFlat({ prefix: `${clientID}/` })) {
       const docType = blob.name.split('/')[1] || 'Unknown';
-      
+
       // Only include mental health document types
-      if (mentalHealthTypes.includes(docType)) {
+      if (mentalHealthTypes.includes(docType) && blobInScope(blob, scope)) {
         files.push({
           id: blob.name,
           blobName: blob.name,
