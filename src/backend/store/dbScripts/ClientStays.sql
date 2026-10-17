@@ -139,9 +139,10 @@ BEGIN
 
         DECLARE @src NVARCHAR(MAX);
         SELECT @cols = STRING_AGG(CAST(QUOTENAME(c.name) AS NVARCHAR(MAX)), N', ') WITHIN GROUP (ORDER BY c.column_id),
-               @src  = STRING_AGG(CAST(CASE WHEN c.name IN (SELECT name FROM @unique) THEN N'NULL'
+               @src  = STRING_AGG(CAST(CASE WHEN u.name IS NOT NULL THEN N'NULL'
                                             ELSE QUOTENAME(c.name) END AS NVARCHAR(MAX)), N', ') WITHIN GROUP (ORDER BY c.column_id)
         FROM sys.columns c
+        LEFT JOIN @unique u ON u.name = c.name COLLATE DATABASE_DEFAULT   -- (a subquery is not allowed inside STRING_AGG)
         WHERE c.object_id = OBJECT_ID('dbo.Clients')
           AND c.is_identity = 0 AND c.is_computed = 0
           AND TYPE_NAME(c.system_type_id) NOT IN ('timestamp')
@@ -172,7 +173,7 @@ BEGIN
         JOIN sys.columns rc ON rc.object_id = fkc.referenced_object_id AND rc.column_id = fkc.referenced_column_id
         WHERE rc.name IN ('clientID', 'client_id')
           AND fk.is_disabled = 0
-          AND OBJECT_NAME(fk.referenced_object_id) NOT IN (SELECT name FROM @keep);
+          AND OBJECT_NAME(fk.referenced_object_id) COLLATE DATABASE_DEFAULT NOT IN (SELECT name FROM @keep);
 
         DECLARE fkcur CURSOR LOCAL FAST_FORWARD FOR SELECT sch, tbl, fkName FROM @fks;
         OPEN fkcur;
@@ -194,7 +195,7 @@ BEGIN
             WHERE t.TABLE_TYPE = 'BASE TABLE'
               AND c.COLUMN_NAME IN ('clientID', 'client_id')
               AND c.DATA_TYPE IN ('char', 'nchar', 'varchar', 'nvarchar')
-              AND c.TABLE_NAME NOT IN (SELECT name FROM @keep);
+              AND c.TABLE_NAME COLLATE DATABASE_DEFAULT NOT IN (SELECT name FROM @keep);
         OPEN colcur;
         FETCH NEXT FROM colcur INTO @sch, @tbl, @col;
         WHILE @@FETCH_STATUS = 0
@@ -248,5 +249,8 @@ BEGIN
 END
 GO
 
-PRINT 'dbo.usp_ReadmitClient is ready';
+IF OBJECT_ID('dbo.usp_ReadmitClient', 'P') IS NOT NULL
+    PRINT 'dbo.usp_ReadmitClient is ready';
+ELSE
+    RAISERROR('dbo.usp_ReadmitClient was NOT created - see the error above.', 16, 1);
 GO

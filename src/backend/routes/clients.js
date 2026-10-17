@@ -648,6 +648,9 @@ router.post('/:clientID/readmit', async (req, res) => {
     if (err.number >= 50001 && err.number <= 50005) {
       return res.status(409).json({ error: err.message });
     }
+    if (err.number === 2812) { // Could not find stored procedure
+      return res.status(500).json({ error: 'Readmission is not set up in the database yet (store/dbScripts/ClientStays.sql has not run).' });
+    }
     res.status(500).json({ error: 'Failed to readmit client', message: err.message });
   }
 });
