@@ -11,7 +11,7 @@ describe('ClientFace API Tests', () => {
     console.log('🔧 Setting up test client for ClientFace tests...');
     
     await request(app)
-      .post('/api/clients')
+      .post('/api/clients').set('Authorization', 'Bearer dev-bypass-token')
       .send({
         clientID: testClientID,
         clientFirstName: 'Face',
@@ -66,7 +66,7 @@ describe('ClientFace API Tests', () => {
       
       // Create client first
       await request(app)
-        .post('/api/clients')
+        .post('/api/clients').set('Authorization', 'Bearer dev-bypass-token')
         .send({
           clientID: minimalClientID,
           clientFirstName: 'Minimal',
@@ -152,7 +152,7 @@ describe('ClientFace API Tests', () => {
       for (const phone of validPhones) {
         const phoneClientID = testClientID + '-PHONE-' + Math.random();
         
-        await request(app).post('/api/clients').send({
+        await request(app).post('/api/clients').set('Authorization', 'Bearer dev-bypass-token').send({
           clientID: phoneClientID,
           clientFirstName: 'Phone',
           clientLastName: 'Test',
@@ -292,7 +292,7 @@ describe('ClientFace API Tests', () => {
     test('should maintain data consistency across saves', async () => {
       const persistClientID = testClientID + '-PERSIST';
       
-      await request(app).post('/api/clients').send({
+      await request(app).post('/api/clients').set('Authorization', 'Bearer dev-bypass-token').send({
         clientID: persistClientID,
         clientFirstName: 'Persist',
         clientLastName: 'Test',

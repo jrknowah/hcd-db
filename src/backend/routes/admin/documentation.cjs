@@ -430,7 +430,8 @@ async function loadActiveClients(pool) {
            CAST(c.clientAdmitDate AS DATE) AS admitDate
     FROM Clients c
     LEFT JOIN ClientDischarge d ON ${CID('d.clientID')} = ${CID('c.clientID')}
-    WHERE (c.clientAdmitDate IS NULL OR CAST(c.clientAdmitDate AS DATE) <= CAST(GETDATE() AS DATE))
+    WHERE c.clientPriorStayOf IS NULL  -- a readmitted client's previous stays (ClientStays.sql)
+      AND (c.clientAdmitDate IS NULL OR CAST(c.clientAdmitDate AS DATE) <= CAST(GETDATE() AS DATE))
       AND (d.clientDischargeDate IS NULL OR CAST(d.clientDischargeDate AS DATE) > CAST(GETDATE() AS DATE))
   `);
   return result.recordset;

@@ -4,6 +4,10 @@
 //   PUT /:clientID  - create or update it; stamps who saved it and when
 //
 // Mount behind authMiddleware so createdBy/updatedBy come from the signed-in user.
+//
+// afterSave(transaction, { clientID, values }) runs inside the save transaction,
+// for forms whose values also update another table (the Exit Form sets the
+// client's discharge date).
 const express = require('express');
 const sql = require('mssql');
 const { getPool } = require('../store/azureSql');
@@ -60,7 +64,7 @@ const FIELD_TYPES = {
 
 const validClientID = (clientID) => typeof clientID === 'string' && clientID.trim() !== '' && clientID.length <= 50;
 
-function createClientFormRouter({ table, label, auditTable, fields }) {
+function createClientFormRouter({ table, label, auditTable, fields, afterSave }) {
   const router = express.Router();
   const names = Object.keys(fields);
   const columns = names.join(', ');
@@ -156,6 +160,8 @@ function createClientFormRouter({ table, label, auditTable, fields }) {
         clientID,
         timestamp: now,
       });
+
+      if (afterSave) await afterSave(transaction, { clientID, values });
 
       const saved = await selectRecord(transaction.request().input('clientID', sql.NVarChar(50), clientID));
       await transaction.commit();

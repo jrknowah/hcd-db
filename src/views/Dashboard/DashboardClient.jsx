@@ -45,12 +45,14 @@ import {
   Home as HomeIcon,
   TrendingUp as TrendingUpIcon,
   Schedule as ScheduleIcon,
-  Edit as EditIcon
+  Edit as EditIcon,
+  ExitToApp as DischargedIcon
 } from '@mui/icons-material';
 
 import ClientProfileCard from 'src/components/cards/ClientProfileCard';
 import ClientTable from 'src/components/tables/ClientTable';
 import NewClient from './NewClient';
+import ReadmitDialog from './ReadmitDialog';
 import NavigationDebugger from '../../components/debug/NavigationDebugger';
 import { matchesClientSearch } from '../../utils/clientSearch';
 
@@ -89,6 +91,7 @@ const DashboardClient = () => {
   const [viewMode, setViewMode] = useState('table');
   const [activeTab, setActiveTab] = useState(0);
   const [showDebugModal, setShowDebugModal] = useState(false);
+  const [readmitClient, setReadmitClient] = useState(null);
   const [successMessage, setSuccessMessage] = useState('');
   const [showSuccess, setShowSuccess] = useState(false);
 
@@ -157,10 +160,17 @@ const DashboardClient = () => {
     }
   }, [dispatch]);
 
+  // Tabs: 0 = current clients, 1 = discharged, 2 = recent activity.
+  // Status comes from the API (discharged once the Exit Form's exit date arrives).
+  const { currentClients, dischargedClients } = useMemo(() => ({
+    currentClients: clients.filter(client => client.status !== 'discharged'),
+    dischargedClients: clients.filter(client => client.status === 'discharged'),
+  }), [clients]);
+  const tabClients = activeTab === 1 ? dischargedClients : currentClients;
+
   // Filter and search logic with array safety
   const filteredClients = useMemo(() => {
-    // Ensure clients is always an array
-    let filtered = Array.isArray(clients) ? [...clients] : [];
+    let filtered = [...tabClients];
 
     if (searchQuery.trim()) {
       filtered = filtered.filter(client => matchesClientSearch(client, searchQuery));
@@ -183,16 +193,13 @@ const DashboardClient = () => {
             client.clientVetStatus === 'I am a veteran, but I am not a protected veteran'
           );
           break;
-        case 'active':
-          filtered = filtered.filter(client => client.status === 'active');
-          break;
         default:
           break;
       }
     }
 
     return filtered;
-  }, [clients, searchQuery, filterBy]);
+  }, [tabClients, searchQuery, filterBy]);
 
   // Dashboard statistics with array safety
   const dashboardStats = useMemo(() => {
@@ -213,16 +220,14 @@ const DashboardClient = () => {
       client.clientVetStatus === 'I am a veteran, but I am not a protected veteran'
     ).length;
 
-    const activeClients = clientsArray.filter(client => client.status === 'active').length;
-
     return {
       total: totalClients,
       newThisWeek,
       veterans,
-      active: activeClients,
-      formsComplete: Math.floor(totalClients * 0.7)
+      active: currentClients.length,
+      discharged: dischargedClients.length
     };
-  }, [clients]);
+  }, [clients, currentClients, dischargedClients]);
 
   // Clean React Router navigation (no page reload)
   const handleGoToSection = useCallback((sectionName, clientID) => {
@@ -345,6 +350,15 @@ const DashboardClient = () => {
     dispatch(fetchClients());
   }, [dispatch]);
 
+  // Readmission: the client returns to Current Clients with a new, blank stay
+  const handleReadmitted = useCallback(({ client, stayNumber }) => {
+    setReadmitClient(null);
+    setSuccessMessage(`${client.clientFirstName || ''} ${client.clientLastName || ''} readmitted. Stay ${stayNumber} is under Previous Stays on their profile.`);
+    setShowSuccess(true);
+    setActiveTab(0);
+    dispatch(fetchClients());
+  }, [dispatch]);
+
   // Close success notification
   const handleCloseSuccess = useCallback(() => {
     setShowSuccess(false);
@@ -437,11 +451,11 @@ const DashboardClient = () => {
           color: 'white'
         }}>
           <CardContent sx={{ textAlign: 'center', py: 3 }}>
-            <AssignmentIcon sx={{ fontSize: 40, mb: 1 }} />
+            <DischargedIcon sx={{ fontSize: 40, mb: 1 }} />
             <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
-              {dashboardStats.formsComplete}
+              {dashboardStats.discharged}
             </Typography>
-            <Typography variant="body2">Forms Complete</Typography>
+            <Typography variant="body2">Discharged</Typography>
           </CardContent>
         </Card>
       </Grid>
@@ -490,12 +504,6 @@ const DashboardClient = () => {
               color={filterBy === 'veteran' ? 'info' : 'default'}
               variant={filterBy === 'veteran' ? 'filled' : 'outlined'}
             />
-            <Chip
-              label="Active Cases"
-              onClick={() => handleFilterChange('active')}
-              color={filterBy === 'active' ? 'success' : 'default'}
-              variant={filterBy === 'active' ? 'filled' : 'outlined'}
-            />
           </Stack>
         </Grid>
 
@@ -530,7 +538,7 @@ const DashboardClient = () => {
 
       <Box sx={{ mt: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <Typography variant="body2" color="text.secondary">
-          Showing {filteredClients.length} of {clients.length} clients
+          Showing {filteredClients.length} of {tabClients.length} {activeTab === 1 ? 'discharged' : 'current'} clients
           {searchQuery && ` for "${searchQuery}"`}
         </Typography>
         
@@ -598,10 +606,20 @@ const DashboardClient = () => {
                   <Tabs value={activeTab} onChange={handleTabChange}>
                     <Tab 
                       label={
-                        <Badge badgeContent={filteredClients.length} color="primary">
+                        <Badge badgeContent={currentClients.length} color="primary" max={999}>
                           <Box sx={{ display: 'flex', alignItems: 'center' }}>
                             <GroupIcon sx={{ mr: 1 }} />
-                            All Clients
+                            Current Clients
+                          </Box>
+                        </Badge>
+                      } 
+                    />
+                    <Tab 
+                      label={
+                        <Badge badgeContent={dischargedClients.length} color="default" max={999}>
+                          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                            <DischargedIcon sx={{ mr: 1 }} />
+                            Discharged
                           </Box>
                         </Badge>
                       } 
@@ -618,7 +636,7 @@ const DashboardClient = () => {
                 </Box>
 
                 {/* Tab Content */}
-                {activeTab === 0 && (
+                {(activeTab === 0 || activeTab === 1) && (
                   <ClientTable 
                     clients={filteredClients}
                     onSelectClient={handleSelectClient}
@@ -628,10 +646,11 @@ const DashboardClient = () => {
                     onEditClient={handleEditClient}
                     onViewForms={handleViewForms}
                     onViewChart={handleViewChart}
+                    onReadmit={setReadmitClient}
                   />
                 )}
 
-                {activeTab === 1 && (
+                {activeTab === 2 && (
                   <Box sx={{ p: 2, textAlign: 'center' }}>
                     <Typography variant="h6" color="text.secondary">
                       Recent Activity
@@ -664,26 +683,32 @@ const DashboardClient = () => {
       )}
 
       {/* Empty State */}
-      {!loading && filteredClients.length === 0 && (
+      {!loading && activeTab !== 2 && filteredClients.length === 0 && (
         <Paper elevation={1} sx={{ p: 6, textAlign: 'center' }}>
           <PersonIcon sx={{ fontSize: 80, color: 'text.secondary', mb: 2 }} />
           <Typography variant="h6" gutterBottom>
-            {searchQuery || filterBy !== 'all' ? 'No clients found' : 'No clients yet'}
+            {searchQuery || filterBy !== 'all'
+              ? 'No clients found'
+              : activeTab === 1 ? 'No discharged clients' : 'No clients yet'}
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
             {searchQuery || filterBy !== 'all' 
               ? 'Try adjusting your search or filter criteria'
-              : 'Get started by adding your first client'
+              : activeTab === 1
+                ? 'Clients appear here once the exit date on their Exit Form is reached'
+                : 'Get started by adding your first client'
             }
           </Typography>
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={handleOpenModal}
-            size="large"
-          >
-            Add New Client
-          </Button>
+          {activeTab !== 1 && (
+            <Button
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={handleOpenModal}
+              size="large"
+            >
+              Add New Client
+            </Button>
+          )}
         </Paper>
       )}
 
@@ -776,6 +801,12 @@ const DashboardClient = () => {
           )}
         </DialogContent>
       </Dialog>
+
+      <ReadmitDialog
+        client={readmitClient}
+        onClose={() => setReadmitClient(null)}
+        onReadmitted={handleReadmitted}
+      />
 
       {/* Success Notification */}
       <Snackbar

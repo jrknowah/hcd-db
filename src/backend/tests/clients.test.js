@@ -35,7 +35,7 @@ describe('Client API Endpoints', () => {
       };
 
       const response = await request(app)
-        .post('/api/clients')
+        .post('/api/clients').set('Authorization', 'Bearer dev-bypass-token')
         .send(completeClient)
         .expect(201);
 
@@ -59,7 +59,7 @@ describe('Client API Endpoints', () => {
       };
 
       const response = await request(app)
-        .post('/api/clients')
+        .post('/api/clients').set('Authorization', 'Bearer dev-bypass-token')
         .send(minimalClient)
         .expect(201);
 
@@ -72,7 +72,7 @@ describe('Client API Endpoints', () => {
       
       // Create first client
       await request(app)
-        .post('/api/clients')
+        .post('/api/clients').set('Authorization', 'Bearer dev-bypass-token')
         .send({
           clientID: testClientID,
           clientFirstName: 'First',
@@ -85,7 +85,7 @@ describe('Client API Endpoints', () => {
 
       // Try to create duplicate
       const response = await request(app)
-        .post('/api/clients')
+        .post('/api/clients').set('Authorization', 'Bearer dev-bypass-token')
         .send({
           clientID: testClientID, // Same ID
           clientFirstName: 'Second',
@@ -103,7 +103,7 @@ describe('Client API Endpoints', () => {
       const invalidClient = { clientID: 'TEST-123' };
       
       const response = await request(app)
-        .post('/api/clients')
+        .post('/api/clients').set('Authorization', 'Bearer dev-bypass-token')
         .send(invalidClient)
         .expect(400);
 
@@ -127,7 +127,7 @@ describe('Client API Endpoints', () => {
         testClientID = 'TEST-SSN-' + timestamp + '-' + Math.random();
         
         await request(app)
-          .post('/api/clients')
+          .post('/api/clients').set('Authorization', 'Bearer dev-bypass-token')
           .send({
             clientID: testClientID,
             clientFirstName: 'Test',
@@ -150,7 +150,7 @@ describe('Client API Endpoints', () => {
         testClientID = 'TEST-SSN-VALID-' + timestamp + '-' + Math.random();
         
         await request(app)
-          .post('/api/clients')
+          .post('/api/clients').set('Authorization', 'Bearer dev-bypass-token')
           .send({
             clientID: testClientID,
             clientFirstName: 'Test',
@@ -168,7 +168,7 @@ describe('Client API Endpoints', () => {
       testClientID = 'TEST-SPECIAL-' + timestamp + '-' + Math.random();
       
       await request(app)
-        .post('/api/clients')
+        .post('/api/clients').set('Authorization', 'Bearer dev-bypass-token')
         .send({
           clientID: testClientID,
           clientFirstName: "O'Brien",
@@ -182,7 +182,7 @@ describe('Client API Endpoints', () => {
 
       // ✅ Fetch the client to verify
       const response = await request(app)
-        .get(`/api/clients/${testClientID}`)
+        .get(`/api/clients/${testClientID}`).set('Authorization', 'Bearer dev-bypass-token')
         .expect(200);
 
       expect(response.body.clientFirstName).toBe("O'Brien");
@@ -195,7 +195,7 @@ describe('Client API Endpoints', () => {
       const longAliases = 'A'.repeat(500);
       
       await request(app)
-        .post('/api/clients')
+        .post('/api/clients').set('Authorization', 'Bearer dev-bypass-token')
         .send({
           clientID: testClientID,
           clientFirstName: 'Test',
@@ -209,7 +209,7 @@ describe('Client API Endpoints', () => {
 
       // ✅ Fetch the client to verify
       const response = await request(app)
-        .get(`/api/clients/${testClientID}`)
+        .get(`/api/clients/${testClientID}`).set('Authorization', 'Bearer dev-bypass-token')
         .expect(200);
 
       expect(response.body.clientAliases).toHaveLength(500);
@@ -219,7 +219,7 @@ describe('Client API Endpoints', () => {
       testClientID = 'TEST-DATE-' + timestamp + '-' + Math.random();
       
       const response = await request(app)
-        .post('/api/clients')
+        .post('/api/clients').set('Authorization', 'Bearer dev-bypass-token')
         .send({
           clientID: testClientID,
           clientFirstName: 'Test',
@@ -244,7 +244,7 @@ describe('Client API Endpoints', () => {
         testClientID = 'TEST-VALID-SSN-' + timestamp + '-' + i;
         
         await request(app)
-          .post('/api/clients')
+          .post('/api/clients').set('Authorization', 'Bearer dev-bypass-token')
           .send({
             clientID: testClientID,
             clientFirstName: 'Test',
@@ -263,7 +263,7 @@ describe('Client API Endpoints', () => {
     
     test('should fetch all clients', async () => {
       const response = await request(app)
-        .get('/api/clients')
+        .get('/api/clients').set('Authorization', 'Bearer dev-bypass-token')
         .expect(200);
 
       expect(Array.isArray(response.body)).toBe(true);
@@ -272,7 +272,7 @@ describe('Client API Endpoints', () => {
 
     test('should return clients with mapped fields', async () => {
       const response = await request(app)
-        .get('/api/clients')
+        .get('/api/clients').set('Authorization', 'Bearer dev-bypass-token')
         .expect(200);
 
       const firstClient = response.body[0];
@@ -290,7 +290,7 @@ describe('Client API Endpoints', () => {
       createdClientID = 'TEST-GET-' + timestamp + '-' + Math.random();
       
       await request(app)
-        .post('/api/clients')
+        .post('/api/clients').set('Authorization', 'Bearer dev-bypass-token')
         .send({
           clientID: createdClientID,
           clientFirstName: 'GetTest',
@@ -307,7 +307,7 @@ describe('Client API Endpoints', () => {
 
     test('should fetch specific client with ALL fields', async () => {
       const response = await request(app)
-        .get(`/api/clients/${createdClientID}`)
+        .get(`/api/clients/${createdClientID}`).set('Authorization', 'Bearer dev-bypass-token')
         .expect(200);
 
       // Verify ALL fields are returned
@@ -324,7 +324,7 @@ describe('Client API Endpoints', () => {
       
       // Create
       await request(app)
-        .post('/api/clients')
+        .post('/api/clients').set('Authorization', 'Bearer dev-bypass-token')
         .send({
           clientID: persistID,
           clientFirstName: 'Persistence',
@@ -338,7 +338,7 @@ describe('Client API Endpoints', () => {
 
       // Retrieve
       const response = await request(app)
-        .get(`/api/clients/${persistID}`)
+        .get(`/api/clients/${persistID}`).set('Authorization', 'Bearer dev-bypass-token')
         .expect(200);
 
       // Verify all data persisted
@@ -349,7 +349,7 @@ describe('Client API Endpoints', () => {
 
     test('should return 404 for non-existent client', async () => {
       await request(app)
-        .get('/api/clients/NONEXISTENT')
+        .get('/api/clients/NONEXISTENT').set('Authorization', 'Bearer dev-bypass-token')
         .expect(404);
     });
   });
@@ -362,7 +362,7 @@ describe('Client API Endpoints', () => {
       updateClientID = 'TEST-UPDATE-' + timestamp + '-' + Math.random();
       
       await request(app)
-        .post('/api/clients')
+        .post('/api/clients').set('Authorization', 'Bearer dev-bypass-token')
         .send({
           clientID: updateClientID,
           clientFirstName: 'Original',
@@ -397,7 +397,7 @@ describe('Client API Endpoints', () => {
       };
 
       const response = await request(app)
-        .put(`/api/clients/${updateClientID}`)
+        .put(`/api/clients/${updateClientID}`).set('Authorization', 'Bearer dev-bypass-token')
         .send(comprehensiveUpdates)
         .expect(200);
 
@@ -415,7 +415,7 @@ describe('Client API Endpoints', () => {
       };
 
       const response = await request(app)
-        .put(`/api/clients/${updateClientID}`)
+        .put(`/api/clients/${updateClientID}`).set('Authorization', 'Bearer dev-bypass-token')
         .send(singleUpdate)
         .expect(200);
 
@@ -430,7 +430,7 @@ describe('Client API Endpoints', () => {
       };
 
       const response = await request(app)
-        .put(`/api/clients/${updateClientID}`)
+        .put(`/api/clients/${updateClientID}`).set('Authorization', 'Bearer dev-bypass-token')
         .send(emptyUpdate)
         .expect(200);
 
@@ -439,7 +439,7 @@ describe('Client API Endpoints', () => {
 
     test('should reject invalid updates', async () => {
       await request(app)
-        .put(`/api/clients/${updateClientID}`)
+        .put(`/api/clients/${updateClientID}`).set('Authorization', 'Bearer dev-bypass-token')
         .send({
           clientDOB: 'invalid-date'
         })
@@ -448,7 +448,7 @@ describe('Client API Endpoints', () => {
 
     test('should return 404 for non-existent client', async () => {
       await request(app)
-        .put('/api/clients/NONEXISTENT')
+        .put('/api/clients/NONEXISTENT').set('Authorization', 'Bearer dev-bypass-token')
         .send({
           clientFirstName: 'Test'
         })
@@ -463,7 +463,7 @@ describe('Client API Endpoints', () => {
       authClientID = 'TEST-AUTH-' + timestamp + '-' + Math.random();
       
       await request(app)
-        .post('/api/clients')
+        .post('/api/clients').set('Authorization', 'Bearer dev-bypass-token')
         .send({
           clientID: authClientID,
           clientFirstName: 'Auth',
@@ -477,7 +477,7 @@ describe('Client API Endpoints', () => {
 
     test('should fetch authorization forms progress', async () => {
       const response = await request(app)
-        .get(`/api/clients/${authClientID}/authorization-progress`)
+        .get(`/api/clients/${authClientID}/authorization-progress`).set('Authorization', 'Bearer dev-bypass-token')
         .expect(200);
 
       expect(response.body).toHaveProperty('clientID');

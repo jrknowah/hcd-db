@@ -9,6 +9,7 @@ const request = require('supertest');
 const sql = require('mssql');
 
 let rows;      // clientID -> saved row
+let clientRows; // clientID -> discharge fields copied to dbo.Clients
 let auditRows;
 let nextID;
 
@@ -30,6 +31,10 @@ function makeRequest() {
       }
       if (/INSERT INTO dbo\.AuditLog/.test(q)) {
         auditRows.push({ ...params });
+        return { recordset: [] };
+      }
+      if (/UPDATE dbo\.Clients/.test(q)) {
+        clientRows[params.clientID] = { clientDischargeDate: params.exitDate, clientExitReason: params.exitReason };
         return { recordset: [] };
       }
       if (/FROM dbo\.exit_form/.test(q)) {
@@ -72,6 +77,7 @@ const asUser = (email) => ({ 'x-test-user': JSON.stringify({ email, name: email 
 describe('Exit Form API', () => {
   beforeEach(() => {
     rows = {};
+    clientRows = {};
     auditRows = [];
     nextID = 1;
   });
@@ -102,6 +108,8 @@ describe('Exit Form API', () => {
     });
     expect(rows.C1.notificationMethods).toBe('["Called","Emailed"]');
     expect(auditRows[0]).toMatchObject({ action: 'CREATE', tableName: 'exit_form', clientID: 'C1', userID: 'a@hope.org' });
+    // The exit date marks the client discharged on the dashboard
+    expect(clientRows.C1).toEqual({ clientDischargeDate: '2026-10-05', clientExitReason: 'Family Reunification' });
 
     const second = await request(app).put('/api/exit-form/C1').set(asUser('b@hope.org')).send({
       exitReason: 'Deceased',
@@ -116,6 +124,8 @@ describe('Exit Form API', () => {
       updatedBy: 'b@hope.org',
     });
     expect(auditRows[1]).toMatchObject({ action: 'UPDATE', userID: 'b@hope.org' });
+    // Clearing the exit date makes the client active again
+    expect(clientRows.C1).toEqual({ clientDischargeDate: null, clientExitReason: 'Deceased' });
 
     const loaded = await request(app).get('/api/exit-form/C1');
     expect(loaded.body.record.exitReason).toBe('Deceased');

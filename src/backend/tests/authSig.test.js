@@ -15,7 +15,7 @@ describe('Authorization Forms API', () => {
     console.log('🧹 Setting up test data...');
     // Create test client
     await request(app)
-      .post('/api/clients')
+      .post('/api/clients').set('Authorization', 'Bearer dev-bypass-token')
       .send({
         clientID: testClientID,
         firstName: 'Test',

@@ -22,6 +22,10 @@ try {
   }
 }
 
+const { getClientStatus, programError, isPriorStayID, toYMD } = require('../utils/clientStatus');
+const { allowedSites, canSeeClient, SITE_GROUPS } = require('../config/siteAccess');
+const { auditAction } = require('../utils/section4Lock');
+
 // Generate client ID helper
 const generateClientID = () => {
   const timestamp = Date.now().toString().slice(-6);
@@ -51,7 +55,8 @@ const mapClientForAuthForms = (client) => {
     fullName: fullName,
     dateOfBirth: client.clientDOB,
     admitDate: client.clientAdmitDate,
-    status: client.status || 'active'
+    // Discharged once the Exit Form's exit date has arrived (utils/clientStatus.js)
+    status: getClientStatus(client)
   };
 };
 
@@ -88,7 +93,11 @@ const validateClientData = (clientData, isUpdate = false) => {
     }
   }
   
-  // In clients.js, update validateClientData function:
+  const invalidProgram = programError(clientData.clientProgram);
+  if (invalidProgram) {
+    errors.clientProgram = invalidProgram;
+  }
+
 
   // Validate SSN format if provided
    if (clientData.clientSSN && clientData.clientSSN.trim().length > 0) {
@@ -133,9 +142,21 @@ router.post('/', async (req, res) => {
       });
     }
     
+    if (!canSeeClient(allowedSites(req.user), client)) {
+      return res.status(403).json({ error: 'You can only add clients at your own sites' });
+    }
+
     // Generate clientID if not provided
     // Trim so IDs like '  187145' can't be created; blob folders use the trimmed ID
     const clientID = String(client.clientID || '').trim() || generateClientID();
+
+    // '~' marks a readmitted client's archived stays (e.g. CL-123~1)
+    if (clientID.includes('~')) {
+      return res.status(400).json({
+        error: 'Validation failed',
+        errors: { clientID: 'Client ID cannot contain "~"' }
+      });
+    }
     
     console.log(`Creating client: ${clientID} - ${client.clientFirstName} ${client.clientLastName}`);
     
@@ -222,11 +243,16 @@ router.get('/', async (req, res) => {
     const pool = await getPool();
     const result = await pool.request().query(`
       SELECT * FROM Clients 
+      WHERE clientPriorStayOf IS NULL
       ORDER BY createdAt DESC
     `);
     
+    // Only the sites this user has access to (config/siteAccess.js)
+    const sites = allowedSites(req.user);
+    const visible = result.recordset.filter(client => canSeeClient(sites, client));
+
     // ✅ Map all clients for authorization forms compatibility
-    const mappedClients = result.recordset.map(mapClientForAuthForms);
+    const mappedClients = visible.map(mapClientForAuthForms);
     
     console.log(`📋 Fetched ${mappedClients.length} clients from Clients table`);
     res.json(mappedClients);
@@ -250,6 +276,10 @@ router.get('/:clientID', async (req, res) => {
     if (result.recordset.length === 0) {
       return res.status(404).json({ error: 'Client not found' });
     }
+
+    if (!canSeeClient(allowedSites(req.user), result.recordset[0])) {
+      return res.status(403).json({ error: 'You do not have access to clients at this site' });
+    }
     
     // ✅ Map client for authorization forms compatibility
     const mappedClient = mapClientForAuthForms(result.recordset[0]);
@@ -271,6 +301,10 @@ router.put('/:clientID', async (req, res) => {
     const pool = await getPool();
     const { clientID } = req.params;
     const updates = req.body;
+
+    if (isPriorStayID(clientID)) {
+      return res.status(403).json({ error: 'Previous stays are read-only' });
+    }
     
     // ✅ Enhanced validation
     const validationErrors = validateClientData(updates, true);
@@ -291,6 +325,10 @@ router.put('/:clientID', async (req, res) => {
     
     if (checkResult.recordset.length === 0) {
       return res.status(404).json({ error: 'Client not found' });
+    }
+
+    if (!canSeeClient(allowedSites(req.user), checkResult.recordset[0])) {
+      return res.status(403).json({ error: 'You do not have access to clients at this site' });
     }
     
     // Build update query
@@ -369,6 +407,10 @@ router.put('/:clientID', async (req, res) => {
     if (updates.clientHighEd !== undefined) {
       request.input('clientHighEd', sql.NVarChar(100), updates.clientHighEd);
       updateFields.push('clientHighEd = @clientHighEd');
+    }
+    if (updates.clientProgram !== undefined) {
+      request.input('clientProgram', sql.NVarChar(50), updates.clientProgram || null);
+      updateFields.push('clientProgram = @clientProgram');
     }
     
     if (updateFields.length === 0) {
@@ -481,6 +523,132 @@ router.get('/:clientID/authorization-progress', async (req, res) => {
       error: 'Failed to fetch authorization progress',
       message: err.message 
     });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Readmission: a discharged client referred back to the same program keeps
+// their client ID and starts a new stay with a blank chart. The previous stay's
+// records move to '<clientID>~<n>' (read-only). See dbScripts/ClientStays.sql.
+// A referral to a different program is a new client with a new ID instead.
+// ---------------------------------------------------------------------------
+const YMD_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+const SITES = Object.keys(SITE_GROUPS);
+
+// Previous stays of a client (newest first). Works for the client or one of its archived stays.
+router.get('/:clientID/stays', async (req, res) => {
+  try {
+    const pool = await getPool();
+    const id = String(req.params.clientID);
+    const baseID = isPriorStayID(id) ? id.replace(/~\d+$/, '') : id;
+
+    const client = await pool.request()
+      .input('clientID', sql.NVarChar(50), baseID)
+      .query('SELECT clientID, clientSite FROM Clients WHERE clientID = @clientID');
+    if (client.recordset.length === 0) {
+      return res.status(404).json({ error: 'Client not found' });
+    }
+    if (!canSeeClient(allowedSites(req.user), client.recordset[0])) {
+      return res.status(403).json({ error: 'You do not have access to clients at this site' });
+    }
+
+    const result = await pool.request()
+      .input('clientID', sql.NVarChar(50), baseID)
+      .query(`
+        SELECT stayNumber, priorStayClientID, site, program, admitDate, dischargeDate,
+               exitReason, readmittedAt, readmittedBy
+        FROM ClientStays
+        WHERE clientID = @clientID
+        ORDER BY stayNumber DESC
+      `);
+    res.json(result.recordset);
+  } catch (err) {
+    console.error('❌ Error fetching client stays:', err);
+    res.status(500).json({ error: 'Failed to fetch previous stays', message: err.message });
+  }
+});
+
+router.post('/:clientID/readmit', async (req, res) => {
+  const { clientID } = req.params;
+  const admitDate = String(req.body?.admitDate || '').slice(0, 10);
+  const site = String(req.body?.clientSite || '').trim();
+
+  if (isPriorStayID(clientID)) {
+    return res.status(403).json({ error: 'Previous stays are read-only' });
+  }
+  const errors = {};
+  if (!YMD_ONLY.test(admitDate) || Number.isNaN(new Date(admitDate).getTime())) {
+    errors.admitDate = 'Admit date must be a YYYY-MM-DD date';
+  }
+  if (!SITES.includes(site)) {
+    errors.clientSite = `Site must be one of: ${SITES.join(', ')}`;
+  }
+  if (Object.keys(errors).length) {
+    return res.status(400).json({ error: 'Validation failed', errors });
+  }
+
+  try {
+    const pool = await getPool();
+    const found = await pool.request()
+      .input('clientID', sql.NVarChar(50), clientID)
+      .query('SELECT * FROM Clients WHERE clientID = @clientID');
+    const client = found.recordset[0];
+    if (!client) {
+      return res.status(404).json({ error: 'Client not found' });
+    }
+
+    const sites = allowedSites(req.user);
+    if (!canSeeClient(sites, client) || !canSeeClient(sites, { clientSite: site })) {
+      return res.status(403).json({ error: 'You do not have access to clients at this site' });
+    }
+    if (getClientStatus(client) !== 'discharged') {
+      return res.status(409).json({ error: 'Only a discharged client can be readmitted' });
+    }
+    const dischargeDate = toYMD(client.clientDischargeDate);
+    if (dischargeDate && admitDate < dischargeDate) {
+      return res.status(400).json({
+        error: 'Validation failed',
+        errors: { admitDate: 'Admit date cannot be before the discharge date' }
+      });
+    }
+
+    const user = req.user?.email || req.user?.name || 'unknown';
+    const result = await pool.request()
+      .input('clientID', sql.NVarChar(50), clientID)
+      .input('admitDate', sql.Date, admitDate)
+      .input('site', sql.NVarChar(100), site)
+      .input('user', sql.NVarChar(255), user)
+      .execute('dbo.usp_ReadmitClient');
+    const { priorStayClientID, stayNumber, movedRows } = result.recordset[0];
+
+    // Audit failure must not undo a completed readmission
+    await auditAction(pool, {
+      action: 'READMIT',
+      req,
+      tableName: 'Clients',
+      recordID: clientID,
+      clientID,
+      details: { priorStayClientID, stayNumber, admitDate, site, movedRows },
+      timestamp: new Date(),
+    }).catch(err => console.error('⚠️ Readmission audit log failed:', err.message));
+
+    const updated = await pool.request()
+      .input('clientID', sql.NVarChar(50), clientID)
+      .query('SELECT * FROM Clients WHERE clientID = @clientID');
+
+    console.log(`🔁 Client readmitted: ${clientID} (previous stay archived as ${priorStayClientID})`);
+    res.json({
+      client: mapClientForAuthForms(updated.recordset[0]),
+      priorStayClientID,
+      stayNumber,
+    });
+  } catch (err) {
+    console.error('❌ Error readmitting client:', err);
+    // Errors raised by usp_ReadmitClient (50001-50005) are explained to the user
+    if (err.number >= 50001 && err.number <= 50005) {
+      return res.status(409).json({ error: err.message });
+    }
+    res.status(500).json({ error: 'Failed to readmit client', message: err.message });
   }
 });
 

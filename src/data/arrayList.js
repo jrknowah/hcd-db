@@ -347,6 +347,15 @@ export const section4List2 = [
     { section4Title: 'Section 3 Archive', section4Date: '' }
 ];
 
+// Programs a client can be in (the same agencies as the Section 1 Referrals tab).
+// Keep in step with PROGRAMS in backend/utils/clientStatus.js.
+export const programList = [
+    {value: "LAHSA", label: "LAHSA"},
+    {value: "ODR", label: "ODR"},
+    {value: "DHS", label: "DHS"},
+    {value: "DMH", label: "DMH"}
+];
+
 export const hhhSiteList2 = [
     // {value: "41st", label: "41st"},
     {value: "97th", label: "97th"},

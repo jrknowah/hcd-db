@@ -31,7 +31,7 @@ describe('Referrals API', () => {
     };
 
     await request(app)
-      .post('/api/clients')
+      .post('/api/clients').set('Authorization', 'Bearer dev-bypass-token')
       .send(clientData)
       .expect(201);  // ✅ FIX: API returns 201 Created, not 200
 
@@ -62,7 +62,7 @@ describe('Referrals API', () => {
       
       // Create client first
       await request(app)
-        .post('/api/clients')
+        .post('/api/clients').set('Authorization', 'Bearer dev-bypass-token')
         .send({
           clientID: partialClientID,
           clientFirstName: 'Partial',
@@ -93,7 +93,7 @@ describe('Referrals API', () => {
       const odrClientID = `${testClientID}-ODR`;
       
       await request(app)
-        .post('/api/clients')
+        .post('/api/clients').set('Authorization', 'Bearer dev-bypass-token')
         .send({
           clientID: odrClientID,
           clientFirstName: 'ODR',
@@ -124,7 +124,7 @@ describe('Referrals API', () => {
       const multiClientID = `${testClientID}-MULTI`;
       
       await request(app)
-        .post('/api/clients')
+        .post('/api/clients').set('Authorization', 'Bearer dev-bypass-token')
         .send({
           clientID: multiClientID,
           clientFirstName: 'Multi',
@@ -166,7 +166,7 @@ describe('Referrals API', () => {
       const emptyClientID = `${testClientID}-EMPTY`;
       
       await request(app)
-        .post('/api/clients')
+        .post('/api/clients').set('Authorization', 'Bearer dev-bypass-token')
         .send({
           clientID: emptyClientID,
           clientFirstName: 'Empty',
@@ -197,7 +197,7 @@ describe('Referrals API', () => {
       const longClientID = `${testClientID}-LONG`;
       
       await request(app)
-        .post('/api/clients')
+        .post('/api/clients').set('Authorization', 'Bearer dev-bypass-token')
         .send({
           clientID: longClientID,
           clientFirstName: 'Long',
@@ -230,7 +230,7 @@ describe('Referrals API', () => {
       const specialClientID = `${testClientID}-SPECIAL`;
       
       await request(app)
-        .post('/api/clients')
+        .post('/api/clients').set('Authorization', 'Bearer dev-bypass-token')
         .send({
           clientID: specialClientID,
           clientFirstName: 'Special',
@@ -345,7 +345,7 @@ describe('Referrals API', () => {
       const consistencyID = `${testClientID}-CONSISTENCY`;
       
       await request(app)
-        .post('/api/clients')
+        .post('/api/clients').set('Authorization', 'Bearer dev-bypass-token')
         .send({
           clientID: consistencyID,
           clientFirstName: 'Consistency',
@@ -389,7 +389,7 @@ describe('Referrals API', () => {
       const client2ID = `${testClientID}-ISO2`;
       
       // Create two separate clients
-      await request(app).post('/api/clients').send({
+      await request(app).post('/api/clients').set('Authorization', 'Bearer dev-bypass-token').send({
         clientID: client1ID,
         clientFirstName: 'Client1',
         clientLastName: 'Test',
@@ -400,7 +400,7 @@ describe('Referrals API', () => {
         clientAdmitDate: new Date().toISOString().split('T')[0]
       }).expect(201);  // ✅ FIX: Expect 201 for client creation
 
-      await request(app).post('/api/clients').send({
+      await request(app).post('/api/clients').set('Authorization', 'Bearer dev-bypass-token').send({
         clientID: client2ID,
         clientFirstName: 'Client2',
         clientLastName: 'Test',
@@ -446,7 +446,7 @@ describe('Referrals API', () => {
     it('should handle multiple updates to same client', async () => {
       const multiUpdateID = `${testClientID}-MULTIUPDATE`;
       
-      await request(app).post('/api/clients').send({
+      await request(app).post('/api/clients').set('Authorization', 'Bearer dev-bypass-token').send({
         clientID: multiUpdateID,
         clientFirstName: 'MultiUpdate',
         clientLastName: 'Test',

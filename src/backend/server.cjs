@@ -166,6 +166,9 @@ app.use((req, res, next) => {
   next();
 });
 
+// A readmitted client's previous stays ('<clientID>~<n>') are read-only
+app.use('/api', require('./middleware/priorStayReadOnly.js'));
+
 // ✅ NEW: Track which routers are loaded
 let clientsRouterLoaded = false;
 let clientFaceRouterLoaded = false;
@@ -185,7 +188,8 @@ let clientExportRouterLoaded = false;
 // ✅ NEW: Try to load your actual routes first
 try {
   const clientsRouter = require('./routes/clients.js');
-  app.use('/api/clients', clientsRouter);
+  // Signed-in users only: the list is limited to the sites they can see (config/siteAccess.js)
+  app.use('/api/clients', authMiddleware, clientsRouter);
   console.log('✅ Real clients router loaded from ./routes/clients.js');
   clientsRouterLoaded = true;
 } catch (err) {
