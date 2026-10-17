@@ -30,6 +30,7 @@ const today = () => {
 const errorText = (err) => {
   const body = err?.response?.data;
   if (body?.errors) return Object.values(body.errors).join(' ');
+  if (body?.error && body?.message) return `${body.error}: ${body.message}`;
   return body?.error || err?.message || 'Readmission failed';
 };
 
