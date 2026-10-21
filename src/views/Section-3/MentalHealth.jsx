@@ -790,7 +790,11 @@ const MentalHealth = ({ exportMode }) => {
 
         // ✅ FIXED: actually check if the save succeeded — Redux Toolkit doesn't throw on rejection
         if (saveMentalHealthData.rejected.match(result)) {
-          throw new Error(result.payload?.message || result.error?.message || 'Save failed');
+          const payload = result.payload;
+          throw new Error(
+            (typeof payload === 'string' ? payload : payload?.message || payload?.error) ||
+            result.error?.message || 'Save failed'
+          );
         }
       }
 
@@ -798,7 +802,7 @@ const MentalHealth = ({ exportMode }) => {
       setTimeout(() => setSaveSuccess(false), 3000);
     } catch (error) {
       console.error("❌ Error saving Mental Health data:", error);
-      setError("Failed to save mental health data. Please try again.");
+      setError(`Failed to save mental health data: ${error.message}`);
     } finally {
       setLoading(false);
     }
