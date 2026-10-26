@@ -520,7 +520,7 @@ const CarePlan = ({ clientID, exportMode }) => {
         {carePlans.length > 0 && (
           <Paper sx={{ p: 2, mb: 3, bgcolor: 'grey.50' }}>
             <Grid container spacing={2}>
-              <Grid item xs={12} sm={3}>
+              <Grid size={{ xs: 12, sm: 3 }}>
                 <Box textAlign="center">
                   <Typography variant="h4" color="primary.main">
                     {carePlans.length}
@@ -530,7 +530,7 @@ const CarePlan = ({ clientID, exportMode }) => {
                   </Typography>
                 </Box>
               </Grid>
-              <Grid item xs={12} sm={3}>
+              <Grid size={{ xs: 12, sm: 3 }}>
                 <Box textAlign="center">
                   <Typography variant="h4" color="success.main">
                     {carePlans.filter(plan => plan.status === 'Completed').length}
@@ -540,7 +540,7 @@ const CarePlan = ({ clientID, exportMode }) => {
                   </Typography>
                 </Box>
               </Grid>
-              <Grid item xs={12} sm={3}>
+              <Grid size={{ xs: 12, sm: 3 }}>
                 <Box textAlign="center">
                   <Typography variant="h4" color="primary.main">
                     {carePlans.filter(plan => plan.status === 'Active' || plan.status === 'In Progress').length}
@@ -550,7 +550,7 @@ const CarePlan = ({ clientID, exportMode }) => {
                   </Typography>
                 </Box>
               </Grid>
-              <Grid item xs={12} sm={3}>
+              <Grid size={{ xs: 12, sm: 3 }}>
                 <Box textAlign="center">
                   <Typography variant="h4" color="error.main">
                     {carePlans.filter(plan => plan.priority === 'High').length}
@@ -880,7 +880,7 @@ const CarePlan = ({ clientID, exportMode }) => {
           <DialogContent>
             <fieldset disabled={editingLocked} style={{ border: 0, margin: 0, padding: 0, minWidth: 0 }}>
             <Grid container spacing={3} sx={{ mt: 1 }}>
-              <Grid item xs={12}>
+              <Grid size={12}>
                 <TextField
                   fullWidth
                   label="Goal"
@@ -894,7 +894,7 @@ const CarePlan = ({ clientID, exportMode }) => {
                 />
               </Grid>
               
-              <Grid item xs={12} sm={6}>
+              <Grid size={{ xs: 12, sm: 6 }}>
                 <TextField
                   fullWidth
                   select
@@ -912,7 +912,7 @@ const CarePlan = ({ clientID, exportMode }) => {
                 </TextField>
               </Grid>
               
-              <Grid item xs={12} sm={6}>
+              <Grid size={{ xs: 12, sm: 6 }}>
                 <TextField
                   fullWidth
                   select
@@ -928,7 +928,7 @@ const CarePlan = ({ clientID, exportMode }) => {
                 </TextField>
               </Grid>
 
-              <Grid item xs={12}>
+              <Grid size={12}>
                 <TextField
                   fullWidth
                   label="Steps to Achieve Goal"
@@ -942,7 +942,7 @@ const CarePlan = ({ clientID, exportMode }) => {
                 />
               </Grid>
               
-              <Grid item xs={12} sm={6}>
+              <Grid size={{ xs: 12, sm: 6 }}>
                 <TextField
                   fullWidth
                   label="Client's Actions"
@@ -955,7 +955,7 @@ const CarePlan = ({ clientID, exportMode }) => {
                 />
               </Grid>
               
-              <Grid item xs={12} sm={6}>
+              <Grid size={{ xs: 12, sm: 6 }}>
                 <TextField
                   fullWidth
                   label="Case Manager's Actions"
@@ -968,7 +968,7 @@ const CarePlan = ({ clientID, exportMode }) => {
                 />
               </Grid>
               
-              <Grid item xs={12}>
+              <Grid size={12}>
                 <TextField
                   fullWidth
                   label="Expected Outcomes"
@@ -981,7 +981,7 @@ const CarePlan = ({ clientID, exportMode }) => {
                 />
               </Grid>
               
-              <Grid item xs={12} sm={6}>
+              <Grid size={{ xs: 12, sm: 6 }}>
                 <TextField
                   fullWidth
                   type="date"
