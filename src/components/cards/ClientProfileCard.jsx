@@ -38,10 +38,12 @@ import {
   Visibility as VisibilityIcon,
   Home as HomeIcon,
   History as HistoryIcon,
+  Groups as GroupsIcon,
 } from '@mui/icons-material';
 import { fetchClientById } from '../../backend/store/slices/clientSlice';
 import { formatDateOnly } from '../../utils/dateOnly';
 import PreviousStays from './PreviousStays';
+import CareTeam from './CareTeam';
 
 const ClientProfileCard = ({ 
   clientID, 
@@ -292,6 +294,22 @@ const ClientProfileCard = ({
                 />
               </ListItem>
             </List>
+          </AccordionDetails>
+        </Accordion>
+
+        {/* Behavioral and medical staff assigned to the client */}
+        <Accordion 
+          expanded={expandedSection === 'careTeam'} 
+          onChange={handleAccordionChange('careTeam')}
+        >
+          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+              <GroupsIcon sx={{ mr: 1, color: 'secondary.main' }} />
+              <Typography sx={{ fontWeight: 600 }}>Care Team</Typography>
+            </Box>
+          </AccordionSummary>
+          <AccordionDetails>
+            <CareTeam client={selectedClient} />
           </AccordionDetails>
         </Accordion>
 

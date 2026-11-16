@@ -26,6 +26,49 @@ const { getClientStatus, programError, isPriorStayID, toYMD } = require('../util
 const { allowedSites, canSeeClient, SITE_GROUPS } = require('../config/siteAccess');
 const { auditAction } = require('../utils/section4Lock');
 
+// Care team: the behavioral and medical person assigned to a client
+// (dbo.Clients, see dbScripts/ClientCareTeam.sql). Each is an email (the
+// person's sign-in name) plus a display name.
+const CARE_TEAM_FIELDS = {
+  clientBehavioralStaffEmail: 255,
+  clientBehavioralStaffName: 200,
+  clientMedicalStaffEmail: 255,
+  clientMedicalStaffName: 200,
+};
+const CARE_TEAM_ROLES = [
+  { role: 'behavioral', email: 'clientBehavioralStaffEmail', name: 'clientBehavioralStaffName' },
+  { role: 'medical', email: 'clientMedicalStaffEmail', name: 'clientMedicalStaffName' },
+];
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// Trims the care team fields in place ('' -> null, emails lower-cased) and
+// returns validation errors. A cleared email clears its name too.
+const normalizeCareTeam = (data) => {
+  const errors = {};
+  Object.entries(CARE_TEAM_FIELDS).forEach(([field, max]) => {
+    if (data[field] === undefined) return;
+    if (data[field] !== null && typeof data[field] !== 'string') {
+      errors[field] = 'Must be text';
+      return;
+    }
+    const value = (data[field] || '').trim();
+    data[field] = value === '' ? null : value;
+    if (value.length > max) errors[field] = `Must be ${max} characters or fewer`;
+  });
+  CARE_TEAM_ROLES.forEach(({ role, email, name }) => {
+    if (data[email] === undefined) return;
+    if (data[email] === null) {
+      data[name] = null;
+      return;
+    }
+    data[email] = data[email].toLowerCase();
+    if (!errors[email] && !EMAIL_RE.test(data[email])) {
+      errors[email] = `The ${role} staff member must be an email address`;
+    }
+  });
+  return errors;
+};
+
 // Generate client ID helper
 const generateClientID = () => {
   const timestamp = Date.now().toString().slice(-6);
@@ -93,6 +136,8 @@ const validateClientData = (clientData, isUpdate = false) => {
     }
   }
   
+  Object.assign(errors, normalizeCareTeam(clientData));
+
   const invalidProgram = programError(clientData.clientProgram);
   if (invalidProgram) {
     errors.clientProgram = invalidProgram;
@@ -172,7 +217,17 @@ router.post('/', async (req, res) => {
       });
     }
     
-    const result = await pool.request()
+    // Care team columns only when given, so creating a client keeps working
+    // before dbScripts/ClientCareTeam.sql has run
+    const insert = pool.request();
+    const careTeamColumns = Object.entries(CARE_TEAM_FIELDS)
+      .filter(([field]) => client[field])
+      .map(([field, max]) => {
+        insert.input(field, sql.NVarChar(max), client[field]);
+        return `${field}, `;
+      });
+
+    const result = await insert
       .input('clientID', sql.NVarChar(50), clientID)
       .input('clientAdmitDate', sql.Date, client.clientAdmitDate || null)
       .input('clientDOB', sql.Date, client.clientDOB || null)
@@ -199,7 +254,7 @@ router.post('/', async (req, res) => {
           clientCitizenship, clientVetStatus, clientSSN,
           clientGender, clientPronouns, clientEthnicity, clientRace,
           clientPrimaryLang, clientMaritalStatus, clientReligiousPref, clientHighEd,
-          createdAt, updatedAt
+          ${careTeamColumns.join('')}createdAt, updatedAt
         )
         VALUES (
           @clientID, @clientAdmitDate, @clientDOB, @clientSite,
@@ -207,7 +262,7 @@ router.post('/', async (req, res) => {
           @clientCitizenship, @clientVetStatus, @clientSSN,
           @clientGender, @clientPronouns, @clientEthnicity, @clientRace,
           @clientPrimaryLang, @clientMaritalStatus, @clientReligiousPref, @clientHighEd,
-          GETDATE(), GETDATE()
+          ${careTeamColumns.map(col => `@${col}`).join('')}GETDATE(), GETDATE()
         );
         
         SELECT * FROM Clients WHERE clientID = @clientID;
@@ -413,6 +468,12 @@ router.put('/:clientID', async (req, res) => {
       updateFields.push('clientProgram = @clientProgram');
     }
     
+    Object.entries(CARE_TEAM_FIELDS).forEach(([field, max]) => {
+      if (updates[field] === undefined) return;
+      request.input(field, sql.NVarChar(max), updates[field]);
+      updateFields.push(`${field} = @${field}`);
+    });
+
     if (updateFields.length === 0) {
       return res.status(400).json({ error: 'No valid fields to update' });
     }
@@ -430,6 +491,28 @@ router.put('/:clientID', async (req, res) => {
     
     // ✅ Map updated client for authorization forms compatibility
     const updatedClient = mapClientForAuthForms(updateResult.recordset[0]);
+
+    // Record care team changes in the audit trail
+    const before = checkResult.recordset[0];
+    const careTeamChanges = CARE_TEAM_ROLES
+      .filter(({ email }) => updates[email] !== undefined && (before[email] || null) !== updates[email])
+      .map(({ role, email, name }) => ({
+        role,
+        from: before[email] || null,
+        to: updates[email],
+        toName: updates[name] ?? null,
+      }));
+    if (careTeamChanges.length) {
+      await auditAction(pool, {
+        action: 'ASSIGN_CARE_TEAM',
+        req,
+        tableName: 'Clients',
+        recordID: clientID,
+        clientID,
+        details: { changes: careTeamChanges },
+        timestamp: new Date(),
+      }).catch(err => console.error('⚠️ Care team audit log failed:', err.message));
+    }
     
     console.log(`✅ Client updated: ${clientID} - ${updatedClient.firstName} ${updatedClient.lastName}`);
     res.json(updatedClient);

@@ -106,6 +106,42 @@ export const updateClient = createAsyncThunk(
   }
 );
 
+// Assign the behavioral and medical person on a client's care team.
+// careTeam: { clientBehavioralStaffEmail, clientBehavioralStaffName,
+//             clientMedicalStaffEmail, clientMedicalStaffName } (null clears one)
+// Unlike updateClient it leaves state.loading alone, so the profile card that
+// opened the dialog stays mounted while saving.
+export const assignCareTeam = createAsyncThunk(
+  'clients/assignCareTeam',
+  async ({ clientID, careTeam }, { rejectWithValue }) => {
+    try {
+      if (USE_MOCK_DATA) {
+        const client = mockData.clients.find(c => c.clientID === clientID);
+        if (!client) throw new Error('Client not found');
+        Object.assign(client, careTeam);
+        return { ...client };
+      }
+      const response = await axios.put(`${API_BASE_URL}/api/clients/${clientID}`, careTeam, {
+        headers: await getApiAuthHeaders(),
+      });
+      return response.data;
+    } catch (error) {
+      const data = error.response?.data;
+      const fieldErrors = data?.errors ? Object.values(data.errors).join(' ') : null;
+      return rejectWithValue(fieldErrors || data?.error || error.message || 'Failed to save care team');
+    }
+  }
+);
+
+const replaceClient = (state, updatedClient) => {
+  if (!updatedClient?.clientID) return;
+  const index = state.clients.findIndex(client => client.clientID === updatedClient.clientID);
+  if (index !== -1) state.clients[index] = updatedClient;
+  if (state.selectedClient && state.selectedClient.clientID === updatedClient.clientID) {
+    state.selectedClient = updatedClient;
+  }
+};
+
 // Client slice
 const clientSlice = createSlice({
   name: 'clients',
@@ -201,6 +237,9 @@ const clientSlice = createSlice({
       .addCase(updateClient.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload || 'Failed to update client';
+      })
+      .addCase(assignCareTeam.fulfilled, (state, action) => {
+        replaceClient(state, action.payload);
       });
   },
 });

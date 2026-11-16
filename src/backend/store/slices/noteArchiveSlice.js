@@ -1,6 +1,7 @@
 // src/store/apps/notes/noteArchiveSlice.js
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
+import { addApiAuthInterceptor } from '../../../utils/installApiAuth';
 import { azureBlobService } from "../../services/azureBlobService";
 import { ARCHIVE_SECTIONS, SECTION_CATEGORIES, sectionDocType, filterSectionFiles } from "../../../utils/archiveSections";
 
@@ -10,12 +11,14 @@ const FETCH_TIMEOUT = 30000; // 30 seconds
 
 // Configured axios instance
 const createAxiosInstance = (timeout = FETCH_TIMEOUT) => {
-  return axios.create({
+  const instance = axios.create({
     timeout,
     headers: {
       'Content-Type': 'application/json'
     }
   });
+  addApiAuthInterceptor(instance);
+  return instance;
 };
 
 // CM note files share the same blob storage pipeline as every other section's
