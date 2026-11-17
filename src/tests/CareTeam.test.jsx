@@ -75,6 +75,7 @@ describe('CareTeam', () => {
     await waitFor(() =>
       expect(store.getState().clients.selectedClient.clientBehavioralStaffName).toBe('Casey Worker'));
     expect(await screen.findByText('Casey Worker (case.worker@hope.org)')).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   });
 
   it('accepts a typed email when the directory cannot be read', async () => {

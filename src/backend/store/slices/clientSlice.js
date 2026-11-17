@@ -116,10 +116,11 @@ export const assignCareTeam = createAsyncThunk(
   async ({ clientID, careTeam }, { rejectWithValue }) => {
     try {
       if (USE_MOCK_DATA) {
-        const client = mockData.clients.find(c => c.clientID === clientID);
-        if (!client) throw new Error('Client not found');
-        Object.assign(client, careTeam);
-        return { ...client };
+        // Replace, don't mutate: the store may hold this very object
+        const index = mockData.clients.findIndex(c => c.clientID === clientID);
+        if (index === -1) throw new Error('Client not found');
+        mockData.clients[index] = { ...mockData.clients[index], ...careTeam };
+        return mockData.clients[index];
       }
       const response = await axios.put(`${API_BASE_URL}/api/clients/${clientID}`, careTeam, {
         headers: await getApiAuthHeaders(),

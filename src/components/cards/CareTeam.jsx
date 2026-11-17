@@ -147,11 +147,15 @@ export const CareTeamDialog = ({ open, client, onClose }) => {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
 
+  // Start from the client's current care team each time the dialog opens.
+  // Only on opening: resetting when the client changes would wipe an error
+  // shown after a save that also updated the client.
   useEffect(() => {
     if (!open) return;
     setPicks(Object.fromEntries(CARE_TEAM_ROLES.map((r) => [r.role, assigneeOf(client, r)])));
     setError(null);
-  }, [open, client]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   const invalid = CARE_TEAM_ROLES.find((r) => picks[r.role] && !EMAIL_RE.test(picks[r.role].email));
 
