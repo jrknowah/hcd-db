@@ -13,6 +13,10 @@ import { BrowserRouter } from 'react-router-dom';
 import { CustomizerContextProvider } from './context/CustomizerContext';
 import { Provider } from 'react-redux';
 import store from './backend/store/store';
+import { installApiAuth } from './utils/installApiAuth';
+
+// Every backend call carries the user's ID token (site access is checked per client)
+installApiAuth();
 
 // ✅ CRITICAL: Make store globally accessible for Azure Profile Service
 window.__REDUX_STORE__ = store;

@@ -169,6 +169,13 @@ app.use((req, res, next) => {
 // A readmitted client's previous stays ('<clientID>~<n>') are read-only
 app.use('/api', require('./middleware/priorStayReadOnly.js'));
 
+// Any request naming a client must come from a user who can see that client's
+// site (config/siteAccess.js). Needs the database, so not mounted in tests.
+if (dbModule) {
+  const { createClientSiteAccess } = require('./middleware/clientSiteAccess.js');
+  app.use('/api', createClientSiteAccess({ getPool: dbModule.getPool, authenticate: authMiddleware }));
+}
+
 // ✅ NEW: Track which routers are loaded
 let clientsRouterLoaded = false;
 let clientFaceRouterLoaded = false;

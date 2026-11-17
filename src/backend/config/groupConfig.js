@@ -158,3 +158,10 @@ export const ROLE_DISPLAY_NAMES = {
   AUDITOR: 'Auditor',
   READONLY: 'Read Only User',
 };
+// Care team pickers on the client profile: the behavioral and medical person
+// assigned to a client are chosen from the members of these Entra groups
+// (Microsoft Graph, GroupMember.Read.All). Add group IDs to widen a list.
+export const CARE_TEAM_GROUPS = {
+  behavioral: [GROUP_MAPPINGS.HOPE_case],
+  medical: [GROUP_MAPPINGS.HOPE_nursing],
+};

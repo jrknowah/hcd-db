@@ -1,6 +1,7 @@
 // store/slices/referralSlice.js - Enhanced with timeout and retry logic
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
+import { addApiAuthInterceptor } from '../../../utils/installApiAuth';
 
 const API = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
 
@@ -17,12 +18,14 @@ const MOCK_REFERRAL_DATA = {
 
 // ✅ NEW: Create configured axios instance for uploads
 const createAxiosInstance = (timeout = API_TIMEOUT) => {
-  return axios.create({
+  const instance = axios.create({
     timeout,
     headers: {
       'Content-Type': 'application/json'
     }
   });
+  addApiAuthInterceptor(instance);
+  return instance;
 };
 
 // ✅ NEW: Helper to determine if error is retryable
