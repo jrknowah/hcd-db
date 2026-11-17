@@ -234,7 +234,8 @@ export const careTeamSortKey = (client) =>
 
 // Two short lines for the client list / grid cards: "BH  Dana Lee", "Med  Unassigned"
 export const CareTeamSummary = ({ client }) => (
-  <Box sx={{ display: 'grid', gridTemplateColumns: 'auto 1fr', columnGap: 1, rowGap: 0.25, alignItems: 'baseline' }}>
+  // minWidth keeps names readable when the profile card squeezes the table (it scrolls instead)
+  <Box sx={{ display: 'grid', gridTemplateColumns: 'auto 1fr', columnGap: 1, rowGap: 0.25, alignItems: 'baseline', minWidth: 150 }}>
     {CARE_TEAM_ROLES.map((r) => {
       const person = assigneeOf(client, r);
       return (
