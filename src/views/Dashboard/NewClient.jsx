@@ -38,6 +38,13 @@ import {
   updateClient, 
   setSelectedClient 
 } from '../../backend/store/slices/clientSlice';
+import {
+  CARE_TEAM_ROLES,
+  StaffPicker,
+  careTeamPicks,
+  careTeamFields,
+  invalidCareTeamRole,
+} from '../../components/cards/CareTeam';
 
 const NewClient = ({ onClientCreated, editMode = false, clientData = null }) => {
   const dispatch = useDispatch();
@@ -98,6 +105,9 @@ const NewClient = ({ onClientCreated, editMode = false, clientData = null }) => 
 
   // Form state
   const [formData, setFormData] = useState(getInitialFormData);
+  // Behavioral and medical staff, picked from the directory (components/cards/CareTeam)
+  const getInitialCareTeam = () => careTeamPicks(editMode ? clientData : null);
+  const [careTeam, setCareTeam] = useState(getInitialCareTeam);
   const [localError, setLocalError] = useState(null);
   const [success, setSuccess] = useState(false);
 
@@ -105,6 +115,7 @@ const NewClient = ({ onClientCreated, editMode = false, clientData = null }) => 
   useEffect(() => {
     if (editMode && clientData) {
       setFormData(getInitialFormData());
+      setCareTeam(getInitialCareTeam());
     }
   }, [editMode, clientData]);
 
@@ -140,12 +151,19 @@ const NewClient = ({ onClientCreated, editMode = false, clientData = null }) => 
       }
     }
 
+    const badRole = invalidCareTeamRole(careTeam);
+    if (badRole) {
+      setLocalError(`Enter a valid email address for the ${badRole.label.toLowerCase()} staff member.`);
+      return false;
+    }
+
     setLocalError(null);
     return true;
   };
 
   const resetForm = () => {
     setFormData(getInitialFormData());
+    setCareTeam(getInitialCareTeam());
     setLocalError(null);
     setSuccess(false);
   };
@@ -156,17 +174,21 @@ const NewClient = ({ onClientCreated, editMode = false, clientData = null }) => 
 
     try {
       let response;
+      // Edit sends only the care team roles that changed; a new client only those set
+      const payload = editMode
+        ? { ...formData, ...careTeamFields(careTeam, clientData) }
+        : { ...formData, ...Object.fromEntries(Object.entries(careTeamFields(careTeam)).filter(([, v]) => v)) };
       
       if (editMode) {
         console.log('🔄 Updating client with data:', {
           clientID: formData.clientID,
-          updates: formData
+          updates: payload
         });
         
         // Update existing client
         response = await dispatch(updateClient({
           clientID: formData.clientID,
-          updates: formData
+          updates: payload
         })).unwrap();
         
         console.log('✅ Update successful:', response);
@@ -177,10 +199,10 @@ const NewClient = ({ onClientCreated, editMode = false, clientData = null }) => 
           onClientCreated(formData.clientID);
         }
       } else {
-        console.log('🔄 Creating new client with data:', formData);
+        console.log('🔄 Creating new client with data:', payload);
         
         // Create new client
-        response = await dispatch(addClient(formData)).unwrap();
+        response = await dispatch(addClient(payload)).unwrap();
         
         console.log('✅ Create successful:', response);
         setSuccess(true);
@@ -406,7 +428,6 @@ const NewClient = ({ onClientCreated, editMode = false, clientData = null }) => 
 
           <Grid item xs={12} sm={4}>
             <Typography>SSN(XXX-XX-XXX)</Typography>
-            // In NewClient.jsx:
               <TextField
                 fullWidth
                 label="SSN"
@@ -465,6 +486,31 @@ const NewClient = ({ onClientCreated, editMode = false, clientData = null }) => 
             {renderSelect('', formData.clientHighEd, handleChange('clientHighEd'), highestEdu, 'clientHighEd')}
           </Grid>
         </Grid>
+        {/* Care Team. A plain CSS grid, not <Grid item>: the item/xs props are
+            ignored by MUI v7, which leaves the pickers too narrow to read. */}
+        <Box sx={{ mt: 4 }}>
+          <Typography variant="h6" sx={{ mb: 0.5, color: 'primary.main' }}>
+            Care Team
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2.5 }}>
+            Optional. Can also be set later from the client&apos;s profile card.
+          </Typography>
+          <Box sx={{ display: 'grid', gap: 3, gridTemplateColumns: { xs: '1fr', md: 'repeat(2, minmax(0, 420px))' } }}>
+            {CARE_TEAM_ROLES.map(({ role, label }) => (
+              <StaffPicker
+                key={role}
+                role={role}
+                label={label}
+                value={careTeam[role]}
+                disabled={loading}
+                onChange={(person) => {
+                  setCareTeam((prev) => ({ ...prev, [role]: person }));
+                  if (localError) setLocalError(null);
+                }}
+              />
+            ))}
+          </Box>
+        </Box>
         <Grid container spacing={3} sx={{ mt: 2 }}>
           {/* Submit Section */}
           <Grid item xs={12} sx={{ mt: 3, textAlign: 'center' }}>

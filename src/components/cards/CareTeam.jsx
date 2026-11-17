@@ -33,6 +33,7 @@ export const CARE_TEAM_ROLES = [
   {
     role: 'behavioral',
     label: 'Behavioral Health',
+    short: 'BH',
     emailField: 'clientBehavioralStaffEmail',
     nameField: 'clientBehavioralStaffName',
     Icon: BehavioralIcon,
@@ -40,6 +41,7 @@ export const CARE_TEAM_ROLES = [
   {
     role: 'medical',
     label: 'Medical',
+    short: 'Med',
     emailField: 'clientMedicalStaffEmail',
     nameField: 'clientMedicalStaffName',
     Icon: MedicalIcon,
@@ -48,8 +50,29 @@ export const CARE_TEAM_ROLES = [
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-const assigneeOf = (client, { emailField, nameField }) =>
+export const assigneeOf = (client, { emailField, nameField }) =>
   client?.[emailField] ? { email: client[emailField], name: client[nameField] || client[emailField] } : null;
+
+// { behavioral: person|null, medical: person|null } from a client record
+export const careTeamPicks = (client) =>
+  Object.fromEntries(CARE_TEAM_ROLES.map((r) => [r.role, assigneeOf(client, r)]));
+
+// The first role whose typed-in email is not an email address
+export const invalidCareTeamRole = (picks) =>
+  CARE_TEAM_ROLES.find((r) => picks[r.role] && !EMAIL_RE.test(picks[r.role].email));
+
+// picks -> the Clients columns. With `original`, only roles that changed are
+// included, so an untouched care team is not rewritten (or audited).
+export const careTeamFields = (picks, original = null) => {
+  const fields = {};
+  CARE_TEAM_ROLES.forEach((r) => {
+    const email = picks[r.role]?.email || null;
+    if (original && (original[r.emailField] || null) === email) return;
+    fields[r.emailField] = email;
+    fields[r.nameField] = picks[r.role]?.name || null;
+  });
+  return fields;
+};
 
 // A typed-in value (directory unavailable or person not in the group)
 const fromText = (text) => {
@@ -57,7 +80,7 @@ const fromText = (text) => {
   return email ? { email, name: email } : null;
 };
 
-const StaffPicker = ({ role, label, value, onChange, disabled }) => {
+export const StaffPicker = ({ role, label, value, onChange, disabled }) => {
   const [open, setOpen] = useState(false);
   const [options, setOptions] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -152,20 +175,16 @@ export const CareTeamDialog = ({ open, client, onClose }) => {
   // shown after a save that also updated the client.
   useEffect(() => {
     if (!open) return;
-    setPicks(Object.fromEntries(CARE_TEAM_ROLES.map((r) => [r.role, assigneeOf(client, r)])));
+    setPicks(careTeamPicks(client));
     setError(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  const invalid = CARE_TEAM_ROLES.find((r) => picks[r.role] && !EMAIL_RE.test(picks[r.role].email));
+  const invalid = invalidCareTeamRole(picks);
 
   const handleSave = async () => {
     if (invalid) return;
-    const careTeam = {};
-    CARE_TEAM_ROLES.forEach(({ role, emailField, nameField }) => {
-      careTeam[emailField] = picks[role]?.email || null;
-      careTeam[nameField] = picks[role]?.name || null;
-    });
+    const careTeam = careTeamFields(picks);
     setSaving(true);
     setError(null);
     try {
@@ -208,6 +227,35 @@ export const CareTeamDialog = ({ open, client, onClose }) => {
     </Dialog>
   );
 };
+
+// Sort key for the client list: clients missing someone sort first (ascending)
+export const careTeamSortKey = (client) =>
+  CARE_TEAM_ROLES.map((r) => (client?.[r.emailField] ? `1${client[r.nameField] || client[r.emailField]}` : '0')).join('|');
+
+// Two short lines for the client list / grid cards: "BH  Dana Lee", "Med  Unassigned"
+export const CareTeamSummary = ({ client }) => (
+  <Box sx={{ display: 'grid', gridTemplateColumns: 'auto 1fr', columnGap: 1, rowGap: 0.25, alignItems: 'baseline' }}>
+    {CARE_TEAM_ROLES.map((r) => {
+      const person = assigneeOf(client, r);
+      return (
+        <React.Fragment key={r.role}>
+          <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
+            {r.short}
+          </Typography>
+          <Typography
+            variant="body2"
+            noWrap
+            color={person ? 'text.primary' : 'warning.main'}
+            title={person ? `${r.label}: ${person.name} (${person.email})` : `${r.label}: not assigned`}
+            sx={{ maxWidth: 200 }}
+          >
+            {person ? person.name : 'Unassigned'}
+          </Typography>
+        </React.Fragment>
+      );
+    })}
+  </Box>
+);
 
 const CareTeam = ({ client }) => {
   const [dialogOpen, setDialogOpen] = useState(false);

@@ -43,6 +43,7 @@ import {
 } from '@mui/icons-material';
 import { visuallyHidden } from '@mui/utils';
 import { formatDateOnly } from '../../utils/dateOnly';
+import { CareTeamSummary, careTeamSortKey } from '../cards/CareTeam';
 
 // Table column definitions
 const headCells = [
@@ -51,6 +52,7 @@ const headCells = [
   { id: 'clientID', numeric: false, disablePadding: false, label: 'ID' },
   { id: 'clientSite', numeric: false, disablePadding: false, label: 'Site' },
   { id: 'clientProgram', numeric: false, disablePadding: false, label: 'Program' },
+  { id: 'careTeam', numeric: false, disablePadding: false, label: 'Care Team' },
   { id: 'status', numeric: false, disablePadding: false, label: 'Status' },
   { id: 'clientGender', numeric: false, disablePadding: false, label: 'Gender' },
   { id: 'clientDOB', numeric: false, disablePadding: false, label: 'Date of Birth' },
@@ -309,6 +311,10 @@ function ClientCard({ client, isSelected, onSelect, onView, onEdit, onViewForms,
           )}
         </Box>
 
+        <Box sx={{ mb: 1 }}>
+          <CareTeamSummary client={client} />
+        </Box>
+
         <Typography variant="caption" color="text.secondary">
           Created: {client.createdAt ? new Date(client.createdAt).toLocaleDateString() : 'N/A'}
         </Typography>
@@ -390,6 +396,11 @@ const ClientTable = ({
       case 'clientDOB':
         aVal = new Date(a.clientDOB || 0);
         bVal = new Date(b.clientDOB || 0);
+        break;
+      case 'careTeam':
+        // Ascending puts clients missing a behavioral or medical person first
+        aVal = careTeamSortKey(a);
+        bVal = careTeamSortKey(b);
         break;
       default:
         aVal = a[orderBy] || '';
@@ -635,6 +646,10 @@ const ClientTable = ({
                       <Typography variant="body2">
                         {client.clientProgram || 'Not set'}
                       </Typography>
+                    </TableCell>
+
+                    <TableCell>
+                      <CareTeamSummary client={client} />
                     </TableCell>
 
                     <TableCell>
