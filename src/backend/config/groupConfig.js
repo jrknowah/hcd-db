@@ -1,33 +1,9 @@
-export const GROUP_MAPPINGS = {
-  // ✅ Your actual IT group from Azure AD
-  // Verified against Entra > Groups > HOPE_it > Object Id (Aug 2026).
-  // The previous value (5937eaf5-...) was stale and matched no group in the
-  // token, which is why IT_ADMIN never resolved.
-  'HOPE_it': '47e60a70-aeab-4f3e-80bd-940cc951622f',
-  
-  // Keep the original IDs for future use (in case other groups are created later)
-  'HOPE_case': '59b40286-56c6-4b1e-8de2-854c7d91179b',
-  'HOPE_nursing': '51b04727-a548-4769-8227-4b055427a9ac',
-  'HOPE_level1': 'f47eca14-0206-4719-91c7-fba7b2be382c',
-  'HOPE_audit': 'fec5c917-431c-4663-85b2-efc9e9053e96',
-  'HOPE_readonly': 'e95d2a7a-0390-414e-92bd-26fb5b745acf',
-  // Documentation report supervisors (Admin > Nursing / Behavioral Health).
-  // TODO: fill in the Object Id from Entra > Groups. Empty = nobody matches.
-  // Must match middleware/documentationAccess.js.
-  'HOPE_nursing_admin': '',
-  'HOPE_behavioral_admin': '',
-  'hope_eubanks': 'd5115dd6-74f0-4abe-951f-6dc3e96fb1ee',
-  'hope_pacific': '1985ac8b-285d-45c1-9d0e-1ded3d3f6fca',
-  'hope_heart': '',
-  'hope_hope': '',
-  'hope_downey': '',
-  'hope_heritage': '',
-  'hope_northridge': '',
-  'hope_casa': '',
-  'hope_97': '',
-  'hope_104': '',
-  'hope_238': '',
-};
+import { ORG } from './org';
+
+// Entra group Object IDs for this deployment's organization, from
+// config/orgs/<VITE_ORG>.json (see config/orgs/README.md). Site groups are
+// keyed by site name in ORG.sites; the backend reads the same file.
+export const GROUP_MAPPINGS = { ...ORG.groups };
 
 // Define role-based permissions for HOPE system
 export const ROLE_PERMISSIONS = {

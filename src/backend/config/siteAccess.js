@@ -8,32 +8,22 @@
 //     because most site groups have no Object ID yet. Set SITE_ACCESS_STRICT=true
 //     once all of them are filled in, and such users will see no clients.
 //
-// Group Object IDs: Entra > Groups > <group> > Object Id. Keep in step with
-// GROUP_MAPPINGS in config/groupConfig.js (the frontend copy).
+// Group Object IDs live in config/orgs/<ORG>.json, shared with the frontend.
 
-const AUDIT_GROUP_ID = 'fec5c917-431c-4663-85b2-efc9e9053e96'; // HOPE_audit
+const { ORG, group } = require('./orgConfig.cjs');
 
-// Site name (as stored in clientSite / the New Client site list) -> group Object ID
-const SITE_GROUPS = {
-  'Eubanks': 'd5115dd6-74f0-4abe-951f-6dc3e96fb1ee',        // hope_eubanks
-  'Pacific': '1985ac8b-285d-45c1-9d0e-1ded3d3f6fca',        // hope_pacific
-  'Heart Haven': '',                                         // hope_heart
-  'Hope Haven': '',                                          // hope_hope
-  'Downey': '',                                              // hope_downey
-  'Heritage House': '',                                      // hope_heritage
-  'Northridge': '',                                          // hope_northridge
-  'Casa Amore': '',                                          // hope_casa
-  '97th': '',                                                // hope_97
-  '104th': '',                                               // hope_104
-  '238th': '',                                               // hope_238
-};
+const AUDIT_GROUP_ID = group('HOPE_audit');
+
+// Site name (as stored in clientSite / the New Client site list) -> group Object ID,
+// from config/orgs/<ORG>.json
+const SITE_GROUPS = Object.fromEntries(ORG.sites.map(({ name, groupId }) => [name, groupId || '']));
 
 const normalizeSite = (site) => String(site || '').trim().toLowerCase();
 
 // null = every site; otherwise the set of (normalized) site names the user may see
 const allowedSites = (user, { strict = process.env.SITE_ACCESS_STRICT === 'true' } = {}) => {
   const groups = user?.groups || [];
-  if (user?.isAdmin || groups.includes(AUDIT_GROUP_ID)) return null;
+  if (user?.isAdmin || (AUDIT_GROUP_ID && groups.includes(AUDIT_GROUP_ID))) return null;
 
   const sites = Object.entries(SITE_GROUPS)
     .filter(([, groupID]) => groupID && groups.includes(groupID))

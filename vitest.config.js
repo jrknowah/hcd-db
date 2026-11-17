@@ -4,6 +4,7 @@
 import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import path from 'path';
+import { orgConfigAlias } from './scripts/org-alias.mjs';
 
 export default defineConfig({
   plugins: [react()],
@@ -38,6 +39,7 @@ export default defineConfig({
   },
   resolve: {
     alias: {
+      ...orgConfigAlias(),
       src: path.resolve(__dirname, './src')
     }
   }

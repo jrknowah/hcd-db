@@ -4,8 +4,10 @@
 
 // vitest.config.backend.js
 import { defineConfig } from 'vitest/config';
+import { orgConfigAlias } from '../../scripts/org-alias.mjs';
 
 export default defineConfig({
+  resolve: { alias: orgConfigAlias() },
   test: {
     globals: true,
     environment: 'node',

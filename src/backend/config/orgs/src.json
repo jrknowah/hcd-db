@@ -1,0 +1,49 @@
+{
+  "name": "SRC",
+  "tenantId": "",
+  "clientId": "",
+  "groups": {
+    "HOPE_it": "",
+    "HOPE_case": "",
+    "HOPE_nursing": "",
+    "HOPE_level1": "",
+    "HOPE_audit": "",
+    "HOPE_readonly": "",
+    "HOPE_nursing_admin": "",
+    "HOPE_behavioral_admin": ""
+  },
+  "sites": [
+    {
+      "name": "Arlington-LA",
+      "groupId": ""
+    },
+    {
+      "name": "Arroyo",
+      "groupId": ""
+    },
+    {
+      "name": "East LA",
+      "groupId": ""
+    },
+    {
+      "name": "Lakeview Terrace",
+      "groupId": ""
+    },
+    {
+      "name": "Long Beach 4th",
+      "groupId": ""
+    },
+    {
+      "name": "Motel 6",
+      "groupId": ""
+    },
+    {
+      "name": "Percy",
+      "groupId": ""
+    },
+    {
+      "name": "Torrance-Cabrillo",
+      "groupId": ""
+    }
+  ]
+}

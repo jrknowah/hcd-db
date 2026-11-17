@@ -1,11 +1,12 @@
 // middleware/auth.js - Backend Authentication Middleware
 const jwt = require('jsonwebtoken');
 const jwksClient = require('jwks-rsa');
-const TENANT_ID = '2fca3a49-cd1a-4717-bccc-5dbd1ea86b64';
-const APP_CLIENT_ID = '0b3e6463-bea7-4521-a36a-a32edb6af7a1';
+// Tenant, app registration and groups come from config/orgs/<ORG>.json;
+// AUTH_TENANT_ID / AUTH_CLIENT_ID app settings override the first two.
+const { TENANT_ID, CLIENT_ID: APP_CLIENT_ID, group } = require('../config/orgConfig.cjs');
 // HOPE_it — the group the frontend maps to IT_ADMIN (config/groupConfig.js).
 // Roles are assigned by group membership, so this is what makes IT staff admins.
-const IT_ADMIN_GROUP_ID = '47e60a70-aeab-4f3e-80bd-940cc951622f';
+const IT_ADMIN_GROUP_ID = group('HOPE_it');
 const ADMIN_GROUP_IDS = [IT_ADMIN_GROUP_ID, process.env.ADMIN_GROUP_ID].filter(Boolean);
 
 // ID tokens are signed with tenant-specific keys.

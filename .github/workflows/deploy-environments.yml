@@ -1,0 +1,154 @@
+# Deploys the frontend (Azure Static Web App) and backend (Azure App Service)
+# to one environment:
+#
+#   staging         - automatically on every push to the `staging` branch
+#   src-production  - manually: Actions > Deploy environment > Run workflow,
+#                     from `main`. Protect the GitHub environment with required
+#                     reviewers so a person approves each production deploy.
+#
+# The existing HOPE production deploy (azure-static-web-apps-*.yml on `main`)
+# is unchanged.
+#
+# Each GitHub environment (Settings > Environments) needs:
+#   secrets: AZURE_STATIC_WEB_APPS_API_TOKEN, AZURE_WEBAPP_PUBLISH_PROFILE
+#   vars:    ORG (hope | src), BACKEND_APP_NAME, BACKEND_URL,
+#            VITE_AZURE_CLIENT_ID, VITE_AZURE_TENANT_ID, VITE_AZURE_REDIRECT_URI
+# See docs/DEPLOYMENT.md.
+
+name: Deploy environment
+
+on:
+  push:
+    branches: [staging]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Where to deploy
+        type: choice
+        options: [staging, src-production]
+        default: staging
+
+concurrency:
+  group: deploy-${{ inputs.environment || 'staging' }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+      - name: Unit tests
+        run: npx vitest run
+        env:
+          VITE_ORG: ${{ vars.ORG || 'hope' }}
+
+  deploy:
+    name: Deploy to ${{ inputs.environment || 'staging' }}
+    needs: test
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ inputs.environment || 'staging' }}
+      url: ${{ vars.VITE_AZURE_REDIRECT_URI }}
+    steps:
+      - name: Production deploys come from main only
+        if: inputs.environment == 'src-production' && github.ref != 'refs/heads/main'
+        run: |
+          echo "::error::src-production must be deployed from main (got ${{ github.ref }})"
+          exit 1
+
+      - name: Check environment settings
+        env:
+          ORG: ${{ vars.ORG }}
+          BACKEND_APP_NAME: ${{ vars.BACKEND_APP_NAME }}
+          BACKEND_URL: ${{ vars.BACKEND_URL }}
+          VITE_AZURE_CLIENT_ID: ${{ vars.VITE_AZURE_CLIENT_ID }}
+          VITE_AZURE_TENANT_ID: ${{ vars.VITE_AZURE_TENANT_ID }}
+          HAS_SWA_TOKEN: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN != '' }}
+          HAS_PUBLISH_PROFILE: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE != '' }}
+        run: |
+          missing=0
+          for v in ORG BACKEND_APP_NAME BACKEND_URL VITE_AZURE_CLIENT_ID VITE_AZURE_TENANT_ID; do
+            [ -n "${!v}" ] || { echo "::error::Environment variable $v is not set"; missing=1; }
+          done
+          [ "$HAS_SWA_TOKEN" = "true" ] || { echo "::error::Secret AZURE_STATIC_WEB_APPS_API_TOKEN is not set"; missing=1; }
+          [ "$HAS_PUBLISH_PROFILE" = "true" ] || { echo "::error::Secret AZURE_WEBAPP_PUBLISH_PROFILE is not set"; missing=1; }
+          exit $missing
+
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            src/backend/package-lock.json
+
+      # ---------- Backend ----------
+      - name: Package backend
+        run: |
+          mkdir -p backend-deploy
+          rsync -a --exclude node_modules --exclude tests --exclude uploads \
+            --exclude '*.test.js' --exclude 'vitest.config*.js' --exclude '.env*' \
+            src/backend/ backend-deploy/
+          cd backend-deploy
+          npm ci --omit=dev --ignore-scripts
+          # Smoke test: every module server.cjs needs must load from this package
+          ORG='${{ vars.ORG }}' node -e "require('./config/orgConfig.cjs'); require('./middleware/auth.js'); require('./config/siteAccess.js'); console.log('backend package OK')"
+
+      - name: Deploy backend
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ vars.BACKEND_APP_NAME }}
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+          package: ./backend-deploy
+
+      # ---------- Frontend ----------
+      - run: npm ci
+      - name: Build frontend
+        run: npm run build
+        env:
+          VITE_ORG: ${{ vars.ORG }}
+          BACKEND_URL: ${{ vars.BACKEND_URL }}
+          VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL || vars.BACKEND_URL }}
+          VITE_API_URL: ${{ vars.VITE_API_URL || vars.BACKEND_URL }}
+          VITE_AZURE_CLIENT_ID: ${{ vars.VITE_AZURE_CLIENT_ID }}
+          VITE_AZURE_TENANT_ID: ${{ vars.VITE_AZURE_TENANT_ID }}
+          VITE_AZURE_REDIRECT_URI: ${{ vars.VITE_AZURE_REDIRECT_URI }}
+          VITE_USE_REAL_DATA: 'true'
+          VITE_USE_MOCK_DATA: 'false'
+
+      - name: Deploy frontend
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
+          action: upload
+          skip_app_build: true
+          skip_api_build: true
+          app_location: dist
+          output_location: ''
+
+      # ---------- Check ----------
+      - name: Backend health check
+        run: |
+          for i in $(seq 1 12); do
+            code=$(curl -s -o /tmp/health.json -w '%{http_code}' "${{ vars.BACKEND_URL }}/api/health" || true)
+            echo "attempt $i: HTTP $code"
+            if [ "$code" = "200" ]; then
+              cat /tmp/health.json; echo
+              grep -q '"database":"Connected"' /tmp/health.json \
+                || echo "::warning::Backend is up but reports no database connection. Check the AZURE_SQL_* app settings and SQL firewall."
+              exit 0
+            fi
+            sleep 15
+          done
+          echo "::error::Backend did not answer /api/health with 200"
+          exit 1

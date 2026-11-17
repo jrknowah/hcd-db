@@ -4,10 +4,11 @@
 //
 // IT Admin (req.user.isAdmin, set by middleware/auth.js) sees both reports;
 // HOPE_behavioral_admin and HOPE_nursing_admin each see their own.
-// These IDs must stay in sync with GROUP_MAPPINGS in config/groupConfig.js.
-// TODO: fill in the Object Ids from Entra > Groups. Empty = nobody matches.
-const HOPE_BEHAVIORAL_ADMIN_GROUP_ID = '';
-const HOPE_NURSING_ADMIN_GROUP_ID = '';
+// IDs come from config/orgs/<ORG>.json (shared with the frontend).
+// Empty = nobody matches.
+const { group } = require('../config/orgConfig.cjs');
+const HOPE_BEHAVIORAL_ADMIN_GROUP_ID = group('HOPE_behavioral_admin');
+const HOPE_NURSING_ADMIN_GROUP_ID = group('HOPE_nursing_admin');
 
 const AREA_GROUP_IDS = {
   behavioral: HOPE_BEHAVIORAL_ADMIN_GROUP_ID,

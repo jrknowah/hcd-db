@@ -1,12 +1,14 @@
-import { defineConfig } from 'vite';
+import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 import { resolve } from 'path';
 import fs from 'fs/promises';
 import svgr from '@svgr/rollup';
+import { orgConfigAlias } from './scripts/org-alias.mjs';
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   resolve: {
     alias: {
+      ...orgConfigAlias(process.env.VITE_ORG || loadEnv(mode, process.cwd(), 'VITE_').VITE_ORG),
       src: resolve(__dirname, 'src'),
       buffer: 'buffer', // Add buffer alias
     },
@@ -38,4 +40,4 @@ export default defineConfig({
     },
   },
   plugins: [svgr(), react()],
-});
+}));
