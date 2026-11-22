@@ -29,7 +29,7 @@ say() { echo "▶ $*" >&2; }
 
 sub=$(az account show --query id -o tsv)
 sfx=$(echo -n "$sub-$ENV_NAME" | md5sum | cut -c1-6)   # same every run, unique per subscription
-SQL_SERVER="src-care-sql-$ENV_NAME-$sfx"
+SQL_PREFIX="src-care-sql-$ENV_NAME-$sfx"     # + region, e.g. ...-westus3
 STORAGE="srccare${ENV_NAME:0:4}$sfx"
 PLAN="src-care-plan-$ENV_NAME"
 WEBAPP="src-care-api-$ENV_NAME-$sfx"
@@ -45,16 +45,18 @@ az group show -n "$RG" -o none 2>/dev/null || az group create -n "$RG" -l "${REG
 
 # ---------- SQL ----------
 new_password=""
-if ! az sql server show -g "$RG" -n "$SQL_SERVER" -o none 2>/dev/null; then
+SQL_SERVER=$(az sql server list -g "$RG" --query "[?starts_with(name, '$SQL_PREFIX')].name | [0]" -o tsv 2>/dev/null || true)
+if [ -z "$SQL_SERVER" ]; then
   new_password="$(openssl rand -base64 24 | tr -d '/+=')Aa1!"
   LOCATION=""
   for r in $REGIONS; do
+    SQL_SERVER="$SQL_PREFIX-$r"
     say "SQL server $SQL_SERVER: trying $r"
     if out=$(az sql server create -g "$RG" -n "$SQL_SERVER" -l "$r" \
           --admin-user "$SQL_ADMIN" --admin-password "$new_password" --minimal-tls-version 1.2 -o none 2>&1); then
       LOCATION="$r"; break
     fi
-    if echo "$out" | grep -qiE "RegionDoesNotAllowProvisioning|not accepting|ProvisioningDisabled|quota"; then
+    if echo "$out" | grep -qiE "RegionDoesNotAllowProvisioning|not accepting|ProvisioningDisabled|quota|already exists in location"; then
       say "  $r is not taking new SQL servers, trying the next region"; continue
     fi
     echo "$out" >&2; exit 1
