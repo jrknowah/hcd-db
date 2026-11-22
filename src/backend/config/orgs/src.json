@@ -14,31 +14,11 @@
   },
   "sites": [
     {
-      "name": "Arlington-LA",
-      "groupId": ""
-    },
-    {
-      "name": "Arroyo",
-      "groupId": ""
-    },
-    {
-      "name": "East LA",
-      "groupId": ""
-    },
-    {
       "name": "Lakeview Terrace",
       "groupId": ""
     },
     {
       "name": "Long Beach 4th",
-      "groupId": ""
-    },
-    {
-      "name": "Motel 6",
-      "groupId": ""
-    },
-    {
-      "name": "Percy",
       "groupId": ""
     },
     {

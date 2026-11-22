@@ -360,7 +360,7 @@ export const cmNoteType = [
 ];
 
 
-export const srcSiteList = ["", "Arlington-LA","Arroyo","East LA","Lakeview Terrace","Long Beach 4th", "Motel 6","Percy","Torrance-Cabrillo"];
+export const srcSiteList = ["", "Lakeview Terrace", "Long Beach 4th", "Torrance-Cabrillo"];
 
 export const allergyList = [ 
     // No Allergies Option

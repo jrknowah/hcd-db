@@ -21,13 +21,8 @@ ROLE_GROUPS=(
 
 # Site groups: "<site name exactly as in src.json>|<display name>"
 SITE_GROUPS=(
-  "Arlington-LA|SRC_Site_ArlingtonLA"
-  "Arroyo|SRC_Site_Arroyo"
-  "East LA|SRC_Site_EastLA"
   "Lakeview Terrace|SRC_Site_LakeviewTerrace"
   "Long Beach 4th|SRC_Site_LongBeach4th"
-  "Motel 6|SRC_Site_Motel6"
-  "Percy|SRC_Site_Percy"
   "Torrance-Cabrillo|SRC_Site_TorranceCabrillo"
 )
 
