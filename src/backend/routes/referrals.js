@@ -8,7 +8,7 @@ const { BlobServiceClient } = require('@azure/storage-blob');
 const { DefaultAzureCredential } = require('@azure/identity');
 
 // Configure Azure Blob Storage using Managed Identity (no connection string needed)
-const STORAGE_ACCOUNT_NAME = process.env.AZURE_STORAGE_ACCOUNT_NAME || 'clientintakestorage';
+const STORAGE_ACCOUNT_NAME = process.env.AZURE_STORAGE_ACCOUNT_NAME || require('../config/orgConfig.cjs').STORAGE_ACCOUNT;
 const CONTAINER_NAME = "client-docs";
 
 // Initialize blob service client via Managed Identity

@@ -45,10 +45,12 @@ if (process.env.NODE_ENV !== 'test') {
 }
 
 // Middleware
+// FRONTEND_URL: this deployment's website address(es), comma-separated (staging, SRC)
 app.use(cors({
   origin: ['http://localhost:3000', 
     'http://localhost:5173',
-    'https://zealous-river-09541d21e.1.azurestaticapps.net' 
+    'https://zealous-river-09541d21e.1.azurestaticapps.net',
+    ...(process.env.FRONTEND_URL || '').split(',').map(s => s.trim().replace(/\/+$/, '')).filter(Boolean),
   ],
   credentials: true,
   exposedHeaders: ['Content-Disposition']

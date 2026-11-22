@@ -11,6 +11,7 @@ Both must name the same file. Group and site values are Entra group Object IDs
 | Key | Meaning |
 | --- | --- |
 | `tenantId`, `clientId` | Entra tenant and app registration. `AUTH_TENANT_ID` / `AUTH_CLIENT_ID` app settings on the backend override them (use them when staging has its own app registration). |
+| `storageAccount` | Blob storage account for client documents. Empty = the `AZURE_STORAGE_ACCOUNT` app setting. |
 | `groups.HOPE_it` | IT admins: full access and the admin console |
 | `groups.HOPE_level1` | Level 1: all sections, unlock locked records, audit trail |
 | `groups.HOPE_case` | Case managers; also the "behavioral" care team pick list |

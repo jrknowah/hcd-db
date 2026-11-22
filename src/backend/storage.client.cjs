@@ -11,7 +11,7 @@ const credential = new DefaultAzureCredential();
 
 // Use the *blob* endpoint (NOT file.core.windows.net)
 const blobServiceClient = new BlobServiceClient(
-  `https://clientintakestorage.blob.core.windows.net/`,
+  `https://${account}.blob.core.windows.net/`,
   credential
 );
 

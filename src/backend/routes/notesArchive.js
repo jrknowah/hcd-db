@@ -14,7 +14,7 @@ const upload = multer({
   limits: { fileSize: 25 * 1024 * 1024 } // 25MB
 });
 
-const STORAGE_ACCOUNT = 'clientintakestorage';
+const STORAGE_ACCOUNT = require('../config/orgConfig.cjs').STORAGE_ACCOUNT;
 const CONTAINER_NAME = 'client-docs';
 
 // Managed Identity blob client — matches the rest of HCD

@@ -16,6 +16,9 @@ module.exports = {
   ORG: org,
   TENANT_ID: process.env.AUTH_TENANT_ID || org.tenantId,
   CLIENT_ID: process.env.AUTH_CLIENT_ID || org.clientId,
+  // Blob storage account for client documents: the org file's value, else the
+  // AZURE_STORAGE_ACCOUNT app setting
+  STORAGE_ACCOUNT: org.storageAccount || process.env.AZURE_STORAGE_ACCOUNT,
   group: (key) => org.groups[key] || '',
 };
 

@@ -2,6 +2,7 @@
   "name": "SRC",
   "tenantId": "d9d9d842-715a-4e28-93ef-635d3443575d",
   "clientId": "606dd6a8-f3bf-4813-87a0-e16b74235e10",
+  "storageAccount": "",
   "groups": {
     "HOPE_it": "85580ea5-3fb2-47b9-8fb6-092e712cde05",
     "HOPE_level1": "2a3ab960-1556-42c1-8f22-b63314da0085",
@@ -13,8 +14,17 @@
     "HOPE_behavioral_admin": "989732f7-1e0d-46ff-9793-8b217f3cd98c"
   },
   "sites": [
-    { "name": "Lakeview Terrace", "groupId": "9dfd9113-44eb-48d5-87f9-144c497a130e" },
-    { "name": "Long Beach 4th", "groupId": "93153693-1385-4569-8308-349339a742b8" },
-    { "name": "Torrance-Cabrillo", "groupId": "634cb38b-d502-42ea-98d8-65823775408e" }
+    {
+      "name": "Lakeview Terrace",
+      "groupId": "9dfd9113-44eb-48d5-87f9-144c497a130e"
+    },
+    {
+      "name": "Long Beach 4th",
+      "groupId": "93153693-1385-4569-8308-349339a742b8"
+    },
+    {
+      "name": "Torrance-Cabrillo",
+      "groupId": "634cb38b-d502-42ea-98d8-65823775408e"
+    }
   ]
 }

@@ -2,6 +2,7 @@
   "name": "HOPE",
   "tenantId": "2fca3a49-cd1a-4717-bccc-5dbd1ea86b64",
   "clientId": "0b3e6463-bea7-4521-a36a-a32edb6af7a1",
+  "storageAccount": "clientintakestorage",
   "groups": {
     "HOPE_it": "47e60a70-aeab-4f3e-80bd-940cc951622f",
     "HOPE_case": "59b40286-56c6-4b1e-8de2-854c7d91179b",
@@ -13,16 +14,49 @@
     "HOPE_behavioral_admin": ""
   },
   "sites": [
-    { "name": "97th", "groupId": "" },
-    { "name": "104th", "groupId": "" },
-    { "name": "238th", "groupId": "" },
-    { "name": "Downey", "groupId": "" },
-    { "name": "Heritage House", "groupId": "" },
-    { "name": "Northridge", "groupId": "" },
-    { "name": "Pacific", "groupId": "1985ac8b-285d-45c1-9d0e-1ded3d3f6fca" },
-    { "name": "Casa Amore", "groupId": "" },
-    { "name": "Eubanks", "groupId": "d5115dd6-74f0-4abe-951f-6dc3e96fb1ee" },
-    { "name": "Heart Haven", "groupId": "" },
-    { "name": "Hope Haven", "groupId": "" }
+    {
+      "name": "97th",
+      "groupId": ""
+    },
+    {
+      "name": "104th",
+      "groupId": ""
+    },
+    {
+      "name": "238th",
+      "groupId": ""
+    },
+    {
+      "name": "Downey",
+      "groupId": ""
+    },
+    {
+      "name": "Heritage House",
+      "groupId": ""
+    },
+    {
+      "name": "Northridge",
+      "groupId": ""
+    },
+    {
+      "name": "Pacific",
+      "groupId": "1985ac8b-285d-45c1-9d0e-1ded3d3f6fca"
+    },
+    {
+      "name": "Casa Amore",
+      "groupId": ""
+    },
+    {
+      "name": "Eubanks",
+      "groupId": "d5115dd6-74f0-4abe-951f-6dc3e96fb1ee"
+    },
+    {
+      "name": "Heart Haven",
+      "groupId": ""
+    },
+    {
+      "name": "Hope Haven",
+      "groupId": ""
+    }
   ]
 }
