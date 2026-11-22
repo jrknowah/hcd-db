@@ -6,7 +6,11 @@
 # Part 1 runs signed in to HOPE's directory, part 2 signs you in to SRC's.
 # For each side, Cloud Shell's address is allowed through that SQL server's
 # firewall only while the script runs; the rule is removed at the end.
-# The SQL logins are read from each backend's app settings and never printed.
+# HOPE is read with your own Entra sign-in, which must be the HOPE SQL server's
+# Entra admin (the app's login cannot read table definitions). If the server
+# has no Entra admin, the script offers to make you one; it never replaces an
+# existing one. SRC's SQL login is read from its backend's app settings and
+# never printed.
 #
 # Run in Azure Cloud Shell (Bash), already signed in to HOPE's directory:
 #   bash copy-schema-hope-to-src.sh
@@ -65,12 +69,25 @@ say "Cloud Shell address: $myip"
 HOPE_SUB=$(az account show --query id -o tsv)
 HOPE_RG=$(az sql server list --query "[?name=='$HOPE_SERVER'].resourceGroup | [0]" -o tsv)
 [ -n "$HOPE_RG" ] || { HOPE_RG=""; echo "SQL server $HOPE_SERVER not found in this subscription" >&2; exit 1; }
-hope_app=$(az webapp list --query "[?starts_with(name,'hcd-db-backend')] | [0]" -o json)
-hope_app_rg=$(echo "$hope_app" | python3 -c 'import json,sys;print(json.load(sys.stdin)["resourceGroup"])')
-hope_app_name=$(echo "$hope_app" | python3 -c 'import json,sys;print(json.load(sys.stdin)["name"])')
-HOPE_USER=$(setting "$hope_app_rg" "$hope_app_name" AZURE_SQL_USER)
-HOPE_PASS=$(setting "$hope_app_rg" "$hope_app_name" AZURE_SQL_PASSWORD)
-[ -n "$HOPE_USER" ] && [ -n "$HOPE_PASS" ] || { echo "Could not read HOPE's SQL login from $hope_app_name" >&2; exit 1; }
+me=$(az ad signed-in-user show --query id -o tsv)
+me_upn=$(az ad signed-in-user show --query userPrincipalName -o tsv)
+admin_sid=$(az sql server ad-admin list -g "$HOPE_RG" -s "$HOPE_SERVER" --query "[0].sid" -o tsv 2>/dev/null || true)
+admin_name=$(az sql server ad-admin list -g "$HOPE_RG" -s "$HOPE_SERVER" --query "[0].login" -o tsv 2>/dev/null || true)
+if [ -z "$admin_sid" ]; then
+  echo >&2
+  echo "HOPE's SQL server has no Entra admin. Making you ($me_upn) its Entra admin lets you" >&2
+  echo "read the structure with your own sign-in. It does not change the app's SQL login." >&2
+  read -r -p "Make $me_upn the Entra admin of $HOPE_SERVER? [y/N] " ok </dev/tty
+  [ "$ok" = y ] || [ "$ok" = Y ] || { echo "Stopped. Nothing was changed." >&2; exit 1; }
+  az sql server ad-admin create -g "$HOPE_RG" -s "$HOPE_SERVER" --display-name "$me_upn" --object-id "$me" -o none
+  say "You are now the Entra admin of $HOPE_SERVER"
+  admin_sid="$me"
+elif [ "$admin_sid" != "$me" ]; then
+  say "HOPE's SQL server Entra admin is '$admin_name', not you; trying anyway (works if you are in that group)"
+else
+  say "You are the Entra admin of $HOPE_SERVER"
+fi
+HOPE_TOKEN=$(az account get-access-token --resource https://database.windows.net/ --query accessToken -o tsv)
 
 say "Allowing Cloud Shell through HOPE's SQL firewall (temporary)"
 az sql server firewall-rule create -g "$HOPE_RG" -s "$HOPE_SERVER" -n "$RULE" \
@@ -80,11 +97,11 @@ sleep 20   # firewall rules take a few seconds to apply
 say "Reading HOPE's database structure (no data)"
 "$SQLPACKAGE" /Action:Extract /TargetFile:"$WORK/hope-schema.dacpac" \
   /SourceServerName:"$HOPE_SERVER.database.windows.net" /SourceDatabaseName:"$HOPE_DB" \
-  /SourceUser:"$HOPE_USER" /SourcePassword:"$HOPE_PASS" /SourceEncryptConnection:True \
+  /AccessToken:"$HOPE_TOKEN" /SourceEncryptConnection:True \
   /p:ExtractAllTableData=false /p:IgnoreUserLoginMappings=true /p:IgnorePermissions=true \
   /p:VerifyExtraction=false /p:ExtractApplicationScopedObjectsOnly=true >"$WORK/extract.log" 2>&1 \
   || { tail -20 "$WORK/extract.log" >&2; exit 1; }
-unset HOPE_PASS
+unset HOPE_TOKEN
 tail -2 "$WORK/extract.log" >&2
 az sql server firewall-rule delete -g "$HOPE_RG" -s "$HOPE_SERVER" -n "$RULE" -o none && HOPE_RG=""
 say "Removed the temporary firewall rule on HOPE"
