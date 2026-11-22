@@ -137,6 +137,13 @@ settings=(
   AZURE_STORAGE_ACCOUNT="$STORAGE" AZURE_BLOB_CONTAINER="$CONTAINER" ENABLE_LOCAL_FALLBACK=false
   FRONTEND_URL="$site" SCM_DO_BUILD_DURING_DEPLOYMENT=false
 )
+# A run that created the SQL server but stopped before this point leaves the
+# backend without the password; nothing else knows it, so set a new one.
+if [ -z "$new_password" ] && [ -z "$(az webapp config appsettings list -g "$RG" -n "$WEBAPP" --query "[?name=='AZURE_SQL_PASSWORD'].value | [0]" -o tsv)" ]; then
+  say "Backend has no SQL password; setting a new one on $SQL_SERVER"
+  new_password="$(openssl rand -base64 24 | tr -d '/+=')Aa1!"
+  az sql server update -g "$RG" -n "$SQL_SERVER" --admin-password "$new_password" -o none
+fi
 [ -n "$new_password" ] && settings+=(AZURE_SQL_PASSWORD="$new_password")
 az webapp config appsettings set -g "$RG" -n "$WEBAPP" --settings "${settings[@]}" -o none
 unset new_password

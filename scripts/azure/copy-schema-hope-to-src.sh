@@ -64,6 +64,9 @@ myip=$(curl -fsS https://api.ipify.org)
 say "Cloud Shell address: $myip"
 
 # ---------- Part 1: HOPE (read only) ----------
+if [ -s "$WORK/hope-schema.dacpac" ]; then
+  say "Using HOPE's structure already read earlier ($WORK/hope-schema.dacpac)"
+else
 [ "$(az account show --query tenantId -o tsv)" = "$HOPE_TENANT" ] \
   || { echo "Sign in to HOPE's directory first: az login --tenant $HOPE_TENANT --use-device-code" >&2; exit 1; }
 HOPE_SUB=$(az account show --query id -o tsv)
@@ -105,15 +108,19 @@ unset HOPE_TOKEN
 tail -2 "$WORK/extract.log" >&2
 az sql server firewall-rule delete -g "$HOPE_RG" -s "$HOPE_SERVER" -n "$RULE" -o none && HOPE_RG=""
 say "Removed the temporary firewall rule on HOPE"
+fi
 
 # ---------- Part 2: SRC ----------
-say "Now sign in to SRC's directory (Serenity Recuperative Care)"
-az login --tenant "$SRC_TENANT" --use-device-code -o none
+if [ "$(az account show --query tenantId -o tsv 2>/dev/null)" != "$SRC_TENANT" ]; then
+  say "Now sign in to SRC's directory (Serenity Recuperative Care)"
+  az login --tenant "$SRC_TENANT" --use-device-code -o none
+fi
 SRC_SERVER=$(az sql server list -g "$SRC_RG" --query "[?starts_with(name,'src-care-sql-')].name | [0]" -o tsv)
 src_app=$(az webapp list -g "$SRC_RG" --query "[?starts_with(name,'src-care-api-')].name | [0]" -o tsv)
 SRC_USER=$(setting "$SRC_RG" "$src_app" AZURE_SQL_USER)
 SRC_PASS=$(setting "$SRC_RG" "$src_app" AZURE_SQL_PASSWORD)
-[ -n "$SRC_SERVER" ] && [ -n "$SRC_PASS" ] || { echo "Could not find SRC's SQL server or login in $SRC_RG" >&2; exit 1; }
+[ -n "$SRC_SERVER" ] || { echo "No SQL server found in $SRC_RG" >&2; exit 1; }
+[ -n "$SRC_PASS" ] || { echo "The SRC backend ($src_app) has no AZURE_SQL_PASSWORD. Run create-src-resources.sh again (it sets one), then this script." >&2; exit 1; }
 
 say "Allowing Cloud Shell through SRC's SQL firewall (temporary)"
 az sql server firewall-rule create -g "$SRC_RG" -s "$SRC_SERVER" -n "$RULE" \
