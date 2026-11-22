@@ -14,7 +14,7 @@
     "test:all": "npm run test:backend && npm run test:frontend"
   },
   "engines": {
-    "node": "20.x"
+    "node": ">=20"
   },
   "dependencies": {
     "@azure/identity": "^4.12.0",

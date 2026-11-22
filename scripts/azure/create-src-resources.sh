@@ -111,8 +111,13 @@ if ! az appservice plan show -g "$RG" -n "$PLAN" -o none 2>/dev/null; then
   az appservice plan create -g "$RG" -n "$PLAN" -l "$LOCATION" --is-linux --sku "$PLAN_SKU" -o none
 fi
 if ! az webapp show -g "$RG" -n "$WEBAPP" -o none 2>/dev/null; then
-  say "Backend web app $WEBAPP"
-  az webapp create -g "$RG" -p "$PLAN" -n "$WEBAPP" --runtime "NODE:20-lts" -o none
+  # Newest Node LTS Azure offers, preferring 22 (the version CI builds with)
+  runtimes=$(az webapp list-runtimes --os-type linux -o tsv | tr '\t' '\n' | grep -iE '^node[:|]' || true)
+  runtime=$(echo "$runtimes" | grep -iE '^node[:|]22' | head -1)
+  [ -n "$runtime" ] || runtime=$(echo "$runtimes" | grep -i lts | sort -t: -k2 -V | tail -1)
+  [ -n "$runtime" ] || { echo "No Node runtime offered: $runtimes" >&2; exit 1; }
+  say "Backend web app $WEBAPP ($runtime)"
+  az webapp create -g "$RG" -p "$PLAN" -n "$WEBAPP" --runtime "$runtime" -o none
 else
   say "Backend web app $WEBAPP exists"
 fi

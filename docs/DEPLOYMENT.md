@@ -34,7 +34,7 @@ Create in a resource group of their own (e.g. `rg-hcd-staging`, `rg-hcd-src-prod
 
 - **Azure SQL Database**: separate server or at least a separate database.
 - **Storage account** + blob container for client documents.
-- **App Service** (Linux, Node 20) for the backend.
+- **App Service** (Linux, Node 22) for the backend.
 - **Static Web App** (Standard plan if you need custom domains/auth features).
 
 Staging must never hold real client data. Use test clients only.
