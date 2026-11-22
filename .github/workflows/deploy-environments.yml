@@ -2,9 +2,10 @@
 # to one environment:
 #
 #   staging         - automatically on every push to the `staging` branch
-#   src-production  - manually: Actions > Deploy environment > Run workflow,
-#                     from `main`. Protect the GitHub environment with required
-#                     reviewers so a person approves each production deploy.
+#   src-production  - on every push to the `release/src` branch, or manually
+#                     (Actions > Deploy environment > Run workflow) from `main`
+#                     or `release/src`. The GitHub environment requires a
+#                     reviewer, so a person approves each production deploy.
 #
 # The existing HOPE production deploy (azure-static-web-apps-*.yml on `main`)
 # is unchanged.
@@ -19,7 +20,7 @@ name: Deploy environment
 
 on:
   push:
-    branches: [staging]
+    branches: [staging, release/src]
   workflow_dispatch:
     inputs:
       environment:
@@ -29,7 +30,7 @@ on:
         default: staging
 
 concurrency:
-  group: deploy-${{ inputs.environment || 'staging' }}
+  group: deploy-${{ inputs.environment || (github.ref_name == 'release/src' && 'src-production') || 'staging' }}
   cancel-in-progress: false
 
 permissions:
@@ -52,17 +53,17 @@ jobs:
           VITE_ORG: ${{ vars.ORG || 'hope' }}
 
   deploy:
-    name: Deploy to ${{ inputs.environment || 'staging' }}
+    name: Deploy to ${{ inputs.environment || (github.ref_name == 'release/src' && 'src-production') || 'staging' }}
     needs: test
     runs-on: ubuntu-latest
     environment:
-      name: ${{ inputs.environment || 'staging' }}
+      name: ${{ inputs.environment || (github.ref_name == 'release/src' && 'src-production') || 'staging' }}
       url: ${{ vars.VITE_AZURE_REDIRECT_URI }}
     steps:
-      - name: Production deploys come from main only
-        if: inputs.environment == 'src-production' && github.ref != 'refs/heads/main'
+      - name: Production deploys come from main or release/src only
+        if: inputs.environment == 'src-production' && github.ref != 'refs/heads/main' && github.ref != 'refs/heads/release/src'
         run: |
-          echo "::error::src-production must be deployed from main (got ${{ github.ref }})"
+          echo "::error::src-production must be deployed from main or release/src (got ${{ github.ref }})"
           exit 1
 
       - name: Check environment settings
