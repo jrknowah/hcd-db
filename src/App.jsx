@@ -18,14 +18,9 @@ import {
   isAdminAccount, canViewAuditTrail, canOpenAdminConsole, canViewNursingReport, canViewBehavioralReport,
 } from './backend/config/groupConfig';
 import AdminLayout from './views/admin/AdminLayout';
-import config from './context/config';
-import { LightThemeColors } from './theme/LightThemeColors';
 import HopeMark from './assets/images/logos/hope/hope-mark.png';
-
-// The MSAL loading screen renders before the MUI ThemeProvider, so it reads the
-// brand color for this deployment (VITE_BRAND) straight from the theme list.
-const BRAND_PRIMARY =
-  LightThemeColors.find((t) => t.name === config.activeTheme)?.palette.primary.main || '#0F4C5C';
+// The MSAL loading screen renders before the MUI ThemeProvider
+import { BRAND_PRIMARY } from './theme/brandColors';
 
 // At the very top of App.jsx, before any other code:
 if (typeof window !== 'undefined') {

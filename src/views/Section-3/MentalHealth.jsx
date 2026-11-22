@@ -34,6 +34,7 @@ import {
   legalList, energyLevelList, gadList, mhList, sleepPatternList, substanceAbuseOften, 
   substanceAbuseUse, substanceList, traumaList, needsCol1, riskList
 } from "../../data/arrayList";
+import { BRAND_PRIMARY } from '../../theme/brandColors';
 
 // ✅ Helper function to convert plain values to react-select format
 const convertToSelectFormat = (value) => {
@@ -147,10 +148,10 @@ const customSelectStyles = {
   control: (provided, state) => ({
     ...provided,
     minHeight: '56px',
-    borderColor: state.isFocused ? '#1976d2' : 'rgba(0, 0, 0, 0.23)',
-    boxShadow: state.isFocused ? '0 0 0 1px #1976d2' : 'none',
+    borderColor: state.isFocused ? BRAND_PRIMARY : 'rgba(0, 0, 0, 0.23)',
+    boxShadow: state.isFocused ? `0 0 0 1px ${BRAND_PRIMARY}` : 'none',
     '&:hover': {
-      borderColor: state.isFocused ? '#1976d2' : 'rgba(0, 0, 0, 0.87)',
+      borderColor: state.isFocused ? BRAND_PRIMARY : 'rgba(0, 0, 0, 0.87)',
     },
   }),
   placeholder: (provided) => ({
