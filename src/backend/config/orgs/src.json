@@ -1,29 +1,20 @@
 {
   "name": "SRC",
-  "tenantId": "",
+  "tenantId": "d9d9d842-715a-4e28-93ef-635d3443575d",
   "clientId": "",
   "groups": {
-    "HOPE_it": "",
-    "HOPE_case": "",
-    "HOPE_nursing": "",
-    "HOPE_level1": "",
-    "HOPE_audit": "",
-    "HOPE_readonly": "",
-    "HOPE_nursing_admin": "",
-    "HOPE_behavioral_admin": ""
+    "HOPE_it": "85580ea5-3fb2-47b9-8fb6-092e712cde05",
+    "HOPE_level1": "2a3ab960-1556-42c1-8f22-b63314da0085",
+    "HOPE_case": "31913493-032f-4aab-9057-e4bf6b19b310",
+    "HOPE_nursing": "6c26c3db-882a-425f-acfe-3c99f2ad573b",
+    "HOPE_audit": "c7641a56-d2ed-443d-8146-99e164db2ca9",
+    "HOPE_readonly": "00cb9d81-cb1c-4e9b-8d3e-9c725fcc97c7",
+    "HOPE_nursing_admin": "a2db3c5b-8824-4f67-a53b-462eab8b24f3",
+    "HOPE_behavioral_admin": "989732f7-1e0d-46ff-9793-8b217f3cd98c"
   },
   "sites": [
-    {
-      "name": "Lakeview Terrace",
-      "groupId": ""
-    },
-    {
-      "name": "Long Beach 4th",
-      "groupId": ""
-    },
-    {
-      "name": "Torrance-Cabrillo",
-      "groupId": ""
-    }
+    { "name": "Lakeview Terrace", "groupId": "9dfd9113-44eb-48d5-87f9-144c497a130e" },
+    { "name": "Long Beach 4th", "groupId": "93153693-1385-4569-8308-349339a742b8" },
+    { "name": "Torrance-Cabrillo", "groupId": "634cb38b-d502-42ea-98d8-65823775408e" }
   ]
 }
