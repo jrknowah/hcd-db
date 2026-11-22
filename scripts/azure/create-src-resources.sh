@@ -12,7 +12,10 @@
 set -euo pipefail
 
 ENV_NAME="${ENV_NAME:-prod}"                 # prod | staging
-LOCATION="${LOCATION:-westus2}"
+# Regions to try, in order, for the database, storage and backend. New
+# subscriptions are sometimes refused in busy regions (RegionDoesNotAllowProvisioning).
+REGIONS="${REGIONS:-westus3 westus centralus southcentralus eastus2}"
+SWA_REGIONS="${SWA_REGIONS:-westus2 centralus eastus2}"   # Static Web Apps run in only a few regions
 APP_NAME="SRC Care Database"                 # app registration (create-src-app-registration.sh)
 RG="rg-src-care-$ENV_NAME"
 SQL_SKU="${SQL_SKU:-S0}"                     # S0 ~ $15/month; scale up any time
@@ -37,19 +40,31 @@ for p in Microsoft.Sql Microsoft.Storage Microsoft.Web; do
   az provider register --namespace "$p" --wait >/dev/null
 done
 
-say "Resource group $RG ($LOCATION)"
-az group create -n "$RG" -l "$LOCATION" -o none
+say "Resource group $RG"
+az group show -n "$RG" -o none 2>/dev/null || az group create -n "$RG" -l "${REGIONS%% *}" -o none
 
 # ---------- SQL ----------
 new_password=""
 if ! az sql server show -g "$RG" -n "$SQL_SERVER" -o none 2>/dev/null; then
-  say "SQL server $SQL_SERVER"
   new_password="$(openssl rand -base64 24 | tr -d '/+=')Aa1!"
-  az sql server create -g "$RG" -n "$SQL_SERVER" -l "$LOCATION" \
-    --admin-user "$SQL_ADMIN" --admin-password "$new_password" --minimal-tls-version 1.2 -o none
+  LOCATION=""
+  for r in $REGIONS; do
+    say "SQL server $SQL_SERVER: trying $r"
+    if out=$(az sql server create -g "$RG" -n "$SQL_SERVER" -l "$r" \
+          --admin-user "$SQL_ADMIN" --admin-password "$new_password" --minimal-tls-version 1.2 -o none 2>&1); then
+      LOCATION="$r"; break
+    fi
+    if echo "$out" | grep -qiE "RegionDoesNotAllowProvisioning|not accepting|ProvisioningDisabled|quota"; then
+      say "  $r is not taking new SQL servers, trying the next region"; continue
+    fi
+    echo "$out" >&2; exit 1
+  done
+  [ -n "$LOCATION" ] || { echo "No region in '$REGIONS' accepted a SQL server. Try: REGIONS=\"eastus northcentralus\" bash $0" >&2; exit 1; }
 else
-  say "SQL server $SQL_SERVER exists"
+  LOCATION=$(az sql server show -g "$RG" -n "$SQL_SERVER" --query location -o tsv)
+  say "SQL server $SQL_SERVER exists ($LOCATION)"
 fi
+say "Using region $LOCATION for the database, storage and backend"
 me=$(az ad signed-in-user show --query id -o tsv)
 me_upn=$(az ad signed-in-user show --query userPrincipalName -o tsv)
 say "Making you ($me_upn) the SQL server's Entra admin (sign in with SSMS / Azure Data Studio)"
@@ -77,8 +92,12 @@ storage_id=$(az storage account show -g "$RG" -n "$STORAGE" --query id -o tsv)
 
 # ---------- Website (Static Web App) ----------
 if ! az staticwebapp show -g "$RG" -n "$SWA" -o none 2>/dev/null; then
-  say "Static Web App $SWA ($SWA_SKU)"
-  az staticwebapp create -g "$RG" -n "$SWA" -l "$LOCATION" --sku "$SWA_SKU" -o none
+  made=""
+  for r in $SWA_REGIONS; do
+    say "Static Web App $SWA ($SWA_SKU): trying $r"
+    if az staticwebapp create -g "$RG" -n "$SWA" -l "$r" --sku "$SWA_SKU" -o none; then made=1; break; fi
+  done
+  [ -n "$made" ] || { echo "Could not create the Static Web App in $SWA_REGIONS" >&2; exit 1; }
 else
   say "Static Web App $SWA exists"
 fi
@@ -133,6 +152,7 @@ echo "===== Send this back (no passwords in it) =====" >&2
 cat <<OUT
 environment:      $ENV_NAME
 resource group:   $RG
+region:           $LOCATION
 website:          $site
 backend app:      $WEBAPP
 backend URL:      $api
