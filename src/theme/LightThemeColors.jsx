@@ -101,6 +101,36 @@ const LightThemeColors = [
       },
     },
   },
+  {
+    // HOPE brand (Serenity Recuperative Care). In this template `light` is the
+    // pale tint behind text/icon buttons and selected items, not a lighter shade.
+    name: 'HOPE_TEAL_THEME',
+    palette: {
+      primary: {
+        main: '#0F4C5C',
+        light: '#E6EFF1',
+        dark: '#0A3540',
+        contrastText: '#FFFFFF',
+      },
+      secondary: {
+        main: '#E8A33D',
+        light: '#FDF4E7',
+        dark: '#B97A1C',
+        contrastText: '#13293D', // white on amber fails contrast
+      },
+      background: {
+        default: '#F5F7F9',
+        paper: '#FFFFFF',
+      },
+      text: {
+        primary: '#13293D',
+        secondary: '#4A5A68',
+      },
+      action: {
+        hover: '#E6EFF1',
+      },
+    },
+  },
 ];
 
 export { LightThemeColors };

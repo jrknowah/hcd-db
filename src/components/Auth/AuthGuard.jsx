@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import { useIsAuthenticated, useMsal } from '@azure/msal-react';
 import { useDispatch, useSelector } from 'react-redux';
-import { Box, CircularProgress, Typography, Alert } from '@mui/material';
+import { Box, CircularProgress, Typography, Alert, Button } from '@mui/material';
 import { 
   loginWithAzure,
   setLoading,
@@ -14,6 +14,7 @@ import {
 import { GROUP_TO_ROLE, ROLE_PERMISSIONS } from '../../backend/config/groupConfig';
 import Login from '../../views/authentication/auth1/Login';
 import { clearSensitiveStorage } from '../../utils/secureSession';
+import HopeMarkWhite from '../../assets/images/logos/hope/hope-mark-white.png';
 
 const extractAzureGroups = (account) => {
   if (account?.idTokenClaims?.groups) {
@@ -155,9 +156,13 @@ const AuthGuard = ({ children }) => {
         alignItems="center"
         justifyContent="center"
         minHeight="100vh"
-        sx={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', color: 'white' }}
+        sx={{
+          background: (theme) => `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.primary.dark} 100%)`,
+          color: 'white',
+        }}
       >
-        <CircularProgress sx={{ color: 'white', mb: 2 }} size={60} />
+        <Box component="img" src={HopeMarkWhite} alt="HOPE" sx={{ width: 72, height: 72, mb: 3 }} />
+        <CircularProgress sx={{ color: 'white', mb: 2 }} size={40} />
         <Typography variant="h5" sx={{ mb: 1, fontWeight: 'bold' }}>
           Loading HOPE Application
         </Typography>
@@ -183,12 +188,9 @@ const AuthGuard = ({ children }) => {
             Please contact your IT administrator if this problem persists.
           </Typography>
         </Alert>
-        <button
-          onClick={() => window.location.reload()}
-          style={{ padding: '10px 20px', backgroundColor: '#1976d2', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
-        >
+        <Button variant="contained" onClick={() => window.location.reload()}>
           Retry Authentication
-        </button>
+        </Button>
       </Box>
     );
   }
