@@ -53,16 +53,17 @@ import logUserAction from "../../backend/config/logAction";
 import ExportPdfButton from "../../components/shared/ExportPdfButton";
 import { medCond, allergyList } from "../../data/arrayList";
 import { formatDateOnly, toDateInputValue } from "../../utils/dateOnly";
+import { BRAND_PRIMARY, brandTint } from '../../theme/brandColors';
 
 // ✅ ENHANCED: Custom styles for react-select with better dropdown visibility
 const customSelectStyles = {
   control: (provided, state) => ({
     ...provided,
     minHeight: '56px',
-    borderColor: state.isFocused ? '#1976d2' : 'rgba(0, 0, 0, 0.23)',
-    boxShadow: state.isFocused ? '0 0 0 1px #1976d2' : 'none',
+    borderColor: state.isFocused ? BRAND_PRIMARY : 'rgba(0, 0, 0, 0.23)',
+    boxShadow: state.isFocused ? `0 0 0 1px ${BRAND_PRIMARY}` : 'none',
     '&:hover': {
-      borderColor: state.isFocused ? '#1976d2' : 'rgba(0, 0, 0, 0.87)',
+      borderColor: state.isFocused ? BRAND_PRIMARY : 'rgba(0, 0, 0, 0.87)',
     },
   }),
   placeholder: (provided) => ({
@@ -87,30 +88,30 @@ const customSelectStyles = {
   option: (provided, state) => ({
     ...provided,
     backgroundColor: state.isSelected 
-      ? '#1976d2' 
+      ? BRAND_PRIMARY 
       : state.isFocused 
-      ? 'rgba(25, 118, 210, 0.08)' 
+      ? brandTint(0.08) 
       : 'white',
     color: state.isSelected ? 'white' : 'rgba(0, 0, 0, 0.87)',
     padding: '8px 12px',
     cursor: 'pointer',
     '&:active': {
-      backgroundColor: 'rgba(25, 118, 210, 0.16)',
+      backgroundColor: brandTint(0.16),
     },
   }),
   multiValue: (provided) => ({
     ...provided,
-    backgroundColor: 'rgba(25, 118, 210, 0.08)',
+    backgroundColor: brandTint(0.08),
   }),
   multiValueLabel: (provided) => ({
     ...provided,
-    color: '#1976d2',
+    color: BRAND_PRIMARY,
   }),
   multiValueRemove: (provided) => ({
     ...provided,
-    color: '#1976d2',
+    color: BRAND_PRIMARY,
     ':hover': {
-      backgroundColor: '#1976d2',
+      backgroundColor: BRAND_PRIMARY,
       color: 'white',
     },
   }),

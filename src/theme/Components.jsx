@@ -240,14 +240,14 @@ const components = (theme) => {
           backgroundColor: theme.palette.primary.light,
           '&:hover': {
             backgroundColor: theme.palette.primary.main,
-            color: 'white',
+            color: theme.palette.primary.contrastText,
           },
         },
         colorSecondary: {
           backgroundColor: theme.palette.secondary.light,
           '&:hover': {
             backgroundColor: theme.palette.secondary.main,
-            color: 'white',
+            color: theme.palette.secondary.contrastText,
           },
         },
         colorSuccess: {
@@ -294,14 +294,14 @@ const components = (theme) => {
           backgroundColor: theme.palette.primary.light,
           '&:hover': {
             backgroundColor: theme.palette.primary.main,
-            color: 'white',
+            color: theme.palette.primary.contrastText,
           },
         },
         textSecondary: {
           backgroundColor: theme.palette.secondary.light,
           '&:hover': {
             backgroundColor: theme.palette.secondary.main,
-            color: 'white',
+            color: theme.palette.secondary.contrastText,
           },
         },
         textSuccess: {
@@ -335,13 +335,13 @@ const components = (theme) => {
         outlinedPrimary: {
           '&:hover': {
             backgroundColor: theme.palette.primary.main,
-            color: 'white',
+            color: theme.palette.primary.contrastText,
           },
         },
         outlinedSecondary: {
           '&:hover': {
             backgroundColor: theme.palette.secondary.main,
-            color: 'white',
+            color: theme.palette.secondary.contrastText,
           },
         },
         outlinedError: {

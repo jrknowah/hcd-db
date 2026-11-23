@@ -91,6 +91,11 @@ const Customizer = () => {
       bgColor: '#FA896B',
       disp: 'ORANGE_THEME',
     },
+    {
+      id: 7,
+      bgColor: '#0F4C5C',
+      disp: 'HOPE_TEAL_THEME',
+    },
   ];
 
   const addAttributeToBody = (cvalue) => {
