@@ -23,48 +23,11 @@ import { CustomizerContext } from 'src/context/CustomizerContext';
 import { useContext } from 'react';
 import { useAuth } from '../../../hooks/useAuth';
 
-// HOPE Logo Component (same as before)
-const HopeLogo = ({ width = "180", height = "60" }) => (
-  <svg width={width} height={height} viewBox="0 0 220 60" xmlns="http://www.w3.org/2000/svg">
-    <defs>
-      <linearGradient id="iconGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-        <stop offset="0%" stopColor="#2563eb" stopOpacity="0.9" />
-        <stop offset="100%" stopColor="#1e40af" stopOpacity="0.8" />
-      </linearGradient>
-    </defs>
-    
-    <g transform="translate(15, 15)">
-      <rect x="8" y="5" width="4" height="20" fill="url(#iconGradient)" rx="1"/>
-      <rect x="3" y="10" width="14" height="4" fill="url(#iconGradient)" rx="1"/>
-      
-      <rect x="22" y="7" width="8" height="1.5" fill="url(#iconGradient)" rx="0.5"/>
-      <rect x="22" y="10" width="6" height="1.5" fill="url(#iconGradient)" rx="0.5"/>
-      <rect x="22" y="13" width="7" height="1.5" fill="url(#iconGradient)" rx="0.5"/>
-      <rect x="22" y="16" width="9" height="1.5" fill="url(#iconGradient)" rx="0.5"/>
-      <rect x="22" y="19" width="5" height="1.5" fill="url(#iconGradient)" rx="0.5"/>
-      
-      <path d="M 10 28 C 8 26, 4 26, 4 30 C 4 34, 10 40, 10 40 C 10 40, 16 34, 16 30 C 16 26, 12 26, 10 28 Z" 
-            fill="url(#iconGradient)" opacity="0.7"/>
-    </g>
-    
-    <text x="70" y="35" fontFamily="Arial, sans-serif" fontSize="24" fontWeight="bold" fill="#2563eb">
-      HOPE
-    </text>
-    
-    <text x="70" y="48" fontFamily="Arial, sans-serif" fontSize="10" fill="#64748b">
-      Client Database
-    </text>
-    
-    <g stroke="#2563eb" strokeWidth="1" opacity="0.3" fill="none">
-      <line x1="55" y1="25" x2="65" y2="25"/>
-      <line x1="55" y1="30" x2="65" y2="30"/>
-      <line x1="55" y1="35" x2="65" y2="35"/>
-      <circle cx="52" cy="25" r="1" fill="#2563eb"/>
-      <circle cx="52" cy="30" r="1" fill="#2563eb"/>
-      <circle cx="52" cy="35" r="1" fill="#2563eb"/>
-    </g>
-  </svg>
-);
+// HOPE brand logos: teal wordmark on the light sign-in panel (white in dark
+// mode) and the white wordmark with tagline on the teal brand panel.
+import HopeWordmark from 'src/assets/images/logos/hope/hope-wordmark.png';
+import HopeWordmarkWhite from 'src/assets/images/logos/hope/hope-wordmark-white.png';
+import HopeWordmarkTaglineWhite from 'src/assets/images/logos/hope/hope-wordmark-tagline-white.png';
 
 // Working Azure Login Component
 const AzureLogin = () => {
@@ -137,11 +100,11 @@ const AzureLogin = () => {
         }
         sx={{
           py: 1.5,
-          borderColor: '#0078d4',
-          color: '#0078d4',
+          borderColor: 'primary.main',
+          color: 'primary.main',
           '&:hover': {
-            backgroundColor: '#0078d4',
-            color: 'white',
+            backgroundColor: 'primary.main',
+            color: 'primary.contrastText',
           },
           '&:disabled': {
             borderColor: '#e0e0e0',
@@ -249,7 +212,7 @@ export default function Login() {
         justifyContent="center"
         sx={{
           height: "100vh",
-          backgroundColor: activeMode === "light" ? "#f8fafc" : "background.default",
+          backgroundColor: "background.default",
         }}
       >
         {/* Left Panel - Login Form */}
@@ -268,7 +231,11 @@ export default function Login() {
         >
           {/* Logo Section */}
           <Box px={4} py={3}>
-            <HopeLogo width="200" height="60" />
+            <img
+              src={activeMode === 'dark' ? HopeWordmarkWhite : HopeWordmark}
+              alt="HOPE"
+              style={{ height: '44px', width: 'auto', display: 'block' }}
+            />
           </Box>
 
           {/* Login Form Section */}
@@ -336,7 +303,7 @@ export default function Login() {
           }}
           sx={{
             position: "relative",
-            background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+            background: (theme) => `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.primary.dark} 100%)`,
             display: { xs: "none", lg: "block" },
           }}
         >
@@ -363,9 +330,12 @@ export default function Login() {
 
             {/* Main Content */}
             <Box textAlign="center" color="white" zIndex={1} px={6}>
-              <Typography variant="h2" fontWeight="700" mb={3}>
-                HOPE
-              </Typography>
+              <Box
+                component="img"
+                src={HopeWordmarkTaglineWhite}
+                alt="HOPE: Housing, Outreach, Placement, Engagement"
+                sx={{ width: '100%', maxWidth: 420, height: 'auto', display: 'block', mx: 'auto', mb: 4 }}
+              />
               <Typography variant="h5" fontWeight="300" mb={2}>
                 Client Database System
               </Typography>

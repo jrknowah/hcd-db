@@ -46,6 +46,7 @@ import logUserAction from "../../backend/config/logAction";
 import { formatLocalDateTime } from "../../utils/localDateTime";
 import { formatDateOnly } from "../../utils/dateOnly";
 import { hhhSiteList2, cmNoteType } from "../../data/arrayList";
+import { BRAND_PRIMARY } from '../../theme/brandColors';
 
 // ✅ Static mock data outside component
 const MOCK_CLIENT = {
@@ -95,10 +96,10 @@ const customSelectStyles = {
   control: (provided, state) => ({
     ...provided,
     minHeight: '56px',
-    borderColor: state.isFocused ? '#1976d2' : 'rgba(0, 0, 0, 0.23)',
-    boxShadow: state.isFocused ? '0 0 0 1px #1976d2' : 'none',
+    borderColor: state.isFocused ? BRAND_PRIMARY : 'rgba(0, 0, 0, 0.23)',
+    boxShadow: state.isFocused ? `0 0 0 1px ${BRAND_PRIMARY}` : 'none',
     '&:hover': {
-      borderColor: state.isFocused ? '#1976d2' : 'rgba(0, 0, 0, 0.87)',
+      borderColor: state.isFocused ? BRAND_PRIMARY : 'rgba(0, 0, 0, 0.87)',
     },
   }),
   placeholder: (provided) => ({

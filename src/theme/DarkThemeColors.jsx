@@ -106,6 +106,25 @@ const DarkThemeColors = [
       },
     },
   },
+  {
+    // HOPE brand, dark mode: the brand teal #0F4C5C is unreadable on the dark
+    // background, so dark mode uses a lighter teal with navy text on it.
+    name: 'HOPE_TEAL_THEME',
+    palette: {
+      primary: {
+        main: '#5BA8B9',
+        light: '#123840',
+        dark: '#3E8FA3',
+        contrastText: '#13293D',
+      },
+      secondary: {
+        main: '#E8A33D',
+        light: '#3A2C17',
+        dark: '#B97A1C',
+        contrastText: '#13293D',
+      },
+    },
+  },
 ];
 
 export { DarkThemeColors };
