@@ -3,62 +3,34 @@ import { Link } from 'react-router-dom';
 import { styled } from '@mui/material';
 import { CustomizerContext } from "src/context/CustomizerContext";
 
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-ignore
-// import { ReactComponent as LogoDark } from 'src/assets/images/logos/dark-logo.svg';
-import LogoDark from 'src/assets/images/logos/dark-logo.svg';
+// HOPE brand logo for light surfaces (mobile sidebar drawer, sign-in pages):
+// the teal wordmark, or the white one in dark mode.
+import HopeWordmark from 'src/assets/images/logos/hope/hope-wordmark.png';
+import HopeWordmarkWhite from 'src/assets/images/logos/hope/hope-wordmark-white.png';
+import HopeMark from 'src/assets/images/logos/hope/hope-mark.png';
+import HopeMarkWhite from 'src/assets/images/logos/hope/hope-mark-white.png';
 
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-ignore
-import LogoDarkRTL from 'src/assets/images/logos/logo-icon.svg';
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-ignore
-import LogoLight from 'src/assets/images/logos/light-logo.svg';
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-ignore
-import LogoLightRTL from 'src/assets/images/logos/light-rtl-logo.svg';
+const LinkStyled = styled(Link, {
+  shouldForwardProp: (prop) => prop !== 'isMini',
+})(({ isMini }) => ({
+  height: '64px',
+  width: isMini ? '40px' : '180px',
+  overflow: 'hidden',
+  display: 'flex',
+  alignItems: 'center',
+}));
 
 const AuthLogo = () => {
-  const { isCollapse, isSidebarHover, activeDir, activeMode } = useContext(CustomizerContext);
-
-
-  const LinkStyled = styled(Link)(() => ({
-    height: '64px',
-    width: isCollapse == "mini-sidebar" && !isSidebarHover ? '40px' : '180px',
-    overflow: 'hidden',
-    display: 'block',
-  }));
-
-  if (activeDir === 'ltr') {
-    return (
-      <LinkStyled
-        to="/"
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-        }}
-      >
-        {activeMode === 'dark' ? (
-          <img src={LogoLight} alt="logo" style={{ width: '174px', height: '64px' }} />
-        ) : (
-          <img src={LogoDark} alt="logo" style={{ width: '174px', height: '64px' }} />
-        )}
-      </LinkStyled>
-    );
-  }
+  const { isCollapse, isSidebarHover, activeMode } = useContext(CustomizerContext);
+  const isMini = isCollapse === 'mini-sidebar' && !isSidebarHover;
+  const isDark = activeMode === 'dark';
 
   return (
-    <LinkStyled
-      to="/"
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-      }}
-    >
-      {activeMode === 'dark' ? (
-        <img src={LogoLightRTL} alt="logo" style={{ width: '174px', height: '64px' }} />
+    <LinkStyled to="/" isMini={isMini} aria-label="HOPE Client Database home">
+      {isMini ? (
+        <img src={isDark ? HopeMarkWhite : HopeMark} alt="HOPE" style={{ width: '36px', height: '36px' }} />
       ) : (
-        <img src={LogoDark} alt="logo" style={{ width: '174px', height: '64px' }} />
+        <img src={isDark ? HopeWordmarkWhite : HopeWordmark} alt="HOPE" style={{ height: '36px', width: 'auto' }} />
       )}
     </LinkStyled>
   );

@@ -51,6 +51,7 @@ import {
   medCond2, medCond3,
   medCond4, medCond5, medicationData
 } from "../../data/arrayList";
+import { BRAND_PRIMARY } from '../../theme/brandColors';
 
 // ✅ Helper function to format dates for HTML date inputs
 const formatDateForInput = (dateValue) => {
@@ -123,10 +124,10 @@ const customSelectStyles = {
   control: (provided, state) => ({
     ...provided,
     minHeight: '56px',
-    borderColor: state.isFocused ? '#1976d2' : 'rgba(0, 0, 0, 0.23)',
-    boxShadow: state.isFocused ? '0 0 0 1px #1976d2' : 'none',
+    borderColor: state.isFocused ? BRAND_PRIMARY : 'rgba(0, 0, 0, 0.23)',
+    boxShadow: state.isFocused ? `0 0 0 1px ${BRAND_PRIMARY}` : 'none',
     '&:hover': {
-      borderColor: state.isFocused ? '#1976d2' : 'rgba(0, 0, 0, 0.87)',
+      borderColor: state.isFocused ? BRAND_PRIMARY : 'rgba(0, 0, 0, 0.87)',
     },
   }),
   placeholder: (provided) => ({

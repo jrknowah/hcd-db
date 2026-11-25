@@ -18,6 +18,9 @@ import {
   isAdminAccount, canViewAuditTrail, canOpenAdminConsole, canViewNursingReport, canViewBehavioralReport,
 } from './backend/config/groupConfig';
 import AdminLayout from './views/admin/AdminLayout';
+import HopeMark from './assets/images/logos/hope/hope-mark.png';
+// The MSAL loading screen renders before the MUI ThemeProvider
+import { BRAND_PRIMARY } from './theme/brandColors';
 
 // At the very top of App.jsx, before any other code:
 if (typeof window !== 'undefined') {
@@ -70,7 +73,7 @@ const MSALLoadingComponent = ({ error, retry }) => (
     alignItems: 'center', 
     minHeight: '100vh',
     gap: 3,
-    backgroundColor: '#f5f5f5'
+    backgroundColor: '#F5F7F9'
   }}>
     {error ? (
       <>
@@ -89,7 +92,7 @@ const MSALLoadingComponent = ({ error, retry }) => (
               onClick={retry}
               style={{ 
                 padding: '12px 24px', 
-                backgroundColor: '#1976d2',
+                backgroundColor: BRAND_PRIMARY,
                 color: 'white',
                 border: 'none',
                 borderRadius: '8px',
@@ -118,8 +121,9 @@ const MSALLoadingComponent = ({ error, retry }) => (
       </>
     ) : (
       <>
-        <CircularProgress size={60} thickness={4} />
-        <Typography variant="h5" color="primary">
+        <Box component="img" src={HopeMark} alt="HOPE" sx={{ width: 72, height: 72 }} />
+        <CircularProgress size={48} thickness={4} sx={{ color: BRAND_PRIMARY }} />
+        <Typography variant="h5" sx={{ color: BRAND_PRIMARY }}>
           🔐 Initializing Authentication...
         </Typography>
         <Typography variant="body1" color="text.secondary">
@@ -135,7 +139,7 @@ const MSALLoadingComponent = ({ error, retry }) => (
           <Box sx={{ 
             width: '100%', 
             height: '100%', 
-            background: 'linear-gradient(90deg, transparent, #1976d2, transparent)',
+            background: `linear-gradient(90deg, transparent, ${BRAND_PRIMARY}, transparent)`,
             animation: 'loading 2s infinite'
           }} />
         </Box>
