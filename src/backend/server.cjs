@@ -57,6 +57,12 @@ app.use(cors({
 }));
 app.use(express.json());
 
+// Audit trail: one dbo.AuditLog row per API request (who, VIEW/CREATE/UPDATE/
+// DELETE, route, client ID, field NAMES for writes; never values). identifyUser
+// reads the sign-in token when there is one but never rejects a request.
+app.use('/api', require('./middleware/auth.js').identifyUser);
+app.use(require('./middleware/auditTrail.cjs'));
+
 try {
   const adminErrorsRouter = require('./routes/admin/errors.cjs');
   const adminAuditRouter = require('./routes/admin/audit.cjs');

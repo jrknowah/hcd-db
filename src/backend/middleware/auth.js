@@ -171,6 +171,22 @@ module.exports = process.env.NODE_ENV === 'development' && process.env.USE_MOCK_
   ? mockAuthMiddleware
   : authMiddleware;
 
+// Sets req.user when the request carries a valid sign-in token, and otherwise
+// lets it through unchanged: never answers 401. Used so the audit trail can
+// name the person behind requests on routes that do not require sign-in.
+const identifyUser = (req, res, next) => {
+  if (req.user || !req.headers.authorization) return next();
+  let done = false;
+  const proceed = () => { if (!done) { done = true; next(); } };
+  const quiet = { status: () => ({ json: proceed }) };
+  try {
+    module.exports(req, quiet, proceed);
+  } catch {
+    proceed();
+  }
+};
+
+module.exports.identifyUser = identifyUser;
 module.exports.requireRole  = requireRole;
 module.exports.requireAdmin = requireAdmin;
 module.exports.mockAuth     = mockAuthMiddleware;
