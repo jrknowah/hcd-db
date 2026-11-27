@@ -150,8 +150,13 @@ jobs:
             echo "attempt $i: HTTP $code"
             if [ "$code" = "200" ]; then
               cat /tmp/health.json; echo
-              grep -q '"database":"Connected"' /tmp/health.json \
-                || echo "::warning::Backend is up but reports no database connection. Check the AZURE_SQL_* app settings and SQL firewall."
+              # /api/health is answered by the files router, which reports storage
+              # only; warn about the database only when the response mentions it.
+              if grep -q '"database"' /tmp/health.json && ! grep -q '"database":"Connected"' /tmp/health.json; then
+                echo "::warning::Backend is up but reports no database connection. Check the AZURE_SQL_* app settings and SQL firewall."
+              fi
+              grep -q '"azureBlobEnabled":false' /tmp/health.json \
+                && echo "::warning::Backend is up but Azure Blob Storage is not enabled. Check AZURE_STORAGE_ACCOUNT and the backend's storage role." || true
               exit 0
             fi
             sleep 15
